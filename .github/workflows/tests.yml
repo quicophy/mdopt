@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  setup:
+  tests:
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v2
@@ -19,10 +19,6 @@ jobs:
 
       - name: Set up Poetry
         run: pip install poetry 
-
-  test:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
+        
       - name: Run tests
         run: poetry run pytest .
