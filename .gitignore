@@ -2,7 +2,7 @@
 .vscode
 
 # Poetry stuff
-pyproject.lock
+poetry.lock 
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
