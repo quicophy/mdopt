@@ -43,5 +43,5 @@ jobs:
         run: poetry install
         
       - name: Run linter
-        run: poetry run 
+        run: poetry run pylint .
         
