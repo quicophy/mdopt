@@ -19,26 +19,26 @@ def test_trimmed_SVD():
 
         U, S, Vh = trimmed_SVD(
             M,
-            cut=1e-6,
-            max_num=1e6,
+            cut=1e-12,
+            max_num=int(1e6),
             normalize=True,
             init_norm=True,
             norm_ord=2,
             limit_max=False,
-            err_th=1e-16,
+            err_th=1e-12,
         )
 
         M_trimmed = np.einsum("ij, j, jk -> ik", U, S, Vh)
 
         U, S, Vh = trimmed_SVD(
             M_trimmed,
-            cut=1e-6,
-            max_num=1e6,
+            cut=1e-12,
+            max_num=int(1e6),
             normalize=True,
             init_norm=True,
             norm_ord=2,
             limit_max=False,
-            err_th=1e-16,
+            err_th=1e-12,
         )
 
         M_trimmed_new = np.einsum("ij, j, jk -> ik", U, S, Vh)
