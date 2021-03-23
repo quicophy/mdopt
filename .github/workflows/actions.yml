@@ -25,3 +25,23 @@ jobs:
         
       - name: Run tests
         run: poetry run pytest .
+
+  lint:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v2
+
+      - name: Set up Python 3.9 
+        uses: actions/setup-python@v2
+        with:
+         python-version: 3.9
+
+      - name: Set up Poetry
+        run: pip install poetry 
+      
+      - name: Install dependencies
+        run: poetry install
+        
+      - name: Run linter
+        run: poetry run pylint mpopt
+       
