@@ -52,7 +52,8 @@ def trimmed_SVD(
         U, S, Vh = svd(M, full_matrices=False, lapack_driver="gesdd")
     except:
         try:
-            Vh, S, U = svd(np.transpose(M), full_matrices=False, lapack_driver="gesdd")
+            Vh, S, U = svd(np.transpose(M), full_matrices=False,
+                           lapack_driver="gesdd")
             U = np.transpose(U)
             Vh = np.transpose(Vh)
         except:
@@ -122,7 +123,8 @@ def MPS_from_dense(psi, d=2, limit_max=False, max_num=100):
     psi = psi.reshape(-1, d)
 
     # Getting the first B and S tensors
-    psi, S, Vh = trimmed_SVD(psi, normalize=False, limit_max=limit_max, max_num=max_num)
+    psi, S, Vh = trimmed_SVD(psi, normalize=False,
+                             limit_max=limit_max, max_num=max_num)
 
     # Adding the first B and S tensors to the corresponding lists
     # Note adding the ghost dimension to the first B tensor
@@ -146,7 +148,6 @@ def MPS_from_dense(psi, d=2, limit_max=False, max_num=100):
 
 
 def FM_MPS(L, d):
-
     """
     Return a ferromagnetic MPS (a product state with all spins up).
 
@@ -160,16 +161,15 @@ def FM_MPS(L, d):
         MPS: an instance of the MPS class
     """
 
-    B = np.zeros([1, d, 1], np.float)
+    B = np.zeros([1, d, 1], np.float64)
     B[0, 0, 0] = 1.0
-    S = np.ones([1], np.float)
+    S = np.ones([1], np.float64)
     Bs = [B.copy() for i in range(L)]
     Ss = [S.copy() for i in range(L)]
     return MPS.MPS(Bs, Ss)
 
 
 def AFM_MPS(L, d):
-
     """
     Return an antiferromagnetic MPS (a product state with all spins down).
 
@@ -182,16 +182,15 @@ def AFM_MPS(L, d):
         MPS: an instance of the MPS class
     """
 
-    B = np.zeros([1, d, 1], np.float)
+    B = np.zeros([1, d, 1], np.float64)
     B[0, 1, 0] = 1.0
-    S = np.ones([1], np.float)
+    S = np.ones([1], np.float64)
     Bs = [B.copy() for i in range(L)]
     Ss = [S.copy() for i in range(L)]
     return MPS.MPS(Bs, Ss)
 
 
 def split_truncate_theta(theta, chi_max, eps):
-
     """
     Split and truncate a two-site wave function in mixed canonical form.
 
@@ -226,7 +225,8 @@ def split_truncate_theta(theta, chi_max, eps):
     X, Y, Z = svd(theta, full_matrices=False)
     # truncate
     chivC = min(chi_max, np.sum(Y > eps))
-    piv = np.argsort(Y)[::-1][:chivC]  # keep the largest `chivC` singular values
+    # keep the largest `chivC` singular values
+    piv = np.argsort(Y)[::-1][:chivC]
     X, Y, Z = X[:, piv], Y[piv], Z[piv, :]
     # renormalize
     S = Y / np.linalg.norm(Y)  # == Y/sqrt(sum(Y**2))
@@ -237,7 +237,6 @@ def split_truncate_theta(theta, chi_max, eps):
 
 
 def to_right_canonical(mps, chi_max, eps):
-
     """
     Return the right canonical MPS, i.e., B-tensors and S-tensors given the MPS as just a list of tensors with the last one being     the orthogonality centre.
 
