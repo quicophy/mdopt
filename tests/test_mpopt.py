@@ -56,7 +56,7 @@ def test_from_dense():
 
     for _ in range(100):
 
-        psi = np.random.random(size=2 ** n)
+        psi = np.random.rand(2 ** n)
         index = np.random.randint(low=0, high=2 ** n - 1)
         psi[index] = 1.0
         psi /= np.linalg.norm(psi)
