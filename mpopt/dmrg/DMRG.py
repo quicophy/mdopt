@@ -1,5 +1,8 @@
-# This code was written by Alex Berezutskii inspired by TenPy in 2020-2021.
-# See MPS.py for documentation
+"""
+    This module contains the DMRG class.
+    See the MPS module for more documentation.
+    Written by Alex Berezutskii inspired by TenPy in 2020-2021.
+"""
 
 import numpy as np
 from scipy.linalg import svd
@@ -57,6 +60,10 @@ class DMRG:
             self.update_RP(i)
 
     def sweep(self):
+        """
+        Function performing one DMRG sweep.
+        """
+
         # sweep from left to right
         for i in range(self.mps.nbonds - 1):
             self.update_bond(i)
@@ -66,10 +73,13 @@ class DMRG:
             self.update_bond(i)
 
     def update_bond(self, i):
-        # Updating the bond
+        """
+        Function which updates the bond i.
+        """
+
         j = (i + 1) % self.mps.L
 
-        # get the effective Hamiltonian, which will be diagonalized during the update bond step, looks like this:
+        # get the effective Hamiltonian, which will be diagonalised during the update bond step:
         #
         #    .--vL*           vR*--.
         #    |       i*    j*      |
@@ -89,13 +99,13 @@ class DMRG:
         d1, d2 = self.mpo[i].shape[2], self.mpo[j].shape[2]
         Heff = Heff.reshape(chi1 * d1 * d2 * chi2, chi1 * d1 * d2 * chi2)
 
-        # Let's calculate effective single-site wave function on site i in mixed canonical form.
+        # Let's calculate effective single-site wave function on site i.
         # The returned array has legs ``vL, i, vR`` (as one of the Bs).
         get_theta1 = np.tensordot(
             np.diag(self.mps.Ss[i]), self.mps.Bs[i], [1, 0]
         )  # vL [vL'], [vL] i vR
 
-        # Let's calculate effective two-site wave function on sites i,j=(i+1) in mixed canonical form
+        # Let's calculate effective two-site wave function on sites i,j=(i+1).
         # The returned array has legs ``vL, i, j, vR``.
         get_theta2 = np.tensordot(
             get_theta1, self.mps.Bs[(i + 1) % self.mps.L], [2, 0]
@@ -144,7 +154,9 @@ class DMRG:
         self.update_RP(j)
 
     def update_RP(self, i):
-        # Calculate RP right of site `i-1` from RP right of site `i`
+        """
+        Compute RP right of site i-1 from RP right of site i.
+        """
         j = (i - 1) % self.mps.L
         RP = self.RPs[i]  # vR* wR* vR
         B = self.mps.Bs[i]  # vL i vR
@@ -160,7 +172,9 @@ class DMRG:
         self.RPs[j] = RP  # vL wL vL* (== vR* wR* vR on site i-1)
 
     def update_LP(self, i):
-        # Calculate LP left of site `i+1` from LP left of site `i`
+        """
+        Compute LP left of site i+1 from LP left of site i.
+        """
         j = (i + 1) % self.mps.L
         LP = self.LPs[i]  # vL wL vL*
         B = self.mps.Bs[i]  # vL i vR

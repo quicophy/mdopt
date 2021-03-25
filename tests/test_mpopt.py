@@ -1,12 +1,18 @@
+"""
+    This module contains tests.
+    Written by Alex Berezutskii inspired by TenPy in 2020-2021.
+"""
+
 import scipy
 import pytest
 import numpy as np
-from mpopt.contractor import *
-from mpopt.utils import *
+from mpopt.utils import trimmed_SVD, MPS_from_dense, FM_MPS, AFM_MPS
 
-# try to implement tests for all of the functions there are in the classes
-# don't forget the canonical form test and the sanity test they have in TenPy
-# start testing mps and utilities
+
+# TO DO:
+# 1) try to implement tests for all of the functions there are in the classes MPS and DMRG
+# 2) the canonical form test 
+# 3) check out the sanity tests they have in TenPy
 
 
 def test_trimmed_SVD():
@@ -60,7 +66,6 @@ def test_from_dense():
         index = np.random.randint(low=0, high=2 ** n - 1)
         psi[index] = 1.0
         psi /= np.linalg.norm(psi)
-        psi_copy = psi.copy()
 
         mps = MPS_from_dense(psi, d=2, limit_max=False, max_num=100)
         psi_from_mps = mps.to_dense().reshape(2 ** n)
@@ -104,13 +109,5 @@ def test_mps_afm():
     overlap = abs(psi @ psi_true)
 
     assert np.isclose(overlap, 1.0)
-
-    return
-
-
-def test_get_theta1():
-
-    # psi = np.random.random_sample(size = (2,2,2,2,2,2,2,2))
-    # mps = mps_from_dense(psi)
 
     return
