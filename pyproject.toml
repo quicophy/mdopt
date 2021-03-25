@@ -2,7 +2,11 @@
 name = "mpopt"
 version = "0.1.0"
 description = "A MPS-MPO optimizer library"
-authors = ["maxtremblay <matrem@protonmail.com>"]
+authors = [
+    "maxtremblay <matrem@protonmail.com>",
+    "Alex Berezutskii",
+    "Samuel Desrosiers"
+]
 
 [tool.poetry.dependencies]
 python = "^3.8"
