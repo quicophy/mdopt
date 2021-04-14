@@ -3,9 +3,9 @@ name = "mpopt"
 version = "0.1.0"
 description = "A MPS-MPO optimizer library"
 authors = [
-    "maxtremblay <matrem@protonmail.com>",
-    "Alex Berezutskii",
-    "Samuel Desrosiers"
+    "Max Tremblay <matrem@protonmail.com>",
+    "Alex Berezutskii <aleksandr.berezutskii@usherbrooke.ca>",
+    "Samuel Desrosiers <samuel.desrosiers@usherbrooke.ca>"
 ]
 
 [tool.poetry.dependencies]
