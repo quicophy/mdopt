@@ -1,10 +1,10 @@
 """
-    This module contains tests.
+    Tests for the explicit MPS construction.
 """
 
 import numpy as np
 from mpopt.utils import dagger, trimmed_svd, tensor_product_with_dagger
-from mpopt.contractor.mps import mps_from_dense
+from mpopt.mps.explicit import mps_from_dense
 from experiments.decoder import ferro_mps, antiferro_mps
 
 # TODO:
@@ -16,9 +16,7 @@ from experiments.decoder import ferro_mps, antiferro_mps
 
 
 def test_trimmed_svd():
-
     for _ in range(100):
-
         dim_1 = np.random.randint(low=2, high=100)
         dim_2 = np.random.randint(low=2, high=100)
         m = np.random.rand(dim_1, dim_2)
@@ -52,8 +50,6 @@ def test_trimmed_svd():
         difference_norm = np.linalg.norm(m_trimmed - m_trimmed_new, ord="fro")
 
         assert np.isclose(difference_norm, 0.0)
-
-    return
 
 
 def test_from_dense():
@@ -134,5 +130,3 @@ def test_tensor_product_with_dagger():
 
         assert product.shape == product_to_compare.shape
         assert np.isclose(product, product_to_compare).all()
-
-        return

@@ -1,5 +1,5 @@
 import numpy as np
-from mpopt.contractor.mps import MPS
+from mpopt.mps import ExplicitMPS
 
 """
 Parameters
@@ -53,7 +53,7 @@ def ferro_mps(nsites, dim):
     schmidt_value = np.ones([1], np.float64)
     tensors = [tensor.copy() for i in range(nsites)]
     schmidt_values = [schmidt_value.copy() for i in range(nsites)]
-    return MPS(tensors, schmidt_values)
+    return ExplicitMPS(tensors, schmidt_values)
 
 
 def antiferro_mps(nsites, dim):
@@ -73,6 +73,6 @@ def antiferro_mps(nsites, dim):
     tensor = np.zeros([1, dim, 1], np.float64)
     tensor[0, 1, 0] = 1.0
     schmidt_value = np.ones([1], np.float64)
-    tensors = [tensor.copy() for i in range(nsites)]
-    schmidt_values = [schmidt_value.copy() for i in range(nsites)]
-    return MPS(tensors, schmidt_values)
+    tensors = [tensor.copy() for _ in range(nsites)]
+    schmidt_values = [schmidt_value.copy() for _ in range(nsites)]
+    return ExplicitMPS(tensors, schmidt_values)

@@ -4,7 +4,8 @@
 
 from functools import reduce
 import numpy as np
-from mpopt.utils import trimmed_svd, dagger, tensor_product_with_dagger
+from mpopt.utils import trimmed_svd, dagger, tensor_product_with_dagger, nlog
+
 
 class ExplicitMPS:
     """
@@ -40,16 +41,20 @@ class ExplicitMPS:
             If tensors and schmidt_values have different length.
     """
 
-    def __init__(self, tensors, schmidt_values):
+    def __init__(self, tensors, schmidt_values, tolerance = 1e-14):
         if len(tensors) != len(schmidt_values):
             raise ValueError(
                 f"There is a different number of tensors ({len(tensors)})"
                 "and Schmidt values ({len(schmidt_values)}"
             )
+        for s in schmidt_values:
+            if abs(np.linalg.norm(s) - 1.0) > tolerance:
+                raise ValueError("the norm of each Schmidt values tensor must be 1.0")
         self.tensors = tensors
         self.schmidt_values = schmidt_values
         self.nsites = len(tensors)
         self.nbonds = self.nsites - 1
+        self.tolerance = tolerance
 
     def __len__(self):
         """
@@ -96,7 +101,7 @@ class ExplicitMPS:
         return np.tensordot(
             self.single_site_left_iso(site),
             self.single_site_left_iso(next_site),
-            (2, 0)
+            (2, 0),
         )  # vL i [vR], [vL] j vR
 
     def two_site_right_tensor(self, site):
@@ -111,7 +116,7 @@ class ExplicitMPS:
         return np.tensordot(
             self.single_site_right_iso(site),
             self.single_site_right_iso(next_site),
-            (2, 0)
+            (2, 0),
         )  # vL i [vR], [vL] j vR
 
     def single_site_left_iso_iter(self):
@@ -136,19 +141,13 @@ class ExplicitMPS:
         """
         Return the (von Neumann) entanglement entropy for a bipartition at any of the bonds.
         """
-
-        bonds = range(1, len(self))
-        result = []
-
-        for i in bonds:
-            schmidt_values = self.schmidt_values[i].copy()
-            # 0*log(0) should give 0 in order to avoid warning or NaN.
-            schmidt_values[schmidt_values < 1.0e-20] = 0.0
+        entropy = np.zeros(self.nbonds)
+        for bond in range(self.nbonds):
+            schmidt_values = self.schmidt_values[bond].copy()
+            schmidt_values[schmidt_values < self.tolerance] = 0.0
             schmidt_values2 = schmidt_values * schmidt_values
-            assert abs(np.linalg.norm(schmidt_values) - 1.0) < 1.0e-14
-            result.append(-np.sum(schmidt_values2 * np.log(schmidt_values2)))
-
-        return np.array(result)
+            entropy[bond](-np.sum(nlog(schmidt_values2)))
+        return entropy
 
     def to_dense(self):
         """
@@ -313,7 +312,7 @@ def find_orth_centre(mps):
         mps: list of np.arrays[ndim=3]
             Matrix Product State given as a list of tensors containing an orthogonality centre
     """
-    
+
     for i, tensor in enumerate(mps):
         to_be_identity = np.tensordot(tensor, dagger(tensor), axes=((0, 0), (1, 1)))
         identity = np.identity(to_be_identity.shape[0], dtype=np.float64)
@@ -345,7 +344,6 @@ def move_orth_centre(mps, init_pos, final_pos, d=2):
     """
 
     L = len(mps)
-
 
     if init_pos >= L:
         raise ValueError(
@@ -396,6 +394,7 @@ def move_orth_centre(mps, init_pos, final_pos, d=2):
         mps = [np.transpose(M, (2, 1, 0)) for M in mps[::-1]]
 
     return mps
+
 
 def is_canonical(mps):
     """

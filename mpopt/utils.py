@@ -11,7 +11,6 @@ def dagger(tensor):
     """
     Returns the daggered version of a given tensor.
     """
-
     return np.conjugate(np.transpose(tensor))
 
 
@@ -103,7 +102,7 @@ def tensor_product_with_dagger(tensor):
     That is, the input tensor's legs being (vL, i, vR) and the output's (vL * vL, i, i, vR * vR).
     """
 
-    product = np.kron(tensor, dagger(tensor))
+    product = np.kron(tensor, tensor.conjugate())
     return product.reshape(
         (
             tensor.shape[0] ** 2,
@@ -112,3 +111,13 @@ def tensor_product_with_dagger(tensor):
             tensor.shape[2] ** 2,
         )
     )
+
+
+def nlog(number):
+    """ Compute number * log(number) with 0 * log(0) = 0 """
+    if number == 0.0:
+        return 0.0
+    else:
+        return number * np.log(number)
+
+
