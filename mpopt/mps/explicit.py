@@ -1,15 +1,12 @@
 """
-    This module contains the MPS class.
+    This module contains the explicit MPS construction.
 """
 
 from functools import reduce
 import numpy as np
 from mpopt.utils import trimmed_svd, dagger, tensor_product_with_dagger
 
-# TODO check dots and other punctuation in docstrings
-
-
-class MPS:
+class ExplicitMPS:
     """
     Class for a finite-size matrix product state.
 
@@ -72,7 +69,7 @@ class MPS:
         The returned array has legs (vL, i, vR).
         """
         return np.tensordot(
-            np.diag(self.schmidt_values[site]), self.tensors[site], [1, 0]
+            np.diag(self.schmidt_values[site]), self.tensors[site], (1, 0)
         )  # vL [vL'], [vL] i vR
 
     def single_site_right_iso(self, site):
@@ -84,7 +81,7 @@ class MPS:
         next_site = (site + 1) % len(self)
 
         return np.tensordot(
-            np.diag(self.tensors[site]), self.schmidt_values[next_site], [2, 0]
+            np.diag(self.tensors[site]), self.schmidt_values[next_site], (2, 0)
         )  # vL i [vR], [vR'] vR
 
     def two_site_left_tensor(self, site):
@@ -99,7 +96,7 @@ class MPS:
         return np.tensordot(
             self.single_site_left_iso(site),
             self.single_site_left_iso(next_site),
-            [2, 0],
+            (2, 0)
         )  # vL i [vR], [vL] j vR
 
     def two_site_right_tensor(self, site):
@@ -114,7 +111,7 @@ class MPS:
         return np.tensordot(
             self.single_site_right_iso(site),
             self.single_site_right_iso(next_site),
-            [2, 0],
+            (2, 0)
         )  # vL i [vR], [vL] j vR
 
     def single_site_left_iso_iter(self):
@@ -253,7 +250,7 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=100):
         tensors.insert(0, v_h)
         schmidt_values.insert(0, singular_values)
 
-    return MPS(tensors, schmidt_values)
+    return ExplicitMPS(tensors, schmidt_values)
 
 
 def split_truncate_two_site_tensor(theta, chi_max, eps):
@@ -318,9 +315,8 @@ def find_orth_centre(mps):
     """
     
     for i, tensor in enumerate(mps):
-
-        to_be_identity = np.tensordot(tensor, dagger(tensor), axes=[[0, 0], [1, 1]])
-        identity = np.identity(to_be_identity.shape[0], dtype=np.float)
+        to_be_identity = np.tensordot(tensor, dagger(tensor), axes=((0, 0), (1, 1)))
+        identity = np.identity(to_be_identity.shape[0], dtype=np.float64)
 
         if not np.isclose(to_be_identity, identity).all():
             return i
@@ -350,9 +346,6 @@ def move_orth_centre(mps, init_pos, final_pos, d=2):
 
     L = len(mps)
 
-    if init_pos == final_pos:
-
-        return mps
 
     if init_pos >= L:
         raise ValueError(
@@ -370,9 +363,11 @@ def move_orth_centre(mps, init_pos, final_pos, d=2):
     if init_pos < final_pos:
         begin, final = init_pos, final_pos
     # reverse the mps if going from right to left
-    if init_pos > final_pos:
+    elif init_pos > final_pos:
         mps = [np.transpose(M, (2, 1, 0)) for M in mps[::-1]]
         begin, final = (L - 1) - init_pos, (L - 1) - final_pos
+    else:
+        return mps
 
     for i in range(begin, final):
 
@@ -447,14 +442,14 @@ def to_explicit_form(mps, chi_max=1e6, eps=1e-12):
     schmidt_values = [np.ones((mps[i].shape[0]), dtype=float) for i in range(L)]
     schmidt_values[0] = np.diag(mps[0].squeeze())
 
-    mps_class_instance = MPS(mps, schmidt_values)
+    mps_class_instance = ExplicitMPS(mps, schmidt_values)
 
     for i in range(0, n_bonds, 2):
         j = (i + 1) % L
         theta_2 = mps_class_instance.two_site_left_tensor(i)
         a_i, s_j, b_j = split_truncate_two_site_tensor(theta_2, chi_max, eps)
-        g_i = np.tensordot(schmidt_values[i] ** (-1), a_i, axes=[0, 0])
-        mps_class_instance.tensors[i] = np.tensordot(g_i, np.diag(s_j), axes=[1, 0])
+        g_i = np.tensordot(schmidt_values[i] ** (-1), a_i, axes=(0, 0))
+        mps_class_instance.tensors[i] = np.tensordot(g_i, np.diag(s_j), axes=(1, 0))
         mps_class_instance.schmidt_values[j] = s_j
         mps_class_instance.tensors[j] = b_j
 
