@@ -280,7 +280,7 @@ def plus_state_mps(size, qudit=2):
     return mps
 
 
-def _two_sites_mps_reduce(site1, site2, renorm=False, ord=2, dir='right'):
+def _two_sites_mps_reduce(site1, site2, renorm=False, norm_ord=2, direction='right'):
     '''
     Contracts two adjacent site tensors and returns them with a reduced bond
     dimension using the reduce_svd function.
@@ -291,12 +291,12 @@ def _two_sites_mps_reduce(site1, site2, renorm=False, ord=2, dir='right'):
     _temp1 = site1.reshape((bond_1*site_size_1, -1))
     _temp2 = site2.reshape((-1, bond_3*site_size_2))
     _temp = np.dot(_temp1, _temp2)
-    _u, _s, _vh, _ = reduced_svd(_temp, normalize=renorm, norm_ord=ord)
-    if dir == 'right':
+    _u, _s, _vh, _ = reduced_svd(_temp, normalize=renorm, norm_ord=norm_ord)
+    if direction == 'right':
         _vh = np.dot(np.diag(_s), _vh)
-    elif dir == 'left':
+    elif direction == 'left':
         _u = np.dot(_u, np.diag(_s))
-    elif dir == 'none':
+    elif direction == 'none':
         _u = np.dot(_u, np.diag(np.sqrt(_s)))
         _vh = np.dot(np.diag(np.sqrt(_s)), _vh)
     else:
@@ -307,7 +307,7 @@ def _two_sites_mps_reduce(site1, site2, renorm=False, ord=2, dir='right'):
     return _u, _vh, _s
 
 
-def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, renorm=False, ord=2):
+def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, renorm=False, norm_ord=2):
     '''
     Moves the orth center from one site to a site to its right. Can be used to
     put the mps in canonical form and normalize it.
@@ -324,12 +324,12 @@ def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, renorm=False, ord=2):
     for i in range(begin, end):
         # Contract, svd and shape-back
         mps[i], mps[i+1], _ = _two_sites_mps_reduce(
-            mps[i], mps[i+1], renorm=renorm, ord=ord, dir='right')
+            mps[i], mps[i+1], renorm=renorm, norm_ord=norm_ord, direction='right')
 
     return mps
 
 
-def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, ord=2):
+def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, norm_ord=2):
     '''
     Moves the orth center from one site to a site to its left. Can be used to
     put the mps in canonical form and normalize it.
@@ -347,12 +347,12 @@ def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, ord=2):
         print(i)
         # Contract, svd and shape-back
         mps[begin-i-1], mps[begin-i], _ = _two_sites_mps_reduce(
-            mps[begin-i-1], mps[begin-i], renorm=renorm, ord=ord, dir='left')
+            mps[begin-i-1], mps[begin-i], renorm=renorm, norm_ord=norm_ord, direction='left')
 
     return mps
 
 
-def move_orthog(mps, begin=0, end=-1, renorm=False, ord=2):
+def move_orthog(mps, begin=0, end=-1, renorm=False, norm_ord=2):
     '''
     This simply moves the orth center from one position to the other calling the
     refresh functions
@@ -366,10 +366,10 @@ def move_orthog(mps, begin=0, end=-1, renorm=False, ord=2):
         return mps
     if begin < end:
         return mpsrefresh_lefttoright(
-            mps, begin=begin, orth_pos=end, renorm=renorm, ord=ord)
+            mps, begin=begin, orth_pos=end, renorm=renorm, norm_ord=norm_ord)
     if begin > end:
         return mpsrefresh_righttoleft(
-            mps, begin=begin, orth_pos=end, renorm=renorm, ord=ord)
+            mps, begin=begin, orth_pos=end, renorm=renorm, norm_ord=norm_ord)
     else:
         raise ValueError("\'begin\' and \'end\' values are not compatible")
 
@@ -433,7 +433,7 @@ def _mps_mpo_contract_opentoright(opened, mps_tens, mpo_tens, orthog=True):
 
 def mps_mpo_contract_fromlefttoright(mps, mpo, index=0):
     '''
-    Partial-mpo to mps contractor. Assumes fantom legs on the mpo ends. Begins 
+    Partial-mpo to mps contractor. Assumes fantom legs on the mpo ends. Begins
     at start of mpo.
     '''
     mpo_length = len(mpo)
@@ -506,8 +506,8 @@ def binary_mps(binary):
     '''
     mps = []
     # Initiating tensors
-    zero = (np.array([1., 0.])).reshape(1, 2, 1)
-    one = (np.array([0., 1.])).reshape(1, 2, 1)
+    zero = (np.array([1., 0.])).reshape((1, 2, 1))
+    one = (np.array([0., 1.])).reshape((1, 2, 1))
 
     for _, j in enumerate(binary):
         if j == 0:
@@ -530,9 +530,11 @@ def max_bond_size(mps):
     return max(max_bonds)
 
 
-if __name__ == "__main__":
+""" if __name__ == "__main__":
 
     '''
+
+
     mat = np.random.rand(5, 5)
     _, s, _, i = simple_reduced_svd(mat)
     print(f's={s}')
@@ -600,4 +602,4 @@ if __name__ == "__main__":
     binarray[0] = 1
     an_mps = binary_mps(binarray)
     print(max_bond_size(an_mps))
-    print(an_mps)
+    print(an_mps) """
