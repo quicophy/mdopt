@@ -344,7 +344,6 @@ def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, norm_ord=2):
 
     cover = begin-end
     for i in range(0, cover):
-        print(i)
         # Contract, svd and shape-back
         mps[begin-i-1], mps[begin-i], _ = _two_sites_mps_reduce(
             mps[begin-i-1], mps[begin-i], renorm=renorm, norm_ord=norm_ord, direction='left')
@@ -500,6 +499,34 @@ def mps_mpo_contract_fromrighttoleft(mps, mpo, index=0):
     return mps
 
 
+def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0):
+    '''
+    Moves the orth. center of the mps at right position then does partial
+    mps-mpo contraction.
+    Decides if it is more strategic to contract the mpo from right of left.
+    '''
+    mpo_length = len(mpo)
+    mps_length = len(mps)
+
+    while index < 0:
+        index += mps_length
+    while current_orth < 0:
+        current_orth += mps_length
+    # Finds best strategy
+    dist_start = np.abs(index-current_orth)
+    dist_end = np.abs(index+mpo_length-1-current_orth)
+    if dist_start > dist_end:
+        mps = move_orthog(mps, begin=current_orth, end=index+mpo_length-1)
+        mps = mps_mpo_contract_fromrighttoleft(mps, mpo, index=index)
+        new_orth = index
+    else:
+        mps = move_orthog(mps, begin=current_orth, end=index)
+        mps = mps_mpo_contract_fromlefttoright(mps, mpo, index=index)
+        new_orth = index+mpo_length-1
+
+    return mps, new_orth
+
+
 def binary_mps(binary):
     '''
     Turns a classical binary array into a an equivalent normalised MPS.
@@ -530,8 +557,8 @@ def max_bond_size(mps):
     return max(max_bonds)
 
 
-""" if __name__ == "__main__":
-
+if __name__ == "__main__":
+    """
     '''
 
 
@@ -603,3 +630,23 @@ def max_bond_size(mps):
     an_mps = binary_mps(binarray)
     print(max_bond_size(an_mps))
     print(an_mps) """
+
+phi = np.random.rand(2**10)
+phi = phi/np.linalg.norm(phi, ord=2)
+
+an_mps = state_to_mps_build(phi)
+an_mpo = identity_mpo(4)
+
+#an_mps = move_orthog(an_mps, begin=-1, end=2)
+
+orthogonality = find_orthog_center(an_mps)[0]
+print(orthogonality)
+
+another_mps, new_orthogonality = mps_mpo_contract_shortest_moves(
+    an_mps, an_mpo, index=2, current_orth=orthogonality)
+
+print(find_orthog_center(another_mps))
+print(new_orthogonality)
+
+vector = mps_contract(an_mps)
+print(np.allclose(vector, phi))
