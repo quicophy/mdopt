@@ -98,5 +98,3 @@ def test_mps_mpo_contraction(bit_numb=10, qudit_lvl=2):
     np.testing.assert_allclose(phi, vector)
 
 
-if __name__ == "__main__":
-    test_mps_mpo_contraction()

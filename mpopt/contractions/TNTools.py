@@ -1,8 +1,15 @@
 '''
-This a variation of the legacy TN_tools file.
+
+ _______ __   _ _______  _____   _____         _______
+    |    | \  |    |    |     | |     | |      |______
+    |    |  \_|    |    |_____| |_____| |_____ ______|
+                                                      
+
+Collection of Tn functions useful for the simple_canonical form solver.
 
 The functions are made to input fantom legs. The format permits open boundary
-conditions to the mps
+conditions to the mps. Doesn't include a state/MPS class. Doesn't include 
+optimizers (DMRG/main_component/etc.).
 
 '''
 
@@ -556,97 +563,3 @@ def max_bond_size(mps):
 
     return max(max_bonds)
 
-
-if __name__ == "__main__":
-    """
-    '''
-
-
-    mat = np.random.rand(5, 5)
-    _, s, _, i = simple_reduced_svd(mat)
-    print(f's={s}')
-    print(i)
-    # '''
-
-    '''
-    phi = np.random.rand(2**10)
-    phi = phi/np.linalg.norm(phi, ord=2)
-
-    yo = state_to_mps_build(phi)
-    print(len(yo))
-    # '''
-
-    '''
-    print('Yo!')
-    tot = mps_contract(yo)
-
-    non_iso = find_orthog_center(yo)
-
-    print(phi)
-    print(tot)
-    print(non_iso)
-    # '''
-
-    '''
-    an_mps = plus_state_mps(6)
-    print(an_mps[3])
-    print(len(an_mps))
-
-    an_mps = mpsrefresh_lefttoright(an_mps)
-    # an_mps = mpsrefresh_righttoleft(an_mps, begin=-1, orth_pos=3)
-    an_mps = move_orthog(an_mps, begin=-1, end=3)
-    print(find_orthog_center(an_mps))
-    # '''
-    '''
-    an_mps = plus_state_mps(6)
-    an_mpo = identity_mpo(4)
-
-    an_mps = move_orthog(an_mps)
-    an_mps = move_orthog(an_mps, begin=-1, end=2)
-    print(find_orthog_center(an_mps))
-    # print(len(an_mps))
-
-    another_mps = mps_mpo_contract_fromlefttoright(an_mps, an_mpo, index=2)
-
-    print(find_orthog_center(an_mps))
-    '''
-    '''
-    an_mps = plus_state_mps(6)
-    an_mpo = identity_mpo(4)
-
-    an_mps[2] = an_mps[2]*2
-    an_mps = move_orthog(an_mps)
-    #an_mps = move_orthog(an_mps, begin=-1, end=2)
-
-    print(find_orthog_center(an_mps))
-    # print(len(an_mps))
-
-    another_mps = mps_mpo_contract_fromrighttoleft(an_mps, an_mpo, index=2)
-
-    print(find_orthog_center(another_mps))
-    '''
-    binarray = np.zeros(4)
-    binarray[0] = 1
-    an_mps = binary_mps(binarray)
-    print(max_bond_size(an_mps))
-    print(an_mps) """
-
-phi = np.random.rand(2**10)
-phi = phi/np.linalg.norm(phi, ord=2)
-
-an_mps = state_to_mps_build(phi)
-an_mpo = identity_mpo(4)
-
-#an_mps = move_orthog(an_mps, begin=-1, end=2)
-
-orthogonality = find_orthog_center(an_mps)[0]
-print(orthogonality)
-
-another_mps, new_orthogonality = mps_mpo_contract_shortest_moves(
-    an_mps, an_mpo, index=2, current_orth=orthogonality)
-
-print(find_orthog_center(another_mps))
-print(new_orthogonality)
-
-vector = mps_contract(an_mps)
-print(np.allclose(vector, phi))
