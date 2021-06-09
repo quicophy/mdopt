@@ -657,6 +657,7 @@ class MpsStateCanon:
         self.mps = mps_list.copy()
         self.length = len(mps_list)
         self.orth_pos = None
+        # initialize the orthogonality center position
         if 'orth_pos' not in kwargs:
             orth_poses = find_orthog_center(self.mps)
             if len(orth_poses) != 1:
@@ -668,6 +669,7 @@ class MpsStateCanon:
         else:
             self.orth_pos = real_index(
                 kwargs.get('orth_pos', None), self.length)
+        # Default SVD function
         if 'svd_func' not in kwargs:
             warnings.warn(
                 'No SVD function specified for MPS class. Using standard \'no-cut\' reduced_SVD!')
@@ -696,13 +698,15 @@ class MpsStateCanon:
         '''
         if self.orth_pos is None:
             self.mps = move_orthog(
-                self.mps, begin=0, end=-1, renorm=renormalize)
-            self.mps = move_orthog(self.mps, begin=-1, end=position)
+                self.mps, begin=0, end=-1, svd_func=self.svd_func)
+            self.mps = move_orthog(
+                self.mps, begin=-1, end=position, svd_func=self.svd_func)
             self.orth_pos = real_index(position, self.length)
         else:
             warnings.warn(
                 f'MPS already in canonical form with orthog position ={self.orth_pos}! Moving orthog center at required position={position}')
-            self.mps = move_orthog(self.mps, begin=self.orth_pos, end=position)
+            self.mps = move_orthog(
+                self.mps, begin=self.orth_pos, end=position, svd_func=self.svd_func)
             self.orth_pos = real_index(position, self.length)
 
     def move_orth(self, position, renormalize=False):
@@ -714,7 +718,7 @@ class MpsStateCanon:
                 f'MPS has no orth. center, so cannot be moved at position {position}!')
         else:
             self.mps = move_orthog(
-                self.mps, begin=self.orth_pos, end=position, renorm=renormalize)
+                self.mps, begin=self.orth_pos, end=position, svd_func=self.svd_func)
             self.orth_pos = real_index(position, self.length)
 
     def adjust_orth(self):
@@ -741,7 +745,7 @@ class MpsStateCanon:
         -beginning: position at the mps to which the first mpo tensor is applied.
         '''
         self.mps, self.orth_pos = mps_mpo_contract_shortest_moves(
-            self.mps, mpo=mpo, current_orth=self.orth_pos, index=beginning)
+            self.mps, mpo=mpo, current_orth=self.orth_pos, index=beginning, svd_func=self.svd_func)
 
 
 '''
