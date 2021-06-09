@@ -691,7 +691,7 @@ class MpsStateCanon:
         '''
         self.svd_func = svd_func
 
-    def create_orth(self, position=-1, renormalize=False):
+    def create_orth(self, position=-1):
         '''
         Puts the mps in canonical form and puts the orthog center at specified
         position.
@@ -709,7 +709,7 @@ class MpsStateCanon:
                 self.mps, begin=self.orth_pos, end=position, svd_func=self.svd_func)
             self.orth_pos = real_index(position, self.length)
 
-    def move_orth(self, position, renormalize=False):
+    def move_orth(self, position):
         '''
         Moves the orthogonality center at given position.
         '''
