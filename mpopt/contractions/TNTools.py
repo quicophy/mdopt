@@ -3,17 +3,16 @@
  _______ __   _ _______  _____   _____         _______
     |    | \  |    |    |     | |     | |      |______
     |    |  \_|    |    |_____| |_____| |_____ ______|
-                                                      
+
 
 Collection of Tn functions useful for the simple_canonical form solver.
 
 The functions are made to input fantom legs. The format permits open boundary
-conditions to the mps. Doesn't include a state/MPS class. Doesn't include 
+conditions to the mps. Doesn't include a state/MPS class. Doesn't include
 optimizers (DMRG/main_component/etc.).
-
 '''
 
-
+import warnings
 import numpy as np
 import scipy.linalg
 
@@ -163,6 +162,15 @@ def mps_contract(mps, renorm=False, norm_ord=2):
     return dense
 
 
+def real_index(index, list_lenght):
+    '''
+    Translates negative indices to positive integers
+    '''
+    while index < 0:
+        index += list_lenght
+    return index
+
+
 def find_left_noniso(mps, precision=1e-02):
     '''
     Finds the left non-unit tensors in a MPS.
@@ -287,18 +295,23 @@ def plus_state_mps(size, qudit=2):
     return mps
 
 
-def _two_sites_mps_reduce(site1, site2, renorm=False, norm_ord=2, direction='right'):
+def _two_sites_mps_reduce(site1, site2, direction='right', **kwargs):
     '''
     Contracts two adjacent site tensors and returns them with a reduced bond
     dimension using the reduce_svd function.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
 
     bond_1, site_size_1, _ = site1.shape
     _, site_size_2, bond_3 = site2.shape
     _temp1 = site1.reshape((bond_1*site_size_1, -1))
     _temp2 = site2.reshape((-1, bond_3*site_size_2))
     _temp = np.dot(_temp1, _temp2)
-    _u, _s, _vh, _ = reduced_svd(_temp, normalize=renorm, norm_ord=norm_ord)
+    _u, _s, _vh, _ = svd_func(_temp)
     if direction == 'right':
         _vh = np.dot(np.diag(_s), _vh)
     elif direction == 'left':
@@ -314,11 +327,17 @@ def _two_sites_mps_reduce(site1, site2, renorm=False, norm_ord=2, direction='rig
     return _u, _vh, _s
 
 
-def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, renorm=False, norm_ord=2):
+def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, **kwargs):
     '''
     Moves the orth center from one site to a site to its right. Can be used to
     put the mps in canonical form and normalize it.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     length = len(mps)
     if orth_pos < 0:
         end = length+orth_pos
@@ -331,16 +350,22 @@ def mpsrefresh_lefttoright(mps, begin=0, orth_pos=-1, renorm=False, norm_ord=2):
     for i in range(begin, end):
         # Contract, svd and shape-back
         mps[i], mps[i+1], _ = _two_sites_mps_reduce(
-            mps[i], mps[i+1], renorm=renorm, norm_ord=norm_ord, direction='right')
+            mps[i], mps[i+1], direction='right', svd_func=svd_func)
 
     return mps
 
 
-def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, norm_ord=2):
+def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, **kwargs):
     '''
     Moves the orth center from one site to a site to its left. Can be used to
     put the mps in canonical form and normalize it.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     length = len(mps)
     end = orth_pos
     while end < 0:
@@ -353,16 +378,22 @@ def mpsrefresh_righttoleft(mps, begin=-1, orth_pos=0, renorm=False, norm_ord=2):
     for i in range(0, cover):
         # Contract, svd and shape-back
         mps[begin-i-1], mps[begin-i], _ = _two_sites_mps_reduce(
-            mps[begin-i-1], mps[begin-i], renorm=renorm, norm_ord=norm_ord, direction='left')
+            mps[begin-i-1], mps[begin-i], direction='left', svd_func=svd_func)
 
     return mps
 
 
-def move_orthog(mps, begin=0, end=-1, renorm=False, norm_ord=2):
+def move_orthog(mps, begin=0, end=-1, **kwargs):
     '''
     This simply moves the orth center from one position to the other calling the
     refresh functions
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     while begin < 0:
         begin += len(mps)
     while end < 0:
@@ -372,10 +403,10 @@ def move_orthog(mps, begin=0, end=-1, renorm=False, norm_ord=2):
         return mps
     if begin < end:
         return mpsrefresh_lefttoright(
-            mps, begin=begin, orth_pos=end, renorm=renorm, norm_ord=norm_ord)
+            mps, begin=begin, orth_pos=end, svd_func=svd_func)
     if begin > end:
         return mpsrefresh_righttoleft(
-            mps, begin=begin, orth_pos=end, renorm=renorm, norm_ord=norm_ord)
+            mps, begin=begin, orth_pos=end, svd_func=svd_func)
     else:
         raise ValueError("\'begin\' and \'end\' values are not compatible")
 
@@ -416,16 +447,22 @@ def _mps_mpo_contract_firstsite(mps_tens, mpo_tens, direction='right'):
     return opened
 
 
-def _mps_mpo_contract_opentoright(opened, mps_tens, mpo_tens, orthog=True):
+def _mps_mpo_contract_opentoright(opened, mps_tens, mpo_tens, orthog=True, **kwargs):
     '''
     Contracts the 'opened' tensor to the next mps and mpo tensors.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     # contraction with mps tens
     _temp = np.tensordot(opened, mps_tens, axes=([1], [0]))
     _temp = np.tensordot(_temp, mpo_tens, axes=([2, 3], [2, 0]))
     _shape = _temp.shape
     _temp = _temp.reshape((_shape[0]*_shape[1], -1))
-    _u, _s, _vh, _ = reduced_svd(_temp)
+    _u, _s, _vh, _ = svd_func(_temp)
     if orthog:
         _vh = np.dot(np.diag(_s), _vh)
     else:
@@ -437,11 +474,17 @@ def _mps_mpo_contract_opentoright(opened, mps_tens, mpo_tens, orthog=True):
     return prev_mps, next_opened, _s
 
 
-def mps_mpo_contract_fromlefttoright(mps, mpo, index=0):
+def mps_mpo_contract_fromlefttoright(mps, mpo, index=0, **kwargs):
     '''
     Partial-mpo to mps contractor. Assumes fantom legs on the mpo ends. Begins
     at start of mpo.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     mpo_length = len(mpo)
     mps_length = len(mps)
 
@@ -454,20 +497,29 @@ def mps_mpo_contract_fromlefttoright(mps, mpo, index=0):
     # Contract for all intermediate tensors
     for i in range(1, mpo_length):
         mps[i+index-1], open_right, _ = _mps_mpo_contract_opentoright(
-            open_right, mps[i+index], mpo[i])
+            open_right, mps[i+index], mpo[i], svd_func=svd_func)
     # Form the last mps site
     mps[index+mpo_length-1] = np.transpose(open_right[:, :, :, 0], (0, 2, 1))
 
     return mps
 
 
-def _mps_mpo_contract_opentoleft(opened, mps_tens, mpo_tens, orthog=True):
+def _mps_mpo_contract_opentoleft(opened, mps_tens, mpo_tens, orthog=True, **kwargs):
+    '''
+    Contracts the 'opened' tensor to the previous mps and mpo tensors.
+    '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     # contraction with mps tens
     _temp = np.tensordot(opened, mps_tens, axes=([0], [2]))
     _temp = np.tensordot(_temp, mpo_tens, axes=([2, 4], [3, 0]))
     _shape = _temp.shape
     _temp = _temp.reshape((_shape[0]*_shape[1], -1))
-    _u, _s, _vh, _ = reduced_svd(_temp)
+    _u, _s, _vh, _ = svd_func(_temp)
     if orthog:
         _vh = np.dot(np.diag(_s), _vh)
     else:
@@ -481,11 +533,17 @@ def _mps_mpo_contract_opentoleft(opened, mps_tens, mpo_tens, orthog=True):
     return prev_mps, next_opened, _s
 
 
-def mps_mpo_contract_fromrighttoleft(mps, mpo, index=0):
+def mps_mpo_contract_fromrighttoleft(mps, mpo, index=0, **kwargs):
     '''
     Partial-mpo to mps contractor. Assumes fantom legs on the mpo ends. Begins
     at end of mpo.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     mpo_length = len(mpo)
     mps_length = len(mps)
 
@@ -500,18 +558,24 @@ def mps_mpo_contract_fromrighttoleft(mps, mpo, index=0):
 
     for i in range(1, mpo_length):
         mps[start-i+1], open_left, _ = _mps_mpo_contract_opentoleft(
-            open_left, mps[start-i], mpo[-i-1])
+            open_left, mps[start-i], mpo[-i-1], svd_func=svd_func)
     mps[index] = np.transpose(open_left[:, :, :, 0], (0, 2, 1))
 
     return mps
 
 
-def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0):
+def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0, **kwargs):
     '''
     Moves the orth. center of the mps at right position then does partial
     mps-mpo contraction.
     Decides if it is more strategic to contract the mpo from right of left.
     '''
+
+    if 'svd_func' not in kwargs:
+        svd_func = reduced_svd
+    else:
+        svd_func = kwargs.get('svd_func', None)
+
     mpo_length = len(mpo)
     mps_length = len(mps)
 
@@ -523,12 +587,16 @@ def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0):
     dist_start = np.abs(index-current_orth)
     dist_end = np.abs(index+mpo_length-1-current_orth)
     if dist_start > dist_end:
-        mps = move_orthog(mps, begin=current_orth, end=index+mpo_length-1)
-        mps = mps_mpo_contract_fromrighttoleft(mps, mpo, index=index)
+        mps = move_orthog(mps, begin=current_orth, end=index +
+                          mpo_length-1, svd_func=svd_func)
+        mps = mps_mpo_contract_fromrighttoleft(
+            mps, mpo, index=index, svd_func=svd_func)
         new_orth = index
     else:
-        mps = move_orthog(mps, begin=current_orth, end=index)
-        mps = mps_mpo_contract_fromlefttoright(mps, mpo, index=index)
+        mps = move_orthog(mps, begin=current_orth,
+                          end=index, svd_func=svd_func)
+        mps = mps_mpo_contract_fromlefttoright(
+            mps, mpo, index=index, svd_func=svd_func)
         new_orth = index+mpo_length-1
 
     return mps, new_orth
@@ -563,3 +631,138 @@ def max_bond_size(mps):
 
     return max(max_bonds)
 
+
+def custom_svd(_m):
+    '''
+    Speccific custom function build for Mps_State class example.
+    '''
+    return reduced_svd(_m, cut=0.001, max_len=100, normalize=True, norm_ord=2)
+
+
+class MpsStateCanon:
+    '''
+    MPS class object.
+
+    -mps_list: list of mps tensors (3 legs each)
+    optional:
+        -orth_pos: position at which the orthogonality center can be found.
+                    finds this position by default
+        -svd_func: custom selected svd function used. The cut parameters, max bond
+                    dims and etc. are selected from there. By default, reduced_svd
+                    func in this file.
+
+    '''
+
+    def __init__(self, mps_list, **kwargs):
+        self.mps = mps_list.copy()
+        self.length = len(mps_list)
+        self.orth_pos = None
+        if 'orth_pos' not in kwargs:
+            orth_poses = find_orthog_center(self.mps)
+            if len(orth_poses) != 1:
+                warnings.warn(
+                    f'MPS seems to be in non-valid canonical form (one orthog. center) orth. poses ={orth_poses} not size 1 !')
+                self.orth_pos = None
+            else:
+                self.orth_pos = orth_poses[0]
+        else:
+            self.orth_pos = real_index(
+                kwargs.get('orth_pos', None), self.length)
+        if 'svd_func' not in kwargs:
+            warnings.warn(
+                'No SVD function specified for MPS class. Using standard \'no-cut\' reduced_SVD!')
+            self.svd_func = reduced_svd
+        else:
+            self.svd_func = kwargs.get('svd_func', None)
+
+    def test_the_svd(self, test_size=10):
+        '''
+        Quick test to verify if svd_func has the right properties.
+        '''
+        _m = np.random.rand(test_size, test_size)
+        _u, _s, _vh, _ = self.svd_func(_m)
+        print(_s)
+
+    def update_svd_func(self, svd_func):
+        '''
+        Changes the default svd function by which operations are done.
+        '''
+        self.svd_func = svd_func
+
+    def create_orth(self, position=-1, renormalize=False):
+        '''
+        Puts the mps in canonical form and puts the orthog center at specified
+        position.
+        '''
+        if self.orth_pos is None:
+            self.mps = move_orthog(
+                self.mps, begin=0, end=-1, renorm=renormalize)
+            self.mps = move_orthog(self.mps, begin=-1, end=position)
+            self.orth_pos = real_index(position, self.length)
+        else:
+            warnings.warn(
+                f'MPS already in canonical form with orthog position ={self.orth_pos}! Moving orthog center at required position={position}')
+            self.mps = move_orthog(self.mps, begin=self.orth_pos, end=position)
+            self.orth_pos = real_index(position, self.length)
+
+    def move_orth(self, position, renormalize=False):
+        '''
+        Moves the orthogonality center at given position.
+        '''
+        if self.orth_pos is None:
+            warnings.warn(
+                f'MPS has no orth. center, so cannot be moved at position {position}!')
+        else:
+            self.mps = move_orthog(
+                self.mps, begin=self.orth_pos, end=position, renorm=renormalize)
+            self.orth_pos = real_index(position, self.length)
+
+    def adjust_orth(self):
+        '''
+        Verifies that the orthog center is at the right position. If there is one
+        orthog not at right position, changes orth_pos to that position. If the
+        mps is not in canonical form, orth_pos is put to none.
+        '''
+        orth_poses = find_orthog_center(self.mps)
+        if len(orth_poses) != 1:
+            warnings.warn(
+                f'MPS seems to be in non-valid canonical form (one orthog. center) orth. poses ={orth_poses} not size 1 !')
+            self.orth_pos = None
+        elif self.orth_pos != orth_poses[0]:
+            warnings.warn(
+                f'MPS orth_pos center seems to be at wrong position, adjusted to be at position {orth_poses} now!')
+            self.orth_pos = orth_poses[0]
+
+    def mpo_contract(self, mpo, beginning=0):
+        '''
+        Contracts mpo to the current mps. The orthgonality center is automatically
+        updated.
+        -mpo: MPO tensor list
+        -beginning: position at the mps to which the first mpo tensor is applied.
+        '''
+        self.mps, self.orth_pos = mps_mpo_contract_shortest_moves(
+            self.mps, mpo=mpo, current_orth=self.orth_pos, index=beginning)
+
+
+'''
+Note to self:
+To be added:
+-Function to cancel canonicalization, and related modifications
+-Adjust all functions so that they use the svd_func specified.
+-function to test if any tensor contains nans, infs or etc.
+-Adjust svd function to include state killing (norm=0):
+    -return error in case svd results countains nans, infs, or 0 sing vals
+'''
+
+
+bin = np.random.rand(2**10)
+mps_tensors = state_to_mps_build(bin)
+mpo_tensors = identity_mpo(7)
+# bin = np.array([0, 1, 0, 0, 1, 0, 0])
+# mps_tensors = binary_mps(bin)
+
+class_mps = MpsStateCanon(mps_tensors, svd_func=custom_svd)
+class_mps.create_orth(position=-1)
+class_mps.mpo_contract(mpo_tensors, beginning=0)
+print(class_mps.orth_pos)
+class_mps.test_the_svd()
