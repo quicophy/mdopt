@@ -10,14 +10,14 @@ from scipy.linalg import svd
 def trimmed_svd(
     mat,
     cut=1e-16,
-    max_num=1e6,
+    max_num=1e5,
     normalise=False,
     init_norm=False,
     limit_max=False,
     err_th=1e-16,
 ):
     """
-    Return the Singular Value Decomposition of a matrix M.
+    Return the Singular Value Decomposition of a matrix `mat`.
 
     Arguments:
         mat: ndarray[ndim=2]
@@ -127,3 +127,13 @@ def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals
         )
 
     return product
+
+
+def nlog(n):
+    """
+    An utility function which return n * log(n) or 0 if n == 0.
+    """
+    if n == 0.0:
+        return 0.0
+
+    return n * np.log(n)

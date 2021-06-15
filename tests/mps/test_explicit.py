@@ -1,17 +1,19 @@
 """
-    This module contains tests.
+    Tests for the explicit MPS construction.
 """
 
 from functools import reduce
+from itertools import combinations
 import numpy as np
 from mpopt.utils import trimmed_svd, interlace_tensors
-from mpopt.contractor.mps import (
+from mpopt.mps.explicit import (
     mps_from_dense,
     is_canonical,
     find_orth_centre,
     move_orth_centre,
     split_two_site_tensor,
     to_explicit_form,
+    inner_product,
 )
 from experiments.decoder import ferro_mps, antiferro_mps
 
@@ -22,9 +24,14 @@ from experiments.decoder import ferro_mps, antiferro_mps
 # check out typing for fixing types of variables in functions
 # mpos + mpo-mps contraction
 # dmrg
-# implement decoder in the experiments folder
+# decoder in the experiments folder
 # dtypes: complex64/32? float64/32?
 # `` for the variables and functions in docstrings
+# optimise move_orth_centre
+# CHECK THE ZEROS IN THE SVD
+# check all the functions do not act inplace
+# copy attribute for the class
+# reverse as an attribute for the class / separate function
 
 
 def test_trimmed_svd():
@@ -149,7 +156,7 @@ def test_ferro_mps():
 
     overlap = abs(psi @ psi_true) ** 2
 
-    assert np.isclose(overlap, 1.0)
+    assert np.isclose(overlap, 1)
 
 
 def test_antiferro_mps():
@@ -168,7 +175,7 @@ def test_antiferro_mps():
 
     overlap = abs(psi @ psi_true) ** 2
 
-    assert np.isclose(overlap, 1.0)
+    assert np.isclose(overlap, 1)
 
 
 def test_from_dense():
@@ -181,8 +188,6 @@ def test_from_dense():
     for _ in range(100):
 
         psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
-        index = np.random.randint(low=0, high=2 ** n - 1)
-        psi[index] = 1.0
         psi /= np.linalg.norm(psi)
 
         mps = mps_from_dense(psi, dim=2)
@@ -190,7 +195,7 @@ def test_from_dense():
 
         overlap = abs(np.conjugate(psi_from_mps) @ psi) ** 2
 
-        assert np.isclose(overlap, 1.0)
+        assert np.isclose(overlap, 1)
 
 
 def test_single_site_left_iso():
@@ -234,7 +239,11 @@ def test_to_left_canonical():
         mps_left = mps.to_left_canonical()
 
         assert is_canonical(mps_left)
-        assert find_orth_centre(mps_left) is None
+        assert np.isclose(abs(inner_product(mps_left, mps_left)), 1)
+        assert len(find_orth_centre(mps_left)) == 1
+
+        for i in range(n):
+            assert mps.tensors[i].shape == mps_left[i].shape
 
         for i, _ in enumerate(mps_left):
 
@@ -289,7 +298,11 @@ def test_to_right_canonical():
         mps_right = mps.to_right_canonical()
 
         assert is_canonical(mps_right)
-        assert find_orth_centre(mps_right) is None
+        assert np.isclose(abs(inner_product(mps_right, mps_right)), 1)
+        assert len(find_orth_centre(mps_right)) == 1
+
+        for i in range(n):
+            assert mps.tensors[i].shape == mps_right[i].shape
 
         for i, _ in enumerate(mps_right):
 
@@ -317,13 +330,14 @@ def test_to_mixed_canonical():
         psi /= np.linalg.norm(psi)
         mps = mps_from_dense(psi, dim=2, limit_max=False)
 
-        orth_centre_index = np.random.randint(1, n - 1)
+        orth_centre_index = np.random.randint(n)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
         for i in range(n):
             assert mps.tensors[i].shape == mps_mixed[i].shape
-        assert find_orth_centre(mps_mixed) == orth_centre_index
         assert is_canonical(mps_mixed)
+        assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
+        assert find_orth_centre(mps_mixed) == [orth_centre_index]
 
 
 def test_entanglement_entropy():
@@ -424,11 +438,11 @@ def test_find_orth_centre():
         psi /= np.linalg.norm(psi)
         mps = mps_from_dense(psi, dim=2, limit_max=False)
 
-        orth_centre_index = np.random.randint(0, n)
+        orth_centre_index = np.random.randint(n)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
-        print(orth_centre_index)
+
         assert is_canonical(mps_mixed)
-        assert find_orth_centre(mps_mixed) == orth_centre_index
+        assert find_orth_centre(mps_mixed) == [orth_centre_index]
 
 
 def test_move_orth_centre():
@@ -444,15 +458,52 @@ def test_move_orth_centre():
         psi /= np.linalg.norm(psi)
         mps = mps_from_dense(psi, dim=2, limit_max=False)
 
-        mps_mixed = mps.to_mixed_canonical(1)
-        assert is_canonical(mps_mixed)
-        assert find_orth_centre(mps_mixed) == 1
+        orth_centre_index_init = np.random.randint(n)
+        mps_mixed_init = mps.to_mixed_canonical(orth_centre_index_init)
+        assert np.isclose(abs(inner_product(mps_mixed_init, mps_mixed_init)), 1)
+        assert is_canonical(mps_mixed_init)
+        assert find_orth_centre(mps_mixed_init) == [orth_centre_index_init]
 
-        orth_centre_index = np.random.randint(0, n)
-        mps_mixed_new = move_orth_centre(mps_mixed, 1, orth_centre_index)
+        orth_centre_index_final = np.random.randint(n)
+        mps_mixed_final = move_orth_centre(
+            mps_mixed_init, orth_centre_index_init, orth_centre_index_final
+        )
 
-        assert is_canonical(mps_mixed_new)
-        assert find_orth_centre(mps_mixed_new) == orth_centre_index
+        assert np.isclose(abs(inner_product(mps_mixed_final, mps_mixed_final)), 1)
+        assert is_canonical(mps_mixed_final)
+        assert find_orth_centre(mps_mixed_final) == [orth_centre_index_final]
+
+
+def test_inner_product():
+    """
+    Test the implementation of the inner_product function.
+    """
+
+    n = 5
+
+    for _ in range(100):
+
+        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi /= np.linalg.norm(psi)
+        mps = mps_from_dense(psi, dim=2, limit_max=False)
+
+        # all possible orthogonality centre indices
+        orth_centre_indices = np.arange(n)
+
+        list_of_mps = []
+
+        list_of_mps.append(mps.to_left_canonical())
+        list_of_mps.append(mps.to_right_canonical())
+        for index in orth_centre_indices:
+            list_of_mps.append(mps.to_mixed_canonical(index))
+
+        index_list = np.arange(len(list_of_mps))
+        index_pairs = list(combinations(index_list, 2))
+
+        for pair in index_pairs:
+            assert np.isclose(
+                abs(inner_product(list_of_mps[pair[0]], list_of_mps[pair[1]])), 1
+            )
 
 
 def test_to_explicit_form():
@@ -470,40 +521,56 @@ def test_to_explicit_form():
 
         mps_left = mps.to_left_canonical()
         mps_right = mps.to_right_canonical()
-        orth_centre_index = np.random.randint(0, n)
+        orth_centre_index = np.random.randint(n)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
         assert is_canonical(mps_left)
         assert is_canonical(mps_right)
         assert is_canonical(mps_mixed)
-        assert find_orth_centre(mps_mixed) == orth_centre_index
 
         explicit_from_right = to_explicit_form(mps_right)
         explicit_from_left = to_explicit_form(mps_left)
         explicit_from_mixed = to_explicit_form(mps_mixed)
 
-        for i in range(n):
-            assert np.isclose(
-                np.linalg.norm(
-                    mps_right[i] - explicit_from_right.to_right_canonical()[i]
-                ),
-                0,
-            )
-            assert np.isclose(
-                np.linalg.norm(
-                    mps_left[i] - explicit_from_right.to_left_canonical()[i]
-                ),
-                0,
-            )
-            """
-            assert np.isclose(
-                np.linalg.norm(
-                    mps_right[i] - explicit_from_left.to_right_canonical()[i]
-                ),
-                0,
-            )
-            """
-            assert np.isclose(
-                np.linalg.norm(mps_left[i] - explicit_from_left.to_left_canonical()[i]),
-                0,
-            )
+        assert np.isclose(
+            abs(inner_product(mps_right, explicit_from_right.to_right_canonical())), 1
+        )
+
+        assert np.isclose(
+            abs(inner_product(mps_right, explicit_from_left.to_right_canonical())), 1
+        )
+
+        assert np.isclose(
+            abs(inner_product(mps_left, explicit_from_right.to_left_canonical())), 1
+        )
+
+        assert np.isclose(
+            abs(inner_product(mps_left, explicit_from_left.to_left_canonical())), 1
+        )
+
+        assert np.isclose(
+            abs(
+                inner_product(
+                    mps_mixed, explicit_from_mixed.to_mixed_canonical(orth_centre_index)
+                )
+            ),
+            1,
+        )
+
+        assert np.isclose(
+            abs(
+                inner_product(
+                    mps_mixed, explicit_from_right.to_mixed_canonical(orth_centre_index)
+                )
+            ),
+            1,
+        )
+
+        assert np.isclose(
+            abs(
+                inner_product(
+                    mps_mixed, explicit_from_left.to_mixed_canonical(orth_centre_index)
+                )
+            ),
+            1,
+        )
