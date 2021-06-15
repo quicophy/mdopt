@@ -14,7 +14,7 @@ if dephased:
 
 """
 
-#def dephase_mpo(self, prob, tensor_to_apply):
+# def dephase_mpo(self, prob, tensor_to_apply):
 #        """
 #        Transforms the density MPO of a given MPS as follows:
 #        t = tensor_to_apply
@@ -23,7 +23,7 @@ if dephased:
 #
 #       return dephase_tensor(self.density_mpo(dephased=False), prob, tensor_to_apply)
 
-#def dephase_tensor(tensor, prob, tensor_to_apply):
+# def dephase_tensor(tensor, prob, tensor_to_apply):
 #    """
 #    T = tensor
 #    t = tensor_to_apply
@@ -52,7 +52,7 @@ def ferro_mps(nsites, dim):
     tensor[0, 0, 0] = 1.0
     schmidt_value = np.ones([1], np.float64)
     tensors = [tensor.copy() for i in range(nsites)]
-    schmidt_values = [schmidt_value.copy() for i in range(nsites)]
+    schmidt_values = [schmidt_value.copy() for i in range(nsites + 1)]
     return ExplicitMPS(tensors, schmidt_values)
 
 
@@ -74,5 +74,5 @@ def antiferro_mps(nsites, dim):
     tensor[0, 1, 0] = 1.0
     schmidt_value = np.ones([1], np.float64)
     tensors = [tensor.copy() for _ in range(nsites)]
-    schmidt_values = [schmidt_value.copy() for _ in range(nsites)]
+    schmidt_values = [schmidt_value.copy() for _ in range(nsites + 1)]
     return ExplicitMPS(tensors, schmidt_values)
