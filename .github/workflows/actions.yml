@@ -43,5 +43,5 @@ jobs:
         run: poetry install
         
       - name: Run linter
-        run: poetry run pylint mpopt
+        run: poetry run pylint mpopt --fail-under=8
         
