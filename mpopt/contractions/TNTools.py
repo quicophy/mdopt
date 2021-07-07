@@ -17,6 +17,13 @@ import numpy as np
 import scipy.linalg
 
 
+'''
+################################################################################
+Basic Linear algebra operations
+################################################################################
+'''
+
+
 def best_svd(matrix):
     '''    Returns the "best" svd given a possibly failing matrix.
     If failure, try transpose, if again, change lapack driver.
@@ -110,6 +117,12 @@ def reduced_svd(matrix, cut=0.0, max_len=False, normalize=False, init_norm=True,
         return _u[:, :final_len], _s[:final_len], _vh[:final_len, :], final_len
 
 
+'''
+################################################################################
+Matrix Product State (MPS) basic operations
+################################################################################
+'''
+
 def state_to_mps_build(phi, qudit_level=2, normalize=True, max_bond=None):
     '''
     Builds a multi qudit state mps.
@@ -162,13 +175,14 @@ def mps_contract(mps, renorm=False, norm_ord=2):
     return dense
 
 
-def real_index(index, list_lenght):
+def max_bond_size(mps):
     '''
-    Translates negative indices to positive integers
+    Finds the max bond dimension of an mps.
     '''
-    while index < 0:
-        index += list_lenght
-    return index
+    max_bonds = [max(tens.shape[0], tens.shape[2])
+                 for _, tens in enumerate(mps)]
+
+    return max(max_bonds)
 
 
 def find_left_noniso(mps, precision=1e-02):
@@ -266,33 +280,6 @@ def find_orthog_center(mps, precision=1e-02):
     non_unit2 = find_orthogtoleft_noniso(mps, precision=precision)
 
     return list(set(non_unit1) & set(non_unit2))
-
-
-def ones_mps(size, qudit=2):
-    '''
-    Returns a full ones mps. Equivalent to a list of n reshaped copy tensors of
-    size qudit. No orthogonality center and no normalization.
-    '''
-
-    # Create the ones tensor
-    ones = np.ones(qudit).reshape((1, qudit, 1))
-    # create list of ones of length n
-    mps = [ones for _ in range(size)]
-
-    return mps
-
-
-def plus_state_mps(size, qudit=2):
-    '''
-    Returns a normalized plus tensor product state mps. No orthogonality center.
-    '''
-    # Create the ones tensor
-    plus = np.ones(qudit).reshape((1, qudit, 1))
-    plus /= np.sqrt(qudit)
-    # create list of ones of length n
-    mps = [plus for _ in range(size)]
-
-    return mps
 
 
 def _two_sites_mps_reduce(site1, site2, direction='right', **kwargs):
@@ -411,6 +398,78 @@ def move_orthog(mps, begin=0, end=-1, **kwargs):
         raise ValueError("\'begin\' and \'end\' values are not compatible")
 
 
+
+
+'''
+################################################################################
+Specific MPSs and MPOs Builder 
+################################################################################
+'''
+
+def ones_mps(size, qudit=2):
+    '''
+    Returns a full ones mps. Equivalent to a list of n reshaped copy tensors of
+    size qudit. No orthogonality center and no normalization.
+    '''
+
+    # Create the ones tensor
+    ones = np.ones(qudit).reshape((1, qudit, 1))
+    # create list of ones of length n
+    mps = [ones for _ in range(size)]
+
+    return mps
+
+
+def plus_state_mps(size, qudit=2):
+    '''
+    Returns a normalized plus tensor product state mps. No orthogonality center.
+    '''
+    # Create the ones tensor
+    plus = np.ones(qudit).reshape((1, qudit, 1))
+    plus /= np.sqrt(qudit)
+    # create list of ones of length n
+    mps = [plus for _ in range(size)]
+
+    return mps
+
+
+def binary_mps(binary):
+    '''
+    Turns a classical binary array into a an equivalent normalised MPS.
+    '''
+    mps = []
+    # Initiating tensors
+    zero = (np.array([1., 0.])).reshape((1, 2, 1))
+    one = (np.array([0., 1.])).reshape((1, 2, 1))
+
+    for _, j in enumerate(binary):
+        if j == 0:
+            mps.append(zero)
+        elif j == 1:
+            mps.append(one)
+        else:
+            raise ValueError(
+                " \'binary\' entry must be numpy array with 0/1 values")
+    return mps
+
+
+def ansatz_mps(mps_length, max_chi=20, phys_ind=2):
+    '''
+    Building a random MPS ansatz of specific length, with maximal bond dim chi
+    The physical index size can be adapted (default to qubit). NOT NORMALIZED!!!
+    '''
+    mps = []
+    # first tensor
+    mps.append(np.random.rand(1, phys_ind, min(phys_ind, max_chi)))
+    for i in range(1, mps_length):
+        bond_size = min(max_chi, phys_ind **
+                        (mps_length-i-1), phys_ind**(i+1))
+        # print(bond_size)
+        mps.append(np.random.rand(mps[-1].shape[2], phys_ind, bond_size))
+
+    return mps
+
+
 def boltz_mpo(size, prob=1/100):
     '''
     This returns an MPO in the form of boltzmann probability boxes.
@@ -435,6 +494,12 @@ def identity_mpo(size, qudit=2):
 
     return mpo
 
+
+'''
+################################################################################
+MPS-MPO contractor
+################################################################################
+'''
 
 def _mps_mpo_contract_firstsite(mps_tens, mpo_tens, direction='right'):
     _temp = np.tensordot(mps_tens, mpo_tens, axes=([1], [0]))
@@ -601,35 +666,19 @@ def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0, **kwargs
 
     return mps, new_orth
 
+'''
+################################################################################
+Other basic functions
+################################################################################
+'''
 
-def binary_mps(binary):
+def real_index(index, list_lenght):
     '''
-    Turns a classical binary array into a an equivalent normalised MPS.
+    Translates negative indices to positive integers
     '''
-    mps = []
-    # Initiating tensors
-    zero = (np.array([1., 0.])).reshape((1, 2, 1))
-    one = (np.array([0., 1.])).reshape((1, 2, 1))
-
-    for _, j in enumerate(binary):
-        if j == 0:
-            mps.append(zero)
-        elif j == 1:
-            mps.append(one)
-        else:
-            raise ValueError(
-                " \'binary\' entry must be numpy array with 0/1 values")
-    return mps
-
-
-def max_bond_size(mps):
-    '''
-    Finds the max bond dimension of an mps.
-    '''
-    max_bonds = [max(tens.shape[0], tens.shape[2])
-                 for _, tens in enumerate(mps)]
-
-    return max(max_bonds)
+    while index < 0:
+        index += list_lenght
+    return index
 
 
 def custom_svd(_m):
@@ -638,6 +687,13 @@ def custom_svd(_m):
     '''
     return reduced_svd(_m, cut=0.001, max_len=100, normalize=True, norm_ord=2)
 
+
+
+'''
+################################################################################
+Canonical MPS class
+################################################################################
+'''
 
 class MpsStateCanon:
     '''
