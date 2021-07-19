@@ -8,13 +8,25 @@
 Collection of Tn functions useful for the simple_canonical form solver.
 
 The functions are made to input fantom legs. The format permits open boundary
-conditions to the mps. Doesn't include a state/MPS class. Doesn't include
+conditions to the mps. Doesn't include
 optimizers (DMRG/main_component/etc.).
+
+TODO:
+    - MPS-MPS contractor (?)
+    - MPO-MPO contractor (?)
+    - general gate to MPO
+    - MPS-block gate contractor
+    - Function to cancel canonicalization in class and related modifications
+    - function to test if any tensor contains nans, infs or etc.
+    - Adjust svd function to include state killing (norm=0):
+    - return error in case svd results countains nans, infs, or 0 sing vals
+
 '''
 
 import warnings
 import numpy as np
 import scipy.linalg
+from scipy.sparse.linalg import eigsh
 
 
 '''
@@ -56,7 +68,7 @@ def simple_reduced_svd(matrix, max_len=False, normalize=True, norm_ord=2):
 
     # We find the cutoff positon
     final_len = len(_s)
-    if max_len is not None:
+    if max_len is not False:
         final_len = min(final_len, max_len)
 
     if normalize:
@@ -460,12 +472,32 @@ def ansatz_mps(mps_length, max_chi=20, phys_ind=2):
     '''
     mps = []
     # first tensor
+    if max_chi is False:
+        max_chi = np.Inf
     mps.append(np.random.rand(1, phys_ind, min(phys_ind, max_chi)))
     for i in range(1, mps_length):
         bond_size = min(max_chi, phys_ind **
                         (mps_length-i-1), phys_ind**(i+1))
-        # print(bond_size)
+
         mps.append(np.random.rand(mps[-1].shape[2], phys_ind, bond_size))
+
+    return mps
+
+
+def random_mps_gen(n=8, noise_ratio=0.1, highest_value_index=1, max=100):
+    '''
+    Builds a MPS with a specific main component element and a general gaussian
+    noise on ther component. Can be used to test main component finding methods.
+    '''
+    most_likely = np.zeros(2**n)
+    most_likely[highest_value_index] = 1
+
+    # vector of the noise model
+    noise = noise_ratio*np.random.rand(2**n)
+    vector = most_likely+noise
+
+    # We can refer to my MPS builder for qubit states
+    mps = state_to_mps_build(vector, normalize=True, max_bond=max)
 
     return mps
 
@@ -680,13 +712,130 @@ def real_index(index, list_lenght):
         index += list_lenght
     return index
 
-
-def custom_svd(_m):
+def integer_to_basis_pos(integer, width, basis=2):
     '''
-    Speccific custom function build for Mps_State class example.
-    '''
-    return reduced_svd(_m, cut=0.001, max_len=100, normalize=True, norm_ord=2)
+    Transforms an integer into a numpy array of each digit value in another 
+    basis. Important for main component finding.
 
+    ex.: basis=2 -> translates into binary.
+    '''
+    bin_str = np.base_repr(
+        integer, basis)  # Rewriting as string in right basis
+    bin_str = bin_str.zfill(width)  # Giving string right len, fill with zeros
+    print(bin_str)
+    arr = np.fromstring(bin_str, 'u1') - ord('0')  # convert to numpy array
+
+    return arr
+
+def vector_list_maxes(list):
+    '''
+    Receives a list of vectors (MPS in tensor product state) and return the
+    position of the maximal value for each element in a numpy array. Important
+    for main component finding.
+    '''
+    maxes = np.zeros(len(list))  # Creating array of right size
+
+    # Assigning right value for each element of the list
+    for _i, tens in enumerate(list):
+        maxes[_i] = np.argmax(np.abs(tens))
+
+    return maxes
+
+
+'''
+################################################################################
+MPS main component finder
+################################################################################
+'''
+
+def dephased_tensor_mpo_built(tensor):
+    '''
+    Builds the correct dephased density matrix MPO element for an mps tensor.
+    Follows general TNTools indices ordering.
+    '''
+    # Build density matrix
+    tens_shape = tensor.shape
+    conj_tensor = np.conj(tensor)
+    mpo_tens = np.tensordot(conj_tensor, tensor, axes=([], []))
+    mpo_tens = np.transpose(mpo_tens, axes=(1, 4, 0, 3, 2, 5))
+    mpo_tens = mpo_tens.reshape(
+        tens_shape[1], tens_shape[1], tens_shape[0]**2, tens_shape[2]**2)
+
+    # Eliminating off-diagonal elements
+    for i in range(tens_shape[0]**2):
+        for j in range(tens_shape[2]**2):
+            mpo_tens[:, :, i, j] = np.diag(np.diag(mpo_tens[:, :, i, j]))
+
+    return mpo_tens
+
+def dephased_mpo_built(mps):
+    '''
+    Builds the correct dephased density matrix MPO a complete MPS.
+    Follows general TNTools indices ordering.
+    '''
+    return [dephased_tensor_mpo_built(_t) for _, _t in enumerate(mps)]
+
+
+def main_component(mps, method='exact', **kwargs):
+    '''
+    Various ways of finding the main component (largest value) of an MPS.
+    Returns a numpy array with the index value of each tensor of the MPS.
+
+    Parameters
+    ----------
+    mps : MPS tensor list with phantom legs (3 indices per tensor)
+    method : - exact : Contracts the mps into a vector, then finds manually
+                       the largest element.
+             - t_prod_state : Creates a tensor product state approximation of
+                              the received mps. Finds the lagest index value of
+                              each site.
+             - dephased_DMRG : Applies the dephased DMRG method, making an
+                               ansatz mps converge to the basis product state
+                               corresponding to the largest value element.
+             - chi_max (optional) : Only used in dephased DMRG. The maximal
+                                    number of singular values kept during the
+                                    algorithm. If equal to False, no limit is
+                                    applied to the bond dimension. By default,
+                                    chi_max=False.
+    '''
+    if method == 'dephased_DMRG':
+        # Defining maximal bond dimension
+        if 'chi_max' not in kwargs:
+            warnings.warn(
+                'No max bond dimension (\'chi_max\') detected. No bound by default, \'chi_max\'=False.')
+            chi_max = False
+        else:
+            chi_max = kwargs.get('chi_max', None)
+        # Dephased mpo built from mps
+        mpo = dephased_mpo_built(mps)
+        ans_mps = ansatz_mps(len(mps), chi_max)  # An ansatz mps
+        deph_dmrg = Dmrg(
+            ans_mps, mpo, chi_max=chi_max, eig_method='LM')  # DMRG largest value
+        res_mps, _ = deph_dmrg.run()
+
+        # Simplify mps then get main component
+        # Defining svd function
+        def svd_func(_m):
+            return simple_reduced_svd(_m, max_len=1)
+        # Swiping to tensor prod state
+        simple_mps = mpsrefresh_righttoleft(res_mps, svd_func=svd_func)
+        main_comp = vector_list_maxes(simple_mps)  # Max pos of each tensor
+
+    elif method == 'exact':
+        vector = mps_contract(mps)  # Contract mps to vector
+        max_pos = np.argmax(np.abs(vector))  # max pos in vector
+        main_comp = integer_to_basis_pos(
+            max_pos, len(mps), basis=(mps[0].shape[1]))  # numpy array equivalent
+
+    elif method == 't_prod_state':
+        # Defining svd function
+        def svd_func(_m):
+            return simple_reduced_svd(_m, max_len=1)
+        # Swiping to tensor prod state
+        simple_mps = mpsrefresh_righttoleft(mps, svd_func=svd_func)
+        main_comp = vector_list_maxes(simple_mps)  # Max pos of each tensor
+
+    return main_comp
 
 
 '''
@@ -802,27 +951,330 @@ class MpsStateCanon:
         '''
         self.mps, self.orth_pos = mps_mpo_contract_shortest_moves(
             self.mps, mpo=mpo, current_orth=self.orth_pos, index=beginning, svd_func=self.svd_func)
+    
+    def main_component(self, method='exact', **kwargs):
+        '''
+        Finds largest value element (main component) of mps equivalent vector.
+        See 'main_component' function in main component finding section of
+        TNTools. 
+        '''
+        #Getting chi_max value for dephased_DMRG case. 
+        chi_max = False
+        if method == 'dephased_DMRG':
+            if 'chi_max' not in kwargs:
+                warnings.warn(
+                    'No max bond dimension (\'chi_max\') detected. No bound by default, \'chi_max\'=False.')
+                chi_max = False
+            else:
+                chi_max = kwargs.get('chi_max', None)
+            return main_component(self.mps, method=method, chi_max=chi_max)
+        
+        return main_component(self.mps, method=method)
 
 
 '''
-Note to self:
-To be added:
--Function to cancel canonicalization, and related modifications
--Adjust all functions so that they use the svd_func specified.
--function to test if any tensor contains nans, infs or etc.
--Adjust svd function to include state killing (norm=0):
-    -return error in case svd results countains nans, infs, or 0 sing vals
+################################################################################
+Other General TN algorithms
+################################################################################
 '''
 
 
-bin = np.random.rand(2**10)
-mps_tensors = state_to_mps_build(bin)
-mpo_tensors = identity_mpo(7)
-# bin = np.array([0, 1, 0, 0, 1, 0, 0])
-# mps_tensors = binary_mps(bin)
+class Dmrg():
+    """
+    Parameters
+    ----------
+    ansatz : MPS tensor list with phantom legs
+    mpo : The Hamiltonian in mpo format
+    chi_max : Maximal bond dimension permitted. No bound with chi_max=False.
+    nsweep : Maximum number of sweeps done
+    energy_var : Minimum energy variation in one step to declare conversion
+    ansatz_is_left_mps : If ansatz input is in left canonical form
+    debug : - 'partial': prints energy at each sweep
+            - 'full': prints at each step of each sweep
+            - 'None': no printing
+    eig_method : - 'LM' : largest magnitude
+                     - 'SM' : smallest magnitude
+                     - 'LR' : largest real part
+                     - 'SR' : smallest real part
+                     - 'LI' : largest imaginary part
+                     - 'SI' : smallest imaginary part
+                     (See scipy documentation)
 
-class_mps = MpsStateCanon(mps_tensors, svd_func=custom_svd)
-class_mps.create_orth(position=-1)
-class_mps.mpo_contract(mpo_tensors, beginning=0)
-print(class_mps.orth_pos)
-class_mps.test_the_svd()
+    Notes
+    -----
+    A MPS in right form (abreviated right_mps) is in right canonical form.
+    i.e. orthog center is the first tensor on the left.
+
+    Similarly, a MPS is in left form if the orthogonality center is the
+    right-most tensor.
+    """
+
+    def __init__(self, ansatz, mpo, chi_max, maxsweep=10, energy_var=1E-5, ansatz_is_left_mps=False, debug='partial', **kwargs):
+        self.nsites = len(ansatz)
+        self.mpo = mpo
+        self.energy_var = energy_var
+        self.nsweep = maxsweep
+        self.debug = debug
+        # Retrieving svd function given, or chi_max
+        if 'svd_func' not in kwargs:
+            # If none, selects svd func with chi_max parameter
+            self.svd_func = lambda m: reduced_svd(
+                m, max_len=chi_max, cut=0, normalize=True, err_th=0)
+        else:
+            warnings.warn(
+                'SVD function specified for DMRG class. Parameter chi_max made obsolete.')
+            self.svd_func = kwargs.get('svd_func', None)
+        # eigensolver method
+        if 'eig_method' not in kwargs:
+            self.eig_method = 'SM'
+        else:
+            self.eig_method = kwargs.get('eig_method', None)
+
+        # Array of singular values at each position
+        self.singular_values = [np.array([0])] * (self.nsites + 1)
+
+        # ansatz mps must be in left orth form
+        if ansatz_is_left_mps:
+            self.left_mps = ansatz.copy()
+        else:
+            self.left_mps = ansatz.copy()
+            self._ansatz_mps_to_left_form(self.left_mps)
+
+        # Getting singular value tensor at last position
+        self._get_last_singular()
+        # initializing right canonical tensor list
+        self.right_mps = [np.array([0]).reshape((1, 1, 1))] * self.nsites
+
+        # Useful parameters
+        self.energies = []  # Storing energy value at each sweep
+        self.sweep = 0  # Number of sweeps so far
+        self.left_env = []
+        self.right_env = []
+
+    def _ansatz_mps_to_left_form(self, ansatz):
+        """
+        Transfers the ansatz mps into the left orthogonal form (i.e. orthog
+        center on right). Update the last sigma value tensor.
+        """
+        for site in range(len(ansatz)-1):
+            chil, chid, chir = ansatz[site].shape
+            utemp, stemp, vhtemp, _ = simple_reduced_svd(
+                ansatz[site].reshape(chil*chid, chir), normalize=True)
+            self.left_mps[site] = utemp.reshape(chil, chid, chir)
+            self.left_mps[site+1] = np.tensordot(
+                np.diag(stemp) @ vhtemp, ansatz[site+1], axes=([1], [0]))
+            self.singular_values[self.nsites] = np.diag(stemp) @ vhtemp
+
+    def _get_last_singular(self):
+        '''
+        Initialize the singular value matrix at last position of MPS. Necessary
+        before valid right to left sweep.
+        '''
+        chil, chid, chir = self.left_mps[self.nsites-1].shape
+        utemp, stemp, vhtemp, _ = simple_reduced_svd(
+            self.left_mps[self.nsites-1].reshape(chil*chid, chir), normalize=True)
+        self.left_mps[self.nsites-1] = utemp.reshape((chil, chid, chir))
+        self.singular_values[self.nsites] = (np.diag(stemp) @ vhtemp)
+
+    def run(self):
+        """
+        DMRG run. Execute sweeps til maximum number (self.nsweep) is reach or
+        until conversion is detected.
+        """
+        self._initialize_env()
+        self.sweep = 0  # Counting sweeps
+        conversion = False  # Activates when conversion
+        while self.sweep <= self.nsweep-1 and conversion is False:
+            self.sweep += 1
+            # Do back and forth sweep
+            self._sweep_orthog_right_to_left()
+            self._sweep_orthog_left_to_right()
+            if self.debug != 'None':
+                print(
+                    f'Sweep {self.sweep}/{self.nsweep} [Energy: {self.energies[-1]}]')
+
+            # Evaluates conversion
+            if self.sweep > 1:
+                ener_dif = np.abs(self.energies[-1]-self.energies[-2])
+                if ener_dif <= self.energy_var:
+                    if self.debug != 'None':
+                        print(
+                            f'Energy conversion detected: {ener_dif} < {self.energy_var}.')
+                    conversion = True
+
+        return self.left_mps, self.energies
+
+    @staticmethod
+    def build_left_env(prev_env, mpo_t, mps_t):
+        '''
+        Creates the left environment at a position from the previous left
+        environment and the right mps and mpo tensors.
+        '''
+        next_env = np.tensordot(prev_env, mpo_t, axes=([0], [2]))
+        next_env = np.tensordot(
+            next_env, np.conj(mps_t), axes=([0, 3], [0, 1]))
+        next_env = np.tensordot(next_env, mps_t, axes=([0, 1], [0, 1]))
+
+        return next_env
+
+    @staticmethod
+    def build_right_env(next_env, mpo_t, mps_t):
+        '''
+        Creates the right environment at a position from the previous right
+        environment and the right mps and mpo tensors.
+        '''
+        prev_env = np.tensordot(next_env, mpo_t, axes=([0], [3]))
+        prev_env = np.tensordot(
+            prev_env, np.conj(mps_t), axes=([0, 3], [2, 1]))
+        prev_env = np.tensordot(prev_env, mps_t, axes=([0, 1], [2, 1]))
+
+        return prev_env
+
+    @staticmethod
+    def full_env(left_env, mpo1, mpo2, right_env, matricize=False):
+        """
+         Creates the full environment before the eigenvalue solving.
+        """
+
+        _temp = np.tensordot(left_env, mpo1, axes=([0], [2]))
+        _temp = np.tensordot(_temp, mpo2, axes=([4], [2]))
+        _temp = np.tensordot(_temp, right_env, axes=([6], [0]))
+        full_env = np.transpose(_temp, (1, 2, 4, 7, 0, 3, 5, 6))
+
+        if matricize:
+            _s1, _s2, _s3, _s4, _, _, _, _ = full_env.shape
+            full_env = full_env.reshape(_s1*_s2*_s3*_s4, _s1*_s2*_s3*_s4)
+
+        return full_env
+
+    @staticmethod
+    def eig_solver(init_vec, env_mat, method='SM'):
+        '''
+        Finds the largest eigenvector using ''best'' method.
+        '''
+        val, vec = eigsh(env_mat, k=1,  which=method,
+                         v0=init_vec, maxiter=None)
+
+        return val[0], vec
+
+    def _initialize_env(self):
+        """ Initialize the environment tensors.
+
+        The left environment tensors will be fully initialized while the
+        right ones are simply made as a list of trivial tensors of correct shapes.
+
+        During the DMRG iteration for site i and i + 1, the left environment is
+        the contraction of all sites with index j < i and the right environment
+        is the contraction of all sites with index j > i + 1.
+
+        The corresponding environments are stored at index i in the left_env and
+        right_env parameters.
+        """
+        left_edge = np.array([1]).reshape((1, 1, 1))
+        right_edge = np.array([1]).reshape((1, 1, 1))
+
+        self.left_env = [left_edge] + [None] * (self.nsites - 1)
+        self.right_env = [None] * (self.nsites - 1) + [right_edge]
+
+        for _i in range(self.nsites-1):
+            self.left_env[_i+1] = self.build_left_env(
+                self.left_env[_i], self.mpo[_i], self.left_mps[_i])
+
+    def _sweep_orthog_right_to_left(self):
+        '''
+        DMRG sweep updating the orthgonality center (sigma matrices) from the
+        last (right) to the first (left).
+
+        At each step, it replaces a pair of sites with their ground-state wavefunction.
+        '''
+
+        for site in reversed(range(self.nsites - 1)):
+            # two-site update
+            chi_l, chi_d1, _ = self.left_mps[site].shape
+            _, chi_d2, chi_r = self.left_mps[site+1].shape
+
+            # updating the two sites with eigenvalue decomposition
+            psi_ground = np.tensordot(
+                self.left_mps[site+1], self.singular_values[site+2], axes=([2], [0]))
+            psi_ground = np.tensordot(self.left_mps[site], psi_ground, axes=(
+                [2], [0])).reshape(chi_l*chi_d1*chi_d2*chi_r)
+
+            my_env = self.full_env(
+                self.left_env[site], self.mpo[site], self.mpo[site+1],
+                self.right_env[site+1], matricize=True)
+            energy, psi_ground = self.eig_solver(
+                psi_ground, my_env, method=self.eig_method)
+
+            # getting back all elements from updated ground state
+            utemp, stemp, vhtemp, _ = self.svd_func(
+                psi_ground.reshape(chi_l*chi_d1, chi_d2*chi_r))
+
+            self.left_mps[site] = utemp.reshape(chi_l, chi_d1, -1)
+            self.singular_values[site+1] = np.diag(stemp)
+            self.right_mps[site + 1] = vhtemp.reshape(-1, chi_d2, chi_r)
+
+            # generating new right env
+            self.right_env[site] = self.build_right_env(
+                self.right_env[site+1], self.mpo[site+1], self.right_mps[site+1])
+
+            if self.debug == 'full':
+                print(f'Pos. {site}, sweep {self.sweep}, energy: {energy}')
+
+        # left boundary tensor site
+        chil, chid, chir = self.left_mps[0].shape
+        temp = np.tensordot(self.left_mps[0], self.singular_values[1], axes=(
+            [2], [0])).reshape((chil, -1))
+        utemp, stemp, vhtemp, _ = self.svd_func(temp)
+        self.right_mps[0] = vhtemp.reshape(chil, chid, chir)
+        self.singular_values[0] = utemp @ np.diag(stemp)
+
+    def _sweep_orthog_left_to_right(self):
+        """ Moves the orthogonality center (singular values matrices) from the
+        first (left) site to the last (right) site.
+
+        At each step, it replaces a pair of sites with their ground-state wavefunction.
+        """
+        for site in range(self.nsites - 1):
+            # Contract orthog center, site tensor and next site tensor.
+            # Computer lowest energy eigenstate of the contraction.
+            # Run SVD and truncates the lowest eigenstate
+            # Update both site tensors with the truncated eigenstate.
+            # Update envs and Sweights
+
+            chi_l, chi_d1, _ = self.right_mps[site].shape
+            _, chi_d2, chi_r = self.right_mps[site+1].shape
+
+            psi_ground = np.tensordot(
+                self.singular_values[site], self.right_mps[site], axes=([1], [0]))
+            psi_ground = np.tensordot(
+                psi_ground, self.right_mps[site+1], axes=([2], [0])).reshape(chi_l*chi_d1*chi_d2*chi_r)
+
+            # sites update
+            my_env = self.full_env(
+                self.left_env[site], self.mpo[site], self.mpo[site+1], self.right_env[site+1], matricize=True)
+            energy, psi_ground = self.eig_solver(
+                psi_ground, my_env, method=self.eig_method)
+
+            # getting back all elements from updated ground state
+            utemp, stemp, vhtemp, _ = self.svd_func(
+                psi_ground.reshape(chi_l*chi_d1, chi_d2*chi_r))
+
+            self.left_mps[site] = utemp.reshape(chi_l, chi_d1, -1)
+            self.singular_values[site+1] = np.diag(stemp)
+            self.right_mps[site + 1] = vhtemp.reshape(-1, chi_d2, chi_r)
+
+            # New left env
+            self.left_env[site+1] = self.build_left_env(
+                self.left_env[site], self.mpo[site], self.left_mps[site])
+
+            if self.debug == 'full':
+                print(f'Pos. {site}, sweep {self.sweep}, energy: {energy}')
+
+        self.energies.append(energy)  # Storing the final energy
+        # right boundary tensor
+        chil, chid, chir = self.right_mps[self.nsites-1].shape
+        temp = np.tensordot(
+            self.singular_values[self.nsites-1], self.right_mps[self.nsites-1], axes=([1], [0])).reshape(chil*chid, chir)
+        utemp, stemp, vhtemp, _ = self.svd_func(temp)
+        self.left_mps[self.nsites-1] = utemp.reshape(chil, chid, chir)
+        self.singular_values[self.nsites] = stemp*vhtemp
