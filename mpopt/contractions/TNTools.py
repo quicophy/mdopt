@@ -135,6 +135,7 @@ Matrix Product State (MPS) basic operations
 ################################################################################
 '''
 
+
 def state_to_mps_build(phi, qudit_level=2, normalize=True, max_bond=None):
     '''
     Builds a multi qudit state mps.
@@ -410,13 +411,12 @@ def move_orthog(mps, begin=0, end=-1, **kwargs):
         raise ValueError("\'begin\' and \'end\' values are not compatible")
 
 
-
-
 '''
 ################################################################################
 Specific MPSs and MPOs Builder 
 ################################################################################
 '''
+
 
 def ones_mps(size, qudit=2):
     '''
@@ -484,20 +484,19 @@ def ansatz_mps(mps_length, max_chi=20, phys_ind=2):
     return mps
 
 
-def random_mps_gen(n=8, noise_ratio=0.1, highest_value_index=1, max=100):
+def random_mps_gen(_n=8, noise_ratio=0.1, highest_value_index=1, max_bond=100, basis=2):
     '''
-    Builds a MPS with a specific main component element and a general gaussian
-    noise on ther component. Can be used to test main component finding methods.
+    Builds a MPS with a specific main component element and a uniformly random
+    noise over other components. Can be used to test main component finding
+    methods.
     '''
-    most_likely = np.zeros(2**n)
-    most_likely[highest_value_index] = 1
-
     # vector of the noise model
-    noise = noise_ratio*np.random.rand(2**n)
-    vector = most_likely+noise
+    vector = noise_ratio*np.random.rand(basis**_n)
+    # Selecting the main component value
+    vector[highest_value_index] = 1
 
     # We can refer to my MPS builder for qubit states
-    mps = state_to_mps_build(vector, normalize=True, max_bond=max)
+    mps = state_to_mps_build(vector, normalize=True, max_bond=max_bond)
 
     return mps
 
@@ -532,6 +531,7 @@ def identity_mpo(size, qudit=2):
 MPS-MPO contractor
 ################################################################################
 '''
+
 
 def _mps_mpo_contract_firstsite(mps_tens, mpo_tens, direction='right'):
     _temp = np.tensordot(mps_tens, mpo_tens, axes=([1], [0]))
@@ -698,11 +698,13 @@ def mps_mpo_contract_shortest_moves(mps, mpo, current_orth=-1, index=0, **kwargs
 
     return mps, new_orth
 
+
 '''
 ################################################################################
 Other basic functions
 ################################################################################
 '''
+
 
 def real_index(index, list_lenght):
     '''
@@ -711,6 +713,7 @@ def real_index(index, list_lenght):
     while index < 0:
         index += list_lenght
     return index
+
 
 def integer_to_basis_pos(integer, width, basis=2):
     '''
@@ -722,10 +725,10 @@ def integer_to_basis_pos(integer, width, basis=2):
     bin_str = np.base_repr(
         integer, basis)  # Rewriting as string in right basis
     bin_str = bin_str.zfill(width)  # Giving string right len, fill with zeros
-    print(bin_str)
     arr = np.fromstring(bin_str, 'u1') - ord('0')  # convert to numpy array
 
     return arr
+
 
 def vector_list_maxes(list):
     '''
@@ -748,6 +751,7 @@ MPS main component finder
 ################################################################################
 '''
 
+
 def dephased_tensor_mpo_built(tensor):
     '''
     Builds the correct dephased density matrix MPO element for an mps tensor.
@@ -767,6 +771,7 @@ def dephased_tensor_mpo_built(tensor):
             mpo_tens[:, :, i, j] = np.diag(np.diag(mpo_tens[:, :, i, j]))
 
     return mpo_tens
+
 
 def dephased_mpo_built(mps):
     '''
@@ -807,10 +812,14 @@ def main_component(mps, method='exact', **kwargs):
         else:
             chi_max = kwargs.get('chi_max', None)
         # Dephased mpo built from mps
+        print('building dephased mpo')
         mpo = dephased_mpo_built(mps)
+        print('building mps ansatz')
         ans_mps = ansatz_mps(len(mps), chi_max)  # An ansatz mps
+        print('initializing DMRG class')
         deph_dmrg = Dmrg(
             ans_mps, mpo, chi_max=chi_max, eig_method='LM')  # DMRG largest value
+        print('starting the DMRG')
         res_mps, _ = deph_dmrg.run()
 
         # Simplify mps then get main component
@@ -843,6 +852,7 @@ def main_component(mps, method='exact', **kwargs):
 Canonical MPS class
 ################################################################################
 '''
+
 
 class MpsStateCanon:
     '''
@@ -951,14 +961,14 @@ class MpsStateCanon:
         '''
         self.mps, self.orth_pos = mps_mpo_contract_shortest_moves(
             self.mps, mpo=mpo, current_orth=self.orth_pos, index=beginning, svd_func=self.svd_func)
-    
+
     def main_component(self, method='exact', **kwargs):
         '''
         Finds largest value element (main component) of mps equivalent vector.
         See 'main_component' function in main component finding section of
         TNTools. 
         '''
-        #Getting chi_max value for dephased_DMRG case. 
+        # Getting chi_max value for dephased_DMRG case.
         chi_max = False
         if method == 'dephased_DMRG':
             if 'chi_max' not in kwargs:
@@ -968,7 +978,6 @@ class MpsStateCanon:
             else:
                 chi_max = kwargs.get('chi_max', None)
             return main_component(self.mps, method=method, chi_max=chi_max)
-        
         return main_component(self.mps, method=method)
 
 
