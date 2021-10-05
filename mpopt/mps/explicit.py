@@ -1,50 +1,49 @@
 """
-    This module contains the explicit MPS construction.
+This module contains the explicit MPS class and relevant functions.
 """
 
 from functools import reduce
+from opt_einsum import contract
 import numpy as np
-from ..utils import trimmed_svd, nlog, interlace_tensors
 
 
 class ExplicitMPS:
     """
-    Class for a finite-size matrix product state with open boundary conditions.
+    Class for a finite-size matrix product state (MPS) with open boundary conditions.
 
-    We index sites with i from 0 to L-1, with bond i being left of site i.
+    We index sites with `i` from `0` to `L-1`, with bond `i` being left of site `i`.
     Notation: the index inside the square brackets means that it is being contracted.
 
-    The state is stored in the following format: for each tensor at site i,
-    there exists a Schmidt value diagonal matrix at bond i.
-    For "ghost" bonds at indices 0, L-1 (i.e., bonds of dimension 1),
+    The state is stored in the following format: for each tensor at site `i`,
+    there exists a Schmidt value diagonal matrix at bond `i`.
+    For "ghost" bonds at indices `0`, `L-1` (i.e., bonds of dimension 1),
     the corresponding Schmidt tensors at the boundaries
     would simply be the identities of the same dimension.
 
-    As a convention, we will call this form the "explicit form" MPS.
-
-    Parameters:
-        tensors, schmidt_values:
-            Same as attributes.
+    As a convention, we will call this form the "explicit form" of MPS.
 
     Attributes:
-        tensors : list of np.arrays[ndim=3]
-            The tensors in right-canonical form, one for each physical site.
-            Each tensor has legs (virtual left, physical, virtual right), in short (vL, i, vR).
-        schmidt_values : list of np.arrays[ndim=1]
-            The Schmidt values at each of the bonds, schmidt_values[i] is left of tensors[i].
+        tensors : list of `np.arrays[ndim=3]`
+            The "physical" tensors of the MPS, one for each physical site.
+            Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
+        schmidt_values : list of `np.arrays[ndim=1]`
+            The Schmidt values at each of the bonds, `schmidt_values[i]` is left of `tensors[i]`.
+            Each Schmidt value list at each bond is normalised to 1.
         nsites : int
             Number of sites.
         nbonds : int
-            Number of non-trivial bonds: nsites - 1.
+            Number of non-trivial bonds: `nsites - 1`.
+        tolerance: float
+            Absolute tolerance of the normalisation of the singular value spectrum at each bond.
 
     Exceptions:
         ValueError:
-            If tensors and schmidt_values do not have corresponding lengths.
+            If `tensors` and `schmidt_values` do not have corresponding lengths.
             The number of Schmidt value matrices should be equal to the number of tensors + 1,
-            because there are two trivial Schmidt value matrices [1.] at each of the ghost bonds.
+            because there are two trivial Schmidt value matrices at each of the ghost bonds.
     """
 
-    def __init__(self, tensors, schmidt_values, tolerance=1e-14):
+    def __init__(self, tensors, schmidt_values, tolerance=1e-12):
 
         if len(tensors) != len(schmidt_values) - 1:
             raise ValueError(
@@ -82,7 +81,7 @@ class ExplicitMPS:
     def single_site_left_iso(self, site: int):
         """
         Computes single-site left isometry at a given site.
-        The returned array has legs (vL, i, vR).
+        The returned array has legs `(vL, i, vR)`.
         """
 
         if site >= self.nsites:
@@ -92,12 +91,12 @@ class ExplicitMPS:
 
         return np.tensordot(
             np.diag(self.schmidt_values[site]), self.tensors[site], (1, 0)
-        )  # vL [vL'], [vL] i vR
+        )
 
     def single_site_right_iso(self, site: int):
         """
         Computes single-site right isometry at a given site.
-        The returned array has legs (vL, i, vR).
+        The returned array has legs `(vL, i, vR)`.
         """
 
         next_site = site + 1
@@ -110,49 +109,45 @@ class ExplicitMPS:
 
         return np.tensordot(
             self.tensors[site], np.diag(self.schmidt_values[next_site]), (2, 0)
-        )  # vL i [vR], [vR'] vR
+        )
 
     def two_site_left_tensor(self, site: int):
         """
-        Calculates effective two-site tensor on the given site and the following one
+        Calculates a two-site tensor on a given site and the following one
         from two single-site left isometries.
-        The returned array has legs (vL, i, j, vR).
+        The returned array has legs `(vL, i, j, vR)`.
         """
-
-        next_site = site + 1
 
         if site >= self.nsites:
             raise ValueError(
-                f"Sites given ({site}, {next_site}), "
+                f"Sites given ({site}, {site + 1}), "
                 f"with the number of sites in the MPS ({self.nsites})."
             )
 
         return np.tensordot(
             self.single_site_left_iso(site),
-            self.single_site_left_iso(next_site),
+            self.single_site_left_iso(site + 1),
             (2, 0),
-        )  # vL i [vR], [vL] j vR
+        )
 
     def two_site_right_tensor(self, site: int):
         """
-        Calculates effective two-site tensor on the given site and the following one
+        Calculates a two-site tensor on a given site and the following one
         from two single-site right isometries.
-        The returned array has legs (vL, i, j, vR).
+        The returned array has legs `(vL, i, j, vR)`.
         """
-
-        next_site = site + 1
 
         if site >= self.nsites:
             raise ValueError(
-                f"Sites given ({site}, {next_site}), "
+                f"Sites given ({site}, {site + 1}), "
                 f"with the number of sites in the MPS ({self.nsites})."
             )
 
         return np.tensordot(
             self.single_site_right_iso(site),
-            self.single_site_right_iso(next_site),
+            self.single_site_right_iso(site + 1),
             (2, 0),
-        )  # vL i [vR], [vL] j vR
+        )
 
     def single_site_left_iso_iter(self):
         """
@@ -187,7 +182,7 @@ class ExplicitMPS:
     def to_mixed_canonical(self, orth_centre_index: int):
         """
         Returns the MPS in the mixed-canonical form,
-        with the orthogonality centre being located at orth_centre_index.
+        with the orthogonality centre being located at `orth_centre_index`.
 
         Arguments:
             orth_centre_index: int
@@ -213,13 +208,9 @@ class ExplicitMPS:
 
         if orth_centre_index == 0:
             return self.to_right_canonical()
-            # return move_orth_centre(mixed_can_routine(1), 1, 0)
 
         if orth_centre_index == self.nsites - 1:
             return self.to_left_canonical()
-            # return move_orth_centre(
-            #    mixed_can_routine(self.nsites - 2), self.nsites - 2, self.nsites - 1
-            # )
 
         return mixed_can_routine(orth_centre_index)
 
@@ -235,23 +226,39 @@ class ExplicitMPS:
         """
         return (self.tensors[i].shape[1] for i in range(self.nsites))
 
+    def reverse(self):
+        """
+        Returns an inverse version of a given MPS.
+        """
+
+        reversed_tensors = list(np.transpose(t) for t in reversed(self.tensors))
+
+        return ExplicitMPS(reversed_tensors, self.schmidt_values[::-1])
+
     def entanglement_entropy(self):
         """
-        Return the (von Neumann) entanglement entropy for bipartitions at all of the bonds.
+        Returns the (von Neumann) entanglement entropy for bipartitions at all of the bonds.
         """
-        entropy = np.zeros(self.nbonds)
+
+        def xlogx(arg):
+            if arg == 0:
+                return 0
+            return arg * np.log(arg)
+
+        entropy = np.zeros(shape=(self.nbonds,), dtype=np.float64)
+
         for bond in range(self.nbonds):
             schmidt_values = self.schmidt_values[bond].copy()
-            schmidt_values[schmidt_values < self.tolerance] = 0.0
+            schmidt_values[schmidt_values < self.tolerance] = 0
             schmidt_values2 = schmidt_values * schmidt_values
             entropy[bond] = -np.sum(
-                np.fromiter((nlog(s) for s in schmidt_values2), dtype=float)
+                np.fromiter((xlogx(s) for s in schmidt_values2), dtype=float)
             )
         return entropy
 
     def to_dense(self, flatten=True):
         """
-        Return the dense representation of the MPS.
+        Returns the dense representation of the MPS.
         Attention: will cause memory overload for number of sites > 18!
         """
 
@@ -265,8 +272,11 @@ class ExplicitMPS:
 
     def density_mpo(self):
         """
-        Return the MPO representation of the density matrix defined by a given MPS.
-        Each tensor in the MPO list has legs (vL, i_u, i_d, vR).
+        Returns the MPO representation (as a list of tensors)
+        of the density matrix defined by a given MPS.
+        Each tensor in the MPO list has legs (vL, pU, pD, vR),
+        where v stands for "virtual", p -- for "physical",
+        and L, R, U, D stand for "left", "right", "up", "down".
         """
 
         tensors = list(self.single_site_right_iso_iter())
@@ -278,13 +288,13 @@ class ExplicitMPS:
             tensors,
         )
 
-        return mpo
+        return list(mpo)
 
 
-def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6):
+def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
     """
-    Return the Matrix Product State in an explicit form,
-    given a state in the dense (statevector) form.
+    Returns the Matrix Product State in an explicit form,
+    given a state in the dense (state vector) form.
 
     Arguments:
         psi: np.array
@@ -295,6 +305,8 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6):
             Activate an upper limit to the spectrum's size.
         max_num: int
             Maximum number of the singular values to keep.
+        tolerance: float
+            Absolute tolerance of the normalisation of the singular value spectrum at each bond.
 
     Returns:
         mps(tensors, schmidt_values):
@@ -345,19 +357,15 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6):
             tensors[i], np.linalg.inv(np.diag(schmidt_values[i + 1])), (2, 0)
         )
 
-    return ExplicitMPS(tensors, schmidt_values)
+    return ExplicitMPS(tensors, schmidt_values, tolerance=tolerance)
 
 
-def split_two_site_tensor(theta, chi_max=1e5, eps=1e-16):
+def split_two_site_tensor(theta, chi_max=1e5, eps=1e-13):
     """
-    Split a two-site tensor.
-
     Split a two-site MPS tensor as follows:
           vL --(theta)-- vR     ->    vL --(A)--diag(S)--(B)-- vR
                 |   |                       |             |
                 i   j                       i             j
-
-    Afterwards, truncate in the new leg (labeled vC).
 
     Parameters:
         theta : np.array[ndim=4]
@@ -406,7 +414,7 @@ def find_orth_centre(mps):
 
     mps = _add_ghost_dimensions(mps)
 
-    L = len(mps)
+    length = len(mps)
 
     flags_left = []
     flags_right = []
@@ -415,37 +423,49 @@ def find_orth_centre(mps):
 
     for i, _ in enumerate(mps):
 
-        to_be_identity_left = np.einsum("ijk, ijl -> kl", mps[i], np.conj(mps[i]))
-        to_be_identity_right = np.einsum("ijk, ljk -> il", mps[i], np.conj(mps[i]))
+        to_be_identity_left = contract("ijk, ijl -> kl", mps[i], np.conj(mps[i]))
+        to_be_identity_right = contract("ijk, ljk -> il", mps[i], np.conj(mps[i]))
 
-        identity_left = np.identity(to_be_identity_left.shape[0])
-        identity_right = np.identity(to_be_identity_right.shape[0])
+        identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float64)
+        identity_right = np.identity(to_be_identity_right.shape[0], dtype=np.float64)
 
         flags_left.append(
-            np.isclose(np.linalg.norm(to_be_identity_left - identity_left), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_left - identity_left), 0, atol=1e-13
+            )
         )
 
         flags_right.append(
-            np.isclose(np.linalg.norm(to_be_identity_right - identity_right), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_right - identity_right), 0, atol=1e-13
+            )
         )
 
         if not (
-            np.isclose(np.linalg.norm(to_be_identity_left - identity_left), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_left - identity_left), 0, atol=1e-13
+            )
         ) and not (
-            np.isclose(np.linalg.norm(to_be_identity_right - identity_right), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_right - identity_right), 0, atol=1e-13
+            )
         ):
             centres.append(i)
 
     # Handling exceptions, right- and left-canonical forms, and cases
     # when the orthogonality centre might be left- or right- isometry at
     # the boundaries, while all the other tensors are the opposite isometries.
-    if (flags_left == [True] + [False] * (L - 1)) or (flags_left == [False] * (L)):
+    if (flags_left == [True] + [False] * (length - 1)) or (
+        flags_left == [False] * (length)
+    ):
         if flags_right == [not flag for flag in flags_left]:
             centres.append(0)
 
-    if (flags_left == [True] * (L - 1) + [False]) or (flags_left == [True] * (L)):
+    if (flags_left == [True] * (length - 1) + [False]) or (
+        flags_left == [True] * (length)
+    ):
         if flags_right == [not flag for flag in flags_left]:
-            centres.append(L - 1)
+            centres.append(length - 1)
 
     return centres
 
@@ -475,7 +495,7 @@ def move_orth_centre(mps, init_pos, final_pos):
     mps = _add_ghost_dimensions(mps)
 
     mps = mps.copy()
-    L = len(mps)
+    length = len(mps)
     centre = find_orth_centre(mps)
 
     if centre != [init_pos]:
@@ -484,12 +504,12 @@ def move_orth_centre(mps, init_pos, final_pos):
             f"do not correspond to given initial position ({init_pos})."
         )
 
-    if init_pos >= L:
+    if init_pos >= length:
         raise ValueError(
             "Initial orthogonality centre position index does not match the MPS length."
         )
 
-    if final_pos >= L:
+    if final_pos >= length:
         raise ValueError(
             "Final orthogonality centre position index does not match the MPS length."
         )
@@ -501,7 +521,7 @@ def move_orth_centre(mps, init_pos, final_pos):
     # If going from right to left, reverse the direction, reverse the MPS
     elif init_pos > final_pos:
         mps = [np.transpose(M) for M in reversed(mps)]
-        begin, final = (L - 1) - init_pos, (L - 1) - final_pos
+        begin, final = (length - 1) - init_pos, (length - 1) - final_pos
     else:
         return mps
 
@@ -543,7 +563,7 @@ def _move_orth_centre_sigma(mps, init_pos, final_pos):
             If inital_pos or final_pos does not match the MPS length.
     """
 
-    L = len(mps)
+    length = len(mps)
 
     mps = _add_ghost_dimensions(mps)
     mps = mps.copy()
@@ -556,7 +576,7 @@ def _move_orth_centre_sigma(mps, init_pos, final_pos):
     # If going from right to left, reverse the direction, reverse the MPS
     elif init_pos > final_pos:
         mps = [np.transpose(M) for M in reversed(mps)]
-        begin, final = (L - 1) - init_pos, (L - 1) - final_pos
+        begin, final = (length - 1) - init_pos, (length - 1) - final_pos
     else:
         return mps, []
 
@@ -595,17 +615,21 @@ def is_canonical(mps):
     flags_right = []
     for _, tensor in enumerate(mps):
 
-        to_be_identity_left = np.einsum("ijk, ijl -> kl", tensor, np.conj(tensor))
-        to_be_identity_right = np.einsum("ijk, ljk -> il", tensor, np.conj(tensor))
+        to_be_identity_left = contract("ijk, ijl -> kl", tensor, np.conj(tensor))
+        to_be_identity_right = contract("ijk, ljk -> il", tensor, np.conj(tensor))
 
         identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float64)
         identity_right = np.identity(to_be_identity_right.shape[0], dtype=np.float64)
 
         flags_left.append(
-            np.isclose(np.linalg.norm(to_be_identity_left - identity_left), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_left - identity_left), 0, atol=1e-13
+            )
         )
         flags_right.append(
-            np.isclose(np.linalg.norm(to_be_identity_right - identity_right), 0)
+            np.isclose(
+                np.linalg.norm(to_be_identity_right - identity_right), 0, atol=1e-13
+            )
         )
 
     if np.array(flags_left).all() or np.array(flags_right).all():
@@ -621,19 +645,19 @@ def _move_orth_centre_to_border(mps, init_orth_centre_index):
 
     mps = _add_ghost_dimensions(mps)
     mps = mps.copy()
-    L = len(mps)
+    length = len(mps)
 
-    if init_orth_centre_index <= L / 2:
+    if init_orth_centre_index <= length / 2:
         (mps, _) = _move_orth_centre_sigma(mps, init_orth_centre_index, 0)
         return (mps, "first")
 
-    (mps, _) = _move_orth_centre_sigma(mps, init_orth_centre_index, L - 1)
+    (mps, _) = _move_orth_centre_sigma(mps, init_orth_centre_index, length - 1)
     return (mps, "last")
 
 
 def to_explicit_form(mps):
     """
-    Return an MPS in the explicit form,
+    Returns an MPS in the explicit form,
     given an MPS as a list of tensors in any of the three canonical forms.
 
     Arguments:
@@ -646,7 +670,7 @@ def to_explicit_form(mps):
             Minimum singular values to keep.
     """
 
-    L = len(mps)
+    length = len(mps)
 
     centres = find_orth_centre(mps)
 
@@ -661,15 +685,15 @@ def to_explicit_form(mps):
     (mps, border) = _move_orth_centre_to_border(mps, centre)
 
     if border == "first":
-        tensors, sigmas = _move_orth_centre_sigma(mps, 0, L - 1)
+        tensors, sigmas = _move_orth_centre_sigma(mps, 0, length - 1)
     else:
-        tensors, sigmas = _move_orth_centre_sigma(mps, L - 1, 0)
+        tensors, sigmas = _move_orth_centre_sigma(mps, length - 1, 0)
 
     sigmas.insert(0, np.array([1.0]))
     sigmas.append(np.array([1.0]))
 
     ttensors = []
-    for i in range(L):
+    for i in range(length):
         ttensors.append(
             np.tensordot(tensors[i], np.linalg.inv(np.diag(sigmas[i + 1])), (2, 0))
         )
@@ -696,25 +720,26 @@ def inner_product(mps_1, mps_2):
     if len(mps_1) != len(mps_2):
         raise ValueError(
             f"The number of sites in the first MPS is ({len(mps_1)}), while "
-            f"the number of sites in the second MPS is ({len(mps_2)}). The MPS's must be of equal length."
+            f"the number of sites in the second MPS is ({len(mps_2)}). "
+            "The MPS's must be of equal length."
         )
 
-    L = len(mps_1)
+    length = len(mps_1)
 
     mps_1 = _add_ghost_dimensions(mps_1)
     mps_2 = _add_ghost_dimensions(mps_2)
 
-    mps_1 = [np.conj(mps_1[i]) for i in range(L)]
+    mps_1 = [np.conj(mps_1[i]) for i in range(length)]
 
     tensors = []
 
-    for i in range(L):
+    for i in range(length):
 
         dims_1 = mps_1[i].shape
         dims_2 = mps_2[i].shape
 
         tensors.append(
-            np.einsum("ijk, ljm -> ilkm", mps_1[i], mps_2[i]).reshape(
+            contract("ijk, ljm -> ilkm", mps_1[i], mps_2[i]).reshape(
                 (dims_1[0] * dims_2[0], dims_1[2] * dims_2[2])
             )
         )
@@ -724,42 +749,211 @@ def inner_product(mps_1, mps_2):
     return product[0][0]
 
 
-def to_dense(mps, reshape=True):
+def to_dense(mps, flatten=True):
     """
     Returns a dense representation of an MPS, given as a list of tensors.
     Attention: will cause memory overload for number of sites > 18!
 
     Options:
-        reshape: bool
+        flatten: bool
             Whether to merge all the physical indices to form a vector.
     """
 
     dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), mps)
 
-    if reshape:
+    if flatten:
         return dense.flatten()
 
     return dense
 
 
-def apply_two_site_unitary(sigma, b_1, b_2, U):
+def apply_two_site_unitary(b_1, b_2, lambda_0, unitary, local_dim=2):
     """
-    TODO
-    This is a work-in-progress.
-    A convenient way to apply a two-site unitary and switching back to right canonical form,
-    without having to compute the inverse of Schmidt value matrix.
+    A convenient way to apply a two-site unitary to a right-canonical MPS and switching back
+    to the right canonical form, without having to compute the inverse of Schmidt value matrix.
+
+    --(lambda_0)--(b_1)--(b_2)--    ->    --(b_1_updated)--(b_2_updated)--
+                    |      |                      |             |
+                    (unitary)                     |             |
+                    |      |                      |             |
+
+    Unitary has legs (pUL pUR, pDL pDR), where p stands for "physical", and
+    L, R, U, D -- for "left", "right", "up", "down" accordingly.
     """
 
-    C = np.tensordot(b_1, b_2, (2, 0))
-    C = np.tensordot(C, U, axes=[[1, 2], [0, 1]])
-    dims = C.shape
-    C = C.reshape((dims[0] * dims[1], dims[2] * dims[3]))
+    two_site_tensor = np.tensordot(b_1, b_2, (2, 0))
+    two_site_tensor = contract("ijkl, jkmn -> imnl", two_site_tensor, unitary)
+    dims = two_site_tensor.shape
+    two_site_tensor = two_site_tensor.reshape((dims[0] * dims[1], dims[2] * dims[3]))
 
-    theta = np.einsum("ij, jkl, lmn -> ikmn", np.diag(sigma), b_1, b_2)
-    theta = np.tensordot(theta, U, axes=[[1, 2], [0, 1]])
-    dims = theta.shape
+    theta = contract("ij, jkl, lmn -> ikmn", np.diag(lambda_0), b_1, b_2)
+    theta = contract("ijkl, jkmn -> imnl", theta, unitary)
     _, _, b_2_updated = split_two_site_tensor(theta)
 
-    b_1_updated = np.tensordot(C, np.conj(b_2_updated))
+    dims = b_2_updated.shape
+
+    b_1_updated = np.tensordot(
+        two_site_tensor,
+        np.conj(b_2_updated.reshape((dims[1] * dims[2], dims[0]))),
+        (1, 0),
+    )
+    b_1_updated = b_1_updated.reshape((-1, local_dim, b_2_updated.shape[0]))
 
     return b_1_updated, b_2_updated
+
+
+def apply_one_site_unitary(b, unitary):
+    """
+    A function which applies a one-site unitary to a right-canonical MPS.
+
+    --(b)--    ->    --(b_updated)--
+       |                     |
+    (unitary)                |
+       |                     |
+
+    Unitary has legs (pU, pD), where p stands for "physical", and
+    U, D -- for "up", "down" accordingly.
+    """
+
+    b_updated = contract("ijk, jl -> ilk", b, unitary)
+
+    return b_updated
+
+
+def create_product_state(num_sites, local_dim=2):
+    """
+    Creates |0...0> as an MPS.
+    """
+
+    tensor = np.zeros((local_dim,))
+    tensor[0] = 1.0
+    tensor = tensor.reshape((1, local_dim, 1))
+
+    sigma = [1.0]
+
+    tensors = [tensor for _ in range(num_sites)]
+    sigmas = [sigma for _ in range(num_sites + 1)]
+
+    return ExplicitMPS(tensors, sigmas)
+
+
+def trimmed_svd(
+    mat,
+    cut=1e-13,
+    max_num=1e5,
+    normalise=False,
+    init_norm=False,
+    limit_max=False,
+    err_th=1e-13,
+):
+    """
+    Returns the Singular Value Decomposition of a matrix `mat`.
+
+    Arguments:
+        mat: ndarray[ndim=2]
+            Matrix given as a ndarray with 2 dimensions.
+        cut: float
+            Norm value cut for lower singular values.
+        max_num: int
+            Maximum number of singular values to keep.
+        normalise: bool
+            Activates normalisation of the final singular value spectrum.
+        init_norm: bool
+            Activates the use of relative norm for unormalised tensor's decomposition.
+        limit_max: bool
+            Activate an upper limit to the spectrum's size.
+        err_th: float
+            Singular value spectrum norm error.
+
+    Returns:
+        u_l: ndarray
+            Unitary matrix having left singular vectors as columns.
+        singular_values: ndarray
+            The singular values, sorted in non-increasing order.
+        v_r: ndarray
+            Unitary matrix having right singular vectors as rows.
+    """
+
+    u_l, singular_values, v_r = np.linalg.svd(mat, full_matrices=False)
+
+    # Relative norm calculated for cut evaluation
+    if init_norm:
+        norm = np.linalg.norm(singular_values)
+        norm_singular_values = singular_values / norm
+    else:
+        norm_singular_values = singular_values
+
+    norm_sum = 0
+    i = 0  # last kept singular value index
+    one_norm = 1
+    one_norms = []
+
+    # Evaluating final SVD value kept (index), for size limit fixed or not
+    if limit_max:
+        while (
+            (norm_sum < (1 - cut))
+            and (i < max_num)
+            and (i < singular_values.size)
+            and (one_norm > err_th)
+        ):
+            one_norm = np.power(norm_singular_values[i], 2)
+            norm_sum += one_norm
+            one_norms.append(one_norm)
+            i += 1
+    else:
+        while norm_sum < (1 - cut) and i < singular_values.size and one_norm > err_th:
+            one_norm = np.power(norm_singular_values[i], 2)
+            norm_sum += one_norm
+            one_norms.append(one_norm)
+            i += 1
+
+    if normalise:
+        # Final renormalisation of SVD values kept or not, returning the correct dimensions
+        norm = np.linalg.norm(singular_values[:i].reshape(-1, 1))
+        singular_values = singular_values[:i] / norm
+        return u_l[:, :i], singular_values, v_r[:i, :]
+
+    return u_l[:, :i], singular_values[:i], v_r[:i, :]
+
+
+def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals=True):
+    """
+    An utility function which is used to compute
+    different versions of a Kronecker product of 2 MPS tensors.
+
+    Arguments:
+        tensor_1: np.array[ndim=3]
+            The first tensor of the product.
+        tensor_2: np.array[ndim=3]
+            The second tensor of the product.
+        conjugate_second: bool
+            Whether to complex-conjugate the second tensor.
+        merge_virtuals: bool
+            Whether to merge virtual indices.
+    """
+
+    if len(tensor_1.shape) != len(tensor_2.shape):
+        raise ValueError("The tensors must have equal numbers of dimensions.")
+
+    if len(tensor_1.shape) != 3:
+        raise ValueError(
+            f"The number of dimensions given was ({len(tensor_1.shape)}), "
+            "but the number of dimensions expected is 3."
+        )
+
+    if conjugate_second:
+        product = np.kron(tensor_1, np.conjugate(tensor_2))
+    else:
+        product = np.kron(tensor_1, tensor_2)
+
+    if merge_virtuals:
+        return product.reshape(
+            (
+                tensor_1.shape[0] * tensor_2.shape[0],
+                tensor_1.shape[1],
+                tensor_2.shape[1],
+                tensor_1.shape[2] * tensor_2.shape[2],
+            )
+        )
+
+    return product
