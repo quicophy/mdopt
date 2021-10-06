@@ -3,8 +3,8 @@ name = "mpopt"
 version = "0.1.0"
 description = "A MPS-MPO optimizer library"
 authors = [
-    "Max Tremblay <matrem@protonmail.com>",
     "Alex Berezutskii <aleksandr.berezutskii@usherbrooke.ca>",
+    "Max Tremblay <matrem@protonmail.com>",
     "Samuel Desrosiers <samuel.desrosiers@usherbrooke.ca>"
 ]
 
@@ -12,6 +12,14 @@ authors = [
 python = "^3.8"
 scipy = "^1.6.1"
 numpy = "^1.20.1"
+jax = "^0.2.20"
+tqdm = "^4.62.3"
+Sphinx = "^4.2.0"
+rinohtype = "^0.5.3"
+sphinx-rtd-theme = "^1.0.0"
+qecstruct = "^0.2.2"
+opt-einsum = "^3.3.0"
+m2r2 = "^0.3.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.2"
