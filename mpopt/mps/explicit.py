@@ -767,7 +767,7 @@ def to_dense(mps, flatten=True):
     return dense
 
 
-def apply_two_site_unitary(b_1, b_2, lambda_0, unitary, local_dim=2):
+def apply_two_site_unitary(lambda_0, b_1, b_2, unitary):
     """
     A convenient way to apply a two-site unitary to a right-canonical MPS and switching back
     to the right canonical form, without having to compute the inverse of Schmidt value matrix.
@@ -781,23 +781,24 @@ def apply_two_site_unitary(b_1, b_2, lambda_0, unitary, local_dim=2):
     L, R, U, D -- for "left", "right", "up", "down" accordingly.
     """
 
-    two_site_tensor = np.tensordot(b_1, b_2, (2, 0))
-    two_site_tensor = contract("ijkl, jkmn -> imnl", two_site_tensor, unitary)
-    dims = two_site_tensor.shape
-    two_site_tensor = two_site_tensor.reshape((dims[0] * dims[1], dims[2] * dims[3]))
-
-    theta = contract("ij, jkl, lmn -> ikmn", np.diag(lambda_0), b_1, b_2)
-    theta = contract("ijkl, jkmn -> imnl", theta, unitary)
-    _, _, b_2_updated = split_two_site_tensor(theta)
-
-    dims = b_2_updated.shape
-
-    b_1_updated = np.tensordot(
-        two_site_tensor,
-        np.conj(b_2_updated.reshape((dims[1] * dims[2], dims[0]))),
-        (1, 0),
+    two_site_tensor_with_lambda_0 = contract(
+        "ij, jkl, lmn -> ikmn", np.diag(lambda_0), b_1, b_2
     )
-    b_1_updated = b_1_updated.reshape((-1, local_dim, b_2_updated.shape[0]))
+    two_site_tensor_with_lambda_0 = contract(
+        "ijkl, jkmn -> imnl", two_site_tensor_with_lambda_0, unitary
+    )
+
+    two_site_tensor_wo_lambda_0 = contract("ijk, klm", b_1, b_2)
+    two_site_tensor_wo_lambda_0 = contract(
+        "ijkl, jkmn -> imnl", two_site_tensor_wo_lambda_0, unitary
+    )
+
+    _, _, b_2_updated = split_two_site_tensor(two_site_tensor_with_lambda_0)
+    b_1_updated = contract(
+        "ijkl, lkm -> ijm",
+        two_site_tensor_wo_lambda_0,
+        np.conj(b_2_updated).transpose(),
+    )
 
     return b_1_updated, b_2_updated
 

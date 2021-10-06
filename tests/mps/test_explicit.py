@@ -4,8 +4,8 @@
 
 from functools import reduce
 from itertools import combinations
+from opt_einsum import contract
 import numpy as np
-from mpopt.utils import trimmed_svd, interlace_tensors
 from mpopt.mps.explicit import (
     mps_from_dense,
     is_canonical,
@@ -14,21 +14,20 @@ from mpopt.mps.explicit import (
     split_two_site_tensor,
     to_explicit_form,
     inner_product,
+    trimmed_svd,
+    interlace_tensors,
+    apply_two_site_unitary,
+    apply_one_site_unitary,
+    to_dense,
 )
-from experiments.decoder import ferro_mps, antiferro_mps
 
-# TODOs:
-# JAX
+# TODO
 # separate tests to different files
 # check out the sanity tests they have in TenPy
 # check out typing for fixing types of variables in functions
 # mpos + mpo-mps contraction
-# dmrg
 # decoder in the experiments folder
 # dtypes: complex64/32? float64/32?
-# `` for the variables and functions in docstrings
-# optimise move_orth_centre
-# CHECK THE ZEROS IN THE SVD
 # check all the functions do not act inplace
 # copy attribute for the class
 # reverse as an attribute for the class / separate function
@@ -54,7 +53,7 @@ def test_trimmed_svd():
             err_th=1e-16,
         )
 
-        m_trimmed = np.einsum("ij, j, jk -> ik", u, s, v_h)
+        m_trimmed = contract("ij, j, jk -> ik", u, s, v_h)
 
         u, s, v_h = trimmed_svd(
             m_trimmed,
@@ -66,7 +65,7 @@ def test_trimmed_svd():
             err_th=1e-16,
         )
 
-        m_trimmed_new = np.einsum("ij, j, jk -> ik", u, s, v_h)
+        m_trimmed_new = contract("ij, j, jk -> ik", u, s, v_h)
 
         assert np.isclose(np.linalg.norm(m_trimmed - m_trimmed_new), 0)
 
@@ -140,58 +139,22 @@ def test_interlace_tensors():
         assert np.isclose(np.linalg.norm(product_4 - product_8), 0)
 
 
-def test_ferro_mps():
-    """
-    Test the implementation of a ferromagnetic MPS.
-    """
-
-    n = 8
-    d = 2
-
-    mps = ferro_mps(n, d)
-    psi = mps.to_dense().reshape(d ** n)
-
-    psi_true = np.zeros(d ** n)
-    psi_true[0] = 1.0
-
-    overlap = abs(psi @ psi_true) ** 2
-
-    assert np.isclose(overlap, 1)
-
-
-def test_antiferro_mps():
-    """
-    Test the implementation of an antiferromagnetic MPS.
-    """
-
-    n = 8
-    d = 2
-
-    mps = antiferro_mps(n, d)
-    psi = mps.to_dense().reshape(d ** n)
-
-    psi_true = np.zeros(d ** n)
-    psi_true[-1] = 1.0
-
-    overlap = abs(psi @ psi_true) ** 2
-
-    assert np.isclose(overlap, 1)
-
-
 def test_from_dense():
     """
     Test the implementation of the mps_from_dense function.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
 
-        mps = mps_from_dense(psi, dim=2)
-        psi_from_mps = mps.to_dense().reshape((2 ** n))
+        mps = mps_from_dense(psi)
+        psi_from_mps = mps.to_dense().reshape((2 ** mps_length))
 
         overlap = abs(np.conjugate(psi_from_mps) @ psi) ** 2
 
@@ -203,18 +166,20 @@ def test_single_site_left_iso():
     Test the implementation of the single_site_left_iso method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
-        for site in range(n):
+        for site in range(mps_length):
             isometry = mps.single_site_left_iso(site)
 
-            to_be_identity = np.einsum(
+            to_be_identity = contract(
                 "ijk, ijl -> kl", isometry, np.conjugate(isometry)
             )
 
@@ -228,13 +193,15 @@ def test_to_left_canonical():
     Test the implementation of the to_left_canonical method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
         mps_left = mps.to_left_canonical()
 
@@ -242,12 +209,12 @@ def test_to_left_canonical():
         assert np.isclose(abs(inner_product(mps_left, mps_left)), 1)
         assert len(find_orth_centre(mps_left)) == 1
 
-        for i in range(n):
+        for i in range(mps_length):
             assert mps.tensors[i].shape == mps_left[i].shape
 
         for i, _ in enumerate(mps_left):
 
-            to_be_identity_left = np.einsum(
+            to_be_identity_left = contract(
                 "ijk, ijl -> kl", mps_left[i], np.conjugate(mps_left[i])
             )
 
@@ -261,19 +228,21 @@ def test_single_site_right_iso():
     Test the implementation of the single_site_right_iso method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
-        for site in range(n):
+        for site in range(mps_length):
 
             isometry = mps.single_site_right_iso(site)
 
-            to_be_identity = np.einsum(
+            to_be_identity = contract(
                 "ijk, ljk -> il", isometry, np.conjugate(isometry)
             )
 
@@ -287,13 +256,15 @@ def test_to_right_canonical():
     Test the implementation of the to_right_canonical method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
         mps_right = mps.to_right_canonical()
 
@@ -301,12 +272,12 @@ def test_to_right_canonical():
         assert np.isclose(abs(inner_product(mps_right, mps_right)), 1)
         assert len(find_orth_centre(mps_right)) == 1
 
-        for i in range(n):
+        for i in range(mps_length):
             assert mps.tensors[i].shape == mps_right[i].shape
 
         for i, _ in enumerate(mps_right):
 
-            to_be_identity_right = np.einsum(
+            to_be_identity_right = contract(
                 "ijk, ljk -> il", mps_right[i], np.conjugate(mps_right[i])
             )
 
@@ -322,18 +293,20 @@ def test_to_mixed_canonical():
     Test the implementation of the to_mixed_canonical method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
-        orth_centre_index = np.random.randint(n)
+        orth_centre_index = np.random.randint(mps_length)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
-        for i in range(n):
+        for i in range(mps_length):
             assert mps.tensors[i].shape == mps_mixed[i].shape
         assert is_canonical(mps_mixed)
         assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
@@ -345,10 +318,10 @@ def test_entanglement_entropy():
     Test the implementation of the entanglement_entropy method.
     """
 
-    n = 4
+    mps_length = 4
 
     psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float64)
-    psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * n)
+    psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * mps_length)
 
     mps_dimer = mps_from_dense(psi_many_body_dimer)
 
@@ -366,13 +339,15 @@ def test_density_mpo():
     Test the implementation of the density_mpo method.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
         density_mpo = list(mps.density_mpo())
 
@@ -382,10 +357,14 @@ def test_density_mpo():
         # get rid of ghost dimensions of the MPO
         density_matrix_mpo = density_matrix_mpo.squeeze()
         # reshaping to the right order of indices
-        correct_order = list(range(0, 2 * n, 2)) + list(range(1, 2 * n, 2))
+        correct_order = list(range(0, 2 * mps_length, 2)) + list(
+            range(1, 2 * mps_length, 2)
+        )
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # reshaping to the matrix form
-        density_matrix_mpo = density_matrix_mpo.reshape((2 ** n, 2 ** n))
+        density_matrix_mpo = density_matrix_mpo.reshape(
+            (2 ** mps_length, 2 ** mps_length)
+        )
 
         # original density matrix
         density_matrix = np.tensordot(psi, np.conjugate(psi), axes=0)
@@ -417,7 +396,7 @@ def test_split_two_site_tensor():
 
         u_l, schmidt_values, v_r = split_two_site_tensor(t)
 
-        should_be_t = np.einsum(
+        should_be_t = contract(
             "ijk, kl, lmn -> ijmn", u_l, np.diag(schmidt_values), v_r
         )
 
@@ -430,15 +409,17 @@ def test_find_orth_centre():
     Test the implementation of the find_orth_centre function.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
-        orth_centre_index = np.random.randint(n)
+        orth_centre_index = np.random.randint(mps_length)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
         assert is_canonical(mps_mixed)
@@ -450,21 +431,23 @@ def test_move_orth_centre():
     Test the implementation of the move_orth_centre function.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
-        orth_centre_index_init = np.random.randint(n)
+        orth_centre_index_init = np.random.randint(mps_length)
         mps_mixed_init = mps.to_mixed_canonical(orth_centre_index_init)
         assert np.isclose(abs(inner_product(mps_mixed_init, mps_mixed_init)), 1)
         assert is_canonical(mps_mixed_init)
         assert find_orth_centre(mps_mixed_init) == [orth_centre_index_init]
 
-        orth_centre_index_final = np.random.randint(n)
+        orth_centre_index_final = np.random.randint(mps_length)
         mps_mixed_final = move_orth_centre(
             mps_mixed_init, orth_centre_index_init, orth_centre_index_final
         )
@@ -479,16 +462,18 @@ def test_inner_product():
     Test the implementation of the inner_product function.
     """
 
-    n = 5
+    mps_length = 5
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
         # all possible orthogonality centre indices
-        orth_centre_indices = np.arange(n)
+        orth_centre_indices = np.arange(mps_length)
 
         list_of_mps = []
 
@@ -511,17 +496,19 @@ def test_to_explicit_form():
     Test the implementation of the to_explicit_form function.
     """
 
-    n = np.random.randint(4, 9)
+    mps_length = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = np.random.uniform(size=(2 ** n)) + 1j * np.random.uniform(size=(2 ** n))
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
         psi /= np.linalg.norm(psi)
-        mps = mps_from_dense(psi, dim=2, limit_max=False)
+        mps = mps_from_dense(psi)
 
         mps_left = mps.to_left_canonical()
         mps_right = mps.to_right_canonical()
-        orth_centre_index = np.random.randint(n)
+        orth_centre_index = np.random.randint(mps_length)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
         assert is_canonical(mps_left)
@@ -574,3 +561,107 @@ def test_to_explicit_form():
             ),
             1,
         )
+
+
+def test_apply_two_site_unitary():
+    """
+    Test the implementation of the apply_two_site_unitary function.
+    """
+
+    mps_length = np.random.randint(4, 9)
+
+    pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
+    pauli_y = np.array([[0.0, -1j], [1j, 0.0]])
+    pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
+    identity = np.identity(2)
+    paulis = [pauli_x, pauli_y, pauli_z]
+
+    for _ in range(100):
+
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
+        psi /= np.linalg.norm(psi)
+
+        mps = mps_from_dense(psi)
+        mps_right = mps.to_right_canonical()
+        mps_new = mps_right.copy()
+
+        site = int(np.random.randint(mps_length - 1))
+
+        operator_index = np.random.randint(3, size=(2,))
+
+        unitary_tensor = contract(
+            "ij, kl -> ikjl", paulis[operator_index[0]], paulis[operator_index[1]]
+        )
+
+        unitary_exact = unitary_tensor.reshape((4, 4))
+        for _ in range(site):
+            unitary_exact = np.kron(identity, unitary_exact)
+        for _ in range(mps_length - site - 2):
+            unitary_exact = np.kron(unitary_exact, identity)
+        unitary_exact = unitary_exact.transpose()
+
+        mps_new[site], mps_new[site + 1] = apply_two_site_unitary(
+            lambda_0=mps.schmidt_values[site],
+            b_1=mps_right[site],
+            b_2=mps_right[site + 1],
+            unitary=unitary_tensor,
+        )
+
+        assert is_canonical(mps_new)
+
+        assert np.isclose(
+            abs(
+                np.dot(
+                    np.conj(contract("ij, j", unitary_exact, psi)), to_dense(mps_new)
+                )
+            )
+            - 1,
+            0,
+        )
+
+        assert np.isclose(
+            contract("ij, j", unitary_exact, psi), to_dense(mps_new)
+        ).all()
+
+
+"""
+def test_apply_one_site_unitary():
+    
+    Test the implementation of the apply_one_site_unitary function.
+    
+    #TODO dense
+    mps_length = np.random.randint(4, 9)
+
+    pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
+    pauli_y = np.array([[0.0, -1j], [1j, 0.0]])
+    pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
+    identity = np.identity(2)
+    paulis = [pauli_x, pauli_y, pauli_z, identity]
+
+    for _ in range(100):
+
+        psi = np.random.uniform(size=(2 ** mps_length)) + 1j * np.random.uniform(
+            size=(2 ** mps_length)
+        )
+        psi /= np.linalg.norm(psi)
+        mps = mps_from_dense(psi)
+        mps_right = mps.to_right_canonical()
+
+        site = int(np.random.randint(mps_length - 2))
+
+        operator_index = int(np.random.randint(3))
+
+        unitary = paulis[operator_index]
+
+        sigma_0 = mps.schmidt_values[site]
+        b_1 = mps_right[site]
+        b_2 = mps_right[site + 1]
+        b_1_updated, b_2_updated = apply_one_site_unitary(b_1, unitary)
+
+        mps_new = mps_right.copy()
+        mps_new[site], mps_new[site + 1] = b_1_updated, b_2_updated
+
+        assert is_canonical(mps_new)
+"""
