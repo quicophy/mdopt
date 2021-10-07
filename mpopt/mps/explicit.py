@@ -795,9 +795,9 @@ def apply_two_site_unitary(lambda_0, b_1, b_2, unitary):
 
     _, _, b_2_updated = split_two_site_tensor(two_site_tensor_with_lambda_0)
     b_1_updated = contract(
-        "ijkl, lkm -> ijm",
+        "ijkl, mkl -> ijm",
         two_site_tensor_wo_lambda_0,
-        np.conj(b_2_updated).transpose(),
+        np.conj(b_2_updated),
     )
 
     return b_1_updated, b_2_updated

@@ -626,19 +626,18 @@ def test_apply_two_site_unitary():
         ).all()
 
 
-"""
 def test_apply_one_site_unitary():
-    
+    """
     Test the implementation of the apply_one_site_unitary function.
-    
-    #TODO dense
+    """
+
     mps_length = np.random.randint(4, 9)
 
     pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
     pauli_y = np.array([[0.0, -1j], [1j, 0.0]])
     pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
     identity = np.identity(2)
-    paulis = [pauli_x, pauli_y, pauli_z, identity]
+    paulis = [pauli_x, pauli_y, pauli_z]
 
     for _ in range(100):
 
@@ -646,22 +645,41 @@ def test_apply_one_site_unitary():
             size=(2 ** mps_length)
         )
         psi /= np.linalg.norm(psi)
+
         mps = mps_from_dense(psi)
         mps_right = mps.to_right_canonical()
+        mps_new = mps_right.copy()
 
-        site = int(np.random.randint(mps_length - 2))
+        site = int(np.random.randint(mps_length))
 
         operator_index = int(np.random.randint(3))
 
-        unitary = paulis[operator_index]
+        unitary_tensor = paulis[operator_index]
 
-        sigma_0 = mps.schmidt_values[site]
-        b_1 = mps_right[site]
-        b_2 = mps_right[site + 1]
-        b_1_updated, b_2_updated = apply_one_site_unitary(b_1, unitary)
+        unitary_exact = unitary_tensor
+        for _ in range(site):
+            unitary_exact = np.kron(identity, unitary_exact)
+        for _ in range(mps_length - site - 1):
+            unitary_exact = np.kron(unitary_exact, identity)
+        unitary_exact = unitary_exact.transpose()
 
-        mps_new = mps_right.copy()
-        mps_new[site], mps_new[site + 1] = b_1_updated, b_2_updated
+        mps_new[site] = apply_one_site_unitary(
+            b=mps_right[site],
+            unitary=unitary_tensor,
+        )
 
         assert is_canonical(mps_new)
-"""
+
+        assert np.isclose(
+            abs(
+                np.dot(
+                    np.conj(contract("ij, j", unitary_exact, psi)), to_dense(mps_new)
+                )
+            )
+            - 1,
+            0,
+        )
+
+        assert np.isclose(
+            contract("ij, j", unitary_exact, psi), to_dense(mps_new)
+        ).all()
