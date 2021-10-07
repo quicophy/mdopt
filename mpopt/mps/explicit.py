@@ -623,12 +623,12 @@ def is_canonical(mps):
 
         flags_left.append(
             np.isclose(
-                np.linalg.norm(to_be_identity_left - identity_left), 0, atol=1e-13
+                np.linalg.norm(to_be_identity_left - identity_left), 0, atol=1e-12
             )
         )
         flags_right.append(
             np.isclose(
-                np.linalg.norm(to_be_identity_right - identity_right), 0, atol=1e-13
+                np.linalg.norm(to_be_identity_right - identity_right), 0, atol=1e-12
             )
         )
 
