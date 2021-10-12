@@ -769,7 +769,8 @@ def to_dense(mps, flatten=True):
 
 def create_product_state(num_sites, local_dim=2):
     """
-    Creates |0...0> as an MPS.
+    Creates |0...0> as an MPS, which means that each physical tensor is `[1., 0.]`,
+    with trivial ([1.]) Schmidt values.
     """
 
     tensor = np.zeros((local_dim,))
