@@ -78,6 +78,12 @@ class ExplicitMPS:
         """
         return zip(self.schmidt_values, self.tensors)
 
+    def copy(self):
+        """
+        Returns a copy of the current MPS
+        """
+        return ExplicitMPS(self.tensors.copy(), self.schmidt_values.copy())
+
     def single_site_left_iso(self, site: int):
         """
         Computes single-site left isometry at a given site.
