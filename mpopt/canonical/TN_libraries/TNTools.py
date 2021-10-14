@@ -95,6 +95,10 @@ def reduced_svd(matrix, cut=0.0, max_len=False, normalize=False, init_norm=True,
     _u, _s, _vh = best_svd(matrix)
 
     # relative norm calculated for cut evaluation
+
+    first_norm = np.linalg.norm(_s, ord=norm_ord)
+    if first_norm==0:
+        ValueError("SVD on tensor of norm 0.")
     if init_norm:
         norm_s = _s / np.linalg.norm(_s, ord=norm_ord)
         norm_s = np.power(norm_s, norm_ord)
@@ -464,6 +468,24 @@ def binary_mps(binary):
                 " \'binary\' entry must be numpy array with 0/1 values")
     return mps
 
+def binary_mps_from_sparse(binary):
+    '''
+    Turns a classical binary array into a an equivalent normalised MPS.
+    '''
+    mps = []
+    # Initiating tensors
+    zero = (np.array([1., 0.])).reshape((1, 2, 1))
+    one = (np.array([0., 1.])).reshape((1, 2, 1))
+
+    for j in range(len(binary)):
+        if binary.is_zero_at(j):
+            mps.append(zero)
+        else:
+            mps.append(one)
+    
+    return mps
+
+
 
 def ansatz_mps(mps_length, max_chi=20, phys_ind=2):
     '''
@@ -489,6 +511,8 @@ def random_mps_gen(_n=8, noise_ratio=0.1, highest_value_index=1, max_bond=100, b
     Builds a MPS with a specific main component element and a uniformly random
     noise over other components. Can be used to test main component finding
     methods.
+    TODO:
+    Needs to be improved. Better way to generate large mps with entanglement.
     '''
     # vector of the noise model
     vector = noise_ratio*np.random.rand(basis**_n)
@@ -752,7 +776,7 @@ MPS main component finder
 '''
 
 
-def dephased_tensor_mpo_built(tensor):
+def legacy_dephased_tensor_mpo_built(tensor):
     '''
     Builds the correct dephased density matrix MPO element for an mps tensor.
     Follows general TNTools indices ordering.
@@ -771,6 +795,26 @@ def dephased_tensor_mpo_built(tensor):
             mpo_tens[:, :, i, j] = np.diag(np.diag(mpo_tens[:, :, i, j]))
 
     return mpo_tens
+
+def dephased_tensor_mpo_built(tensor):
+    '''
+    Builds the correct dephased density matrix MPO element for an mps tensor.
+    Follows general TNTools indices ordering.
+    '''
+    # Build density matrix
+    tens_shape = tensor.shape
+    conj_tensor = np.conj(tensor)
+    mpo_tens = np.tensordot(conj_tensor, tensor, axes=([], []))
+    mpo_tens = np.transpose(mpo_tens, axes=(1, 4, 0, 3, 2, 5))
+    mpo_tens = mpo_tens.reshape(
+        tens_shape[1], tens_shape[1], tens_shape[0]**2, tens_shape[2]**2)
+
+    zeroes = np.zeros(mpo_tens.shape)
+    diags = np.diagonal(mpo_tens, axis1=0, axis2=1)
+    for i in range(tens_shape[1]):
+        zeroes[i, i, :, :] = diags[:,:,i]
+
+    return zeroes
 
 
 def dephased_mpo_built(mps):
@@ -878,8 +922,10 @@ class MpsStateCanon:
             else:
                 self.orth_pos = orth_poses[0]
         else:
-            self.orth_pos = real_index(
-                kwargs.get('orth_pos', None), self.length)
+            self.orth_pos = kwargs.get('orth_pos', None)
+            if self.orth_pos != None:
+                self.orth_pos = real_index(self.orth_pos, self.length)
+            
         # Default SVD function
         if 'svd_func' not in kwargs:
             warnings.warn(
@@ -973,8 +1019,17 @@ class MpsStateCanon:
                 chi_max = False
             else:
                 chi_max = kwargs.get('chi_max', None)
-            return main_component(self.mps, method=method, chi_max=chi_max)
-        return main_component(self.mps, method=method)
+        return main_component(self.mps, method=method, chi_max=chi_max)
+            
+    def nans_infs_find(self):
+        check = False
+        pos = []
+        for i, tens in enumerate(self.mps):
+            if np.sum(np.isnan(tens))+np.sum(np.isinf(tens)):
+                check=True
+                pos.append(i)
+        
+        return check, pos
 
 
 '''

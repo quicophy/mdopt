@@ -1,11 +1,14 @@
-import TN_libraries.TNTools as tnt
 import numpy as np
-import sys
+import TN_libraries.TNTools as tnt
+import os
+
 
 '''
 A file made to evaluate the efficiency of the different main component finders.
 
-TODO: - printing results in json file
+TODO: - Optimize dephase mpo build function
+      - More efficient way to build main component test vector
+      
 
 
 
@@ -37,7 +40,7 @@ def single_test(size=8, noise=0.5, max_bond=False, basis=2, method='dephased_DMR
 
     # Creating an mps with that main component pos.
     mps = tnt.random_mps_gen(_n=size, noise_ratio=noise,
-                             highest_value_index=main_comp_vec, max_bond=np.Inf)
+                             highest_value_index=main_comp_vec, max_bond=20)
 
     # Calling the main component method used
     found_main = tnt.main_component(
@@ -49,31 +52,81 @@ def single_test(size=8, noise=0.5, max_bond=False, basis=2, method='dephased_DMR
 
 
 def single_success_rate(size=8, noise=0.5, max_bond=False, basis=2, method='dephased_DMRG', sample=10):
-    success=0
+    success = 0
     for i in range(sample):
         if single_test(size=size, noise=noise, max_bond=max_bond, basis=basis, method=method):
-            success+=1
-    
+            success += 1
+
     return success/sample
 
-def full_study(sizes=[8],noises=[0.5],max_bonds=[False], bases=[2], methods=['dephased_DMRG'], sample=20):
-    rates = []
-    for _s, size in enumerate(sizes):
-        for _n, noise in enumerate(noises):
-            for _mb, max_bond in enumerate(max_bonds):
-                for _b, basis in enumerate(bases):
-                    for _met, method in enumerate(methods):
-                        print(f'[Success rate: size={size}, noise={noise}]')
-                        rate = single_success_rate(size=size, noise=noise, max_bond=max_bond, basis=basis, method=method, sample=sample)
-                        rates.append(rate)
-    return rates
 
-noises = [0.95,0.99,0.99999]
+def save_to_file(parameters, filename, header=False, path='./', buffer=20):
 
-rates = full_study(noises=noises)
+    try:
+        with open(path+filename) as _:
+            pass
+
+    except FileNotFoundError:
+        if header is False:
+            print('The file doesn\'t exist. Creating one for data.')
+
+        else:
+            print('File doesn\'t exist, Creating one with given header.')
+            header_line = ''
+            for i, param in enumerate(header):
+                if i == len(parameters)-1:
+                    param_add = str(param)
+                else:
+                    param_add = str(param)+','
+                skip = buffer-len(param_add)
+                if skip <= 0:
+                    param_add += ' '*buffer
+                else:
+                    param_add += ' '*skip
+                header_line += param_add
+            save = open(path+filename, 'a')
+            print(header_line, file=save)
+            save.close()
+
+    step_line = ''
+    for i, param in enumerate(parameters):
+        if i == len(parameters)-1:
+            param_add = str(param)
+        else:
+            param_add = str(param)+','
+        skip = buffer-len(param_add)
+        if skip <= 0:
+            param_add += ' '*buffer
+        else:
+            param_add += ' '*skip
+        step_line += param_add
+
+    save = open(path+filename, 'a')
+    print(step_line, file=save)
+    save.close()
 
 
+def full_study(sizes=[8], noises=[0.5], max_bonds=[False], bases=[2], methods=['t_prod_state'], sample=20):
+    header = ['basis', 'method', 'max_bond', 'noise', 'size', 'rate']
+    for _b, basis in enumerate(bases):
+        for _met, method in enumerate(methods):
+            for _s, size in enumerate(sizes):
+                for _mb, max_bond in enumerate(max_bonds):
+                    for _n, noise in enumerate(noises):
+                        print(
+                            f'[method={method}, size={size}({_s+1}/{len(sizes)}), max_bond={max_bond}({_mb+1}/{len(max_bonds)}), noise={noise}({_n+1}/{len(noises)})]')
+                        rate = single_success_rate(
+                            size=size, noise=noise, max_bond=max_bond, basis=basis, method=method, sample=sample)
+                        print(f'Success rate: {rate}')
+                        step_params = [basis, method,
+                                       max_bond, noise, size, rate]
+                        save_to_file(
+                            step_params, 'data.dat', path='./main_component_results/', header=header)
 
 
+noises = [0.8, 0.9, 0.99]
+sizes = [8, 10, 12, 14]
+methods = ['dephased_DMRG']
+max_bonds = [8, 10, 12, 14, 16, False]
 
-
+full_study(noises=noises, sizes=sizes, methods=methods, max_bonds=max_bonds)
