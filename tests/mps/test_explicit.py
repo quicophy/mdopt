@@ -14,7 +14,7 @@ from mpopt.mps.explicit import (
     split_two_site_tensor,
     to_explicit_form,
     inner_product,
-    trimmed_svd,
+    svd,
     interlace_tensors,
 )
 
@@ -43,9 +43,9 @@ def _create_psi(length):
     return psi
 
 
-def test_trimmed_svd():
+def test_svd():
     """
-    Test the implementation of the trimmed_svd function.
+    Test the implementation of the svd function.
     """
 
     for _ in range(100):
@@ -53,31 +53,31 @@ def test_trimmed_svd():
         dim = np.random.randint(low=2, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
 
-        u, s, v_h = trimmed_svd(
-            m,
-            cut=1e-16,
-            max_num=1e6,
-            normalise=True,
-            init_norm=True,
-            limit_max=False,
-            err_th=1e-16,
-        )
+        u, s, v_h = svd(m)
 
         m_trimmed = contract("ij, j, jk -> ik", u, s, v_h)
 
-        u, s, v_h = trimmed_svd(
-            m_trimmed,
-            cut=1e-16,
-            max_num=1e6,
-            normalise=True,
-            init_norm=True,
-            limit_max=False,
-            err_th=1e-16,
-        )
+        u, s, v_h = svd(m_trimmed)
 
         m_trimmed_new = contract("ij, j, jk -> ik", u, s, v_h)
 
         assert np.isclose(np.linalg.norm(m_trimmed - m_trimmed_new), 0)
+
+
+def test_svd_1():
+    """
+    Another test of the svd function.
+    """
+
+    for _ in range(100):
+
+        dim = np.random.randint(low=50, high=100, size=2)
+        m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        num_sing_values = np.random.randint(1, 10)
+
+        u, s, v_h = svd(m, cut=1e-16, max_number=num_sing_values, normalise=True)
+
+        assert len(s) == num_sing_values
 
 
 def test_interlace_tensors():

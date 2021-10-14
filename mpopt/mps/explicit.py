@@ -297,7 +297,7 @@ class ExplicitMPS:
         return list(mpo)
 
 
-def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
+def mps_from_dense(psi, dim=2, max_number=1e6, tolerance=1e-12):
     """
     Returns the Matrix Product State in an explicit form,
     given a state in the dense (state vector) form.
@@ -309,7 +309,7 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
             Dimensionality of the local Hilbert space, d=2 for qubits.
         limit_max: bool
             Activate an upper limit to the spectrum's size.
-        max_num: int
+        max_number: int
             Maximum number of the singular values to keep.
         tolerance: float
             Absolute tolerance of the normalisation of the singular value spectrum at each bond.
@@ -331,7 +331,7 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
     psi = psi.reshape((-1, dim))
 
     # Getting the first tensor and schmidt_value tensors
-    psi, singular_values, v_r = trimmed_svd(psi, limit_max=limit_max, max_num=max_num)
+    psi, singular_values, v_r = svd(psi, max_number=max_number, normalise=False)
 
     # Adding the first tensor and schmidt-value tensor to the corresponding lists
     # Note adding the ghost dimension to the first tensor v_r
@@ -344,9 +344,7 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
 
         bond_dim = psi.shape[-1]
         psi = psi.reshape((-1, dim * bond_dim))
-        psi, singular_values, v_r = trimmed_svd(
-            psi, limit_max=limit_max, max_num=max_num
-        )
+        psi, singular_values, v_r = svd(psi, max_number=max_number, normalise=False)
         v_r = v_r.reshape((-1, dim, bond_dim))
 
         # Adding the v_r and singular_values tensors to the corresponding lists
@@ -366,7 +364,7 @@ def mps_from_dense(psi, dim=2, limit_max=False, max_num=1e6, tolerance=1e-12):
     return ExplicitMPS(tensors, schmidt_values, tolerance=tolerance)
 
 
-def split_two_site_tensor(theta, chi_max=1e5, eps=1e-13):
+def split_two_site_tensor(theta, chi_max=1e5, eps=1e-14):
     """
     Split a two-site MPS tensor as follows:
           vL --(theta)-- vR     ->    vL --(A)--diag(S)--(B)-- vR
@@ -395,9 +393,7 @@ def split_two_site_tensor(theta, chi_max=1e5, eps=1e-13):
     theta = theta.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
     # do a trimmed svd
-    u_l, schmidt_values, v_r = trimmed_svd(
-        theta, cut=eps, max_num=chi_max, init_norm=True
-    )
+    u_l, schmidt_values, v_r = svd(theta, cut=eps, max_number=chi_max, normalise=False)
 
     # split legs of u_l and v_r
     chi_v_cut = len(schmidt_values)
@@ -791,33 +787,19 @@ def create_product_state(num_sites, local_dim=2):
     return ExplicitMPS(tensors, sigmas)
 
 
-def trimmed_svd(
-    mat,
-    cut=1e-13,
-    max_num=1e5,
-    normalise=False,
-    init_norm=False,
-    limit_max=False,
-    err_th=1e-13,
-):
+def svd(mat, cut=1e-14, max_number=1e5, normalise=True):
     """
     Returns the Singular Value Decomposition of a matrix `mat`.
 
     Arguments:
-        mat: ndarray[ndim=2]
-            Matrix given as a ndarray with 2 dimensions.
+        mat: np.array[ndim=2]
+            Matrix given as a `np.array` with 2 dimensions.
         cut: float
-            Norm value cut for lower singular values.
-        max_num: int
+            Singular values smaller than this will be discarded.
+        max_number: int
             Maximum number of singular values to keep.
         normalise: bool
-            Activates normalisation of the final singular value spectrum.
-        init_norm: bool
-            Activates the use of relative norm for unormalised tensor's decomposition.
-        limit_max: bool
-            Activate an upper limit to the spectrum's size.
-        err_th: float
-            Singular value spectrum norm error.
+            Normalisation of the singular value spectrum.
 
     Returns:
         u_l: ndarray
@@ -830,44 +812,15 @@ def trimmed_svd(
 
     u_l, singular_values, v_r = np.linalg.svd(mat, full_matrices=False)
 
-    # Relative norm calculated for cut evaluation
-    if init_norm:
-        norm = np.linalg.norm(singular_values)
-        norm_singular_values = singular_values / norm
-    else:
-        norm_singular_values = singular_values
+    max_num = min(max_number, np.sum(singular_values > cut))
+    ind = np.argsort(singular_values)[::-1][:max_num]
 
-    norm_sum = 0
-    i = 0  # last kept singular value index
-    one_norm = 1
-    one_norms = []
-
-    # Evaluating final SVD value kept (index), for size limit fixed or not
-    if limit_max:
-        while (
-            (norm_sum < (1 - cut))
-            and (i < max_num)
-            and (i < singular_values.size)
-            and (one_norm > err_th)
-        ):
-            one_norm = np.power(norm_singular_values[i], 2)
-            norm_sum += one_norm
-            one_norms.append(one_norm)
-            i += 1
-    else:
-        while norm_sum < (1 - cut) and i < singular_values.size and one_norm > err_th:
-            one_norm = np.power(norm_singular_values[i], 2)
-            norm_sum += one_norm
-            one_norms.append(one_norm)
-            i += 1
+    u_l, singular_values, v_r = u_l[:, ind], singular_values[ind], v_r[ind, :]
 
     if normalise:
-        # Final renormalisation of SVD values kept or not, returning the correct dimensions
-        norm = np.linalg.norm(singular_values[:i].reshape(-1, 1))
-        singular_values = singular_values[:i] / norm
-        return u_l[:, :i], singular_values, v_r[:i, :]
+        singular_values /= np.linalg.norm(singular_values)
 
-    return u_l[:, :i], singular_values[:i], v_r[:i, :]
+    return u_l, singular_values, v_r
 
 
 def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals=True):
