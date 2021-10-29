@@ -1,0 +1,61 @@
+{
+    "code_selector": {
+        "bit_degree": [
+            3
+        ],
+        "check_degree": [
+            4,
+            100
+        ],
+        "code_size_mult": [
+            2
+        ],
+        "phys_err_rt": [
+            0.1
+        ],
+        "num_times": [
+            10
+        ]
+    },
+    "decoder_par": {
+        "b_prob": [
+            -1,
+            -2,
+            -3
+        ]
+    },
+    "svd_function_par": {
+        "max_len": [
+            false
+        ],
+        "cut": [
+            0.0
+        ],
+        "err_th": [
+            1e-30
+        ],
+        "norm_ord": [
+            2
+        ],
+        "init_norm": [
+            true
+        ],
+        "normalize": [
+            true
+        ]
+    },
+    "main_comp_finder_par": {
+        "extract": [
+            "exact"
+        ],
+        "chi_max": [
+            false
+        ],
+        "maxsweep": [
+            10
+        ],
+        "energy_var": [
+            1e-05
+        ]
+    }
+}
