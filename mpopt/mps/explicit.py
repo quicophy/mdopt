@@ -280,7 +280,7 @@ class ExplicitMPS:
         """
         Returns the MPO representation (as a list of tensors)
         of the density matrix defined by a given MPS.
-        Each tensor in the MPO list has legs (vL, pU, pD, vR),
+        Each tensor in the MPO list has legs (vL, vR, pU, pD),
         where v stands for "virtual", p -- for "physical",
         and L, R, U, D stand for "left", "right", "up", "down".
         """
@@ -290,7 +290,7 @@ class ExplicitMPS:
         mpo = map(
             lambda t: interlace_tensors(
                 t, t, conjugate_second=True, merge_virtuals=True
-            ),
+            ).transpose((0, 2, 3, 1)),
             tensors,
         )
 
@@ -364,7 +364,7 @@ def mps_from_dense(psi, dim=2, max_number=1e6, tolerance=1e-12):
     return ExplicitMPS(tensors, schmidt_values, tolerance=tolerance)
 
 
-def split_two_site_tensor(theta, chi_max=1e5, eps=1e-14):
+def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14):
     """
     Split a two-site MPS tensor as follows:
           vL --(theta)-- vR     ->    vL --(A)--diag(S)--(B)-- vR
@@ -393,7 +393,7 @@ def split_two_site_tensor(theta, chi_max=1e5, eps=1e-14):
     theta = theta.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
     # do a trimmed svd
-    u_l, schmidt_values, v_r = svd(theta, cut=eps, max_number=chi_max, normalise=False)
+    u_l, schmidt_values, v_r = svd(theta, cut=cut, max_number=chi_max, normalise=False)
 
     # split legs of u_l and v_r
     chi_v_cut = len(schmidt_values)
@@ -769,20 +769,25 @@ def to_dense(mps, flatten=True):
     return dense
 
 
-def create_product_state(num_sites, local_dim=2):
+def create_product_state(num_sites, which="0", local_dim=2):
     """
-    Creates |0...0> as an MPS, which means that each physical tensor is `[1., 0.]`,
-    with trivial ([1.]) Schmidt values.
+    Creates |0...0>/|1...1>/|+...+>/|-...-> as an MPS.
     """
 
     tensor = np.zeros((local_dim,))
-    tensor[0] = 1.0
-    tensor = tensor.reshape((1, local_dim, 1))
+    if which == "0":
+        tensor[0] = 1.0
+    if which == "1":
+        tensor[1] = 1.0
+    if which == "+":
+        tensor[0] = 1 / np.sqrt(2.0)
+        tensor[1] = tensor[0]
+    if which == "-":
+        tensor[0] = 1 / np.sqrt(2.0)
+        tensor[1] = -tensor[0]
 
-    sigma = [1.0]
-
-    tensors = [tensor for _ in range(num_sites)]
-    sigmas = [sigma for _ in range(num_sites + 1)]
+    tensors = [tensor.reshape((1, local_dim, 1)) for _ in range(num_sites)]
+    sigmas = [[1.0] for _ in range(num_sites + 1)]
 
     return ExplicitMPS(tensors, sigmas)
 

@@ -88,7 +88,6 @@ def test_interlace_tensors():
     for _ in range(100):
 
         dims_1 = np.random.randint(2, 11, size=3)
-
         dims_2 = np.random.randint(2, 11, size=3)
 
         tensor_1 = np.random.uniform(
@@ -111,13 +110,13 @@ def test_interlace_tensors():
             tensor_1, tensor_2, conjugate_second=False, merge_virtuals=False
         )
 
-        product_5 = np.tensordot(tensor_1, np.conjugate(tensor_2), axes=0)
+        product_5 = np.tensordot(tensor_1, np.conjugate(tensor_2), 0)
         product_5 = product_5.transpose(0, 3, 1, 4, 2, 5)
         product_5 = product_5.reshape(
             (dims_1[0] * dims_2[0], dims_1[1], dims_2[1], dims_1[2] * dims_2[2])
         )
 
-        product_6 = np.tensordot(tensor_1, np.conjugate(tensor_2), axes=0)
+        product_6 = np.tensordot(tensor_1, np.conjugate(tensor_2), 0)
         product_6 = product_6.transpose(0, 3, 1, 4, 2, 5)
         product_6 = product_6.reshape(
             (
@@ -127,13 +126,13 @@ def test_interlace_tensors():
             )
         )
 
-        product_7 = np.tensordot(tensor_1, tensor_2, axes=0)
+        product_7 = np.tensordot(tensor_1, tensor_2, 0)
         product_7 = product_7.transpose(0, 3, 1, 4, 2, 5)
         product_7 = product_7.reshape(
             (dims_1[0] * dims_2[0], dims_1[1], dims_2[1], dims_1[2] * dims_2[2])
         )
 
-        product_8 = np.tensordot(tensor_1, tensor_2, axes=0)
+        product_8 = np.tensordot(tensor_1, tensor_2, 0)
         product_8 = product_8.transpose(0, 3, 1, 4, 2, 5)
         product_8 = product_8.reshape(
             (
@@ -338,11 +337,15 @@ def test_density_mpo():
         psi = _create_psi(mps_length)
         mps = mps_from_dense(psi)
 
-        density_mpo = list(mps.density_mpo())
+        density_mpo = mps.density_mpo()
+
+        for i in range(mps_length):
+            density_mpo[i] = density_mpo[i].transpose((0, 3, 1, 2))
 
         density_matrix_mpo = reduce(
-            lambda a, b: np.tensordot(a, b, axes=(-1, 0)), density_mpo
+            lambda a, b: np.tensordot(a, b, (-1, 0)), density_mpo
         )
+
         # get rid of ghost dimensions of the MPO
         density_matrix_mpo = density_matrix_mpo.squeeze()
         # reshaping to the right order of indices
@@ -356,7 +359,7 @@ def test_density_mpo():
         )
 
         # original density matrix
-        density_matrix = np.tensordot(psi, np.conjugate(psi), axes=0)
+        density_matrix = np.tensordot(psi, np.conjugate(psi), 0)
 
         assert np.isclose(np.trace(density_matrix), 1)
         assert np.isclose(
@@ -365,8 +368,7 @@ def test_density_mpo():
 
         assert np.isclose(np.trace(density_matrix_mpo), 1)
         assert np.isclose(
-            np.linalg.norm(density_matrix_mpo - np.conjugate(density_matrix_mpo).T),
-            0,
+            np.linalg.norm(density_matrix_mpo - np.conjugate(density_matrix_mpo).T), 0,
         )
 
 

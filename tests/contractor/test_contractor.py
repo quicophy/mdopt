@@ -104,8 +104,7 @@ def test_apply_one_site_unitary():
         unitary_exact = unitary_exact.transpose()
 
         mps_new[site] = apply_one_site_unitary(
-            b_1=mps_right[site],
-            unitary=unitary_tensor,
+            b_1=mps_right[site], unitary=unitary_tensor,
         )
 
         assert is_canonical(mps_new)
