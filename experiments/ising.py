@@ -4,20 +4,22 @@ of an open-bounded transverse field Ising chain. The Hamiltonian reads:
 $H = - sum_{i=1}^{N-1} Z_i Z_{i+1} - h * sum_{i=1}^{N} X_i$.
 Here, the magnetic field is in the units of the pairwise Z-interaction.
 We find the ground state of this Hamiltonian and compute observables.
+The script should be launched from the root of the project directory.
 """
 
+
 import sys
-
-sys.path.append("../")
-
-from mpopt.mps.explicit import create_product_state, inner_product
-from mpopt.dmrg import DMRG as dmrg
-from mpopt.contractor.contractor import apply_one_site_unitary, apply_two_site_unitary
 import numpy as np
 from scipy.sparse import kron, eye, csr_matrix
 from scipy.sparse.linalg import eigsh
 from opt_einsum import contract
 import matplotlib.pyplot as plt
+
+sys.path[0] = sys.path[0] + "/.."
+
+from mpopt.mps.explicit import create_product_state, inner_product
+from mpopt.optimizer import DMRG as dmrg
+from mpopt.contractor.contractor import apply_one_site_unitary, apply_two_site_unitary
 
 
 def compute_one_site_expectation_value(mps, unitary, site):
@@ -290,7 +292,9 @@ if __name__ == "__main__":
         "__________________________________________________________________________________________"
     )
     print("")
-    print("Checking the ground states from exact diagonalization and DMRG being the same (up to a phase): ")
+    print(
+        "Checking the ground states from exact diagonalization and DMRG being the same (up to a phase): "
+    )
     print("")
     NUMBER_OF_SITES = 10
 

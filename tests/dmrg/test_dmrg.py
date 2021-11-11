@@ -6,7 +6,7 @@ import numpy as np
 from scipy.sparse.linalg import eigsh
 from experiments.ising import IsingExact, IsingMPO
 from mpopt.mps.explicit import create_product_state
-from mpopt.dmrg import DMRG as dmrg
+from mpopt.optimizer.dmrg import DMRG as dmrg
 
 
 def test_ground_states():
