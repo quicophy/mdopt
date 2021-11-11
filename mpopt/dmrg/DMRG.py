@@ -5,19 +5,17 @@ This module contains the DMRG class.
 import numpy as np
 from tqdm import tqdm
 from opt_einsum import contract
-from scipy.sparse.linalg import LinearOperator as linear_operator
+import scipy.sparse
 import scipy.sparse.linalg.eigen.arpack as arp
 from mpopt.mps.explicit import split_two_site_tensor
 
-# TODO check chi limit
 
-
-class EffectiveHamiltonian(linear_operator):
+class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
     """
     To fully use the advantage of :module:`scipy.sparse.linalg`, when we will be computing
     eigenvectors of local effective Hamiltonians, we will need a special class fot them.
 
-    To be diagonalized in `DMRGE.update_bond`.
+    To be diagonalized in `DMRG.update_bond`.
 
     .--uL                      uR--.
     |         i            j       |
@@ -39,8 +37,8 @@ class EffectiveHamiltonian(linear_operator):
             right_environment.shape[2],
         )
         d_1, d_2 = (
-            mpo_1.shape[2],
-            mpo_2.shape[2],
+            mpo_1.shape[3],
+            mpo_2.shape[3],
         )
         self.theta_shape = (chi_1, d_1, d_2, chi_2)
         self.shape = (chi_1 * d_1 * d_2 * chi_2, chi_1 * d_1 * d_2 * chi_2)
@@ -50,7 +48,7 @@ class EffectiveHamiltonian(linear_operator):
         """
         Calculate |theta'> = H_eff |theta>.
 
-        This function is used by :func:scipy.sparse.linalg.eigen.arpack.eigsh` to diagonalize
+        This function is used by :func:scipy.sparse.linalg.eigen.arpack.eigsh` to diagonalise
         the effective Hamiltonian with a Lanczos method, withouth generating the full matrix.
 
         """
@@ -58,7 +56,7 @@ class EffectiveHamiltonian(linear_operator):
         two_site_tensor = np.reshape(theta, self.theta_shape)
 
         two_site_tensor = contract(
-            "ijkl, mni, npjo, orkq, sql -> mprs",
+            "ijkl, mni, nopj, oqrk, sql -> mprs",
             two_site_tensor,
             self.left_environment,
             self.mpo_1,
@@ -71,8 +69,8 @@ class EffectiveHamiltonian(linear_operator):
 
 class DMRG:
     """
-    DMRG algorithm with two-site updates for a finite-size system with open-boundary conditions,
-    implemented as a class.
+    Class holding the Density Matrix Renormalization Group algorithm with two-site updates (DMRG-2)
+    for a finite-size system with open-boundary conditions.
 
     Parameters:
         mps, model, chi_max, mode, tolerance:
@@ -93,9 +91,9 @@ class DMRG:
                 'SM' : Smallest (in magnitude) eigenvalues.
                 'LA' : Largest (algebraic) eigenvalues.
                 'SA' : Smallest (algebraic) eigenvalues.
-        tolerance: float
+        cut: float
             The lower boundary of the spectrum.
-            All the singular values larger than that will be discarded.
+            All the singular values smaller than that will be discarded.
         left_environments, right_environments : lists of ndarrays[ndim=3]
             Left and right parts ("environments") of the effective Hamiltonian.
             Each left_environments[i] has legs (uL, vL, dL),
@@ -111,7 +109,7 @@ class DMRG:
             .--dL            dR--.
     """
 
-    def __init__(self, mps, mpo, chi_max, tolerance, mode):
+    def __init__(self, mps, mpo, chi_max, cut, mode):
         if len(mps) != len(mpo):
             raise ValueError(
                 f"The MPS has length ({len(mps)}), "
@@ -123,7 +121,7 @@ class DMRG:
         self.right_environments = [None] * len(mps)
         self.mpo = mpo
         self.chi_max = chi_max
-        self.tolerance = tolerance
+        self.cut = cut
         self.mode = mode
 
         # initialise left and right environments
@@ -196,7 +194,7 @@ class DMRG:
         )
         theta = eigenvectors[:, 0].reshape(effective_hamiltonian.theta_shape)
         left_iso_i, schmidt_values_j, right_iso_j = split_two_site_tensor(
-            theta, chi_max=self.chi_max, eps=self.tolerance
+            theta, chi_max=self.chi_max, cut=self.cut
         )
         schmidt_values_j /= np.linalg.norm(schmidt_values_j)
 
@@ -220,7 +218,7 @@ class DMRG:
         right_environment = self.right_environments[i]
         right_iso = self.mps.single_site_right_iso(i)
         tmp = contract(
-            "ijk, ljmn, omp -> iloknp", right_iso, self.mpo[i], np.conj(right_iso)
+            "ijk, lnjm, omp -> iloknp", right_iso, self.mpo[i], np.conj(right_iso)
         )
         right_environment = contract("ijk, lmnijk", right_environment, tmp)
         self.right_environments[i - 1] = right_environment
@@ -233,7 +231,7 @@ class DMRG:
         left_environment = self.left_environments[i]
         left_iso = self.mps.single_site_left_iso(i)
         tmp = contract(
-            "ijk, ljmn, omp -> iloknp", left_iso, self.mpo[i], np.conj(left_iso)
+            "ijk, lnjm, omp -> iloknp", left_iso, self.mpo[i], np.conj(left_iso)
         )
         left_environment = contract("ijk, ijklmn", left_environment, tmp)
         self.left_environments[i + 1] = left_environment
