@@ -75,7 +75,7 @@ def test_svd_1():
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
 
-        u, s, v_h = svd(m, cut=1e-16, max_number=num_sing_values, normalise=True)
+        _, s, _ = svd(m, cut=1e-16, max_number=num_sing_values, normalise=True)
 
         assert len(s) == num_sing_values
 
@@ -368,7 +368,8 @@ def test_density_mpo():
 
         assert np.isclose(np.trace(density_matrix_mpo), 1)
         assert np.isclose(
-            np.linalg.norm(density_matrix_mpo - np.conjugate(density_matrix_mpo).T), 0,
+            np.linalg.norm(density_matrix_mpo - np.conjugate(density_matrix_mpo).T),
+            0,
         )
 
 
