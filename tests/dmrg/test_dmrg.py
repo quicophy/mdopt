@@ -51,7 +51,7 @@ def test_ground_states():
                 )
             ),
             0,
-            atol=1e-8,
+            atol=1e-7,
         )
         assert np.isclose(
             sum(
@@ -69,5 +69,5 @@ def test_ground_states():
                 )
             ),
             0,
-            atol=1e-8,
+            atol=1e-7,
         )
