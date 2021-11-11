@@ -17,7 +17,7 @@ def test_ground_states():
 
     for _ in range(10):
 
-        number_of_sites = np.random.randint(3, 11)
+        number_of_sites = 10
         transverse_magnetic_field = np.random.uniform(0.1, 1)
 
         ising_exact = IsingExact(number_of_sites, transverse_magnetic_field)
@@ -32,42 +32,38 @@ def test_ground_states():
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
 
-        assert np.isclose(
-            abs(ground_state_mps.to_dense()), abs(ground_state_exact)
-        ).all()
-        assert np.isclose(
-            sum(
-                np.array(
-                    [
-                        ising_exact.x_magnetization(i, ground_state_exact)
-                        for i in range(number_of_sites)
-                    ]
-                )
-                - np.array(
-                    [
-                        ising_mpo.x_magnetization(i, ground_state_mps)
-                        for i in range(number_of_sites)
-                    ]
-                )
+        assert np.allclose(
+            abs(ground_state_mps.to_dense()),
+            abs(ground_state_exact),
+            atol=1e-6,
+            )
+        assert np.allclose(
+            np.array(
+                [
+                    ising_exact.x_magnetization(i, ground_state_exact)
+                    for i in range(number_of_sites)
+                ]
             ),
-            0,
-            atol=1e-7,
+            np.array(
+                [
+                    ising_mpo.x_magnetization(i, ground_state_mps)
+                    for i in range(number_of_sites)
+                ]
+            ),
+            atol=1e-3,
         )
-        assert np.isclose(
-            sum(
-                np.array(
-                    [
-                        ising_exact.z_magnetization(i, ground_state_exact)
-                        for i in range(number_of_sites)
-                    ]
-                )
-                - np.array(
-                    [
-                        ising_mpo.z_magnetization(i, ground_state_mps)
-                        for i in range(number_of_sites)
-                    ]
-                )
+        assert np.allclose(
+            np.array(
+                [
+                    ising_exact.z_magnetization(i, ground_state_exact)
+                    for i in range(number_of_sites)
+                ]
             ),
-            0,
-            atol=1e-7,
+            np.array(
+                [
+                    ising_mpo.z_magnetization(i, ground_state_mps)
+                    for i in range(number_of_sites)
+                ]
+            ),
+            atol=1e-3,
         )
