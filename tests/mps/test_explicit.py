@@ -19,6 +19,8 @@ from mpopt.mps.explicit import (
 )
 
 # TODO
+# DMRG being too slow
+# Apply unitary/non-unitary
 # separate tests to different files
 # check out the sanity tests they have in TenPy
 # check out typing for fixing types of variables in functions
