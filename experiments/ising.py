@@ -15,7 +15,7 @@ from scipy.sparse.linalg import eigsh
 from opt_einsum import contract
 import matplotlib.pyplot as plt
 
-sys.path[0] = sys.path[0] + "/.."
+sys.path[0] += "/.."
 
 from mpopt.mps.explicit import create_product_state, inner_product
 from mpopt.optimizer import DMRG as dmrg
@@ -320,7 +320,7 @@ if __name__ == "__main__":
     print("")
     print("Let us compare the magnetization plots from exact diagonalization and DMRG")
     print("")
-    NUMBER_OF_SITES = 30
+    NUMBER_OF_SITES = 10
     transverse_magnetic_field_space = np.linspace(0.1, 2.0, 20)
     mag_z_exact = []
     mag_x_exact = []
