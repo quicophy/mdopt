@@ -81,7 +81,7 @@ class DMRG:
             a current approximation of the ground state.
         mpo : MPO, list of ndarrays[ndim=4]
             The MPO of which the groundstate is to be computed.
-            Each tensor in the MPO list has legs (vL, pU, pD, vR), where v stands for "virtual",
+            Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
             p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
         chi_max: int
             The highest bond dimension of an MPS allowed.
@@ -169,8 +169,8 @@ class DMRG:
         #
         # left_environment: uL, vL, dL
         # right_environment: uR, vR, dR
-        # mpo[i]: vL, i, i*, b
-        # mpo[j]: b, j, j*, vR
+        # mpo[i]: vL, b, i, i*
+        # mpo[j]: b, vR, j, j*
 
         j = i + 1
 
