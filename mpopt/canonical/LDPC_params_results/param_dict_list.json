@@ -1,0 +1,1094 @@
+[
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.1,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.13,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.14,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.16,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.17,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.18,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.19,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.2,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.21,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.22,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.25,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.3,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 1,
+            "phys_err_rt": 0.5,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.1,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.13,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.14,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.16,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.17,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.18,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.19,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.2,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.21,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.22,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.25,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.3,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 2,
+            "phys_err_rt": 0.5,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.1,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.13,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.14,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.16,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.17,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.18,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.19,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.2,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.21,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.22,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.25,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.3,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    },
+    {
+        "code_selector": {
+            "bit_degree": 3,
+            "check_degree": 4,
+            "code_size_mult": 3,
+            "phys_err_rt": 0.5,
+            "num_times": 100
+        },
+        "decoder_par": {
+            "b_prob": 0.1
+        },
+        "svd_function_par": {
+            "max_len": 128,
+            "cut": 0.0,
+            "err_th": "default",
+            "norm_ord": 2,
+            "init_norm": true,
+            "normalize": true
+        },
+        "main_comp_finder_par": {
+            "extract": "dephased_DMRG",
+            "chi_max": "default",
+            "maxsweep": 10,
+            "energy_var": 0
+        }
+    }
+]
