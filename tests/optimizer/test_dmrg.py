@@ -17,7 +17,7 @@ def test_ground_states():
 
     for _ in range(10):
 
-        number_of_sites = 10
+        number_of_sites = 8
         transverse_magnetic_field = np.random.uniform(0.1, 1)
 
         ising_exact = IsingExact(number_of_sites, transverse_magnetic_field)
@@ -36,7 +36,7 @@ def test_ground_states():
             abs(ground_state_mps.to_dense()),
             abs(ground_state_exact),
             atol=1e-6,
-            )
+        )
         assert np.allclose(
             np.array(
                 [
