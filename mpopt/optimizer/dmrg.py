@@ -83,7 +83,7 @@ class DMRG:
             The MPO of which the groundstate is to be computed.
             Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
             p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
-        chi_max: int
+        chi_max : int
             The highest bond dimension of an MPS allowed.
         mode : str, which mode of the eigensolver to use
             Available options:
@@ -91,7 +91,7 @@ class DMRG:
                 'SM' : Smallest (in magnitude) eigenvalues.
                 'LA' : Largest (algebraic) eigenvalues.
                 'SA' : Smallest (algebraic) eigenvalues.
-        cut: float
+        cut : float
             The lower boundary of the spectrum.
             All the singular values smaller than that will be discarded.
         left_environments, right_environments : lists of ndarrays[ndim=3]
