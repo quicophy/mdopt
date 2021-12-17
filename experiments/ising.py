@@ -210,24 +210,26 @@ class IsingMPO:
         each tensor in the MPO list has legs (vL, vR, pU, pD),
         where v stands for "virtual", p -- for "physical",
         and L, R, U, D stand for "left", "right", "up", "down".
+        For explanation of what `v_right` and `v_left` are,
+        see https://arxiv.org/abs/1603.03039 page 22.
         """
-        v_l = np.array([0.0, 0.0, 1.0])
-        v_r = np.array([1.0, 0.0, 0.0])
+        v_left = np.array([0.0, 0.0, 1.0])
+        v_right = np.array([1.0, 0.0, 0.0])
 
-        mpo_block = np.zeros((3, 3, 2, 2))
-        mpo_block[0, 0] = self.I
-        mpo_block[1, 0] = self.Z
-        mpo_block[2, 0] = -self.h * self.X
-        mpo_block[2, 1] = -1.0 * self.Z
-        mpo_block[2, 2] = self.I
+        mpo_bulk = np.zeros((3, 3, 2, 2))
+        mpo_bulk[0, 0] = self.I
+        mpo_bulk[1, 0] = self.Z
+        mpo_bulk[2, 0] = -self.h * self.X
+        mpo_bulk[2, 1] = -1.0 * self.Z
+        mpo_bulk[2, 2] = self.I
 
-        mpo_left = np.tensordot(v_l, mpo_block, [0, 0]).reshape((1, 3, 2, 2))
-        mpo_right = np.tensordot(mpo_block, v_r, [1, 0]).reshape((3, 1, 2, 2))
+        mpo_left = np.tensordot(v_left, mpo_bulk, [0, 0]).reshape((1, 3, 2, 2))
+        mpo_right = np.tensordot(mpo_bulk, v_right, [1, 0]).reshape((3, 1, 2, 2))
 
         mpo_list = []
         mpo_list.append(mpo_left)
         for _ in range(self.num_sites - 2):
-            mpo_list.append(mpo_block)
+            mpo_list.append(mpo_bulk)
         mpo_list.append(mpo_right)
 
         return mpo_list
@@ -333,7 +335,7 @@ if __name__ == "__main__":
         ham_exact = ising_exact.hamiltonian_dense()
         mps_start = create_product_state(NUMBER_OF_SITES, which="0")
         engine = dmrg(mps_start.copy(), ham_mpo, chi_max=64, cut=1e-14, mode="SA")
-        engine.run(30)
+        engine.run(10)
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
 
