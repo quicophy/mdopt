@@ -33,7 +33,7 @@ class ExplicitMPS:
             Number of sites.
         nbonds : int
             Number of non-trivial bonds: `nsites - 1`.
-        tolerance: float
+        tolerance : float
             Absolute tolerance of the normalisation of the singular value spectrum at each bond.
 
     Exceptions:
@@ -364,7 +364,7 @@ def mps_from_dense(psi, dim=2, max_number=1e6, tolerance=1e-12):
     return ExplicitMPS(tensors, schmidt_values, tolerance=tolerance)
 
 
-def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14):
+def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14, normalise=False):
     """
     Split a two-site MPS tensor as follows:
           vL --(theta)-- vR     ->    vL --(A)--diag(S)--(B)-- vR
@@ -393,7 +393,9 @@ def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14):
     theta = theta.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
     # do a trimmed svd
-    u_l, schmidt_values, v_r = svd(theta, cut=cut, max_number=chi_max, normalise=False)
+    u_l, schmidt_values, v_r = svd(
+        theta, cut=cut, max_number=chi_max, normalise=normalise
+    )
 
     # split legs of u_l and v_r
     chi_v_cut = len(schmidt_values)
@@ -754,7 +756,7 @@ def inner_product(mps_1, mps_2):
 def to_dense(mps, flatten=True):
     """
     Returns a dense representation of an MPS, given as a list of tensors.
-    Attention: will cause memory overload for number of sites > 18!
+    Attention: will cause memory overload for number of sites > 20!
 
     Options:
         flatten: bool
@@ -792,7 +794,7 @@ def create_product_state(num_sites, which="0", local_dim=2):
     return ExplicitMPS(tensors, sigmas)
 
 
-def svd(mat, cut=1e-14, max_number=1e5, normalise=True):
+def svd(mat, cut=1e-14, max_number=1e5, normalise=False):
     """
     Returns the Singular Value Decomposition of a matrix `mat`.
 
