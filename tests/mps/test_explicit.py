@@ -18,19 +18,6 @@ from mpopt.mps.explicit import (
     interlace_tensors,
 )
 
-# TODO
-# DMRG being too slow
-# Apply unitary/non-unitary
-# separate tests to different files
-# check out the sanity tests they have in TenPy
-# check out typing for fixing types of variables in functions
-# mpos + mpo-mps contraction
-# decoder in the experiments folder
-# dtypes: complex64/32? float64/32?
-# check all the functions do not act inplace
-# copy attribute for the class
-# reverse as an attribute for the class / separate function
-
 
 def _create_psi(length):
     """
