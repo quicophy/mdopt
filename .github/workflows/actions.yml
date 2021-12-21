@@ -33,7 +33,7 @@ jobs:
         with:
           fail_ci_if_error: true
           token: fb9057ec-90fc-4902-9965-3ebb4d81d4f5
-          directory: ..
+          directory: MPOpt
           verbose: true
         
   lint:
