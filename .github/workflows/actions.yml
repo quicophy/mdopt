@@ -25,6 +25,7 @@ jobs:
       
       - name: Generate report
         run: |
+          pip install coverage
           coverage run -m pytest tests
           coverage report
 
