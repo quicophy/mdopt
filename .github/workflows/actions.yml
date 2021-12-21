@@ -25,6 +25,11 @@ jobs:
         
       - name: Run tests
         run: poetry run pytest .
+      
+      - name: Generate report
+        run: |
+          coverage run -m pytest tests
+          coverage report
         
   lint:
     runs-on: ubuntu-latest
