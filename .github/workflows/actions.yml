@@ -22,14 +22,15 @@ jobs:
       
       - name: Install dependencies
         run: poetry install
-        
-      - name: Run tests
-        run: poetry run pytest .
       
       - name: Generate report
         run: |
           coverage run -m pytest tests
           coverage report
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
         
   lint:
     runs-on: ubuntu-latest
