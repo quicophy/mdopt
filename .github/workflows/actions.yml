@@ -25,10 +25,8 @@ jobs:
       
       - name: Generate report
         run: |
-          pip install coverage
-          pip install pytest
-          coverage run -m pytest tests
-          coverage report
+          poetry run coverage run -m pytest tests
+          poetry run coverage report
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v1
