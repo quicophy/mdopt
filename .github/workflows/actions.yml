@@ -2,9 +2,9 @@ name: actions
 
 on:
   push:
-    branches: [ main ]
+    branches: [ Alex_path ]
   pull_request:
-    branches: [ main ]
+    branches: [ Alex_path ]
 
 jobs:
   tests:
@@ -32,7 +32,7 @@ jobs:
         uses: codecov/codecov-action@v2
         with:
           fail_ci_if_error: true
-          token: fb9057ec-90fc-4902-9965-3ebb4d81d4f5
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: /home/runner/work/MPOpt/MPOpt/.coverage
           verbose: false
         
