@@ -10,7 +10,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps: 
-      - uses: actions/checkout@Alex_path
+      - uses: actions/checkout@v2
 
       - name: Set up Python 3.9 
         uses: actions/setup-python@v2
