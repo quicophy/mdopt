@@ -25,15 +25,14 @@ jobs:
       
       - name: Generate report
         run: |
-          poetry run coverage run -m pytest tests
-          poetry run coverage report
+          poetry run pytest --cov=./ --cov-report=xml
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v2
         with:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: /home/runner/work/MPOpt/.coverage
+          files: /home/runner/work/MPOpt/coverage.xml
           verbose: false
         
   lint:
