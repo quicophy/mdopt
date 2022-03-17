@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 
 sys.path[0] += "/.."
 
-from mpopt.mps.explicit import create_product_state, inner_product
+from mpopt.mps.canonical import inner_product
+from mpopt.mps.explicit import create_product_state
 from mpopt.optimizer import DMRG as dmrg
 from mpopt.contractor.contractor import apply_one_site_unitary, apply_two_site_unitary
 
@@ -32,7 +33,7 @@ def compute_one_site_expectation_value(mps, unitary, site):
     mps_new = mps_old.copy()
 
     mps_new[site] = apply_one_site_unitary(
-        b_1=mps.single_site_right_iso(site), unitary=unitary
+        t_1=mps.single_site_right_iso(site), unitary=unitary
     )
 
     return inner_product(mps_old, mps_new)
@@ -283,7 +284,11 @@ if __name__ == "__main__":
     ising_mpo = IsingMPO(3, 1.0)
     ham_mpo = ising_mpo.hamiltonian_mpo()
     m = contract(
-        "zabc, adef, dygh -> begcfh", ham_mpo[0], ham_mpo[1], ham_mpo[2]
+        "zabc, adef, dygh -> begcfh",
+        ham_mpo[0],
+        ham_mpo[1],
+        ham_mpo[2],
+        optimize=[(0, 1), (0, 1)],
     ).reshape((8, 8))
     print(
         "Checking the exact and the MPO Hamiltonians being the same: ",
@@ -309,6 +314,7 @@ if __name__ == "__main__":
 
     print("DMRG running")
     print("")
+    # TODO copy the starting mps inside the dmrg class
     engine = dmrg(mps_start.copy(), ham_mpo, chi_max=64, cut=1e-14, mode="SA")
     engine.run(20)
     print("")
@@ -322,7 +328,7 @@ if __name__ == "__main__":
     print("")
     print("Let us compare the magnetization plots from exact diagonalization and DMRG")
     print("")
-    NUMBER_OF_SITES = 10
+
     transverse_magnetic_field_space = np.linspace(0.1, 2.0, 20)
     mag_z_exact = []
     mag_x_exact = []
