@@ -197,7 +197,7 @@ if __name__ == "__main__":
     # and L, R, U, D stand for "left", "right", "up", "down".
 
     IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
-
+    # TODO ravel unravel for the loops
     XOR_BULK = np.zeros((2, 2, 2, 2))
     for i in range(2):
         for j in range(2):
@@ -225,10 +225,11 @@ if __name__ == "__main__":
                     SWAP[i, j, k, l] = np.eye(2)[i, j] * np.eye(2)[k, l]
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS = 8
-    NUM_CHECKS = 6
+    NUM_BITS = 12
+    NUM_CHECKS = 9
     BIT_DEGREE = 3
     CHECK_DEGREE = 4
+    # TODO prob_noise -> prob_channel
     PROB_NOISE = 0.2
     PROB_ERROR = 0.1
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
@@ -334,6 +335,7 @@ if __name__ == "__main__":
     print("Retreiving a perturbed codeword: ")
 
     # Building an initial and a perturbed codeword.
+    # TODO
     INITIAL_STRING = "0" * NUM_BITS
     PERTURBED_STRING = ""
     for i in range(NUM_BITS):
@@ -348,11 +350,11 @@ if __name__ == "__main__":
         PERTURBED_STRING
     ).to_right_canonical()
 
-    # Passing the perturbed keyword state through the bitflip channel
+    # Passing the perturbed codeword state through the bitflip channel
     channel = [binary_symmetric_channel(PROB_NOISE) for _ in range(NUM_BITS)]
     perturbed_codeword = mps_mpo_contract(perturbed_codeword, channel, 0)
 
-    # Passing the perturbed keyword state through the parity constraints defined by the code
+    # Passing the perturbed codeword state through the parity constraints defined by the code
     for i in range(NUM_CHECKS):
 
         orth_centre_init = find_orth_centre(perturbed_codeword)[0]
@@ -375,6 +377,7 @@ if __name__ == "__main__":
 
     print("DMRG running:")
     mps_dmrg_start = create_product_state(len(density_mpo), which="0")
+    # TODO start with random product state
     engine = dmrg(mps_dmrg_start.copy(), density_mpo, chi_max=128, cut=1e-14, mode="LA")
     engine.run(20)
     mps_dmrg_final = engine.mps.to_right_canonical()

@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from opt_einsum import contract
 import scipy.sparse
-import scipy.sparse.linalg.eigen.arpack as arp
+from scipy.sparse.linalg import eigsh
 from mpopt.utils.utils import split_two_site_tensor
 
 
@@ -217,7 +217,7 @@ class DMRG:
         initial_guess = self.mps.two_site_right_tensor(i).reshape(
             effective_hamiltonian.shape[0]
         )
-        _, eigenvectors = arp.eigsh(
+        _, eigenvectors = eigsh(
             effective_hamiltonian,
             k=1,
             which=self.mode,
