@@ -2,9 +2,9 @@ name: actions
 
 on:
   push:
-    branches: [ Alex_path ]
+    branches: [ main ]
   pull_request:
-    branches: [ Alex_path ]
+    branches: [ main ]
 
 jobs:
   tests:
