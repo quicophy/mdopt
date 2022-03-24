@@ -1,5 +1,5 @@
 """
-This module contains the explicit MPS class and relevant functions.
+This module contains the Explicit and Canonical MPS constructions along with the relevant functions.
 """
 
 from .explicit import ExplicitMPS

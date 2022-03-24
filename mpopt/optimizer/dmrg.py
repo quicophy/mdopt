@@ -1,19 +1,20 @@
 """
-This module contains the DMRG class.
+This module contains the DMRG class. Inspired by TenPy.
 """
 
+from copy import deepcopy
 import numpy as np
 from tqdm import tqdm
 from opt_einsum import contract
 import scipy.sparse
-import scipy.sparse.linalg.eigen.arpack as arp
-from mpopt.mps.explicit import split_two_site_tensor
+from scipy.sparse.linalg import eigsh
+from mpopt.utils.utils import split_two_site_tensor
 
 
 class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
     """
     To fully use the advantage of :module:`scipy.sparse.linalg`, when we will be computing
-    eigenvectors of local effective Hamiltonians, we will need a special class fot them.
+    eigenvectors of local effective Hamiltonians, we will need a special class for them.
 
     To be diagonalized in `DMRG.update_bond`.
 
@@ -40,28 +41,29 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
             mpo_1.shape[3],
             mpo_2.shape[3],
         )
-        self.theta_shape = (chi_1, d_1, d_2, chi_2)
+        self.x_shape = (chi_1, d_1, d_2, chi_2)
         self.shape = (chi_1 * d_1 * d_2 * chi_2, chi_1 * d_1 * d_2 * chi_2)
         self.dtype = mpo_1.dtype
+        super().__init__(shape=self.shape, dtype=self.dtype)
 
-    def _matvec(self, theta):
+    def _matvec(self, x):
         """
-        Calculate |theta'> = H_eff |theta>.
-
-        This function is used by :func:scipy.sparse.linalg.eigen.arpack.eigsh` to diagonalise
+        Calculate |x'> = H_eff |x>.
+        This function is used by :func:scipy.sparse.linalg.eigsh` to diagonalise
         the effective Hamiltonian with a Lanczos method, withouth generating the full matrix.
-
         """
 
-        two_site_tensor = np.reshape(theta, self.theta_shape)
+        two_site_tensor = np.reshape(x, self.x_shape)
 
+        einsum_string = "ijkl, mni, nopj, oqrk, sql -> mprs"
         two_site_tensor = contract(
-            "ijkl, mni, nopj, oqrk, sql -> mprs",
+            einsum_string,
             two_site_tensor,
             self.left_environment,
             self.mpo_1,
             self.mpo_2,
             self.right_environment,
+            optimize=[(0, 1), (0, 3), (0, 2), (0, 1)],
         )
 
         return np.reshape(two_site_tensor, self.shape[0])
@@ -116,7 +118,7 @@ class DMRG:
                 f"the MPO has length ({len(mpo)}), "
                 "but the lengths should be equal."
             )
-        self.mps = mps
+        self.mps = deepcopy(mps)
         self.left_environments = [None] * len(mps)
         self.right_environments = [None] * len(mps)
         self.mpo = mpo
@@ -124,7 +126,7 @@ class DMRG:
         self.cut = cut
         self.mode = mode
 
-        # initialise left and right environments
+        # Initialize left and right environments.
         start_bond_dim = self.mpo[0].shape[0]
         chi = mps.tensors[0].shape[0]
         left_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float64)
@@ -134,7 +136,7 @@ class DMRG:
         self.left_environments[0] = right_environment
         self.right_environments[-1] = right_environment
 
-        # update necessary right environments
+        # Update necessary right environments.
         for i in reversed(range(1, len(mps))):
             self.update_right_environment(i)
 
@@ -185,55 +187,63 @@ class DMRG:
         initial_guess = self.mps.two_site_right_tensor(i).reshape(
             effective_hamiltonian.shape[0]
         )
-        _, eigenvectors = arp.eigsh(
+        _, eigenvectors = eigsh(
             effective_hamiltonian,
             k=1,
             which=self.mode,
             return_eigenvectors=True,
             v0=initial_guess,
         )
-        theta = eigenvectors[:, 0].reshape(effective_hamiltonian.theta_shape)
-        left_iso_i, schmidt_values_j, right_iso_j = split_two_site_tensor(
-            theta, chi_max=self.chi_max, cut=self.cut
+        x = eigenvectors[:, 0].reshape(effective_hamiltonian.x_shape)
+        left_iso_i, singular_values_j, right_iso_j = split_two_site_tensor(
+            x, chi_max=self.chi_max, cut=self.cut
         )
-        schmidt_values_j /= np.linalg.norm(schmidt_values_j)
+        singular_values_j /= np.linalg.norm(singular_values_j)
 
         # Put back into MPS
         self.mps.tensors[i] = np.tensordot(
-            np.linalg.inv(np.diag(self.mps.schmidt_values[i])), left_iso_i, (1, 0)
+            np.linalg.inv(np.diag(self.mps.singular_values[i])), left_iso_i, (1, 0)
         )
         self.mps.tensors[j] = np.tensordot(
-            right_iso_j, np.linalg.inv(np.diag(self.mps.schmidt_values[j + 1])), (2, 0)
+            right_iso_j, np.linalg.inv(np.diag(self.mps.singular_values[j + 1])), (2, 0)
         )
-        self.mps.schmidt_values[j] = schmidt_values_j
+        self.mps.singular_values[j] = singular_values_j
 
         self.update_left_environment(i)
         self.update_right_environment(j)
 
     def update_right_environment(self, i):
         """
-        Compute right_environment right of site `i-1` from right_environment right of site `i`.
+        Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
         """
 
         right_environment = self.right_environments[i]
         right_iso = self.mps.single_site_right_iso(i)
-        tmp = contract(
-            "ijk, lnjm, omp -> iloknp", right_iso, self.mpo[i], np.conj(right_iso)
+        right_environment = contract(
+            "ijk, lnjm, omp, knp -> ilo",
+            right_iso,
+            self.mpo[i],
+            np.conj(right_iso),
+            right_environment,
+            optimize=[(0, 3), (0, 2), (0, 1)],
         )
-        right_environment = contract("ijk, lmnijk", right_environment, tmp)
         self.right_environments[i - 1] = right_environment
 
     def update_left_environment(self, i):
         """
-        Compute right_environment left of site `i+1` from right_environment left of site `i`.
+        Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
         """
 
         left_environment = self.left_environments[i]
         left_iso = self.mps.single_site_left_iso(i)
-        tmp = contract(
-            "ijk, lnjm, omp -> iloknp", left_iso, self.mpo[i], np.conj(left_iso)
+        left_environment = contract(
+            "ijk, lnjm, omp, ilo -> knp",
+            left_iso,
+            self.mpo[i],
+            np.conj(left_iso),
+            left_environment,
+            optimize=[(0, 3), (0, 2), (0, 1)],
         )
-        left_environment = contract("ijk, ijklmn", left_environment, tmp)
         self.left_environments[i + 1] = left_environment
 
     def run(self, num_iter):

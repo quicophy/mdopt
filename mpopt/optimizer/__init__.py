@@ -1,5 +1,5 @@
 """
-This module contains the DMRG class.
+This module contains optimizers for Matrix Product States.
 """
 
 from .dmrg import DMRG
