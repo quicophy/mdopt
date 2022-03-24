@@ -9,7 +9,7 @@ from mpopt.utils.utils import (
     mpo_to_matrix,
     create_random_mpo,
     svd,
-    interlace_tensors,
+    kron_tensors,
     split_two_site_tensor,
 )
 
@@ -48,7 +48,7 @@ def test_svd_1():
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
 
-        _, s, _ = svd(m, cut=1e-16, chi_max=num_sing_values, normalise=True)
+        _, s, _ = svd(m, cut=1e-16, chi_max=num_sing_values, renormalise=True)
 
         assert len(s) == num_sing_values
 
@@ -80,9 +80,9 @@ def test_split_two_site_tensor():
         assert np.isclose(np.linalg.norm(t - should_be_t), 0)
 
 
-def test_interlace_tensors():
+def test_kron_tensors():
     """
-    Test the implementation of the `interlace_tensors` function.
+    Test the implementation of the `kron_tensors` function.
     """
 
     for _ in range(100):
@@ -97,23 +97,23 @@ def test_interlace_tensors():
             size=(dims_2[0], dims_2[1], dims_2[2])
         ) + 1j * np.random.uniform(size=(dims_2[0], dims_2[1], dims_2[2]))
 
-        product_1 = interlace_tensors(
-            tensor_1, tensor_2, conjugate_second=True, merge_virtuals=True
+        product_1 = kron_tensors(
+            tensor_1, tensor_2, conjugate_second=True, merge_physicals=True
         )
-        product_2 = interlace_tensors(
-            tensor_1, tensor_2, conjugate_second=True, merge_virtuals=False
+        product_2 = kron_tensors(
+            tensor_1, tensor_2, conjugate_second=True, merge_physicals=False
         )
-        product_3 = interlace_tensors(
-            tensor_1, tensor_2, conjugate_second=False, merge_virtuals=True
+        product_3 = kron_tensors(
+            tensor_1, tensor_2, conjugate_second=False, merge_physicals=True
         )
-        product_4 = interlace_tensors(
-            tensor_1, tensor_2, conjugate_second=False, merge_virtuals=False
+        product_4 = kron_tensors(
+            tensor_1, tensor_2, conjugate_second=False, merge_physicals=False
         )
 
         product_5 = np.tensordot(tensor_1, np.conjugate(tensor_2), 0)
         product_5 = product_5.transpose(0, 3, 1, 4, 2, 5)
         product_5 = product_5.reshape(
-            (dims_1[0] * dims_2[0], dims_1[1], dims_2[1], dims_1[2] * dims_2[2])
+            (dims_1[0] * dims_2[0], dims_1[1] * dims_2[1], dims_1[2] * dims_2[2])
         )
 
         product_6 = np.tensordot(tensor_1, np.conjugate(tensor_2), 0)
@@ -121,7 +121,8 @@ def test_interlace_tensors():
         product_6 = product_6.reshape(
             (
                 product_6.shape[0] * product_6.shape[1],
-                product_6.shape[2] * product_6.shape[3],
+                product_6.shape[2],
+                product_6.shape[3],
                 product_6.shape[4] * product_6.shape[5],
             )
         )
@@ -129,7 +130,7 @@ def test_interlace_tensors():
         product_7 = np.tensordot(tensor_1, tensor_2, 0)
         product_7 = product_7.transpose(0, 3, 1, 4, 2, 5)
         product_7 = product_7.reshape(
-            (dims_1[0] * dims_2[0], dims_1[1], dims_2[1], dims_1[2] * dims_2[2])
+            (dims_1[0] * dims_2[0], dims_1[1] * dims_2[1], dims_1[2] * dims_2[2])
         )
 
         product_8 = np.tensordot(tensor_1, tensor_2, 0)
@@ -137,7 +138,8 @@ def test_interlace_tensors():
         product_8 = product_8.reshape(
             (
                 product_8.shape[0] * product_8.shape[1],
-                product_8.shape[2] * product_8.shape[3],
+                product_8.shape[2],
+                product_8.shape[3],
                 product_8.shape[4] * product_8.shape[5],
             )
         )

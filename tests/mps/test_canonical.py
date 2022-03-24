@@ -47,6 +47,7 @@ def test_move_orth_centre():
 
         orth_centre_index_init = np.random.randint(mps_length)
         mps_mixed_init = mps.to_mixed_canonical(orth_centre_index_init)
+
         assert np.isclose(abs(inner_product(mps_mixed_init, mps_mixed_init)), 1)
         assert is_canonical(mps_mixed_init)
         assert find_orth_centre(mps_mixed_init) == [orth_centre_index_init]

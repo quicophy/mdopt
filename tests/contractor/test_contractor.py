@@ -4,6 +4,7 @@
 
 import numpy as np
 from opt_einsum import contract
+from scipy.stats import unitary_group
 from mpopt.utils.utils import mpo_to_matrix, create_random_mpo
 from mpopt.mps.explicit import mps_from_dense
 from mpopt.mps.canonical import is_canonical, to_dense
@@ -47,7 +48,7 @@ def test_mps_mpo_contract():
 
         mps_fin = mps_mpo_contract(mps_init, mpo, start_site, renormalise=False)
         mps_fin_1 = mps_mpo_contract(mps_init, mpo, start_site, renormalise=True)
-        orthogonality_center = mps_fin_1[int(start_site + mpo_length - 1)]
+        orthogonality_centre = mps_fin_1[int(start_site + mpo_length - 1)]
 
         mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
         psi_fin = mpo_dense @ psi_init
@@ -56,7 +57,7 @@ def test_mps_mpo_contract():
         assert np.isclose(
             abs(np.linalg.norm(to_dense(mps_fin) - psi_fin)), 0, atol=1e-7
         )
-        assert np.isclose(np.linalg.norm(orthogonality_center), 1)
+        assert np.isclose(np.linalg.norm(orthogonality_centre), 1)
 
 
 def test_apply_two_site_unitary():
@@ -64,13 +65,8 @@ def test_apply_two_site_unitary():
     Test the implementation of the `apply_two_site_unitary` function.
     """
 
+    identity = np.eye(2)
     mps_length = np.random.randint(4, 9)
-
-    pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
-    pauli_y = np.array([[0.0, -1j], [1j, 0.0]])
-    pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
-    identity = np.identity(2)
-    paulis = [pauli_x, pauli_y, pauli_z]
 
     for _ in range(100):
 
@@ -82,16 +78,9 @@ def test_apply_two_site_unitary():
 
         site = int(np.random.randint(mps_length - 1))
 
-        operator_index = np.random.randint(3, size=(2,))
+        unitary_exact = unitary_group.rvs(4)
+        unitary_tensor = unitary_exact.reshape((2, 2, 2, 2))
 
-        unitary_tensor = contract(
-            "ij, kl -> ikjl",
-            paulis[operator_index[0]],
-            paulis[operator_index[1]],
-            optimize=[(0, 1)],
-        )
-
-        unitary_exact = unitary_tensor.reshape((4, 4))
         for _ in range(site):
             unitary_exact = np.kron(identity, unitary_exact)
         for _ in range(mps_length - site - 2):

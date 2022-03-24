@@ -314,8 +314,7 @@ if __name__ == "__main__":
 
     print("DMRG running")
     print("")
-    # TODO copy the starting mps inside the dmrg class
-    engine = dmrg(mps_start.copy(), ham_mpo, chi_max=64, cut=1e-14, mode="SA")
+    engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
     engine.run(20)
     print("")
     ground_state_mps = engine.mps

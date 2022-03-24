@@ -9,11 +9,11 @@ from mpopt.utils.utils import split_two_site_tensor
 
 
 def mps_mpo_contract(
-    mps_can, mpo, start_site, renormalise=False, chi_max=1e5, cut=1e-20
+    mps_can, mpo, start_site=0, renormalise=False, chi_max=1e5, cut=1e-20
 ):
     """
     Applies an operator (not necessarily unitary) in the MPO format
-    to a mixed-canonical MPS with the orthogonality centre at site `start_site`
+    to a canonical MPS with the orthogonality centre at site `start_site`
     while optionally renormalising singular values at each bond.
     Returning the updated MPS in the canonical form.
 
@@ -28,7 +28,7 @@ def mps_mpo_contract(
                    []---[]---[]---...---[]
                    |    |    |          |
 
-    The contraction proceeds as described in the supplimentary notes.
+    The contraction proceeds as described in the supplementary notes.
 
     Arguments:
         mpo : list[np.array[ndim=4]]
@@ -85,7 +85,7 @@ def mps_mpo_contract(
     for i in range(len(mpo) - 2):
 
         mps[orth_centre_index], singular_values, b_r = split_two_site_tensor(
-            two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, normalise=renormalise
+            two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, renormalise=renormalise
         )
 
         orth_centre_index += 1
@@ -117,7 +117,7 @@ def mps_mpo_contract(
         )
 
     mps[orth_centre_index], singular_values, b_r = split_two_site_tensor(
-        two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, normalise=renormalise
+        two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, renormalise=renormalise
     )
 
     mps[orth_centre_index + 1] = contract(
@@ -131,7 +131,7 @@ def apply_two_site_unitary(lambda_0, b_1, b_2, unitary):
     """
     Applies a two-site unitary to a right-canonical MPS without
     having to compute the inverse of any singular value matrix.
-    Returns back the resulting MPS in the right-canonical form.
+    Returns back the resulting MPS tensors in the right-canonical form.
 
     --(lambda_0)--(b_1)--(b_2)--    ->    --(b_1_updated)--(b_2_updated)--
                     |      |                      |             |

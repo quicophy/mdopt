@@ -1,5 +1,28 @@
 """
 This module contains functions to operate with MPS in canonical form.
+The canonical Matrix Product State does not have its class, but is given
+as a list of 3-dimensional tensors satisfying one of the following restrictions:
+
+1) Right-canonical: all tensors are right isometries, i.e.,
+
+                    ---()---      ---
+                        |   |       |
+                        |   |  ==   |
+                        |   |       |
+                    ---()---      ---
+
+2) Left-canonical: all tensors are left isometries, i.e.,
+
+                    ---()---      ---
+                    |   |         |
+                    |   |    ==   |
+                    |   |         |
+                    ---()---      ---
+
+3) Mixed-canonical: all but one tensors are left or right isometries.
+   This exceptional tensor will be hereafter called the orthogonality centre.
+
+Note, that a tensor with a physical leg sticking up is considered to be complex-conjugated.
 """
 
 from functools import reduce
@@ -65,7 +88,9 @@ def find_orth_centre(mps):
         if flags_right == [not flag for flag in flags_left]:
             centres.append(length - 1)
 
-    # Handling a product state. #TODO
+    # Handling a product state.
+    if (flags_left == [True] * length) and (flags_right == [True] * length):
+        centres.append(0)
 
     return centres
 
@@ -87,8 +112,6 @@ def move_orth_centre(mps, init_pos, final_pos):
         ValueError:
             If the MPS is not given in any of the canonical forms.
         ValueError:
-            If the orthogonality centre is found at the position different from `init_pos`.
-        ValueError:
             If inital_pos or final_pos does not match the MPS length.
     """
 
@@ -96,15 +119,7 @@ def move_orth_centre(mps, init_pos, final_pos):
     mps = _add_ghost_dimensions(mps)
 
     length = len(mps)
-    ##################################
-    # TODO move this thing to the tests
-    centre = find_orth_centre(mps)
-    if centre != [init_pos]:
-        raise ValueError(
-            f"The orthogonality centre positions ({centre}) "
-            f"do not correspond to given initial position ({init_pos})."
-        )
-    ##################################
+
     if init_pos >= length:
         raise ValueError(
             "Initial orthogonality centre position index does not match the MPS length."
@@ -141,11 +156,11 @@ def move_orth_centre(mps, init_pos, final_pos):
     return mps
 
 
-def _move_orth_centre_sigma(mps, init_pos, final_pos):
+def _move_orth_centre_singular_values(mps, init_pos, final_pos):
     """
     Given an MPS with an orthogonality centre at site init_pos, returns an MPS
     with the orthogonality centre at site final_pos
-    and the singular value tensors (sigma) at each covered bond.
+    and the singular-value tensors at each covered bond.
 
     Arguments:
         mps: list of np.arrays[ndim=3]
@@ -181,14 +196,14 @@ def _move_orth_centre_sigma(mps, init_pos, final_pos):
     else:
         return mps, []
 
-    sigmas = []
+    singular_values = []
     for i in range(begin, final):
         two_site_tensor = np.tensordot(mps[i], mps[i + 1], (2, 0))
-        u_l, singular_values, v_r = split_two_site_tensor(two_site_tensor)
-        singular_values /= np.linalg.norm(singular_values)
+        u_l, singular_values_bond, v_r = split_two_site_tensor(two_site_tensor)
+        singular_values_bond /= np.linalg.norm(singular_values_bond)
 
-        sigmas.append(singular_values)
-        mps_new = np.tensordot(np.diag(singular_values), v_r, (1, 0))
+        singular_values.append(singular_values_bond)
+        mps_new = np.tensordot(np.diag(singular_values_bond), v_r, (1, 0))
 
         mps[i] = u_l
         mps[i + 1] = mps_new
@@ -197,9 +212,9 @@ def _move_orth_centre_sigma(mps, init_pos, final_pos):
     # to keep the state the same
     if init_pos > final_pos:
         mps = [np.transpose(M) for M in reversed(mps)]
-        sigmas = list(reversed(sigmas))
+        singular_values = list(reversed(singular_values))
 
-    return mps, sigmas
+    return mps, singular_values
 
 
 def is_canonical(mps):
@@ -254,10 +269,12 @@ def _move_orth_centre_to_border(mps, init_orth_centre_index):
     length = len(mps)
 
     if init_orth_centre_index <= length / 2:
-        (mps, _) = _move_orth_centre_sigma(mps, init_orth_centre_index, 0)
+        (mps, _) = _move_orth_centre_singular_values(mps, init_orth_centre_index, 0)
         return (mps, "first")
 
-    (mps, _) = _move_orth_centre_sigma(mps, init_orth_centre_index, length - 1)
+    (mps, _) = _move_orth_centre_singular_values(
+        mps, init_orth_centre_index, length - 1
+    )
     return (mps, "last")
 
 
@@ -291,20 +308,22 @@ def to_explicit(mps):
     (mps, border) = _move_orth_centre_to_border(mps, centre)
 
     if border == "first":
-        tensors, sigmas = _move_orth_centre_sigma(mps, 0, length - 1)
+        tensors, singular_values = _move_orth_centre_singular_values(mps, 0, length - 1)
     else:
-        tensors, sigmas = _move_orth_centre_sigma(mps, length - 1, 0)
+        tensors, singular_values = _move_orth_centre_singular_values(mps, length - 1, 0)
 
-    sigmas.insert(0, np.array([1.0]))
-    sigmas.append(np.array([1.0]))
+    singular_values.insert(0, np.array([1.0]))
+    singular_values.append(np.array([1.0]))
 
     ttensors = []
     for i in range(length):
         ttensors.append(
-            np.tensordot(tensors[i], np.linalg.inv(np.diag(sigmas[i + 1])), (2, 0))
+            np.tensordot(
+                tensors[i], np.linalg.inv(np.diag(singular_values[i + 1])), (2, 0)
+            )
         )
 
-    return ExplicitMPS(ttensors, sigmas)
+    return ExplicitMPS(ttensors, singular_values)
 
 
 def _add_ghost_dimensions(mps):
@@ -322,6 +341,7 @@ def _add_ghost_dimensions(mps):
 
 def inner_product(mps_1, mps_2):
     """
+    # TODO docstring
     Returns an inner product between 2 Matrix Product States.
     """
 

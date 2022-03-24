@@ -5,7 +5,7 @@ This module contains the explicit MPS class and relevant functions.
 from functools import reduce
 from opt_einsum import contract
 import numpy as np
-from mpopt.utils.utils import interlace_tensors, svd
+from mpopt.utils.utils import kron_tensors, svd
 
 
 class ExplicitMPS:
@@ -216,14 +216,14 @@ class ExplicitMPS:
         for i in range(orth_centre_index):
             mixed_can_mps.append(self.single_site_left_iso(i))
 
-        orthogonality_center = contract(
+        orthogonality_centre = contract(
             "ij, jkl, lm -> ikm",
             np.diag(self.singular_values[orth_centre_index]),
             self.tensors[orth_centre_index],
             np.diag(self.singular_values[orth_centre_index + 1]),
             optimize=[(0, 1), (0, 1)],
         )
-        mixed_can_mps.append(orthogonality_center)
+        mixed_can_mps.append(orthogonality_centre)
 
         for i in range(orth_centre_index + 1, self.nsites):
             mixed_can_mps.append(self.single_site_right_iso(i))
@@ -293,13 +293,29 @@ class ExplicitMPS:
         Each tensor in the MPO list has legs (vL, vR, pU, pD),
         where v stands for "virtual", p -- for "physical",
         and L, R, U, D stand for "left", "right", "up", "down".
+
+        This operation is depicted in the following picture.
+        In the cartoon, {i,j,k,l} and {a,b,c,d} are indices.
+        Here, the ()'s represent the MPS tensors, the O's ---
+        the singular values tensors, the []'s --- the MPO tensors.
+        The MPS with the physical legs up is complex-conjugated element-wise.
+        The empty line between the MPS and its complex-conjugated version
+        stands for the tensor (kronecker) product.
+
+              i        j
+          a   |        |       c              i    j
+        ..---()---O---()---O---..         ab  |    |  cd
+                                    --> ..---[]---[]---..
+        ..---()---O---()---O---..            |    |
+          b  |        |        d             k    l
+             k        l
         """
 
         tensors = list(self.single_site_right_iso_iter())
 
         mpo = map(
-            lambda t: interlace_tensors(
-                t, t, conjugate_second=True, merge_virtuals=True
+            lambda t: kron_tensors(
+                t, t, conjugate_second=True, merge_physicals=False
             ).transpose((0, 3, 2, 1)),
             tensors,
         )
@@ -307,14 +323,14 @@ class ExplicitMPS:
         return list(mpo)
 
 
-def mps_from_dense(psi, phys_dim=2, chi_max=1e5, tolerance=1e-12):
+def mps_from_dense(state_vector, phys_dim=2, chi_max=1e5, tolerance=1e-12):
     """
     Returns the Matrix Product State in an explicit form,
-    given a state in the dense (state vector) form.
+    given a state in the dense (state-vector) form.
 
     Arguments:
-        psi: np.array
-            State vector.
+        state_vector: np.array
+            The state vector.
         phys_dim: int
             Dimensionality of the local Hilbert space.
         limit_max: bool
@@ -328,8 +344,9 @@ def mps_from_dense(psi, phys_dim=2, chi_max=1e5, tolerance=1e-12):
         mps(tensors, singular_values):
     """
 
+    psi = np.copy(state_vector)
+
     # Checking the state vector to be the correct shape
-    psi = np.copy(psi)
     if psi.flatten().shape[0] % phys_dim != 0:
         raise ValueError(
             "The dimension of the flattened vector is incorrect "
@@ -342,7 +359,7 @@ def mps_from_dense(psi, phys_dim=2, chi_max=1e5, tolerance=1e-12):
     psi = psi.reshape((-1, phys_dim))
 
     # Getting the first tensor and singular values tensors
-    psi, singular_values_local, v_r = svd(psi, chi_max=chi_max, normalise=False)
+    psi, singular_values_local, v_r = svd(psi, chi_max=chi_max, renormalise=False)
 
     # Adding the first tensor and singular values tensor to the corresponding lists
     # Note adding the ghost dimension to the first tensor v_r
@@ -355,7 +372,7 @@ def mps_from_dense(psi, phys_dim=2, chi_max=1e5, tolerance=1e-12):
 
         bond_dim = psi.shape[-1]
         psi = psi.reshape((-1, phys_dim * bond_dim))
-        psi, singular_values_local, v_r = svd(psi, chi_max=chi_max, normalise=False)
+        psi, singular_values_local, v_r = svd(psi, chi_max=chi_max, renormalise=False)
         v_r = v_r.reshape((-1, phys_dim, bond_dim))
 
         # Adding the v_r and singular_values tensors to the corresponding lists

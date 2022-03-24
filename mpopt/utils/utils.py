@@ -6,7 +6,7 @@ import numpy as np
 from opt_einsum import contract
 
 
-def svd(mat, cut=1e-14, chi_max=1e5, normalise=False):
+def svd(mat, cut=1e-14, chi_max=1e5, renormalise=False):
     """
     Returns the Singular Value Decomposition of a matrix `mat`.
 
@@ -17,8 +17,8 @@ def svd(mat, cut=1e-14, chi_max=1e5, normalise=False):
             Singular values smaller than this will be discarded.
         chi_max: int
             Maximum number of singular values to keep.
-        normalise: bool
-            Normalisation of the singular value spectrum.
+        renormalise: bool
+            Renormalisation of the singular value spectrum.
 
     Returns:
         u_l: ndarray
@@ -37,16 +37,30 @@ def svd(mat, cut=1e-14, chi_max=1e5, normalise=False):
 
     u_l, singular_values, v_r = u_l[:, ind], singular_values[ind], v_r[ind, :]
 
-    if normalise:
+    if renormalise:
         singular_values /= np.linalg.norm(singular_values)
 
     return u_l, singular_values, v_r
 
 
-def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals=True):
+def kron_tensors(tensor_1, tensor_2, conjugate_second=False, merge_physicals=True):
     """
     An utility function which is used to compute
-    different versions of a Kronecker product of 2 MPS tensors.
+    different versions of a kronecker product of 2 MPS tensors.
+    This function acts according to the following cartoon.
+    Note, that indices `i` and `m` can be merged if `merge_physicals=True`.
+
+          tensor_2
+
+              i
+              |                      i
+        j ---()--- k                 |
+                        -->    jl---()---kn = np.array((jl, m, i, kn))
+        l ---()--- n                |
+             |                      m
+             m
+
+          tensor_1
 
     Arguments:
         tensor_1: np.array[ndim=3]
@@ -55,8 +69,8 @@ def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals
             The second tensor of the product.
         conjugate_second: bool
             Whether to complex-conjugate the second tensor.
-        merge_virtuals: bool
-            Whether to merge virtual indices.
+        merge_physicals: bool
+            Whether to merge physical indices.
     """
 
     tensor_1 = np.copy(tensor_1)
@@ -76,7 +90,7 @@ def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals
     else:
         product = np.kron(tensor_1, tensor_2)
 
-    if merge_virtuals:
+    if not merge_physicals:
         return product.reshape(
             (
                 tensor_1.shape[0] * tensor_2.shape[0],
@@ -89,7 +103,7 @@ def interlace_tensors(tensor_1, tensor_2, conjugate_second=False, merge_virtuals
     return product
 
 
-def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14, normalise=False):
+def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14, renormalise=False):
     """
     Split a two-site MPS tensor as follows:
           vL --(theta)-- vR     ->    vL --(A)--diag(S)--(B)-- vR
@@ -120,7 +134,7 @@ def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14, normalise=False):
 
     # do a trimmed svd
     u_l, singular_values, v_r = svd(
-        theta, cut=cut, chi_max=chi_max, normalise=normalise
+        theta, cut=cut, chi_max=chi_max, renormalise=renormalise
     )
 
     # split legs of u_l and v_r
@@ -320,14 +334,14 @@ def mpo_from_matrix(matrix, num_sites, interlaced=True, phys_dim=2, chi_max=1e5)
     # Treating the MPO as an MPS with squared physical dimensions
     mpo = []
     mat = mat.reshape((-1, mps_dim))
-    mat, singular_values, v_r = svd(mat, chi_max=chi_max, normalise=False)
+    mat, singular_values, v_r = svd(mat, chi_max=chi_max, renormalise=False)
     v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
     mpo.append(np.expand_dims(v_r, -1))
     while mat.shape[0] >= mps_dim:
         mat = np.matmul(mat, np.diag(np.sqrt(singular_values)))
         bond_dim = mat.shape[-1]
         mat = mat.reshape((-1, mps_dim * bond_dim))
-        mat, singular_values, v_r = svd(mat, chi_max=chi_max, normalise=False)
+        mat, singular_values, v_r = svd(mat, chi_max=chi_max, renormalise=False)
         v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
         v_r = v_r.reshape((-1, mps_dim, bond_dim))
         mpo.insert(0, v_r)
