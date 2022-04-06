@@ -12,7 +12,6 @@ authors = [
 python = ">=3.8,<3.10"
 scipy = "^1.6.1"
 numpy = "^1.20.1"
-jax = "^0.2.20"
 tqdm = "^4.62.3"
 Sphinx = "^4.2.0"
 rinohtype = "^0.5.3"
