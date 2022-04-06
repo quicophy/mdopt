@@ -2,6 +2,7 @@
 In this experiment, we decode a classical error correction code.
 First, we build the codeword MPS and test it against the dense form.
 Then, we demostrate simple decoding of a classical LDPC code with DMRG.
+The script should be launched from the root of the project directory.
 """
 
 import sys
@@ -117,7 +118,7 @@ class ConstraintString:
 # Simply speaking, it flips the bit with probability `p` and leaves it
 # the same with probability `1-p`.
 
-
+# TODO this exists in qecstruct (find out if there's a square root)
 def binary_symmetric_channel(prob):
     """
     This function returns a single-site MPO,
@@ -135,7 +136,7 @@ def binary_symmetric_channel(prob):
 # Below, we define some utility functions to operate with error correction codes from qecstruct.
 # Co-authored by Stefanos Kourtis.
 
-
+# TODO exists in qecstruct
 def linear_code_checks(code):
     """
     Given a linear code, returns a list of its checks, where each check
@@ -160,6 +161,7 @@ def linear_code_checks(code):
     return checks
 
 
+# TODO exists in qecstruct
 def get_codewords(code):
     """
     Return the list of codewords of a linear code. Codewords are returned
@@ -335,7 +337,8 @@ if __name__ == "__main__":
     print("Retreiving a perturbed codeword: ")
 
     # Building an initial and a perturbed codeword.
-    # TODO
+    # TODO start from random codeword
+    # TODO the error model exists in qecstruct
     INITIAL_STRING = "0" * NUM_BITS
     PERTURBED_STRING = ""
     for i in range(NUM_BITS):
@@ -371,14 +374,13 @@ if __name__ == "__main__":
             perturbed_codeword, constraint_mpo, START_SITE
         )
 
-    # TODO avoid to_expl form conversion, use interlace_tensor
     # Building the density matrix MPO.
     density_mpo = to_explicit(state).density_mpo()
 
     print("DMRG running:")
     mps_dmrg_start = create_product_state(len(density_mpo), which="0")
     # TODO start with random product state
-    engine = dmrg(mps_dmrg_start.copy(), density_mpo, chi_max=128, cut=1e-14, mode="LA")
+    engine = dmrg(mps_dmrg_start, density_mpo, chi_max=128, cut=1e-14, mode="LA")
     engine.run(20)
     mps_dmrg_final = engine.mps.to_right_canonical()
 
