@@ -26,7 +26,6 @@ Note, that a tensor with a physical leg sticking up is considered to be complex-
 """
 
 from functools import reduce
-from copy import deepcopy
 from opt_einsum import contract
 import numpy as np
 from mpopt.mps.explicit import ExplicitMPS
@@ -44,7 +43,6 @@ def find_orth_centre(mps):
             Note that the MPS is not given as `ExplicitMPS` instance here.
     """
 
-    mps = deepcopy(mps)
     mps = _add_ghost_dimensions(mps)
 
     length = len(mps)
@@ -115,7 +113,6 @@ def move_orth_centre(mps, init_pos, final_pos):
             If inital_pos or final_pos does not match the MPS length.
     """
 
-    mps = deepcopy(mps)
     mps = _add_ghost_dimensions(mps)
 
     length = len(mps)
@@ -179,7 +176,6 @@ def _move_orth_centre_singular_values(mps, init_pos, final_pos):
             If inital_pos or final_pos does not match the MPS length.
     """
 
-    mps = deepcopy(mps)
     length = len(mps)
 
     mps = _add_ghost_dimensions(mps)
@@ -224,7 +220,6 @@ def is_canonical(mps):
     not the `ExplicitMPS` class instance.
     """
 
-    mps = deepcopy(mps)
     mps = _add_ghost_dimensions(mps)
 
     # Check if the form is left- or right- canonical
@@ -264,7 +259,6 @@ def is_canonical(mps):
 
 def _move_orth_centre_to_border(mps, init_orth_centre_index):
 
-    mps = deepcopy(mps)
     mps = _add_ghost_dimensions(mps)
     length = len(mps)
 
@@ -293,7 +287,6 @@ def to_explicit(mps):
             Minimum singular values to keep.
     """
 
-    mps = deepcopy(mps)
     length = len(mps)
 
     centres = find_orth_centre(mps)
@@ -332,7 +325,6 @@ def _add_ghost_dimensions(mps):
     This is a helper function.
     """
 
-    mps = deepcopy(mps)
     for i in [0, -1]:
         if len(mps[i].shape) == 2:
             mps[i] = np.expand_dims(mps[i], i)  # convention, see the MPS class
@@ -341,12 +333,10 @@ def _add_ghost_dimensions(mps):
 
 def inner_product(mps_1, mps_2):
     """
-    # TODO docstring
     Returns an inner product between 2 Matrix Product States.
+    Note, that this function takes an MPS as a list of tensors,
+    not the `ExplicitMPS` class instance.
     """
-
-    mps_1 = deepcopy(mps_1)
-    mps_2 = deepcopy(mps_2)
 
     if len(mps_1) != len(mps_2):
         raise ValueError(
@@ -390,7 +380,6 @@ def to_dense(mps, flatten=True):
             Whether to merge all the physical indices to form a vector.
     """
 
-    mps = deepcopy(mps)
     dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), mps)
 
     if flatten:

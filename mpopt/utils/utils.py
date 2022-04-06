@@ -29,7 +29,6 @@ def svd(mat, cut=1e-14, chi_max=1e5, renormalise=False):
             Unitary matrix having right singular vectors as rows.
     """
 
-    mat = np.copy(mat)
     u_l, singular_values, v_r = np.linalg.svd(mat, full_matrices=False)
 
     max_num = min(chi_max, np.sum(singular_values > cut))
@@ -72,9 +71,6 @@ def kron_tensors(tensor_1, tensor_2, conjugate_second=False, merge_physicals=Tru
         merge_physicals: bool
             Whether to merge physical indices.
     """
-
-    tensor_1 = np.copy(tensor_1)
-    tensor_2 = np.copy(tensor_2)
 
     if len(tensor_1.shape) != len(tensor_2.shape):
         raise ValueError("The tensors must have equal numbers of dimensions.")
@@ -127,8 +123,7 @@ def split_two_site_tensor(theta, chi_max=1e5, cut=1e-14, renormalise=False):
             Right isometry on site j, with legs vC, j, vR.
     """
 
-    # merge the legs to form a matrix to feed into svd
-    theta = np.copy(theta)
+    # merge the legs to form a matrix to feed into the svd
     chi_v_l, d_l, d_r, chi_v_r = theta.shape
     theta = theta.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
@@ -318,7 +313,7 @@ def mpo_from_matrix(matrix, num_sites, interlaced=True, phys_dim=2, chi_max=1e5)
             f"or {tuple(phys_dims)}, instead, the matrix given has shape {matrix.shape}."
         )
 
-    # Copying the matrix not to change the origonal one inplace
+    # Copying the matrix not to change the original one inplace
     mat = matrix.copy()
 
     # Reshaping the matrix
