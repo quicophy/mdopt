@@ -1,10 +1,6 @@
 name: actions
 
-on:
-  push:
-    branches: [ alex-branch-1 ]
-  pull_request:
-    branches: [ alex-branch-1 ]
+on: [push, pull_request, fork]
 
 jobs:
   tests:
