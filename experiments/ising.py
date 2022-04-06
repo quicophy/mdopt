@@ -339,7 +339,7 @@ if __name__ == "__main__":
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_exact = ising_exact.hamiltonian_dense()
         mps_start = create_product_state(NUMBER_OF_SITES, which="0")
-        engine = dmrg(mps_start.copy(), ham_mpo, chi_max=64, cut=1e-14, mode="SA")
+        engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
         engine.run(10)
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]

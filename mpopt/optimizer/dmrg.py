@@ -111,14 +111,16 @@ class DMRG:
             .--dL            dR--.
     """
 
-    def __init__(self, mps, mpo, chi_max, cut, mode):
+    def __init__(self, mps, mpo, chi_max, cut, mode, copy=True):
         if len(mps) != len(mpo):
             raise ValueError(
                 f"The MPS has length ({len(mps)}), "
                 f"the MPO has length ({len(mpo)}), "
                 "but the lengths should be equal."
             )
-        self.mps = deepcopy(mps)
+        self.mps = mps
+        if copy:
+            self.mps = deepcopy(mps)
         self.left_environments = [None] * len(mps)
         self.right_environments = [None] * len(mps)
         self.mpo = mpo

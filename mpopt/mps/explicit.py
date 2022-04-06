@@ -82,7 +82,7 @@ class ExplicitMPS:
 
     def copy(self):
         """
-        Returns a copy of the current MPS
+        Returns a copy of the current MPS.
         """
         return ExplicitMPS(self.tensors.copy(), self.singular_values.copy())
 
