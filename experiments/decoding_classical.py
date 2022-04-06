@@ -374,6 +374,7 @@ if __name__ == "__main__":
             perturbed_codeword, constraint_mpo, START_SITE
         )
 
+    # TODO avoid to_expl form conversion, use interlace_tensor
     # Building the density matrix MPO.
     density_mpo = to_explicit(state).density_mpo()
 
