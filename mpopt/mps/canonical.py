@@ -78,6 +78,12 @@ def find_orth_centre(mps):
     # Handling exceptions, right- and left-canonical forms, and cases
     # when the orthogonality centre might be left- or right- isometry at
     # the boundaries, while all the other tensors are the opposite isometries.
+    if flags_left == [True] * length:
+        return [0]
+
+    if flags_right == [True] * length:
+        return [length - 1]
+
     if flags_left in ([True] + [False] * (length - 1), [False] * length):
         if flags_right == [not flag for flag in flags_left]:
             centres.append(0)
