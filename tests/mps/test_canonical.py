@@ -10,6 +10,7 @@ from mpopt.mps.canonical import (
     inner_product,
     find_orth_centre,
     move_orth_centre,
+    to_density_mpo,
 )
 from mpopt.mps.explicit import mps_from_dense
 
@@ -90,4 +91,25 @@ def test_inner_product():
         for pair in index_pairs:
             assert np.isclose(
                 abs(inner_product(list_of_mps[pair[0]], list_of_mps[pair[1]])), 1
+            )
+
+
+def test_to_density_mpo():
+    """
+    Test the implementation of the `to_density_mpo` function.
+    """
+
+    mps_length = np.random.randint(4, 9)
+
+    for _ in range(100):
+
+        psi = _create_psi(mps_length)
+        mps = mps_from_dense(psi)
+
+        density_mpo_from_expl = mps.density_mpo()
+        density_mpo_from_can = to_density_mpo(mps.to_right_canonical())
+
+        for i in range(mps_length):
+            assert np.isclose(
+                np.linalg.norm(density_mpo_from_expl[i] - density_mpo_from_can[i]), 0
             )
