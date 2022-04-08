@@ -325,7 +325,7 @@ if __name__ == "__main__":
         "__________________________________________________________________________________________"
     )
     print("")
-    print("Let us compare the magnetization plots from exact diagonalization and DMRG")
+    print("Let us compare the magnetization plots from exact diagonalization and DMRG (the plots should coincide exactly)")
     print("")
 
     transverse_magnetic_field_space = np.linspace(0.1, 2.0, 20)
