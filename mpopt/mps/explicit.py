@@ -421,7 +421,7 @@ def create_custom_product_state(string, phys_dim=2):
     return ExplicitMPS(tensors, singular_values)
 
 
-def create_product_state(num_sites, which="0", phys_dim=2):
+def create_simple_product_state(num_sites, which="0", phys_dim=2):
     """
     Creates |0...0>/|1...1>/|+...+>/|-...-> as an MPS.
     """

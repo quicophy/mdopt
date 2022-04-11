@@ -5,7 +5,7 @@
 import numpy as np
 from scipy.sparse.linalg import eigsh
 from experiments.ising import IsingExact, IsingMPO
-from mpopt.mps.explicit import create_product_state
+from mpopt.mps.explicit import create_simple_product_state
 from mpopt.optimizer.dmrg import DMRG as dmrg
 
 
@@ -25,7 +25,7 @@ def test_ground_states():
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_exact = ising_exact.hamiltonian_dense()
 
-        mps_start = create_product_state(number_of_sites, which="0")
+        mps_start = create_simple_product_state(number_of_sites, which="0")
 
         engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
         engine.run(10)
