@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 sys.path[0] += "/.."
 
 from mpopt.mps.canonical import inner_product
-from mpopt.mps.explicit import create_product_state
+from mpopt.mps.explicit import create_simple_product_state
 from mpopt.optimizer import DMRG as dmrg
 from mpopt.contractor.contractor import apply_one_site_unitary, apply_two_site_unitary
 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     ham_mpo = ising_mpo.hamiltonian_mpo()
     ham_exact = ising_exact.hamiltonian_dense()
 
-    mps_start = create_product_state(NUMBER_OF_SITES, which="0")
+    mps_start = create_simple_product_state(NUMBER_OF_SITES, which="0")
 
     print("DMRG running")
     print("")
@@ -325,7 +325,9 @@ if __name__ == "__main__":
         "__________________________________________________________________________________________"
     )
     print("")
-    print("Let us compare the magnetization plots from exact diagonalization and DMRG (the plots should coincide exactly)")
+    print(
+        "Let us compare the magnetization plots from exact diagonalization and DMRG (the plots should coincide exactly)"
+    )
     print("")
 
     transverse_magnetic_field_space = np.linspace(0.1, 2.0, 20)
@@ -338,7 +340,7 @@ if __name__ == "__main__":
         ising_mpo = IsingMPO(NUMBER_OF_SITES, magnetic_field)
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_exact = ising_exact.hamiltonian_dense()
-        mps_start = create_product_state(NUMBER_OF_SITES, which="0")
+        mps_start = create_simple_product_state(NUMBER_OF_SITES, which="0")
         engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
         engine.run(10)
         ground_state_mps = engine.mps
