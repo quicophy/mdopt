@@ -358,7 +358,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(9, 4.5))
     plt.plot(transverse_magnetic_field_space, mag_z_exact, label="Exact")
-    plt.plot(transverse_magnetic_field_space, mag_z_dmrg, label="DMRG")
+    plt.plot(transverse_magnetic_field_space, mag_z_dmrg, label="DMRG", linestyle='dashed')
     plt.xlabel("Transverse magnetic field $h$")
     plt.ylabel("Longitudinal magnetization $m_z$", rotation=90, labelpad=10)
     plt.xlim((0, 2))
@@ -369,7 +369,7 @@ if __name__ == "__main__":
 
     plt.figure(figsize=(9, 4.5))
     plt.plot(transverse_magnetic_field_space, mag_x_exact, label="Exact")
-    plt.plot(transverse_magnetic_field_space, mag_x_dmrg, label="DMRG")
+    plt.plot(transverse_magnetic_field_space, mag_x_dmrg, label="DMRG", linestyle='dashed')
     plt.xlabel("Transverse magnetic field $h$")
     plt.ylabel("Transverse magnetization $m_x$", rotation=90, labelpad=10)
     plt.xlim((0, 2))
