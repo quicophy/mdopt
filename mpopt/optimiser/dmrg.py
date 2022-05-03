@@ -16,7 +16,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
     To fully use the advantage of :module:`scipy.sparse.linalg`, when we will be computing
     eigenvectors of local effective Hamiltonians, we will need a special class for them.
 
-    To be diagonalized in `DMRG.update_bond`.
+    To be diagonalised in `DMRG.update_bond`.
 
     .--uL                      uR--.
     |         i            j       |
@@ -71,7 +71,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
 
 class DMRG:
     """
-    Class holding the Density Matrix Renormalization Group algorithm with two-site updates (DMRG-2)
+    Class holding the Density Matrix Renormalisation Group algorithm with two-site updates (DMRG-2)
     for a finite-size system with open-boundary conditions.
 
     Parameters:
@@ -128,7 +128,7 @@ class DMRG:
         self.cut = cut
         self.mode = mode
 
-        # Initialize left and right environments.
+        # Initialise left and right environments.
         start_bond_dim = self.mpo[0].shape[0]
         chi = mps.tensors[0].shape[0]
         left_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float64)
@@ -195,12 +195,12 @@ class DMRG:
             which=self.mode,
             return_eigenvectors=True,
             v0=initial_guess,
+            tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_hamiltonian.x_shape)
         left_iso_i, singular_values_j, right_iso_j = split_two_site_tensor(
-            x, chi_max=self.chi_max, cut=self.cut
+            x, chi_max=self.chi_max, cut=self.cut, renormalise=True
         )
-        singular_values_j /= np.linalg.norm(singular_values_j)
 
         # Put back into MPS
         self.mps.tensors[i] = np.tensordot(

@@ -112,9 +112,7 @@ def move_orth_centre(mps, init_pos, final_pos):
 
     Exceptions:
         ValueError:
-            If the MPS is not given in any of the canonical forms.
-        ValueError:
-            If inital_pos or final_pos does not match the MPS length.
+            If `init_pos` or `final_pos` does not match the MPS length.
     """
 
     mps = _add_ghost_dimensions(mps)

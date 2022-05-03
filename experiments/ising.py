@@ -19,8 +19,8 @@ sys.path[0] += "/.."
 
 from mpopt.mps.canonical import inner_product
 from mpopt.mps.explicit import create_simple_product_state
-from mpopt.optimizer import DMRG as dmrg
-from mpopt.contractor.contractor import apply_one_site_unitary, apply_two_site_unitary
+from mpopt.optimiser import DMRG as dmrg
+from mpopt.contractor.contractor import apply_one_site_operator, apply_two_site_unitary
 
 
 def compute_one_site_expectation_value(mps, unitary, site):
@@ -32,8 +32,8 @@ def compute_one_site_expectation_value(mps, unitary, site):
     mps_old = mps.to_right_canonical()
     mps_new = mps_old.copy()
 
-    mps_new[site] = apply_one_site_unitary(
-        t_1=mps.single_site_right_iso(site), unitary=unitary
+    mps_new[site] = apply_one_site_operator(
+        t_1=mps.single_site_right_iso(site), operator=unitary
     )
 
     return inner_product(mps_old, mps_new)
@@ -108,7 +108,7 @@ class IsingExact:
         """
         return np.conj(state.T) @ self.hamiltonian_sparse @ state
 
-    def z_magnetization(self, i, state):
+    def z_magnetisation(self, i, state):
         """
         Computes the z-magnetisation value
         corresponding to a quantum state `state`
@@ -129,12 +129,12 @@ class IsingExact:
         return (
             np.conj(state.T)
             @ kron(
-                kron(eye(2 ** i), self.Z), eye(2 ** (self.num_sites - i - 1))
+                kron(eye(2**i), self.Z), eye(2 ** (self.num_sites - i - 1))
             ).toarray()
             @ state
         )
 
-    def x_magnetization(self, i, state):
+    def x_magnetisation(self, i, state):
         """
         Computes the x-magnetisation value
         corresponding to a quantum state `state`
@@ -155,30 +155,30 @@ class IsingExact:
         return (
             np.conj(state.T)
             @ kron(
-                kron(eye(2 ** i), self.X), eye(2 ** (self.num_sites - i - 1))
+                kron(eye(2**i), self.X), eye(2 ** (self.num_sites - i - 1))
             ).toarray()
             @ state
         )
 
-    def average_chain_z_magnetization(self, state):
+    def average_chain_z_magnetisation(self, state):
         """
         Computes the average z-magnetisation
         corresponding to a quantum state `state`
         of the whole chain.
         """
         return (
-            sum([self.z_magnetization(i, state) for i in range(self.num_sites)])
+            sum([self.z_magnetisation(i, state) for i in range(self.num_sites)])
             / self.num_sites
         )
 
-    def average_chain_x_magnetization(self, state):
+    def average_chain_x_magnetisation(self, state):
         """
         Computes the average x-magnetisation
         corresponding to a quantum state `state`
         of the whole chain.
         """
         return (
-            sum([self.x_magnetization(i, state) for i in range(self.num_sites)])
+            sum([self.x_magnetisation(i, state) for i in range(self.num_sites)])
             / self.num_sites
         )
 
@@ -235,7 +235,7 @@ class IsingMPO:
 
         return mpo_list
 
-    def z_magnetization(self, i, mps):
+    def z_magnetisation(self, i, mps):
         """
         Computes the z-magnetisation value
         corresponding to a quantum state
@@ -243,7 +243,7 @@ class IsingMPO:
         """
         return compute_one_site_expectation_value(mps, self.Z, i)
 
-    def x_magnetization(self, i, mps):
+    def x_magnetisation(self, i, mps):
         """
         Computes the x-magnetisation value
         corresponding to a quantum state
@@ -251,25 +251,25 @@ class IsingMPO:
         """
         return compute_one_site_expectation_value(mps, self.X, i)
 
-    def average_chain_z_magnetization(self, mps):
+    def average_chain_z_magnetisation(self, mps):
         """
         Computes the average z-magnetisation
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
         return (
-            sum([self.z_magnetization(i, mps) for i in range(self.num_sites)])
+            sum([self.z_magnetisation(i, mps) for i in range(self.num_sites)])
             / self.num_sites
         )
 
-    def average_chain_x_magnetization(self, mps):
+    def average_chain_x_magnetisation(self, mps):
         """
         Computes the average x-magnetisation
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
         return (
-            sum([self.x_magnetization(i, mps) for i in range(self.num_sites)])
+            sum([self.x_magnetisation(i, mps) for i in range(self.num_sites)])
             / self.num_sites
         )
 
@@ -300,17 +300,17 @@ if __name__ == "__main__":
     )
     print("")
     print(
-        "Checking the ground states from exact diagonalization and DMRG being the same (up to a phase): "
+        "Checking the ground states from exact diagonalisation and DMRG being the same (up to a phase): "
     )
     print("")
-    NUMBER_OF_SITES = 10
+    NUM_SITES = 10
 
-    ising_exact = IsingExact(NUMBER_OF_SITES, h=1.0)
-    ising_mpo = IsingMPO(NUMBER_OF_SITES, h=1.0)
+    ising_exact = IsingExact(NUM_SITES, h=1.0)
+    ising_mpo = IsingMPO(NUM_SITES, h=1.0)
     ham_mpo = ising_mpo.hamiltonian_mpo()
     ham_exact = ising_exact.hamiltonian_dense()
 
-    mps_start = create_simple_product_state(NUMBER_OF_SITES, which="0")
+    mps_start = create_simple_product_state(NUM_SITES, which="0")
 
     print("DMRG running")
     print("")
@@ -326,7 +326,7 @@ if __name__ == "__main__":
     )
     print("")
     print(
-        "Let us compare the magnetization plots from exact diagonalization and DMRG (the plots should coincide exactly)"
+        "Let us compare the magnetisation plots from exact diagonalisation and DMRG (the plots should coincide exactly)"
     )
     print("")
 
@@ -336,25 +336,25 @@ if __name__ == "__main__":
     mag_z_dmrg = []
     mag_x_dmrg = []
     for magnetic_field in transverse_magnetic_field_space:
-        ising_exact = IsingExact(NUMBER_OF_SITES, magnetic_field)
-        ising_mpo = IsingMPO(NUMBER_OF_SITES, magnetic_field)
+        ising_exact = IsingExact(NUM_SITES, magnetic_field)
+        ising_mpo = IsingMPO(NUM_SITES, magnetic_field)
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_exact = ising_exact.hamiltonian_dense()
-        mps_start = create_simple_product_state(NUMBER_OF_SITES, which="0")
+        mps_start = create_simple_product_state(NUM_SITES, which="0")
         engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
         engine.run(10)
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
 
         mag_z_exact.append(
-            ising_exact.average_chain_z_magnetization(ground_state_exact)
+            ising_exact.average_chain_z_magnetisation(ground_state_exact)
         )
         mag_x_exact.append(
-            ising_exact.average_chain_x_magnetization(ground_state_exact)
+            ising_exact.average_chain_x_magnetisation(ground_state_exact)
         )
 
-        mag_z_dmrg.append(ising_mpo.average_chain_z_magnetization(ground_state_mps))
-        mag_x_dmrg.append(ising_mpo.average_chain_x_magnetization(ground_state_mps))
+        mag_z_dmrg.append(ising_mpo.average_chain_z_magnetisation(ground_state_mps))
+        mag_x_dmrg.append(ising_mpo.average_chain_x_magnetisation(ground_state_mps))
 
     plt.figure(figsize=(9, 4.5))
     plt.plot(transverse_magnetic_field_space, mag_z_exact, label="Exact")
@@ -362,7 +362,7 @@ if __name__ == "__main__":
         transverse_magnetic_field_space, mag_z_dmrg, label="DMRG", linestyle="dashed"
     )
     plt.xlabel("Transverse magnetic field $h$")
-    plt.ylabel("Longitudinal magnetization $m_z$", rotation=90, labelpad=10)
+    plt.ylabel("Longitudinal magnetisation $m_z$", rotation=90, labelpad=10)
     plt.xlim((0, 2))
     plt.ylim((-1, 1))
     plt.legend(fontsize=10)
@@ -375,7 +375,7 @@ if __name__ == "__main__":
         transverse_magnetic_field_space, mag_x_dmrg, label="DMRG", linestyle="dashed"
     )
     plt.xlabel("Transverse magnetic field $h$")
-    plt.ylabel("Transverse magnetization $m_x$", rotation=90, labelpad=10)
+    plt.ylabel("Transverse magnetisation $m_x$", rotation=90, labelpad=10)
     plt.xlim((0, 2))
     plt.ylim((0, 1))
     plt.legend(fontsize=10)

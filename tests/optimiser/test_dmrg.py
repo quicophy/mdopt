@@ -1,12 +1,12 @@
 """
-    Tests for the DMRG optimizer.
+    Tests for the DMRG optimiser.
 """
 
 import numpy as np
 from scipy.sparse.linalg import eigsh
 from experiments.ising import IsingExact, IsingMPO
 from mpopt.mps.explicit import create_simple_product_state
-from mpopt.optimizer.dmrg import DMRG as dmrg
+from mpopt.optimiser.dmrg import DMRG as dmrg
 
 
 def test_ground_states():
@@ -17,15 +17,15 @@ def test_ground_states():
 
     for _ in range(10):
 
-        number_of_sites = 8
+        num_sites = 8
         transverse_magnetic_field = np.random.uniform(0.1, 1)
 
-        ising_exact = IsingExact(number_of_sites, transverse_magnetic_field)
-        ising_mpo = IsingMPO(number_of_sites, transverse_magnetic_field)
+        ising_exact = IsingExact(num_sites, transverse_magnetic_field)
+        ising_mpo = IsingMPO(num_sites, transverse_magnetic_field)
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_exact = ising_exact.hamiltonian_dense()
 
-        mps_start = create_simple_product_state(number_of_sites, which="0")
+        mps_start = create_simple_product_state(num_sites, which="0")
 
         engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
         engine.run(10)
@@ -40,14 +40,14 @@ def test_ground_states():
         assert np.allclose(
             np.array(
                 [
-                    ising_exact.x_magnetization(i, ground_state_exact)
-                    for i in range(number_of_sites)
+                    ising_exact.x_magnetisation(i, ground_state_exact)
+                    for i in range(num_sites)
                 ]
             ),
             np.array(
                 [
-                    ising_mpo.x_magnetization(i, ground_state_mps)
-                    for i in range(number_of_sites)
+                    ising_mpo.x_magnetisation(i, ground_state_mps)
+                    for i in range(num_sites)
                 ]
             ),
             atol=1e-3,
@@ -55,14 +55,14 @@ def test_ground_states():
         assert np.allclose(
             np.array(
                 [
-                    ising_exact.z_magnetization(i, ground_state_exact)
-                    for i in range(number_of_sites)
+                    ising_exact.z_magnetisation(i, ground_state_exact)
+                    for i in range(num_sites)
                 ]
             ),
             np.array(
                 [
-                    ising_mpo.z_magnetization(i, ground_state_mps)
-                    for i in range(number_of_sites)
+                    ising_mpo.z_magnetisation(i, ground_state_mps)
+                    for i in range(num_sites)
                 ]
             ),
             atol=1e-3,

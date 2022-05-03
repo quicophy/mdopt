@@ -19,8 +19,8 @@ def _create_psi(length):
     A helper function which creates a random quantum state in the form of a state vector.
     """
 
-    psi = np.random.uniform(size=(2 ** length)) + 1j * np.random.uniform(
-        size=(2 ** length)
+    psi = np.random.uniform(size=(2**length)) + 1j * np.random.uniform(
+        size=(2**length)
     )
     psi /= np.linalg.norm(psi)
 
@@ -39,7 +39,7 @@ def test_from_dense():
         psi = _create_psi(mps_length)
 
         mps = mps_from_dense(psi)
-        psi_from_mps = mps.to_dense().reshape((2 ** mps_length))
+        psi_from_mps = mps.to_dense().reshape((2**mps_length))
 
         overlap = abs(np.conjugate(psi_from_mps) @ psi) ** 2
 
@@ -224,7 +224,7 @@ def test_density_mpo():
 
         density_mpo = mps.density_mpo()
 
-        # Juggle the dimensions around to apply the reduce function later,
+        # Juggle the dimensions around to apply the `reduce` function later,
         # which is used to create a density mpo to compare the method against.
         for i in range(mps_length):
             density_mpo[i] = density_mpo[i].transpose((0, 3, 2, 1))
@@ -242,7 +242,7 @@ def test_density_mpo():
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
         density_matrix_mpo = density_matrix_mpo.reshape(
-            (2 ** mps_length, 2 ** mps_length)
+            (2**mps_length, 2**mps_length)
         )
 
         # Original density matrix.

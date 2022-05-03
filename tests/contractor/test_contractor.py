@@ -11,7 +11,7 @@ from mpopt.mps.canonical import is_canonical, to_dense
 from mpopt.contractor.contractor import (
     mps_mpo_contract,
     apply_two_site_unitary,
-    apply_one_site_unitary,
+    apply_one_site_operator,
 )
 from tests.mps.test_explicit import _create_psi
 
@@ -112,9 +112,9 @@ def test_apply_two_site_unitary():
         ).all()
 
 
-def test_apply_one_site_unitary():
+def test_apply_one_site_operator():
     """
-    Test the implementation of the `apply_one_site_unitary` function.
+    Test the implementation of the `apply_one_site_operator` function.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -145,9 +145,9 @@ def test_apply_one_site_unitary():
             unitary_exact = np.kron(unitary_exact, identity)
         unitary_exact = unitary_exact.transpose()
 
-        mps_new[site] = apply_one_site_unitary(
+        mps_new[site] = apply_one_site_operator(
             t_1=mps_right[site],
-            unitary=unitary_tensor,
+            operator=unitary_tensor,
         )
 
         assert is_canonical(mps_new)

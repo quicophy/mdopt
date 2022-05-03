@@ -159,7 +159,7 @@ def test_mpo_from_matrix():
 
         num_sites = np.random.randint(4, 6)
         phys_dim = np.random.randint(2, 4)
-        matrix_shape = (phys_dim ** num_sites, phys_dim ** num_sites)
+        matrix_shape = (phys_dim**num_sites, phys_dim**num_sites)
         matrix = np.random.uniform(size=matrix_shape) + 1j * np.random.uniform(
             size=matrix_shape
         )
