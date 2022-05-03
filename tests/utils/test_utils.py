@@ -16,7 +16,7 @@ from mpopt.utils.utils import (
 
 def test_svd():
     """
-    Test the implementation of the `svd` function.
+    Test of the implementation of the `svd` function.
     """
 
     for _ in range(100):
@@ -55,7 +55,7 @@ def test_svd_1():
 
 def test_split_two_site_tensor():
     """
-    Test the implementation of the `split_two_site_tensor` function.
+    Test of the implementation of the `split_two_site_tensor` function.
     """
 
     for _ in range(100):
@@ -82,7 +82,7 @@ def test_split_two_site_tensor():
 
 def test_kron_tensors():
     """
-    Test the implementation of the `kron_tensors` function.
+    Test of the implementation of the `kron_tensors` function.
     """
 
     for _ in range(100):
@@ -152,7 +152,7 @@ def test_kron_tensors():
 
 def test_mpo_from_matrix():
     """
-    Test the implementation of the `mpo_from_matrix` function.
+    Test of the implementation of the `mpo_from_matrix` function.
     """
 
     for _ in range(100):
@@ -175,7 +175,7 @@ def test_mpo_from_matrix():
 
 def test_mpo_to_matrix():
     """
-    Test the implementation of the `mpo_to_matrix` function.
+    Test of the implementation of the `mpo_to_matrix` function.
     """
 
     for _ in range(100):
@@ -223,7 +223,7 @@ def test_mpo_to_matrix():
 def test_mpo_to_matrix_1():
     """
     Another test of the implementation of the `mpo_to_matrix` function.
-    Here, we test the order of indices, so we fix the number of sites.
+    Here, we Test of the order of indices, so we fix the number of sites.
     """
 
     for _ in range(100):

@@ -123,7 +123,7 @@ class ConstraintString:
 def bias_channel(p_bias, which="0"):
     """
     Here, we define a bias channel -- the operator which will bias us towards the initial message
-    while decoding by ranging the bitstrings according to Hamming distance from it.
+    while decoding by ranking the bitstrings according to Hamming distance from it.
     This function returns a single-site MPO,
     corresponding to the bias channel, which acts on basis states,
     i.e., |0> and |1>, as follows:
@@ -246,11 +246,11 @@ def dephase_mpo(mpo):
 
 def bin_vec_to_dense(vector):
     """
-    Given a vector (1D array) in the `BinaryVector` format (native to `qecstruct`),
-    returns its dense representation.
+    Given a vector (1D array) in the :class:`qecstruct.sparse.BinaryVector` format
+    (native to `qecstruct`), returns its dense representation.
 
     Arguments:
-        vector : qecstruct.sparse.BinaryVector
+        vector : :class:`qecstruct.sparse.BinaryVector`
             The `BinaryVector` object.
 
     Returns:
@@ -270,7 +270,7 @@ def linear_code_checks(code):
     is represented as a list of indices of the bits adjacent to it.
 
     Arguments:
-        code : qecstruct.LinearCode
+        code : :class:`qecstruct.LinearCode`
             Linear code object.
 
     Returns:
@@ -294,7 +294,7 @@ def get_codewords(code):
     as integers in most-significant-bit-first convention.
 
     Arguments:
-        code : qecstruct.LinearCode
+        code : :class:`qecstruct.LinearCode`
             Linear code object.
 
     Returns:
@@ -324,12 +324,12 @@ def get_codewords(code):
     return np.sort(np.array(codewords))
 
 
-def get_strings(code):
+def get_constraint_sites(code):
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
     Arguments:
-        code : qecstruct.LinearCode
+        code : :class:`qecstruct.LinearCode`
             Linear code object.
 
     Returns:
@@ -360,6 +360,42 @@ def get_strings(code):
     return constraints_strings
 
 
+def prepare_codewords(
+    code, prob_error, error_model=qec.BinarySymmetricChannel, seed=None
+):
+    """
+    This function prepares a codeword and its copy after applying an error model.
+
+    Arguments:
+    code : :class:`qecstruct.LinearCode`
+        Linear code object.
+    prob_error : float
+        Error probability of the error model.
+    error_model : error model object from qecstruct
+        The error model used to flip bits of a random codeword.
+    seed : int
+        Random seed.
+
+    Returns:
+        initial_codeword : str
+            The bitstring of the initial codeword.
+        perturbed_codeword : str
+            The bitstring of the perturbed codeword.
+    """
+
+    num_bits = len(code)
+    initial_codeword = code.random_codeword(qec.Rng(seed))
+    perturbed_codeword = initial_codeword + error_model(prob_error).sample(
+        num_bits, qec.Rng(seed)
+    )
+    initial_codeword = "".join(str(bit) for bit in bin_vec_to_dense(initial_codeword))
+    perturbed_codeword = "".join(
+        str(bit) for bit in bin_vec_to_dense(perturbed_codeword)
+    )
+
+    return initial_codeword, perturbed_codeword
+
+
 # Finally, the functions below are used to
 # apply constraints to a codeword MPS and to perform actual decoding.
 
@@ -379,9 +415,9 @@ def apply_parity_constraints(
         codeword_state : list[np.ndarray[ndim=3]]
             The codeword Matrix Product State.
         strings : list[list[list]]
-            The list of arguments for :class:ConstraintString.
+            The list of arguments for :class:`ConstraintString`.
         logical_tensors : list[np.ndarray]
-            List of logical tensors for :class:ConstraintString.
+            List of logical tensors for :class:`ConstraintString`.
         chi_max : int
             Maximum bond dimension to keep in the contractor.
         renormalise : bool
@@ -431,10 +467,35 @@ def apply_parity_constraints(
     return codeword_state
 
 
-def decode(message, codeword, code, chi_max_dmrg=1e4, cut=1e-10):
-    # TODO
+def decode(
+    message, codeword, code, num_runs=1, chi_max_dmrg=1e4, cut=1e-10, silent=False
+):
     """
-    Docstring.
+    This function performs actual decoding of a message given a code and
+    the DMRG truncation parameters.
+    Returns the overlap between the decoded message given the initial message.
+
+    Arguments:
+        message : list[np.ndarray[ndim=3]]
+            The message Matrix Product State.
+        codeword : list[np.ndarray[ndim=3]]
+            The codeword Matrix Product State.
+        code : :class:`qecstruct.LinearCode`
+            Linear code object.
+        num_runs : int
+            Number of DMRG sweeps.
+        chi_max_dmrg : int
+            Maximum bond dimension to keep in the DMRG algorithm.
+        cut : float
+            The lower boundary of the spectrum in the DMRG algorithm.
+            All the singular values smaller than that will be discarded.
+
+    Returns:
+        engine : :class:`mpopt.optimiser.DMRG` instance
+            The container class for the DMRG, see :class:`mpopt.optimiser.DMRG`.
+        overlap : float
+            The overlap between the decoded message and a given codeword,
+            computed as the following inner product |<decoded_message|codeword>|.
     """
 
     # Building the density matrix MPO and dephasing it.
@@ -444,11 +505,19 @@ def decode(message, codeword, code, chi_max_dmrg=1e4, cut=1e-10):
     # Creating an all-plus state to start the DMRG with.
     num_bits = len(code)
     mps_dmrg_start = create_simple_product_state(num_bits, which="+")
-    engine = dmrg(mps_dmrg_start, density_mpo, chi_max=chi_max_dmrg, cut=cut, mode="LA")
-    engine.run(1)
+    engine = dmrg(
+        mps_dmrg_start,
+        density_mpo,
+        chi_max=chi_max_dmrg,
+        cut=cut,
+        mode="LA",
+        silent=silent,
+    )
+    engine.run(num_runs)
     mps_dmrg_final = engine.mps.to_right_canonical()
+    overlap = abs(inner_product(mps_dmrg_final, codeword))
 
-    return engine, abs(inner_product(mps_dmrg_final, codeword))
+    return engine, overlap
 
 
 if __name__ == "__main__":
@@ -488,10 +557,8 @@ if __name__ == "__main__":
     tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS = 10
-    NUM_CHECKS = 5
-    BIT_DEGREE = 4
-    CHECK_DEGREE = 8
+    NUM_BITS, NUM_CHECKS = 10, 6
+    CHECK_DEGREE, BIT_DEGREE = 5, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The graph must be bipartite.")
 
@@ -505,7 +572,7 @@ if __name__ == "__main__":
     state_dense = to_dense(state)
 
     # Getting the sites where each string of constraints should be applied.
-    code_strings = get_strings(example_code)
+    code_constraint_sites = get_constraint_sites(example_code)
 
     print(
         "__________________________________________________________________________________________"
@@ -514,13 +581,13 @@ if __name__ == "__main__":
     print("Checking the codeword superposition state: ")
 
     # Preparing the codeword superposition state by the MPS-MPO evolution.
-    state = apply_parity_constraints(state, code_strings, tensors)
+    state = apply_parity_constraints(state, code_constraint_sites, tensors)
 
     # Preparing the codeword superposition state in the dense form.
     for j in range(NUM_CHECKS):
 
         # Preparing the MPO.
-        constraint_string = ConstraintString(tensors, code_strings[j])
+        constraint_string = ConstraintString(tensors, code_constraint_sites[j])
         constraint_mpo = constraint_string.get_mpo()
 
         # Finding the starting site of the MPS to build a correct dense-form operator.
@@ -571,20 +638,20 @@ if __name__ == "__main__":
     print("")
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS = 16
-    NUM_CHECKS = 4
-    BIT_DEGREE = 3
-    CHECK_DEGREE = 12
+    NUM_BITS, NUM_CHECKS = 12, 9
+    CHECK_DEGREE, BIT_DEGREE = 4, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The graph must be bipartite.")
 
     # Defining the bias channel parameter and the error probability.
-    PROB_ERROR = 0.4
+    PROB_ERROR = 1.0
     PROB_CHANNEL = PROB_ERROR
 
     # Maximum bond dimension for contractor/DMRG.
     CHI_MAX_CONTRACTOR = 1e4
     CHI_MAX_DMRG = 1e4
+    # Number of DMRG sweeps.
+    NUM_RUNS = 1
 
     # Constructing the code as a qecstruct object.
     example_code = qec.random_regular_code(
@@ -592,17 +659,11 @@ if __name__ == "__main__":
     )
 
     # Getting the sites where each string of constraints should be applied.
-    code_strings = get_strings(example_code)
+    code_constraint_sites = get_constraint_sites(example_code)
 
     # Building an initial and a perturbed codeword.
-    # TODO wrap into functions.
-    INITIAL_CODEWORD = example_code.random_codeword(qec.Rng(SEED))
-    PERTURBED_CODEWORD = INITIAL_CODEWORD + qec.BinarySymmetricChannel(
-        PROB_ERROR
-    ).sample(NUM_BITS, qec.Rng(SEED))
-    INITIAL_CODEWORD = "".join(str(bit) for bit in bin_vec_to_dense(INITIAL_CODEWORD))
-    PERTURBED_CODEWORD = "".join(
-        str(bit) for bit in bin_vec_to_dense(PERTURBED_CODEWORD)
+    INITIAL_CODEWORD, PERTURBED_CODEWORD = prepare_codewords(
+        example_code, PROB_ERROR, error_model=qec.BinarySymmetricChannel, seed=SEED
     )
     print("The initial codeword is", INITIAL_CODEWORD)
     print("The perturbed codeword is", PERTURBED_CODEWORD)
@@ -617,7 +678,7 @@ if __name__ == "__main__":
 
     # Passing the perturbed codeword state through the bias channel.
     perturbed_codeword_state = apply_bias_channel(
-        initial_codeword_state,
+        perturbed_codeword_state,
         prob_channel=PROB_CHANNEL,
         codeword_string=PERTURBED_CODEWORD,
     )
@@ -625,7 +686,7 @@ if __name__ == "__main__":
     # Applying the parity constraints defined by the code.
     perturbed_codeword_state = apply_parity_constraints(
         perturbed_codeword_state,
-        code_strings,
+        code_constraint_sites,
         tensors,
         chi_max=CHI_MAX_CONTRACTOR,
         renormalise=True,
@@ -633,13 +694,14 @@ if __name__ == "__main__":
     )
 
     # Decoding.
-    print("DMRG running:")
     dmrg_container, success = decode(
         message=perturbed_codeword_state,
         codeword=initial_codeword_state,
         code=example_code,
+        num_runs=NUM_RUNS,
         chi_max_dmrg=CHI_MAX_DMRG,
         cut=1e-10,
+        silent=False,
     )
     print(
         "The overlap of the density MPO main component and the initial codeword state: ",

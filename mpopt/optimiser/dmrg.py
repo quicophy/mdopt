@@ -3,6 +3,7 @@ This module contains the DMRG class. Inspired by TenPy.
 """
 
 from copy import deepcopy
+from tabnanny import verbose
 import numpy as np
 from tqdm import tqdm
 from opt_einsum import contract
@@ -101,6 +102,8 @@ class DMRG:
             Each left_environments[i] has legs (uL, vL, dL),
             right_environments[i] has legs (uR, vR, dR),
             where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
+        silent : bool
+            Whether to show/hide the progress bar.
 
             .--uL            uR--.
             |                    |
@@ -111,7 +114,7 @@ class DMRG:
             .--dL            dR--.
     """
 
-    def __init__(self, mps, mpo, chi_max, cut, mode, copy=True):
+    def __init__(self, mps, mpo, chi_max, cut, mode, silent=False, copy=True):
         if len(mps) != len(mpo):
             raise ValueError(
                 f"The MPS has length ({len(mps)}), "
@@ -127,6 +130,7 @@ class DMRG:
         self.chi_max = chi_max
         self.cut = cut
         self.mode = mode
+        self.silent = silent
 
         # Initialise left and right environments.
         start_bond_dim = self.mpo[0].shape[0]
@@ -253,5 +257,5 @@ class DMRG:
         Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
         """
 
-        for _ in tqdm(range(num_iter)):
+        for _ in tqdm(range(num_iter), disable=self.silent):
             self.sweep()

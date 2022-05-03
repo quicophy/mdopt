@@ -18,7 +18,7 @@ from tests.mps.test_explicit import _create_psi
 
 def test_mps_mpo_contract():
     """
-    Test the implementation of the `mps_mpo_contract` function.
+    Test of the implementation of the `mps_mpo_contract` function.
     """
 
     num_sites = np.random.randint(4, 9)
@@ -62,7 +62,7 @@ def test_mps_mpo_contract():
 
 def test_apply_two_site_unitary():
     """
-    Test the implementation of the `apply_two_site_unitary` function.
+    Test of the implementation of the `apply_two_site_unitary` function.
     """
 
     identity = np.eye(2)
@@ -114,7 +114,7 @@ def test_apply_two_site_unitary():
 
 def test_apply_one_site_operator():
     """
-    Test the implementation of the `apply_one_site_operator` function.
+    Test of the implementation of the `apply_one_site_operator` function.
     """
 
     mps_length = np.random.randint(4, 9)
