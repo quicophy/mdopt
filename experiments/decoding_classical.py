@@ -2,7 +2,6 @@
 In this experiment, we decode a classical linear error correction code.
 First, we build the MPS containing the superposition of all codewords.
 Then, we demostrate simple decoding of a classical LDPC code with DMRG.
-The script should be launched from the root of the project directory.
 """
 
 import sys

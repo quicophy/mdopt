@@ -3,7 +3,6 @@ This module contains the DMRG class. Inspired by TenPy.
 """
 
 from copy import deepcopy
-from tabnanny import verbose
 import numpy as np
 from tqdm import tqdm
 from opt_einsum import contract

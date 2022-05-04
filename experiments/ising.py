@@ -4,7 +4,6 @@ of an open-bounded transverse field Ising chain. The Hamiltonian reads:
 $H = - sum_{i=1}^{N-1} Z_i Z_{i+1} - h * sum_{i=1}^{N} X_i$.
 Here, the magnetic field is in the units of the pairwise Z-interaction.
 We find the ground state of this Hamiltonian and compute observables.
-The script should be launched from the root of the project directory.
 """
 
 
@@ -66,18 +65,20 @@ class IsingExact:
     Attributes:
         num_sites: int
             Number of spins in the chain.
-        h: float
+        h_magnetic: float
             Value of the transverse magnetic field scaled by the ZZ-interaction.
     """
 
-    def __init__(self, num_sites, h):
+    def __init__(self, num_sites, h_magnetic):
         self.num_sites = num_sites
-        self.h = h
-        self.I = np.identity(2)
-        self.X = np.array([[0.0, 1.0], [1.0, 0.0]])
-        self.Z = np.array([[1.0, 0.0], [0.0, -1.0]])
-        self.two_qubit_hamiltonian = -kron(self.Z, self.Z) - self.h * (
-            kron(self.X, self.I) + kron(self.I, self.X)
+        self.h_magnetic = h_magnetic
+        self.identity = np.identity(2)
+        self.pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
+        self.pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
+        self.two_qubit_hamiltonian = -kron(
+            self.pauli_z, self.pauli_z
+        ) - self.h_magnetic * (
+            kron(self.pauli_x, self.identity) + kron(self.identity, self.pauli_x)
         )
         if num_sites < 2:
             raise ValueError(f"Number of sites should be >=2, given ({num_sites})")
@@ -88,11 +89,11 @@ class IsingExact:
         """
         if self.num_sites == 2:
             return self.two_qubit_hamiltonian
-        ising_recursive = IsingExact(self.num_sites - 1, self.h)
+        ising_recursive = IsingExact(self.num_sites - 1, self.h_magnetic)
         return csr_matrix(
-            kron(ising_recursive.hamiltonian_sparse(), self.I)
-            - kron(eye(2 ** (self.num_sites - 2)), kron(self.Z, self.Z))
-            - self.h * kron(eye(2 ** (self.num_sites - 1)), self.X)
+            kron(ising_recursive.hamiltonian_sparse(), self.identity)
+            - kron(eye(2 ** (self.num_sites - 2)), kron(self.pauli_z, self.pauli_z))
+            - self.h_magnetic * kron(eye(2 ** (self.num_sites - 1)), self.pauli_x)
         )
 
     def hamiltonian_dense(self):
@@ -117,19 +118,19 @@ class IsingExact:
         if i == 0:
             return (
                 np.conj(state.T)
-                @ kron(self.Z, eye(2 ** (self.num_sites - 1))).toarray()
+                @ kron(self.pauli_z, eye(2 ** (self.num_sites - 1))).toarray()
                 @ state
             )
         if i == self.num_sites - 1:
             return (
                 np.conj(state.T)
-                @ kron(eye(2 ** (self.num_sites - 1)), self.Z).toarray()
+                @ kron(eye(2 ** (self.num_sites - 1)), self.pauli_z).toarray()
                 @ state
             )
         return (
             np.conj(state.T)
             @ kron(
-                kron(eye(2**i), self.Z), eye(2 ** (self.num_sites - i - 1))
+                kron(eye(2**i), self.pauli_z), eye(2 ** (self.num_sites - i - 1))
             ).toarray()
             @ state
         )
@@ -143,19 +144,19 @@ class IsingExact:
         if i == 0:
             return (
                 np.conj(state.T)
-                @ kron(self.X, eye(2 ** (self.num_sites - 1))).toarray()
+                @ kron(self.pauli_x, eye(2 ** (self.num_sites - 1))).toarray()
                 @ state
             )
         if i == self.num_sites - 1:
             return (
                 np.conj(state.T)
-                @ kron(eye(2 ** (self.num_sites - 1)), self.X).toarray()
+                @ kron(eye(2 ** (self.num_sites - 1)), self.pauli_x).toarray()
                 @ state
             )
         return (
             np.conj(state.T)
             @ kron(
-                kron(eye(2**i), self.X), eye(2 ** (self.num_sites - i - 1))
+                kron(eye(2**i), self.pauli_x), eye(2 ** (self.num_sites - i - 1))
             ).toarray()
             @ state
         )
@@ -191,16 +192,16 @@ class IsingMPO:
     Attributes:
         num_sites: int
             Number of spins in the chain.
-        h: float
+        h_magnetic: float
             Value of the transverse magnetic field scaled by the ZZ-interaction.
     """
 
-    def __init__(self, num_sites, h):
+    def __init__(self, num_sites, h_magnetic):
         self.num_sites = num_sites
-        self.h = h
-        self.I = np.identity(2)
-        self.X = np.array([[0.0, 1.0], [1.0, 0.0]])
-        self.Z = np.array([[1.0, 0.0], [0.0, -1.0]])
+        self.h_magnetic = h_magnetic
+        self.identity = np.identity(2)
+        self.pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
+        self.pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
         if num_sites < 2:
             raise ValueError(f"Number of sites should be >=2, given ({num_sites})")
 
@@ -218,11 +219,11 @@ class IsingMPO:
         v_right = np.array([1.0, 0.0, 0.0])
 
         mpo_bulk = np.zeros((3, 3, 2, 2))
-        mpo_bulk[0, 0] = self.I
-        mpo_bulk[1, 0] = self.Z
-        mpo_bulk[2, 0] = -self.h * self.X
-        mpo_bulk[2, 1] = -1.0 * self.Z
-        mpo_bulk[2, 2] = self.I
+        mpo_bulk[0, 0] = self.identity
+        mpo_bulk[1, 0] = self.pauli_z
+        mpo_bulk[2, 0] = -self.h_magnetic * self.pauli_x
+        mpo_bulk[2, 1] = -1.0 * self.pauli_z
+        mpo_bulk[2, 2] = self.identity
 
         mpo_left = np.tensordot(v_left, mpo_bulk, [0, 0]).reshape((1, 3, 2, 2))
         mpo_right = np.tensordot(mpo_bulk, v_right, [1, 0]).reshape((3, 1, 2, 2))
@@ -241,7 +242,7 @@ class IsingMPO:
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
-        return compute_one_site_expectation_value(mps, self.Z, i)
+        return compute_one_site_expectation_value(mps, self.pauli_z, i)
 
     def x_magnetisation(self, i, mps):
         """
@@ -249,7 +250,7 @@ class IsingMPO:
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
-        return compute_one_site_expectation_value(mps, self.X, i)
+        return compute_one_site_expectation_value(mps, self.pauli_x, i)
 
     def average_chain_z_magnetisation(self, mps):
         """
@@ -303,21 +304,22 @@ if __name__ == "__main__":
         "Checking the ground states from exact diagonalisation and DMRG being the same (up to a phase): "
     )
     print("")
-    NUM_SITES = 10
+    NUM_SITES = 20
 
-    ising_exact = IsingExact(NUM_SITES, h=1.0)
-    ising_mpo = IsingMPO(NUM_SITES, h=1.0)
+    ising_exact = IsingExact(NUM_SITES, h_magnetic=1.0)
+    ising_mpo = IsingMPO(NUM_SITES, h_magnetic=1.0)
     ham_mpo = ising_mpo.hamiltonian_mpo()
-    ham_exact = ising_exact.hamiltonian_dense()
+    ham_exact = ising_exact.hamiltonian_sparse()
 
     mps_start = create_simple_product_state(NUM_SITES, which="0")
 
     print("DMRG running")
     print("")
     engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
-    engine.run(20)
+    engine.run(10)
     print("")
     ground_state_mps = engine.mps
+    print("Eigensolver running")
     ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
     print(np.isclose(abs(ground_state_mps.to_dense()), abs(ground_state_exact)).all())
 
