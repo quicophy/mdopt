@@ -394,7 +394,7 @@ def mps_from_dense(state_vector, phys_dim=2, chi_max=1e5, tolerance=1e-12):
 
 def create_custom_product_state(string, phys_dim=2):
     """
-    Creates #TODO as an MPS.
+    Creates a custom product state defined by the `string` argument as an MPS.
     """
 
     num_sites = len(string)
@@ -406,13 +406,10 @@ def create_custom_product_state(string, phys_dim=2):
         if k == "0":
             tensor[0] = 1.0
         if k == "1":
-            tensor[1] = 1.0
+            tensor[-1] = 1.0
         if k == "+":
-            tensor[0] = 1 / np.sqrt(phys_dim)
-            tensor[1] = 1 / np.sqrt(phys_dim)
-        if k == "-":
-            tensor[0] = 1 / np.sqrt(phys_dim)
-            tensor[1] = -1 / np.sqrt(phys_dim)
+            for i in range(phys_dim):
+                tensor[i] = 1 / np.sqrt(phys_dim)
         tensors.append(tensor)
 
     tensors = [tensor.reshape((1, phys_dim, 1)) for tensor in tensors]
@@ -421,22 +418,19 @@ def create_custom_product_state(string, phys_dim=2):
     return ExplicitMPS(tensors, singular_values)
 
 
-def create_product_state(num_sites, which="0", phys_dim=2):
+def create_simple_product_state(num_sites, which="0", phys_dim=2):
     """
-    Creates |0...0>/|1...1>/|+...+>/|-...-> as an MPS.
+    Creates |0...0>/|1...1>/|+...+> as an MPS.
     """
 
     tensor = np.zeros((phys_dim,))
     if which == "0":
         tensor[0] = 1.0
     if which == "1":
-        tensor[1] = 1.0
+        tensor[-1] = 1.0
     if which == "+":
-        tensor[0] = 1 / np.sqrt(2.0)
-        tensor[1] = tensor[0]
-    if which == "-":
-        tensor[0] = 1 / np.sqrt(2.0)
-        tensor[1] = -tensor[0]
+        for i in range(phys_dim):
+            tensor[i] = 1 / np.sqrt(phys_dim)
 
     tensors = [tensor.reshape((1, phys_dim, 1)) for _ in range(num_sites)]
     singular_values = [[1.0] for _ in range(num_sites + 1)]

@@ -10,13 +10,14 @@ from mpopt.mps.canonical import (
     inner_product,
     find_orth_centre,
     move_orth_centre,
+    to_density_mpo,
 )
 from mpopt.mps.explicit import mps_from_dense
 
 
 def test_find_orth_centre():
     """
-    Test the implementation of the `find_orth_centre` function.
+    Test of the implementation of the `find_orth_centre` function.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -33,9 +34,30 @@ def test_find_orth_centre():
         assert find_orth_centre(mps_mixed) == [orth_centre_index]
 
 
+def test_find_orth_centre_1():
+    """
+    Another test of the implementation of the `find_orth_centre` function.
+    """
+
+    mps_length = np.random.randint(4, 9)
+
+    for _ in range(100):
+
+        psi = _create_psi(mps_length)
+        mps = mps_from_dense(psi)
+
+        mps_left = mps.to_left_canonical()
+        mps_right = mps.to_right_canonical()
+
+        assert is_canonical(mps_left)
+        assert is_canonical(mps_right)
+        assert find_orth_centre(mps_left, return_flags=True)[1] == [True] * mps_length
+        assert find_orth_centre(mps_right, return_flags=True)[2] == [True] * mps_length
+
+
 def test_move_orth_centre():
     """
-    Test the implementation of the `move_orth_centre` function.
+    Test of the implementation of the `move_orth_centre` function.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -64,7 +86,7 @@ def test_move_orth_centre():
 
 def test_inner_product():
     """
-    Test the implementation of the `inner_product` function.
+    Test of the implementation of the `inner_product` function.
     """
 
     mps_length = 5
@@ -90,4 +112,25 @@ def test_inner_product():
         for pair in index_pairs:
             assert np.isclose(
                 abs(inner_product(list_of_mps[pair[0]], list_of_mps[pair[1]])), 1
+            )
+
+
+def test_to_density_mpo():
+    """
+    Test of the implementation of the `to_density_mpo` function.
+    """
+
+    mps_length = np.random.randint(4, 9)
+
+    for _ in range(100):
+
+        psi = _create_psi(mps_length)
+        mps = mps_from_dense(psi)
+
+        density_mpo_from_expl = mps.density_mpo()
+        density_mpo_from_can = to_density_mpo(mps.to_right_canonical())
+
+        for i in range(mps_length):
+            assert np.isclose(
+                np.linalg.norm(density_mpo_from_expl[i] - density_mpo_from_can[i]), 0
             )

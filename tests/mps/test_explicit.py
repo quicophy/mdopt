@@ -11,7 +11,11 @@ from mpopt.mps.canonical import (
     find_orth_centre,
     to_explicit,
 )
-from mpopt.mps.explicit import mps_from_dense
+from mpopt.mps.explicit import (
+    mps_from_dense,
+    create_simple_product_state,
+    create_custom_product_state,
+)
 
 
 def _create_psi(length):
@@ -19,8 +23,8 @@ def _create_psi(length):
     A helper function which creates a random quantum state in the form of a state vector.
     """
 
-    psi = np.random.uniform(size=(2 ** length)) + 1j * np.random.uniform(
-        size=(2 ** length)
+    psi = np.random.uniform(size=(2**length)) + 1j * np.random.uniform(
+        size=(2**length)
     )
     psi /= np.linalg.norm(psi)
 
@@ -29,7 +33,7 @@ def _create_psi(length):
 
 def test_from_dense():
     """
-    Test the implementation of the `mps_from_dense` function.
+    Test of the implementation of the `mps_from_dense` function.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -39,7 +43,7 @@ def test_from_dense():
         psi = _create_psi(mps_length)
 
         mps = mps_from_dense(psi)
-        psi_from_mps = mps.to_dense().reshape((2 ** mps_length))
+        psi_from_mps = mps.to_dense().reshape((2**mps_length))
 
         overlap = abs(np.conjugate(psi_from_mps) @ psi) ** 2
 
@@ -48,7 +52,7 @@ def test_from_dense():
 
 def test_single_site_left_iso():
     """
-    Test the implementation of the `single_site_left_iso` method.
+    Test of the implementation of the `single_site_left_iso` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -72,7 +76,7 @@ def test_single_site_left_iso():
 
 def test_to_left_canonical():
     """
-    Test the implementation of the `to_left_canonical` method.
+    Test of the implementation of the `to_left_canonical` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -107,7 +111,7 @@ def test_to_left_canonical():
 
 def test_single_site_right_iso():
     """
-    Test the implementation of the `single_site_right_iso` method.
+    Test of the implementation of the `single_site_right_iso` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -132,7 +136,7 @@ def test_single_site_right_iso():
 
 def test_to_right_canonical():
     """
-    Test the implementation of the `to_right_canonical` method.
+    Test of the implementation of the `to_right_canonical` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -169,7 +173,7 @@ def test_to_right_canonical():
 
 def test_to_mixed_canonical():
     """
-    Test the implementation of the `to_mixed_canonical` method.
+    Test of the implementation of the `to_mixed_canonical` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -191,7 +195,7 @@ def test_to_mixed_canonical():
 
 def test_entanglement_entropy():
     """
-    Test the implementation of the `entanglement_entropy` method.
+    Test of the implementation of the `entanglement_entropy` method.
     """
 
     mps_length = 4
@@ -210,9 +214,61 @@ def test_entanglement_entropy():
     assert np.allclose(np.linalg.norm(zeros), 0)
 
 
+def test_create_custom_product_state():
+    """
+    Another test of the implementation of the `create_custom_product_state` function.
+    """
+
+    mps_1 = create_custom_product_state("0011++").to_right_canonical()
+
+    mps_2 = [
+        np.array([[[1.0], [0.0]]]),
+        np.array([[[1.0], [0.0]]]),
+        np.array([[[0.0], [1.0]]]),
+        np.array([[[0.0], [1.0]]]),
+        np.array([[[0.70710678], [0.70710678]]]),
+        np.array([[[0.70710678], [0.70710678]]]),
+    ]
+
+    assert np.isclose(mps_1, mps_2).all()
+
+
+def test_create_simple_product_state():
+    """
+    Another test of the implementation of the `create_simple_product_state` function.
+    """
+
+    mps_1 = create_simple_product_state(4, "0").to_right_canonical()
+    mps_2 = create_simple_product_state(4, "1").to_right_canonical()
+    mps_3 = create_simple_product_state(4, "+").to_right_canonical()
+
+    mps_4 = [
+        np.array([[[1.0], [0.0]]]),
+        np.array([[[1.0], [0.0]]]),
+        np.array([[[1.0], [0.0]]]),
+        np.array([[[1.0], [0.0]]]),
+    ]
+    mps_5 = [
+        np.array([[[0.0], [1.0]]]),
+        np.array([[[0.0], [1.0]]]),
+        np.array([[[0.0], [1.0]]]),
+        np.array([[[0.0], [1.0]]]),
+    ]
+    mps_6 = [
+        np.array([[[0.70710678], [0.70710678]]]),
+        np.array([[[0.70710678], [0.70710678]]]),
+        np.array([[[0.70710678], [0.70710678]]]),
+        np.array([[[0.70710678], [0.70710678]]]),
+    ]
+
+    assert np.isclose(mps_1, mps_4).all()
+    assert np.isclose(mps_2, mps_5).all()
+    assert np.isclose(mps_3, mps_6).all()
+
+
 def test_density_mpo():
     """
-    Test the implementation of the `density_mpo` method.
+    Test of the implementation of the `density_mpo` method.
     """
 
     mps_length = np.random.randint(4, 9)
@@ -224,7 +280,7 @@ def test_density_mpo():
 
         density_mpo = mps.density_mpo()
 
-        # Juggle the dimensions around to apply the reduce function later,
+        # Juggle the dimensions around to apply the `reduce` function later,
         # which is used to create a density mpo to compare the method against.
         for i in range(mps_length):
             density_mpo[i] = density_mpo[i].transpose((0, 3, 2, 1))
@@ -242,7 +298,7 @@ def test_density_mpo():
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
         density_matrix_mpo = density_matrix_mpo.reshape(
-            (2 ** mps_length, 2 ** mps_length)
+            (2**mps_length, 2**mps_length)
         )
 
         # Original density matrix.
@@ -262,7 +318,7 @@ def test_density_mpo():
 
 def test_to_explicit():
     """
-    Test the implementation of the `to_explicit` function.
+    Test of the implementation of the `to_explicit` function.
     """
 
     mps_length = np.random.randint(4, 9)

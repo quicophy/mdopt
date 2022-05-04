@@ -224,7 +224,7 @@ def mpo_to_matrix(mpo, interlace=False, group=False):
     Warning: will cause memory overflow for number of sites > ~20.
 
     Arguments:
-        mpo: list of np.array
+        mpo: List of np.ndarray[ndim=4]
             The MPO to convert to a matrix.
         interlace: bool
             Whether to interlace the matrix' legs or not.
@@ -238,7 +238,7 @@ def mpo_to_matrix(mpo, interlace=False, group=False):
     matrix = (
         np.tensordot(mpo[0], mpo[1], (1, 0))
         .transpose((0, 3, 1, 2, 4, 5))
-        .reshape((-1, mpo[1].shape[1], phys_dim ** 2, phys_dim ** 2))
+        .reshape((-1, mpo[1].shape[1], phys_dim**2, phys_dim**2))
     )
 
     for i in range(num_sites - 2):
@@ -258,7 +258,7 @@ def mpo_to_matrix(mpo, interlace=False, group=False):
         matrix = matrix.transpose(order)
 
     if group:
-        matrix = matrix.reshape((phys_dim ** num_sites, phys_dim ** num_sites))
+        matrix = matrix.reshape((phys_dim**num_sites, phys_dim**num_sites))
 
     return matrix
 
@@ -299,9 +299,9 @@ def mpo_from_matrix(matrix, num_sites, interlaced=True, phys_dim=2, chi_max=1e5)
     """
 
     # Defining some dimensions we will need further
-    hilbert_space_dim = phys_dim ** num_sites
+    hilbert_space_dim = phys_dim**num_sites
     phys_dims = [phys_dim] * num_sites * 2
-    mps_dim = phys_dim ** 2
+    mps_dim = phys_dim**2
 
     # Checking the matrix has correct shapes for
     # a given physical dimension and number of sites

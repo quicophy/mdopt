@@ -9,7 +9,7 @@ from mpopt.utils.utils import split_two_site_tensor
 
 
 def mps_mpo_contract(
-    mps_can, mpo, start_site=0, renormalise=False, chi_max=1e5, cut=1e-20
+    mps_can, mpo, start_site=0, renormalise=False, chi_max=1e5, cut=1e-14
 ):
     """
     Applies an operator (not necessarily unitary) in the MPO format
@@ -181,27 +181,29 @@ def apply_two_site_unitary(lambda_0, b_1, b_2, unitary):
     return b_1_updated, b_2_updated
 
 
-def apply_one_site_unitary(t_1, unitary):
+def apply_one_site_operator(t_1: np.ndarray, operator: np.ndarray) -> np.ndarray:
     """
-    A function which applies a one-site unitary to a canonical MPS.
+    A function which applies a one-site operator to a canonical MPS.
+    The operator can be non-unitary, however note that a non-unitary
+    operator might break the canonical form.
 
     --(t_1)--    ->    --(t_1_updated)--
         |                     |
-     (unitary)                |
+    (operator)                |
         |                     |
 
-    Unitary has legs (pU, pD), where p stands for "physical", and
+    The operator has legs (pU, pD), where p stands for "physical", and
     U, D -- for "up", "down" accordingly.
 
     Arguments:
         t_1 : np.array[ndim=3]
             The MPS tensor to apply the unitary to.
-        unitary : np.array[ndim=4]
-            The unitary tensor we apply.
+        operator : np.array[ndim=4]
+            The operator we apply.
 
     Returns:
         t_1_updated : list[np.array[ndim=3]]
             Resulting MPS tensor.
     """
-    t_1_updated = contract("ijk, jl -> ilk", t_1, unitary, optimize=[(0, 1)])
+    t_1_updated = contract("ijk, jl -> ilk", t_1, operator, optimize=[(0, 1)])
     return t_1_updated

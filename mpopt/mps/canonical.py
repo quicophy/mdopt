@@ -29,16 +29,16 @@ from functools import reduce
 from opt_einsum import contract
 import numpy as np
 from mpopt.mps.explicit import ExplicitMPS
-from mpopt.utils.utils import split_two_site_tensor
+from mpopt.utils.utils import split_two_site_tensor, kron_tensors
 
 
-def find_orth_centre(mps):
+def find_orth_centre(mps, return_flags=False):
     """
     Returns a list of integers corresponding to
     positions of orthogonality centres of an MPS.
 
     Arguments:
-        mps: list of np.arrays[ndim=3]
+        mps : list of np.arrays[ndim=3]
             Matrix Product State given as a list of tensors.
             Note that the MPS is not given as `ExplicitMPS` instance here.
     """
@@ -78,6 +78,7 @@ def find_orth_centre(mps):
     # Handling exceptions, right- and left-canonical forms, and cases
     # when the orthogonality centre might be left- or right- isometry at
     # the boundaries, while all the other tensors are the opposite isometries.
+
     if flags_left in ([True] + [False] * (length - 1), [False] * length):
         if flags_right == [not flag for flag in flags_left]:
             centres.append(0)
@@ -90,6 +91,9 @@ def find_orth_centre(mps):
     if (flags_left == [True] * length) and (flags_right == [True] * length):
         centres.append(0)
 
+    if return_flags:
+        return centres, flags_left, flags_right
+
     return centres
 
 
@@ -99,18 +103,16 @@ def move_orth_centre(mps, init_pos, final_pos):
     with the orthogonality centre at site final_pos.
 
     Arguments:
-        mps: list of np.arrays[ndim=3]
+        mps : list of np.arrays[ndim=3]
             Matrix Product State given as a list of tensors containing an orthogonality centre.
-        init_pos: int
+        init_pos : int
             Initial position of the orthogonality centre.
-        final_pos: int
+        final_pos : int
             Final position of the orthogonality centre.
 
     Exceptions:
         ValueError:
-            If the MPS is not given in any of the canonical forms.
-        ValueError:
-            If inital_pos or final_pos does not match the MPS length.
+            If `init_pos` or `final_pos` does not match the MPS length.
     """
 
     mps = _add_ghost_dimensions(mps)
@@ -160,11 +162,11 @@ def _move_orth_centre_singular_values(mps, init_pos, final_pos):
     and the singular-value tensors at each covered bond.
 
     Arguments:
-        mps: list of np.arrays[ndim=3]
+        mps : list of np.arrays[ndim=3]
             Matrix Product State given as a list of tensors containing an orthogonality centre.
-        init_pos: int
+        init_pos : int
             Initial position of the orthogonality centre.
-        final_pos: int
+        final_pos : int
             Final position of the orthogonality centre.
 
     Exceptions:
@@ -278,12 +280,12 @@ def to_explicit(mps):
     given an MPS as a list of tensors in any of the three canonical forms.
 
     Arguments:
-        mps: list of np.arrays[ndim=3]
+        mps : list of np.arrays[ndim=3]
             A list of tensors, where each tensor has dimenstions
             (virtual left, physical, virtual right), in short (vL, i, vR).
-        chi_max: int
+        chi_max : int
             Maximum bond dimension.
-        eps: float
+        eps : float
             Minimum singular values to keep.
     """
 
@@ -386,3 +388,37 @@ def to_dense(mps, flatten=True):
         return dense.flatten()
 
     return dense
+
+
+def to_density_mpo(mps):
+    """
+    Returns the MPO representation (as a list of tensors)
+    of the density matrix defined by the MPS in a canonical form.
+    Each tensor in the MPO list has legs (vL, vR, pU, pD),
+    where v stands for "virtual", p -- for "physical",
+    and L, R, U, D stand for "left", "right", "up", "down".
+
+    This operation is depicted in the following picture.
+    In the cartoon, {i,j,k,l} and {a,b,c,d} are indices.
+    Here, the ()'s represent the MPS tensors, the []'s ---the MPO tensors.
+    The MPS with the physical legs up is complex-conjugated element-wise.
+    The empty line between the MPS and its complex-conjugated version
+    stands for the tensor (kronecker) product.
+
+          i     j
+    a     |    |    c            i    j
+    ..---()---()---..      ab   |    |    cd
+                      --> ..---[]---[]---..
+    ..---()---()---..          |    |
+    b    |     |    d          k    l
+         k     l
+    """
+
+    mpo = map(
+        lambda t: kron_tensors(
+            t, t, conjugate_second=True, merge_physicals=False
+        ).transpose((0, 3, 2, 1)),
+        mps,
+    )
+
+    return list(mpo)
