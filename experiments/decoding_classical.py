@@ -644,7 +644,7 @@ if __name__ == "__main__":
         raise ValueError("The graph must be bipartite.")
 
     # Defining the bias channel parameter and the error probability.
-    PROB_ERROR = 1.0
+    PROB_ERROR = 0.15
     PROB_CHANNEL = PROB_ERROR
 
     # Maximum bond dimension for contractor/DMRG.
