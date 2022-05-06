@@ -19,6 +19,5 @@ repos:
         name: pylint
         entry: pylint mpopt
         language: python
-        types: [ python ]
         args: [ --in-place, --remove-all-unused-imports, --remove-duplicate-keys, --fail_under=10 ]
         pass_filenames: false
