@@ -8,18 +8,19 @@ We find the ground state of this Hamiltonian and compute observables.
 
 
 import sys
-import numpy as np
-from scipy.sparse import kron, eye, csr_matrix
-from scipy.sparse.linalg import eigsh
-from opt_einsum import contract
+
 import matplotlib.pyplot as plt
+import numpy as np
+from opt_einsum import contract
+from scipy.sparse import csr_matrix, eye, kron
+from scipy.sparse.linalg import eigsh
 
 sys.path[0] += "/.."
 
+from mpopt.contractor.contractor import apply_one_site_operator, apply_two_site_unitary
 from mpopt.mps.canonical import inner_product
 from mpopt.mps.explicit import create_simple_product_state
 from mpopt.optimiser import DMRG as dmrg
-from mpopt.contractor.contractor import apply_one_site_operator, apply_two_site_unitary
 
 
 def compute_one_site_expectation_value(mps, unitary, site):

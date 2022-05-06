@@ -4,13 +4,14 @@ Tests for the `utils` module.
 
 import numpy as np
 from opt_einsum import contract
+
 from mpopt.utils.utils import (
+    create_random_mpo,
+    kron_tensors,
     mpo_from_matrix,
     mpo_to_matrix,
-    create_random_mpo,
-    svd,
-    kron_tensors,
     split_two_site_tensor,
+    svd,
 )
 
 

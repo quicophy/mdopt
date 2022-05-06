@@ -5,6 +5,7 @@ This module contains functions which contract Matrix Product States with Matrix 
 
 import numpy as np
 from opt_einsum import contract
+
 from mpopt.utils.utils import split_two_site_tensor
 
 

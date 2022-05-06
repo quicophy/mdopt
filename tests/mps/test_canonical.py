@@ -3,16 +3,18 @@
 """
 
 from itertools import combinations
+
 import numpy as np
-from tests.mps.test_explicit import _create_psi
+
 from mpopt.mps.canonical import (
-    is_canonical,
-    inner_product,
     find_orth_centre,
+    inner_product,
+    is_canonical,
     move_orth_centre,
     to_density_mpo,
 )
 from mpopt.mps.explicit import mps_from_dense
+from tests.mps.test_explicit import _create_psi
 
 
 def test_find_orth_centre():

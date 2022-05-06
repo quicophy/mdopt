@@ -3,11 +3,13 @@ This module contains the DMRG class. Inspired by TenPy.
 """
 
 from copy import deepcopy
+
 import numpy as np
-from tqdm import tqdm
-from opt_einsum import contract
 import scipy.sparse
+from opt_einsum import contract
 from scipy.sparse.linalg import eigsh
+from tqdm import tqdm
+
 from mpopt.utils.utils import split_two_site_tensor
 
 

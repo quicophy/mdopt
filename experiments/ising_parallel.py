@@ -12,8 +12,9 @@ Co-authored by Moïse Rousseau.
 
 import sys
 from multiprocessing import Pool
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 from scipy.sparse.linalg import eigsh
 from threadpoolctl import threadpool_limits
 

@@ -3,8 +3,10 @@ This module contains the explicit MPS class and relevant functions.
 """
 
 from functools import reduce
-from opt_einsum import contract
+
 import numpy as np
+from opt_einsum import contract
+
 from mpopt.utils.utils import kron_tensors, svd
 
 

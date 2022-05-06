@@ -26,10 +26,12 @@ Note, that a tensor with a physical leg sticking up is considered to be complex-
 """
 
 from functools import reduce
-from opt_einsum import contract
+
 import numpy as np
+from opt_einsum import contract
+
 from mpopt.mps.explicit import ExplicitMPS
-from mpopt.utils.utils import split_two_site_tensor, kron_tensors
+from mpopt.utils.utils import kron_tensors, split_two_site_tensor
 
 
 def find_orth_centre(mps, return_flags=False):

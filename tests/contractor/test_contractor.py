@@ -5,14 +5,15 @@
 import numpy as np
 from opt_einsum import contract
 from scipy.stats import unitary_group
-from mpopt.utils.utils import mpo_to_matrix, create_random_mpo
-from mpopt.mps.explicit import mps_from_dense
-from mpopt.mps.canonical import is_canonical, to_dense
+
 from mpopt.contractor.contractor import (
-    mps_mpo_contract,
-    apply_two_site_unitary,
     apply_one_site_operator,
+    apply_two_site_unitary,
+    mps_mpo_contract,
 )
+from mpopt.mps.canonical import is_canonical, to_dense
+from mpopt.mps.explicit import mps_from_dense
+from mpopt.utils.utils import create_random_mpo, mpo_to_matrix
 from tests.mps.test_explicit import _create_psi
 
 

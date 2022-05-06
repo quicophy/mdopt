@@ -6,10 +6,11 @@ Then, we demostrate simple decoding of a classical LDPC code with DMRG.
 
 import sys
 from functools import reduce
+
 import numpy as np
 import qecstruct as qec
-from opt_einsum import contract
 from more_itertools import powerset
+from opt_einsum import contract
 
 sys.path[0] += "/.."
 

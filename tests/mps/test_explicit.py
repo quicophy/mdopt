@@ -3,18 +3,20 @@
 """
 
 from functools import reduce
-from opt_einsum import contract
+
 import numpy as np
+from opt_einsum import contract
+
 from mpopt.mps.canonical import (
-    is_canonical,
-    inner_product,
     find_orth_centre,
+    inner_product,
+    is_canonical,
     to_explicit,
 )
 from mpopt.mps.explicit import (
-    mps_from_dense,
-    create_simple_product_state,
     create_custom_product_state,
+    create_simple_product_state,
+    mps_from_dense,
 )
 
 
