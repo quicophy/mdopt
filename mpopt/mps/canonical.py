@@ -34,7 +34,7 @@ from mpopt.mps.explicit import ExplicitMPS
 from mpopt.utils.utils import kron_tensors, split_two_site_tensor
 
 
-def find_orth_centre(mps, return_flags=False):
+#def find_orth_centre(mps, return_flags=False):
     """
     Returns a list of integers corresponding to
     positions of orthogonality centres of an MPS.

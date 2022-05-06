@@ -14,12 +14,11 @@ repos:
       - id: black
         name: black
         entry: black .
-        language: system
-        pass_filenames: false
+        language: python
       - id: pylint
         name: pylint
         entry: pylint mpopt
-        language: system
+        language: python
         types: [ python ]
         args: [ --in-place, --remove-all-unused-imports, --remove-duplicate-keys ]
         pass_filenames: false
