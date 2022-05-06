@@ -207,4 +207,4 @@ def apply_one_site_operator(t_1: np.ndarray, operator: np.ndarray) -> np.ndarray
             Resulting MPS tensor.
     """
     t_1_updated = contract("ijk, jl -> ilk", t_1, operator, optimize=[(0, 1)])
-    return t_1_updated
+    #return t_1_updated
