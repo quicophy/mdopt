@@ -25,7 +25,7 @@ threadpoolctl = "^3.1.0"
 pylint = "^2.13.8"
 
 [tool.poetry.dev-dependencies]
-pytest = "^6.2.2"
+pytest = "^7.1.2"
 pylint = "^2.7.2"
 black = "^20.8b1"
 
