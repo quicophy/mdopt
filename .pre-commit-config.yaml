@@ -2,22 +2,24 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
     hooks:
-      - id: check_added_large_files
+      - id: check-added-large-files
       - id: check-docstring-first
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
       - id: trailing-whitespace
       - id: detect-private-key
-  - repo: local
+
+  - repo: https://github.com/psf/black
+    rev: 22.3.0
     hooks:
       - id: black
-        name: black
-        entry: black .
-        language: python
+
+  - repo: local
+    hooks:
       - id: pylint
         name: pylint
         entry: pylint mpopt
         language: python
-        args: [ --in-place, --remove-all-unused-imports, --remove-duplicate-keys, --fail_under=10 ]
+        args: [ "--fail-under=9" ]
         pass_filenames: false
