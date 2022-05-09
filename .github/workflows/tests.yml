@@ -1,4 +1,4 @@
-name: actions
+name: tests
 
 on: [push, pull_request, fork]
 
