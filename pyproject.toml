@@ -4,8 +4,6 @@ version = "0.1.0"
 description = "A MPS-MPO optimiser library"
 authors = [
     "Alex Berezutskii <berezutskii@phystech.edu>",
-    "Max Tremblay <matrem@protonmail.com>",
-    "Samuel Desrosiers <samuel.desrosiers@usherbrooke.ca>"
 ]
 
 [tool.poetry.dependencies]
