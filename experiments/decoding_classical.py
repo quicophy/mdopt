@@ -638,7 +638,7 @@ if __name__ == "__main__":
     print("")
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS, NUM_CHECKS = 12, 9
+    NUM_BITS, NUM_CHECKS = 16, 12
     CHECK_DEGREE, BIT_DEGREE = 4, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The graph must be bipartite.")
