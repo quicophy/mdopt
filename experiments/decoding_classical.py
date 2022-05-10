@@ -148,7 +148,7 @@ def bias_channel(p_bias, which="0"):
             f"given {p_bias}."
         )
     if which not in ["0", "1"]:
-        raise ValueError("Unvalid qubit basis state given.")
+        raise ValueError("Invalid qubit basis state given.")
 
     if which == "0":
         b_channel = np.array(
