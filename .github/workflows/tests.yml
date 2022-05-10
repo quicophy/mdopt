@@ -5,20 +5,20 @@ on: [push, pull_request, fork]
 jobs:
   tests:
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python 3.9 
+      - name: Set up Python 3.9
         uses: actions/setup-python@v3.1.2
         with:
           python-version: 3.9
 
       - name: Set up Poetry
-        run: pip install poetry 
-      
+        run: pip install poetry
+
       - name: Install dependencies
         run: poetry install
-      
+
       - name: Generate report
         run: |
           poetry run pytest --cov=./ --cov-report=xml
@@ -30,22 +30,22 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: /home/runner/work/MPOpt/MPOpt/coverage.xml
           verbose: false
-        
+
   lint:
     runs-on: ubuntu-latest
-    steps: 
+    steps:
       - uses: actions/checkout@v3
 
-      - name: Set up Python 3.9 
+      - name: Set up Python 3.9
         uses: actions/setup-python@v3.1.2
         with:
          python-version: 3.9
 
       - name: Set up Poetry
-        run: pip install poetry 
-      
+        run: pip install poetry
+
       - name: Install dependencies
         run: poetry install
-        
+
       - name: Run linter
-        run: poetry run pylint mpopt --fail-under=8
+        run: poetry run pylint mpopt --fail-under=9
