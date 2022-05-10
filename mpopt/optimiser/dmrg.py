@@ -140,7 +140,7 @@ class DMRG:
         right_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float64)
         left_environment[:, 0, :] = np.eye(chi, dtype=np.float64)
         right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=np.float64)
-        self.left_environments[0] = right_environment
+        self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
 
         # Update necessary right environments.
