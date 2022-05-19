@@ -625,8 +625,8 @@ if __name__ == "__main__":
     print(
         "All lists of codewords match:",
         np.logical_and(
-            (cwords == cwords_to_compare_mps).all(),
-            (cwords_to_compare_mps == cwords_to_compare_dense).all(),
+            np.array_equal(cwords, cwords_to_compare_mps),
+            np.array_equal(cwords_to_compare_mps, cwords_to_compare_dense),
         ),
     )
     print(
