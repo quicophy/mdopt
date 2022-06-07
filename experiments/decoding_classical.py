@@ -1,7 +1,8 @@
 """
 In this experiment, we decode a classical linear error correction code.
 First, we build the MPS containing the superposition of all codewords.
-Then, we demostrate simple decoding of a classical LDPC code with DMRG.
+Then, we demostrate simple decoding of a classical LDPC code using Dephasing DMRG --
+our own built-in DMRG-like algorithm to solve the main component problem.
 """
 
 import sys
@@ -20,10 +21,9 @@ from mpopt.mps.canonical import (
     inner_product,
     move_orth_centre,
     to_dense,
-    to_density_mpo,
 )
 from mpopt.mps.explicit import create_custom_product_state, create_simple_product_state
-from mpopt.optimiser import DMRG as dmrg
+from mpopt.optimiser.dephasing_dmrg import Dephasing_DMRG as deph_dmrg
 from mpopt.utils.utils import mpo_to_matrix
 
 
@@ -123,7 +123,7 @@ class ConstraintString:
 def bias_channel(p_bias, which="0"):
     """
     Here, we define a bias channel -- the operator which will bias us towards the initial message
-    while decoding by ranking the bitstrings according to Hamming distance from it.
+    while decoding by ranking the bitstrings according to Hamming distance from the latter.
     This function returns a single-site MPO,
     corresponding to the bias channel, which acts on basis states,
     i.e., |0> and |1>, as follows:
@@ -200,44 +200,6 @@ def apply_bias_channel(basis_mps, prob_channel, codeword_string):
         )
 
     return biased_mps
-
-
-def dephase_mpo(mpo):
-    """
-    Applies the dephasing channel to an MPO, i.e., for every tensor x in the MPO:
-    x -> 1/2 * (x + ZxZ), where Z is a Pauli Z matrix.
-    This operation destroys the off-diagonal elements of the MPO,
-    thus restricting the DMRG outputs to computational-basis product states.
-
-    Arguments:
-        mpo : list[np.ndarray[ndim=4]]
-            Original MPO.
-
-    Returns:
-        mpo_dephased : list[np.ndarray[ndim=4]]
-            Dephased MPO.
-
-    """
-
-    pauli_z = np.array([[1, 0], [0, -1]])
-
-    mpo_dephased = []
-    for tensor in mpo:
-        mpo_dephased.append(
-            0.5
-            * (
-                tensor
-                + contract(
-                    "km, ijmn, nl -> ijkl",
-                    pauli_z,
-                    tensor,
-                    pauli_z,
-                    optimize=((0, 1), (0, 1)),
-                )
-            )
-        )
-
-    return mpo_dephased
 
 
 # Below, we define some utility functions to operate with data structures from `qecstruct` --
@@ -468,7 +430,7 @@ def apply_parity_constraints(
 
 
 def decode(
-    message, codeword, code, num_runs=1, chi_max_dmrg=1e4, cut=1e-10, silent=False
+    message, codeword, code, num_runs=1, chi_max_dmrg=1e4, cut=1e-12, silent=False
 ):
     """
     This function performs actual decoding of a message given a code and
@@ -498,16 +460,12 @@ def decode(
             computed as the following inner product |<decoded_message|codeword>|.
     """
 
-    # Building the density matrix MPO and dephasing it.
-    density_mpo = to_density_mpo(message)
-    density_mpo = dephase_mpo(density_mpo)
-
     # Creating an all-plus state to start the DMRG with.
     num_bits = len(code)
     mps_dmrg_start = create_simple_product_state(num_bits, which="+")
-    engine = dmrg(
+    engine = deph_dmrg(
         mps_dmrg_start,
-        density_mpo,
+        message,
         chi_max=chi_max_dmrg,
         cut=cut,
         mode="LA",
@@ -560,7 +518,7 @@ if __name__ == "__main__":
     NUM_BITS, NUM_CHECKS = 10, 6
     CHECK_DEGREE, BIT_DEGREE = 5, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
-        raise ValueError("The graph must be bipartite.")
+        raise ValueError("The Tanner graph of the code must be bipartite.")
 
     # Constructing the code as a qecstruct object.
     example_code = qec.random_regular_code(
@@ -638,10 +596,10 @@ if __name__ == "__main__":
     print("")
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS, NUM_CHECKS = 16, 12
+    NUM_BITS, NUM_CHECKS = 24, 18
     CHECK_DEGREE, BIT_DEGREE = 4, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
-        raise ValueError("The graph must be bipartite.")
+        raise ValueError("The Tanner graph of the code must be bipartite.")
 
     # Defining the bias channel parameter and the error probability.
     PROB_ERROR = 0.15
@@ -683,6 +641,7 @@ if __name__ == "__main__":
         codeword_string=PERTURBED_CODEWORD,
     )
 
+    print("Applying constraints")
     # Applying the parity constraints defined by the code.
     perturbed_codeword_state = apply_parity_constraints(
         perturbed_codeword_state,
@@ -693,6 +652,7 @@ if __name__ == "__main__":
         strategy="naive",
     )
 
+    print("Decoding")
     # Decoding.
     dmrg_container, success = decode(
         message=perturbed_codeword_state,

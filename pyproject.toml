@@ -5,6 +5,9 @@ description = "A MPS-MPO optimiser library"
 authors = [
     "Alex Berezutskii <berezutskii@phystech.edu>",
 ]
+maintainers = [
+    "Alex Berezutskii <berezutskii@phystech.edu>"
+]
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.10"
