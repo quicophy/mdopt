@@ -52,7 +52,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
         """
         Calculate |x'> = H_eff |x>.
         This function is used by :func:scipy.sparse.linalg.eigsh` to diagonalise
-        the effective Hamiltonian with a Lanczos method, withouth generating the full matrix.
+        the effective Hamiltonian with the Lanczos method, withouth generating the full matrix.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
@@ -60,7 +60,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
         einsum_string = "ijkl, mni, nopj, oqrk, sql -> mprs"
         two_site_tensor = contract(
             einsum_string,
-            two_site_tensor,
+            np.conj(two_site_tensor),
             self.left_environment,
             self.mpo_1,
             self.mpo_2,
@@ -75,10 +75,6 @@ class DMRG:
     """
     Class holding the Density Matrix Renormalisation Group algorithm with two-site updates (DMRG-2)
     for a finite-size system with open-boundary conditions.
-
-    Parameters:
-        mps, model, chi_max, mode, tolerance:
-            Same as attributes.
 
     Attributes:
         mps : MPS given as an instance of the ExplicitMPS class, which serves as
@@ -163,7 +159,7 @@ class DMRG:
 
     def update_bond(self, i):
         """
-        A method which updates the bond between site `i` and `i+1`.
+        A method which updates the bond between sites `i` and `i+1`.
         """
 
         # get the effective Hamiltonian, which will be diagonalised during the update bond step:
