@@ -2,7 +2,8 @@
 In this experiment, we decode a classical linear error correction code.
 First, we build the MPS containing the superposition of all codewords.
 Then, we demostrate simple decoding of a classical LDPC code using Dephasing DMRG --
-our own built-in DMRG-like algorithm to solve the main component problem.
+our own built-in DMRG-like algorithm to solve the main component problem --
+the problem of finding a computational basis state cotributing the most to a given state.
 """
 
 import sys
@@ -11,7 +12,7 @@ from functools import reduce
 import numpy as np
 import qecstruct as qec
 from more_itertools import powerset
-from opt_einsum import contract
+from tqdm import tqdm
 
 sys.path[0] += "/.."
 
@@ -23,14 +24,15 @@ from mpopt.mps.canonical import (
     to_dense,
 )
 from mpopt.mps.explicit import create_custom_product_state, create_simple_product_state
-from mpopt.optimiser.dephasing_dmrg import Dephasing_DMRG as deph_dmrg
+from mpopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mpopt.utils.utils import mpo_to_matrix
 
 
 class ConstraintString:
     """
-    Class for storing a string of logical constraints in the MPO format.
-    Logical constraints are passed in the form of Matrix Product Operators.
+    Class for storing a string of logical constraints in the
+    Matrix Product Operator format.
+    Logical constraints are passed in the form of MPOs.
 
     Attributes:
         constraints : list
@@ -73,18 +75,16 @@ class ConstraintString:
         if uniq != self.flat():
             raise ValueError("Non-unique sites encountered in the list.")
 
-    def __getitem__(self, site):
+    def __getitem__(self, index):
         """
-        Returns the constraint applied at site `site`
-        in the format of a tensor as a `np.array`.
+        Returns the pair of a list of sites together with the corresponding MPO.
 
         Arguments:
-            site : int
-                The site index.
+            index : int
+                The index of the list of sites.
         """
 
-        index = np.where(np.array(self.sites) == site)[0]
-        return [index, self.constraints[index]]
+        return self.sites[index], self.constraints[index]
 
     def flat(self):
         """
@@ -369,6 +369,7 @@ def apply_parity_constraints(
     chi_max=1e4,
     renormalise=False,
     strategy="naive",
+    silent=False,
 ):
     """
     A function applying constraints to a codeword MPS.
@@ -386,6 +387,8 @@ def apply_parity_constraints(
             To (not) renormalise the singular values at each MPS bond involved in contraction.
         strategy : str
             The contractor strategy.
+        silent : bool
+            Whether to show the progress bar or not.
 
     Returns:
         codeword_state : list[np.ndarray[ndim=3]]
@@ -394,7 +397,7 @@ def apply_parity_constraints(
 
     if strategy == "naive":
 
-        for string in strings:
+        for string in tqdm(strings, disable=silent):
 
             # Finding the orthogonality centre.
             orth_centres, flags_left, flags_right = find_orth_centre(
@@ -650,6 +653,7 @@ if __name__ == "__main__":
         chi_max=CHI_MAX_CONTRACTOR,
         renormalise=True,
         strategy="naive",
+        silent=False,
     )
 
     print("Decoding")
