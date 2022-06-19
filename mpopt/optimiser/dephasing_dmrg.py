@@ -1,15 +1,30 @@
 """
-This module contains the Dephasing DMRG class. Inspired by TenPy.
-The main feature of the Dephasing DMRG is that it restricts the ground-/main-state
-search to computational basis states.
-In particular, we use it to find the main component of a Matrix Density Product Operator (MDPO).
+This module contains the Dephasing DMRG class along with the effective density operator class.
+The algo's main feature is that it restricts the ground-state search to computational basis states.
+In particular, we use it to find the main component of a Matrix Density Product Operator (MPDO),
+i.e., a computational basis state contributing the largest amplitude.
+Inspired by TenPy.
+
+In our notation, MPDO for `n` sites denotes the following object.
+
+     |      |               |       |
+     |      |               |       |
+----(0*)---(1*)--- ... ---(n-2*)--(n-1*)---
+
+----(0)----(1)---- ... ---(n-2)---(n-1)----
+     |      |               |       |
+     |      |               |       |
+
+It is formed by an MPS and its complex-conjugated version.
+The main idea is to find the main component of this object without
+performing the kronecker product explicitly.
 """
 
 from copy import deepcopy
 
 import numpy as np
 import scipy.sparse
-from opt_einsum import contract, contract_path, paths
+from opt_einsum import contract
 from scipy.sparse.linalg import eigsh
 from tqdm import tqdm
 
@@ -18,17 +33,27 @@ from mpopt.utils.utils import split_two_site_tensor
 
 class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
     """
-    To fully use the advantage of :module:`scipy.sparse.linalg`, when we will be computing eigenvectors of
-    local effective dephased density operators (extending the analogy from local effective Hamiltonians),
-    we will need a special class for them.
+    To take more advantage of :module:`scipy.sparse.linalg`, we make a special class
+    for local effective density operators extending the analogy from local effective Hamiltonians.
+    It allows us to compute eigenvectors more effeciently.
 
-    To be diagonalised in `DMRG.update_bond`.
-
-    The diagram can be found in the supplementary notes.
-
+    The diagram displaying the contraction can be found in the supplementary notes.
     """
 
     def __init__(self, left_environment, mps_d_1, mps_d_2, right_environment):
+        """
+        Initialise an effective dephased density operator tensor network.
+
+        Arguments:
+            left_environment : np.array[ndim=3]
+                The left environment for the effective dephased density operator.
+            mps_d_1 : np.array[ndim=3]
+                The left matrix product state tensor.
+            mps_d_2 : np.array[ndim=3]
+                The right matrix product state tensor.
+            right_environment: np.array[ndim=3]
+                The right environment for the effective dephased density operator.
+        """
         self.left_environment = left_environment
         self.right_environment = right_environment
         self.mps_d_1 = mps_d_1
@@ -48,9 +73,13 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
     def _matvec(self, x):
         """
-        Calculate |x'> = Rho_eff |x>.
-        This function is used by :func:scipy.sparse.linalg.eigsh` to diagonalise
-        the effective Hamiltonian with a Lanczos method, withouth generating the full matrix.
+        Calculate |x'> = rho_eff |x>.
+        This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
+        the effective density operator with the Lanczos method, withouth generating the full matrix.
+
+        Arguments:
+            x : np.array[ndim=4]
+                The two-site tensor we are acting on with an effective density operator.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
@@ -74,28 +103,35 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
             copy_tensor,
             copy_tensor,
             self.right_environment,
-            optimize=[(1, 2), (1, 2), (0, 1), (-1, -4), (-1, -4), (-1, -4)],
+            optimize=[
+                (0, 8),
+                (0, 1),
+                (0, 6),
+                (0, 5),
+                (1, 2),
+                (2, 3),
+                (3, 4),
+                (2, 3),
+                (1, 2),
+                (0, 1),
+            ],
         )
 
         return np.reshape(two_site_tensor, self.shape[0])
 
 
-class Dephasing_DMRG:
+class DephasingDMRG:
     """
-    Class holding the Density Matrix Renormalisation Group algorithm with two-site updates (DMRG-2)
+    Class holding the Dephasing Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
-    Parameters:
-        mps, model, chi_max, mode, tolerance:
-            Same as attributes.
-
     Attributes:
-        mps : MPS given as an instance of the ExplicitMPS class, which serves as
-            a current approximation of the ground state.
-        mps_d : list of ndarrays[ndim=4]
-            The MPS which gives us the MDPO.
-            Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
-            p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
+        mps : ExplicitMPS
+            MPS given as an instance of the ExplicitMPS class, which serves as
+            a current approximation of the ground/main state.
+        mps_d : list[np.array[ndim=3]]
+            The "target" MPS in the left/right canonical form.
+            This MPS is used to construct the dephased MPDO.
         chi_max : int
             The highest bond dimension of an MPS allowed.
         mode : str, which mode of the eigensolver to use
@@ -107,28 +143,23 @@ class Dephasing_DMRG:
         cut : float
             The lower boundary of the spectrum.
             All the singular values smaller than that will be discarded.
-        left_environments, right_environments : lists of ndarrays[ndim=3]
-            Left and right parts ("environments") of the effective Hamiltonian.
-            Each left_environments[i] has legs (uL, vL, dL),
-            right_environments[i] has legs (uR, vR, dR),
+        left_environments : list[np.array[ndim=4]]
+            Left environments of the effective dephased density operator
+            Each `left_environments[i]` has legs `(uL, vL_1, vL_2, dL)`,
+            where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
+        right_environments : list[np.array[ndim=4]]
+            Right environments of the effective dephased density operator.
+            Each `right_environments[i]` has legs `(uL, vL_1, vL_2, dL)`,
             where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
         silent : bool
             Whether to show/hide the progress bar.
-
-            .--uL            uR--.
-            |                    |
-            |  vL   |    |   vR  |
-            (L)----()----()----(R)
-            |       |     |      |
-            |                    |
-            .--dL            dR--.
     """
 
     def __init__(self, mps, mps_d, chi_max, cut, mode, silent=False, copy=True):
         if len(mps) != len(mps_d):
             raise ValueError(
-                f"The MPS has length ({len(mps)}), "
-                f"the target MPS has length ({len(mps_d)}), "
+                f"The MPS has length {len(mps)}, "
+                f"the target MPS has length {len(mps_d)}, "
                 "but the lengths should be equal."
             )
         self.mps = mps
@@ -180,13 +211,6 @@ class Dephasing_DMRG:
         """
         A method which updates the bond between site `i` and `i+1`.
         """
-
-        # get the effective Hamiltonian, which will be diagonalised during the update bond step:
-        #
-        # left_environment: uL, vL, dL
-        # right_environment: uR, vR, dR
-        # mpo[i]: vL, b, i, i*
-        # mpo[j]: b, vR, j, j*
 
         j = i + 1
 
