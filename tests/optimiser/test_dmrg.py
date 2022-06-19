@@ -13,7 +13,8 @@ from mpopt.optimiser.dmrg import DMRG as dmrg
 def test_ground_states():
     """
     Test how DMRG finds the ground state of a 1D Ising model.
-    Check that physical observables are correct.
+    Check that physical observables are correct and the MPS ground state
+    corresponds to the one from exact diagonalisation.
     """
 
     for _ in range(5):
