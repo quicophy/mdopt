@@ -164,7 +164,7 @@ def _move_orth_centre_singular_values(mps, init_pos, final_pos):
     and the singular-value tensors at each covered bond.
 
     Arguments:
-        mps : list of np.arrays[ndim=3]
+        mps : list of `np.arrays[ndim=3]`
             Matrix Product State given as a list of tensors containing an orthogonality centre.
         init_pos : int
             Initial position of the orthogonality centre.
