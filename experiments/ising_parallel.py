@@ -41,9 +41,10 @@ class Simulation:
         exact = IsingExact(self.num_sites, magnetic_field)
         hamiltonian = exact.hamiltonian_sparse()
         ground_state = eigsh(hamiltonian, k=6)[1][:, 0]
-        return ising_exact.average_chain_x_magnetisation(
-            ground_state
-        ), ising_exact.average_chain_z_magnetisation(ground_state)
+        return (
+            ising_exact.average_chain_x_magnetisation(ground_state),
+            ising_exact.average_chain_z_magnetisation(ground_state),
+        )
 
     def drmg_simulation(self, magnetic_field):
         """
@@ -64,9 +65,10 @@ class Simulation:
         )
         dmrg_container.run(10)
         dmrg_final_mps = engine.mps
-        return ising_mpo.average_chain_x_magnetisation(
-            dmrg_final_mps
-        ), ising_mpo.average_chain_z_magnetisation(dmrg_final_mps)
+        return (
+            ising_mpo.average_chain_x_magnetisation(dmrg_final_mps),
+            ising_mpo.average_chain_z_magnetisation(dmrg_final_mps),
+        )
 
 
 if __name__ == "__main__":
