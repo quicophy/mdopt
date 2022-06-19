@@ -344,8 +344,8 @@ def inner_product(mps_1, mps_2):
 
     if len(mps_1) != len(mps_2):
         raise ValueError(
-            f"The number of sites in the first MPS is ({len(mps_1)}), while "
-            f"the number of sites in the second MPS is ({len(mps_2)}). "
+            f"The number of sites in the first MPS is {len(mps_1)}, while "
+            f"the number of sites in the second MPS is {len(mps_2)}. "
             "The MPS's must be of equal length."
         )
 
