@@ -1,5 +1,5 @@
 """
-    Tests for the DMRG optimiser.
+Tests for the DMRG optimiser.
 """
 
 import numpy as np
@@ -16,7 +16,7 @@ def test_ground_states():
     Check that physical observables are correct.
     """
 
-    for _ in range(10):
+    for _ in range(5):
 
         num_sites = 8
         transverse_magnetic_field = np.random.uniform(0.1, 1)
