@@ -66,8 +66,8 @@ class ConstraintString:
 
         if len(self.sites) > len(self.constraints):
             raise ValueError(
-                f"We have ({len(self.constraints)}) constraints in the constraints list, "
-                f"({len(self.sites)}) constraints assumed by the sites list."
+                f"We have {len(self.constraints)} constraints in the constraints list, "
+                f"{len(self.sites)} constraints assumed by the sites list."
             )
 
         seen = set()

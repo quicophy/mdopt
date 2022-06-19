@@ -82,7 +82,7 @@ class IsingExact:
             kron(self.pauli_x, self.identity) + kron(self.identity, self.pauli_x)
         )
         if num_sites < 2:
-            raise ValueError(f"Number of sites should be >=2, given ({num_sites})")
+            raise ValueError(f"Number of sites should be >=2, given {num_sites}")
 
     def hamiltonian_sparse(self):
         """
@@ -204,7 +204,7 @@ class IsingMPO:
         self.pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
         self.pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
         if num_sites < 2:
-            raise ValueError(f"Number of sites should be >=2, given ({num_sites})")
+            raise ValueError(f"Number of sites should be >=2, given {num_sites}")
 
     def hamiltonian_mpo(self):
         """
