@@ -50,10 +50,10 @@ class ExplicitMPS:
 
         if len(tensors) != len(singular_values) - 1:
             raise ValueError(
-                f"The number of tensors ({len(tensors)}) should correspond "
+                f"The number of tensors {len(tensors)} should correspond "
                 "to the number of non-trivial singular value matrices "
-                f"({len(tensors) - 1}), instead the number of "
-                f"non-trivial singular value matrices is ({len(singular_values) - 2})."
+                f"{len(tensors) - 1}, instead the number of "
+                f"non-trivial singular value matrices is {len(singular_values) - 2}."
             )
 
         for i, _ in enumerate(singular_values):
@@ -61,7 +61,7 @@ class ExplicitMPS:
             if abs(norm - 1) > tolerance:
                 raise ValueError(
                     "The norm of each singular values tensor must be 1, "
-                    f"instead the norm is ({norm}) at bond ({i + 1})"
+                    f"instead the norm is {norm} at bond {i + 1}."
                 )
 
         self.tensors = tensors
@@ -96,7 +96,7 @@ class ExplicitMPS:
 
         if site >= self.nsites:
             raise ValueError(
-                f"Site given ({site}), with the number of sites in the MPS ({self.nsites})."
+                f"Site given {site}, with the number of sites in the MPS {self.nsites}."
             )
 
         return np.tensordot(
@@ -113,8 +113,8 @@ class ExplicitMPS:
 
         if site >= self.nsites:
             raise ValueError(
-                f"Sites given ({site}, {next_site}), "
-                f"with the number of sites in the MPS ({self.nsites})."
+                f"Sites given {site}, {next_site}, "
+                f"with the number of sites in the MPS {self.nsites}."
             )
 
         return np.tensordot(
@@ -130,8 +130,8 @@ class ExplicitMPS:
 
         if site >= self.nsites:
             raise ValueError(
-                f"Sites given ({site}, {site + 1}), "
-                f"with the number of sites in the MPS ({self.nsites})."
+                f"Sites given {site}, {site + 1}, "
+                f"with the number of sites in the MPS {self.nsites}."
             )
 
         return np.tensordot(
@@ -149,8 +149,8 @@ class ExplicitMPS:
 
         if site >= self.nsites:
             raise ValueError(
-                f"Sites given ({site}, {site + 1}), "
-                f"with the number of sites in the MPS ({self.nsites})."
+                f"Sites given {site}, {site + 1}, "
+                f"with the number of sites in the MPS {self.nsites}."
             )
 
         return np.tensordot(
@@ -203,8 +203,8 @@ class ExplicitMPS:
 
         if orth_centre_index >= self.nsites:
             raise ValueError(
-                f"Orthogonality centre index given ({orth_centre_index}), "
-                f"with the number of sites in the MPS ({self.nsites})."
+                f"Orthogonality centre index given {orth_centre_index}, "
+                f"with the number of sites in the MPS {self.nsites}."
             )
 
         if orth_centre_index == 0:

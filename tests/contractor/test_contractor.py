@@ -67,24 +67,24 @@ def test_apply_two_site_unitary():
     """
 
     identity = np.eye(2)
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
 
         mps = mps_from_dense(psi)
         mps_right = mps.to_right_canonical()
         mps_new = mps_right.copy()
 
-        site = int(np.random.randint(mps_length - 1))
+        site = int(np.random.randint(num_sites - 1))
 
         unitary_exact = unitary_group.rvs(4)
         unitary_tensor = unitary_exact.reshape((2, 2, 2, 2))
 
         for _ in range(site):
             unitary_exact = np.kron(identity, unitary_exact)
-        for _ in range(mps_length - site - 2):
+        for _ in range(num_sites - site - 2):
             unitary_exact = np.kron(unitary_exact, identity)
         unitary_exact = unitary_exact.transpose()
 
@@ -118,7 +118,7 @@ def test_apply_one_site_operator():
     Test of the implementation of the `apply_one_site_operator` function.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
     pauli_y = np.array([[0.0, -1.0j], [1.0j, 0.0]])
@@ -128,13 +128,13 @@ def test_apply_one_site_operator():
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
 
         mps = mps_from_dense(psi)
         mps_right = mps.to_right_canonical()
         mps_new = mps_right.copy()
 
-        site = int(np.random.randint(mps_length))
+        site = int(np.random.randint(num_sites))
 
         operator_index = int(np.random.randint(3))
         unitary_tensor = paulis[operator_index]
@@ -142,7 +142,7 @@ def test_apply_one_site_operator():
         unitary_exact = unitary_tensor
         for _ in range(site):
             unitary_exact = np.kron(identity, unitary_exact)
-        for _ in range(mps_length - site - 1):
+        for _ in range(num_sites - site - 1):
             unitary_exact = np.kron(unitary_exact, identity)
         unitary_exact = unitary_exact.transpose()
 

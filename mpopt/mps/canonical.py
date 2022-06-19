@@ -164,7 +164,7 @@ def _move_orth_centre_singular_values(mps, init_pos, final_pos):
     and the singular-value tensors at each covered bond.
 
     Arguments:
-        mps : list of np.arrays[ndim=3]
+        mps : list of `np.arrays[ndim=3]`
             Matrix Product State given as a list of tensors containing an orthogonality centre.
         init_pos : int
             Initial position of the orthogonality centre.
@@ -344,8 +344,8 @@ def inner_product(mps_1, mps_2):
 
     if len(mps_1) != len(mps_2):
         raise ValueError(
-            f"The number of sites in the first MPS is ({len(mps_1)}), while "
-            f"the number of sites in the second MPS is ({len(mps_2)}). "
+            f"The number of sites in the first MPS is {len(mps_1)}, while "
+            f"the number of sites in the second MPS is {len(mps_2)}. "
             "The MPS's must be of equal length."
         )
 

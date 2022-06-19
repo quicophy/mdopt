@@ -77,7 +77,7 @@ def kron_tensors(tensor_1, tensor_2, conjugate_second=False, merge_physicals=Tru
 
     if len(tensor_1.shape) != 3:
         raise ValueError(
-            f"The number of dimensions given was ({len(tensor_1.shape)}), "
+            f"The number of dimensions given was {len(tensor_1.shape)},"
             "but the number of dimensions expected is 3."
         )
 

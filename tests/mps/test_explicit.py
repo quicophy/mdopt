@@ -38,14 +38,14 @@ def test_from_dense():
     Test of the implementation of the `mps_from_dense` function.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
 
         mps = mps_from_dense(psi)
-        psi_from_mps = mps.to_dense().reshape((2**mps_length))
+        psi_from_mps = mps.to_dense().reshape((2**num_sites))
 
         overlap = abs(np.conjugate(psi_from_mps) @ psi) ** 2
 
@@ -57,14 +57,14 @@ def test_single_site_left_iso():
     Test of the implementation of the `single_site_left_iso` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
-        for site in range(mps_length):
+        for site in range(num_sites):
             isometry = mps.single_site_left_iso(site)
 
             to_be_identity = contract(
@@ -81,11 +81,11 @@ def test_to_left_canonical():
     Test of the implementation of the `to_left_canonical` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
         mps_left = mps.to_left_canonical()
@@ -94,7 +94,7 @@ def test_to_left_canonical():
         assert np.isclose(abs(inner_product(mps_left, mps_left)), 1)
         assert len(find_orth_centre(mps_left)) == 1
 
-        for i in range(mps_length):
+        for i in range(num_sites):
             assert mps.tensors[i].shape == mps_left[i].shape
 
         for i, _ in enumerate(mps_left):
@@ -116,14 +116,14 @@ def test_single_site_right_iso():
     Test of the implementation of the `single_site_right_iso` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
-        for site in range(mps_length):
+        for site in range(num_sites):
 
             isometry = mps.single_site_right_iso(site)
 
@@ -141,11 +141,11 @@ def test_to_right_canonical():
     Test of the implementation of the `to_right_canonical` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
         mps_right = mps.to_right_canonical()
@@ -154,7 +154,7 @@ def test_to_right_canonical():
         assert np.isclose(abs(inner_product(mps_right, mps_right)), 1)
         assert len(find_orth_centre(mps_right)) == 1
 
-        for i in range(mps_length):
+        for i in range(num_sites):
             assert mps.tensors[i].shape == mps_right[i].shape
 
         for i, _ in enumerate(mps_right):
@@ -178,17 +178,17 @@ def test_to_mixed_canonical():
     Test of the implementation of the `to_mixed_canonical` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
-        orth_centre_index = np.random.randint(mps_length)
+        orth_centre_index = np.random.randint(num_sites)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
-        for i in range(mps_length):
+        for i in range(num_sites):
             assert mps.tensors[i].shape == mps_mixed[i].shape
         assert is_canonical(mps_mixed)
         assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
@@ -200,10 +200,10 @@ def test_entanglement_entropy():
     Test of the implementation of the `entanglement_entropy` method.
     """
 
-    mps_length = 4
+    num_sites = 4
 
     psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float64)
-    psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * mps_length)
+    psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
     mps_dimer = mps_from_dense(psi_many_body_dimer)
 
@@ -273,18 +273,18 @@ def test_density_mpo():
     Test of the implementation of the `density_mpo` method.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
         density_mpo = mps.density_mpo()
 
         # Juggle the dimensions around to apply the `reduce` function later,
         # which is used to create a density mpo to compare the method against.
-        for i in range(mps_length):
+        for i in range(num_sites):
             density_mpo[i] = density_mpo[i].transpose((0, 3, 2, 1))
 
         density_matrix_mpo = reduce(
@@ -294,13 +294,13 @@ def test_density_mpo():
         # Get rid of ghost dimensions of the MPO.
         density_matrix_mpo = density_matrix_mpo.squeeze()
         # Reshaping to the right order of indices.
-        correct_order = list(range(0, 2 * mps_length, 2)) + list(
-            range(1, 2 * mps_length, 2)
+        correct_order = list(range(0, 2 * num_sites, 2)) + list(
+            range(1, 2 * num_sites, 2)
         )
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
         density_matrix_mpo = density_matrix_mpo.reshape(
-            (2**mps_length, 2**mps_length)
+            (2**num_sites, 2**num_sites)
         )
 
         # Original density matrix.
@@ -323,16 +323,16 @@ def test_to_explicit():
     Test of the implementation of the `to_explicit` function.
     """
 
-    mps_length = np.random.randint(4, 9)
+    num_sites = np.random.randint(4, 9)
 
     for _ in range(100):
 
-        psi = _create_psi(mps_length)
+        psi = _create_psi(num_sites)
         mps = mps_from_dense(psi)
 
         mps_left = mps.to_left_canonical()
         mps_right = mps.to_right_canonical()
-        orth_centre_index = np.random.randint(mps_length)
+        orth_centre_index = np.random.randint(num_sites)
         mps_mixed = mps.to_mixed_canonical(orth_centre_index)
 
         assert is_canonical(mps_left)

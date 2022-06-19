@@ -1,5 +1,5 @@
 """
-    Tests for the DMRG optimiser.
+Tests for the DMRG optimiser.
 """
 
 import numpy as np
@@ -13,12 +13,14 @@ from mpopt.optimiser.dmrg import DMRG as dmrg
 def test_ground_states():
     """
     Test how DMRG finds the ground state of a 1D Ising model.
-    Check that physical observables are correct.
+    Check that physical observables are correct and the MPS ground state
+    corresponds to the one from exact diagonalisation.
     """
 
-    for _ in range(10):
+    for _ in range(5):
 
         num_sites = 8
+        num_runs = 5
         transverse_magnetic_field = np.random.uniform(0.1, 1)
 
         ising_exact = IsingExact(num_sites, transverse_magnetic_field)
@@ -29,7 +31,7 @@ def test_ground_states():
         mps_start = create_simple_product_state(num_sites, which="0")
 
         engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
-        engine.run(10)
+        engine.run(num_runs)
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
 
