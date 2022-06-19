@@ -132,8 +132,8 @@ class DMRG:
     def __init__(self, mps, mpo, chi_max, cut, mode, silent=False, copy=True):
         if len(mps) != len(mpo):
             raise ValueError(
-                f"The MPS has length ({len(mps)}), "
-                f"the MPO has length ({len(mpo)}), "
+                f"The MPS has length {len(mps)},"
+                f"the MPO has length {len(mpo)},"
                 "but the lengths should be equal."
             )
         self.mps = mps
