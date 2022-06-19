@@ -48,6 +48,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
             right_environment: np.array[ndim=3]
                 The right environment for the effective Hamiltonian.
         """
+
         self.left_environment = left_environment
         self.right_environment = right_environment
         self.mpo_1 = mpo_1
@@ -178,21 +179,6 @@ class DMRG:
         """
         A method which updates the bond between sites `i` and `i+1`.
         """
-
-        # get the effective Hamiltonian, which will be diagonalised during the update bond step:
-        #
-        #    ---uL                      uR---
-        #    |         i            j       |
-        #    |    vL   |     b      |   vR  |
-        #    (L)----(mpo[i])----(mpo[j])----(R)
-        #    |         |            |       |
-        #    |         i*           j*      |
-        #    ---dL                      dR---
-        #
-        # left_environment: uL, vL, dL
-        # right_environment: uR, vR, dR
-        # mpo[i]: vL, b, i, i*
-        # mpo[j]: b, vR, j, j*
 
         j = i + 1
 
