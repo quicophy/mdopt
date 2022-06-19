@@ -1,5 +1,6 @@
 """
-This module contains the DMRG class. Inspired by TenPy.
+This module contains the DMRG class along with the effective Hamiltonian class.
+Inspired by TenPy.
 """
 
 from copy import deepcopy
@@ -15,22 +16,38 @@ from mpopt.utils.utils import split_two_site_tensor
 
 class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
     """
-    To fully use the advantage of :module:`scipy.sparse.linalg`, when we will be computing
-    eigenvectors of local effective Hamiltonians, we will need a special class for them.
+    To take more advantage of :module:`scipy.sparse.linalg`, we make a special class
+    for local effective Hamiltonians. It allows us to compute eigenvectors more effeciently.
 
-    To be diagonalised in `DMRG.update_bond`.
+    Such effective Hamiltonian is to be diagonalised in the
+    :method:`update_bond` method of the :class:'DMRG' class.
 
-    .--uL                      uR--.
-    |         i            j       |
-    |    vL   |     b      |   vR  |
+     ---uL                      uR---
+     |         i            j       |
+     |    vL   |     b      |   vR  |
     (L)----(mpo[i])----(mpo[j])----(R)
-    |         |            |       |
-    |         i*           j*      |
-    .--dL                      dR--.
+     |         |            |       |
+     |         i*           j*      |
+     ---dL                      dR---
 
+    In our convention, the legs of left/right environments (tensors L/R in the cartoon)
+    are ordered as follows: (uL/uR, vL/vR, dL/dR) which means (up, virtual, down).
     """
 
     def __init__(self, left_environment, mpo_1, mpo_2, right_environment):
+        """
+        Initialise an effective Hamiltonian tensor network.
+
+        Arguments:
+            left_environment : np.array[ndim=3]
+                The left environment for the effective Hamiltonian.
+            mpo_1 : np.array[ndim=4]
+                The left matrix product operator.
+            mpo_2 : np.array[ndim=4]
+                The right matrix product operator.
+            right_environment: np.array[ndim=3]
+                The right environment for the effective Hamiltonian.
+        """
         self.left_environment = left_environment
         self.right_environment = right_environment
         self.mpo_1 = mpo_1
@@ -50,9 +67,13 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
 
     def _matvec(self, x):
         """
-        Calculate |x'> = H_eff |x>.
-        This function is used by :func:scipy.sparse.linalg.eigsh` to diagonalise
-        the effective Hamiltonian with the Lanczos method, withouth generating the full matrix.
+        Compute |x'> = H_eff |x>.
+        This function is being used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
+        the effective Hamiltonian with the Lanczos method, without generating the full matrix.
+
+        Arguments:
+            x : np.array[ndim=4]
+                The two-site tensor we are acting on with an effective Hamiltonian.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
@@ -60,7 +81,7 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
         einsum_string = "ijkl, mni, nopj, oqrk, sql -> mprs"
         two_site_tensor = contract(
             einsum_string,
-            np.conj(two_site_tensor),
+            two_site_tensor,
             self.left_environment,
             self.mpo_1,
             self.mpo_2,
@@ -73,13 +94,14 @@ class EffectiveHamiltonian(scipy.sparse.linalg.LinearOperator):
 
 class DMRG:
     """
-    Class holding the Density Matrix Renormalisation Group algorithm with two-site updates (DMRG-2)
+    Class holding the Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
     Attributes:
-        mps : MPS given as an instance of the ExplicitMPS class, which serves as
+        mps : ExplicitMPS
+            MPS given as an instance of the ExplicitMPS class, which serves as
             a current approximation of the ground state.
-        mpo : MPO, list of ndarrays[ndim=4]
+        mpo : list[np.array[ndim=4]]
             The MPO of which the groundstate is to be computed.
             Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
             p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
@@ -94,21 +116,16 @@ class DMRG:
         cut : float
             The lower boundary of the spectrum.
             All the singular values smaller than that will be discarded.
-        left_environments, right_environments : lists of ndarrays[ndim=3]
-            Left and right parts ("environments") of the effective Hamiltonian.
-            Each left_environments[i] has legs (uL, vL, dL),
-            right_environments[i] has legs (uR, vR, dR),
+        left_environments : list[np.array[ndim=3]]
+            Left environments of the effective Hamiltonian.
+            Each `left_environments[i]` has legs `(uL, vL, dL)`,
+            where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
+        right_environments : list[np.array[ndim=3]]
+            Right environments of the effective Hamiltonian.
+            Each `right_environments[i]` has legs `(uL, vL, dL)`,
             where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
         silent : bool
             Whether to show/hide the progress bar.
-
-            .--uL            uR--.
-            |                    |
-            |  vL   |    |   vR  |
-            (L)----()----()----(R)
-            |       |     |      |
-            |                    |
-            .--dL            dR--.
     """
 
     def __init__(self, mps, mpo, chi_max, cut, mode, silent=False, copy=True):
@@ -164,13 +181,13 @@ class DMRG:
 
         # get the effective Hamiltonian, which will be diagonalised during the update bond step:
         #
-        #    .--uL                      uR--.
+        #    ---uL                      uR---
         #    |         i            j       |
         #    |    vL   |     b      |   vR  |
         #    (L)----(mpo[i])----(mpo[j])----(R)
         #    |         |            |       |
         #    |         i*           j*      |
-        #    .--dL                      dR--.
+        #    ---dL                      dR---
         #
         # left_environment: uL, vL, dL
         # right_environment: uR, vR, dR
