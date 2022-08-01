@@ -6,4 +6,4 @@ coverage:
         threshold: 90%
 
 ignore:
-  - "experiments/"  # ignore the experiments folder
+  - "experiments/"
