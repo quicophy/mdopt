@@ -1,6 +1,4 @@
-"""
-Tests for the `utils` module.
-"""
+"""Tests for the :module:`utils` module."""
 
 import numpy as np
 from opt_einsum import contract
@@ -15,12 +13,10 @@ from mpopt.utils.utils import (
 )
 
 
-def test_svd():
-    """
-    Test of the implementation of the `svd` function.
-    """
+def test_utils_svd():
+    r"""Tests for the :func:`svd` function."""
 
-    for _ in range(100):
+    for _ in range(10):
 
         dim = np.random.randint(low=2, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
@@ -37,13 +33,7 @@ def test_svd():
 
         assert np.isclose(np.linalg.norm(m_trimmed - m_trimmed_new), 0)
 
-
-def test_svd_1():
-    """
-    Another test of the `svd` function.
-    """
-
-    for _ in range(100):
+    for _ in range(10):
 
         dim = np.random.randint(low=50, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
@@ -54,12 +44,10 @@ def test_svd_1():
         assert len(s) == num_sing_values
 
 
-def test_split_two_site_tensor():
-    """
-    Test of the implementation of the `split_two_site_tensor` function.
-    """
+def test_utils_split_two_site_tensor():
+    r"""Test for the :func:`split_two_site_tensor` function."""
 
-    for _ in range(100):
+    for _ in range(10):
 
         d = 2
         bond_dim = np.random.randint(2, 18, size=2)
@@ -81,12 +69,10 @@ def test_split_two_site_tensor():
         assert np.isclose(np.linalg.norm(t - should_be_t), 0)
 
 
-def test_kron_tensors():
-    """
-    Test of the implementation of the `kron_tensors` function.
-    """
+def test_utils_kron_tensors():
+    r"""Test for the :func:`kron_tensors` function."""
 
-    for _ in range(100):
+    for _ in range(10):
 
         dims_1 = np.random.randint(2, 11, size=3)
         dims_2 = np.random.randint(2, 11, size=3)
@@ -151,12 +137,10 @@ def test_kron_tensors():
         assert np.isclose(np.linalg.norm(product_4 - product_8), 0)
 
 
-def test_mpo_from_matrix():
-    """
-    Test of the implementation of the `mpo_from_matrix` function.
-    """
+def test_utils_mpo_from_matrix():
+    r"""Test for the :func:`mpo_from_matrix` function."""
 
-    for _ in range(100):
+    for _ in range(10):
 
         num_sites = np.random.randint(4, 6)
         phys_dim = np.random.randint(2, 4)
@@ -174,12 +158,10 @@ def test_mpo_from_matrix():
         assert np.isclose(abs(np.linalg.norm(matrix - matrix_from_mpo)), 0)
 
 
-def test_mpo_to_matrix():
-    """
-    Test of the implementation of the `mpo_to_matrix` function.
-    """
+def test_utils_mpo_to_matrix():
+    r"""Tests for the :func:`mpo_to_matrix` function."""
 
-    for _ in range(100):
+    for _ in range(10):
 
         num_sites = np.random.randint(4, 6)
         phys_dim = np.random.randint(2, 4)
@@ -220,15 +202,9 @@ def test_mpo_to_matrix():
         assert np.isclose(abs(np.linalg.norm(matrix_2 - matrix_02)), 0, atol=1e-6)
         assert np.isclose(abs(np.linalg.norm(matrix_3 - matrix_03)), 0, atol=1e-6)
 
+    for _ in range(10):
 
-def test_mpo_to_matrix_1():
-    """
-    Another test of the implementation of the `mpo_to_matrix` function.
-    Here, we Test of the order of indices, so we fix the number of sites.
-    """
-
-    for _ in range(100):
-
+        # Here, we Test of the order of indices, so we fix the number of sites.
         num_sites = 4
         mpo = create_random_mpo(
             num_sites,
