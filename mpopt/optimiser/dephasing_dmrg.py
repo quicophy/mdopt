@@ -1,12 +1,14 @@
-"""
-This module contains the Dephasing DMRG class along with the effective density operator class.
-The algo's main feature is that it restricts the ground-state search to computational basis states.
-In particular, we use it to find the main component of a Matrix Density Product Operator (MPDO),
+"""This module contains the :class:`DephasingDMRG` and the :class:`EffectiveDensityOperator`
+classes.
+
+This algorithm's main feature is that it restricts the target-state search to
+the computational basis states domain.
+In particular, we use it to find the main component of a Matrix Density Product Operator (MDPO),
 i.e., a computational basis state contributing the largest amplitude.
-Inspired by TenPy.
 
-In our notation, MPDO for `n` sites denotes the following object.
+In our notation, MDPO for `n` sites denotes the following object.
 
+```
      |      |               |       |
      |      |               |       |
 ----(0*)---(1*)--- ... ---(n-2*)--(n-1*)---
@@ -14,75 +16,114 @@ In our notation, MPDO for `n` sites denotes the following object.
 ----(0)----(1)---- ... ---(n-2)---(n-1)----
      |      |               |       |
      |      |               |       |
+```
 
-It is formed by an MPS and its complex-conjugated version.
+An MDPO formed by an MPS and its complex-conjugated version.
 The main idea is to find the main component of this object without
 performing the kronecker product explicitly.
 """
 
-from copy import deepcopy
 
+from typing import Union
 import numpy as np
 import scipy.sparse
 from opt_einsum import contract
 from scipy.sparse.linalg import eigsh
 from tqdm import tqdm
 
+from mpopt.mps.canonical import CanonicalMPS
+from mpopt.mps.explicit import ExplicitMPS
 from mpopt.utils.utils import split_two_site_tensor
 
 
 class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
-    """
+    r"""Class to store an effective two-site density operator.
+
     To take more advantage of :module:`scipy.sparse.linalg`, we make a special class
-    for local effective density operators extending the analogy from local effective Hamiltonians.
+    for local effective density operators extending the analogy from local effective operators.
     It allows us to compute eigenvectors more effeciently.
 
     The diagram displaying the contraction can be found in the supplementary notes.
     """
 
-    def __init__(self, left_environment, mps_d_1, mps_d_2, right_environment):
+    def __init__(
+        self,
+        left_environment: np.ndarray,
+        mps_target_1: np.ndarray,
+        mps_target_2: np.ndarray,
+        right_environment: np.ndarray,
+    ):
         """
         Initialise an effective dephased density operator tensor network.
 
         Arguments:
-            left_environment : np.array[ndim=3]
+            left_environment :
                 The left environment for the effective dephased density operator.
-            mps_d_1 : np.array[ndim=3]
-                The left matrix product state tensor.
-            mps_d_2 : np.array[ndim=3]
-                The right matrix product state tensor.
-            right_environment: np.array[ndim=3]
+            mps_target_1 :
+                The left target matrix product state tensor.
+            mps_target_2 :
+                The right target matrix product state tensor.
+            right_environment :
                 The right environment for the effective dephased density operator.
         """
+        if len(left_environment.shape) != 4:
+            raise ValueError(
+                "A valid left environment tensor must have 4 legs"
+                f"while the one given has {len(left_environment.shape)}."
+            )
+        if len(mps_target_1.shape) != 3:
+            raise ValueError(
+                "A valid target MPS tensor must have 3 legs"
+                f"while the one given has {len(mps_target_1.shape)}."
+            )
+        if len(mps_target_2.shape) != 3:
+            raise ValueError(
+                "A valid target MPS tensor must have 3 legs"
+                f"while the one given has {len(mps_target_1.shape)}."
+            )
+        if len(right_environment.shape) != 4:
+            raise ValueError(
+                "A valid right environment tensor must have 4 legs"
+                f"while the one given has {len(right_environment.shape)}."
+            )
+
         self.left_environment = left_environment
         self.right_environment = right_environment
-        self.mps_d_1 = mps_d_1
-        self.mps_d_2 = mps_d_2
+        self.mps_target_1 = mps_target_1
+        self.mps_target_2 = mps_target_2
         chi_1, chi_2 = (
             left_environment.shape[3],
             right_environment.shape[3],
         )
         d_1, d_2 = (
-            mps_d_1.shape[1],
-            mps_d_2.shape[1],
+            mps_target_1.shape[1],
+            mps_target_2.shape[1],
         )
         self.x_shape = (chi_1, d_1, d_2, chi_2)
         self.shape = (chi_1 * d_1 * d_2 * chi_2, chi_1 * d_1 * d_2 * chi_2)
-        self.dtype = mps_d_1.dtype
+        self.dtype = mps_target_1.dtype
         super().__init__(shape=self.shape, dtype=self.dtype)
 
-    def _matvec(self, x):
-        """
-        Calculate |x'> = rho_eff |x>.
+    def _matvec(self, x: np.ndarray) -> np.ndarray:
+        """Performs matrix-vector multiplication.
+
+        Computes effective_density_operator * |x> = |x'>
         This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
         Arguments:
-            x : np.array[ndim=4]
+            x : np.array
                 The two-site tensor we are acting on with an effective density operator.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
+
+        if len(two_site_tensor.shape) != 4:
+            raise ValueError(
+                f"A valid two-site tensor must have 4 legs"
+                f"while the one given has {len(two_site_tensor.shape)}."
+            )
+
         copy_tensor = np.fromfunction(
             lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=np.int32
         )
@@ -94,12 +135,12 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
             einsum_string,
             two_site_tensor,
             self.left_environment,
-            np.conj(self.mps_d_1),
-            np.conj(self.mps_d_2),
+            np.conjugate(self.mps_target_1),
+            np.conjugate(self.mps_target_2),
             copy_tensor,
             copy_tensor,
-            self.mps_d_1,
-            self.mps_d_2,
+            self.mps_target_1,
+            self.mps_target_2,
             copy_tensor,
             copy_tensor,
             self.right_environment,
@@ -121,60 +162,63 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
 
 class DephasingDMRG:
-    """
+    """Class storing the Dephasing DMRG methods.
+
     Class holding the Dephasing Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
     Attributes:
-        mps : ExplicitMPS
-            MPS given as an instance of the ExplicitMPS class, which serves as
-            a current approximation of the ground/main state.
-        mps_d : list[np.array[ndim=3]]
-            The "target" MPS in the left/right canonical form.
-            This MPS is used to construct the dephased MPDO.
-        chi_max : int
+        mps :
+            MPS serving as a current approximation of the target state.
+        mps_target :
+            The "target" MPS in the right-canonical form.
+            This MPS is used to construct the dephased MDPO.
+        chi_max :
             The highest bond dimension of an MPS allowed.
-        mode : str, which mode of the eigensolver to use
+        mode :
             Available options:
-                'LM' : Largest (in magnitude) eigenvalues.
-                'SM' : Smallest (in magnitude) eigenvalues.
-                'LA' : Largest (algebraic) eigenvalues.
-                'SA' : Smallest (algebraic) eigenvalues.
-        cut : float
+                "LM" : Largest (in magnitude) eigenvalues.
+                "SM" : Smallest (in magnitude) eigenvalues.
+                "LA" : Largest (algebraic) eigenvalues.
+                "SA" : Smallest (algebraic) eigenvalues.
+        cut :
             The lower boundary of the spectrum.
             All the singular values smaller than that will be discarded.
-        left_environments : list[np.array[ndim=4]]
-            Left environments of the effective dephased density operator
-            Each `left_environments[i]` has legs `(uL, vL_1, vL_2, dL)`,
-            where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
-        right_environments : list[np.array[ndim=4]]
-            Right environments of the effective dephased density operator.
-            Each `right_environments[i]` has legs `(uL, vL_1, vL_2, dL)`,
-            where "u", "d", and "v" denote "up", "down", and "virtual" accordingly.
-        silent : bool
+        silent :
             Whether to show/hide the progress bar.
     """
 
-    def __init__(self, mps, mps_d, chi_max, cut, mode, silent=False, copy=True):
-        if len(mps) != len(mps_d):
+    def __init__(
+        self,
+        mps: Union[ExplicitMPS, CanonicalMPS],
+        mps_target: Union[ExplicitMPS, CanonicalMPS],
+        chi_max: np.int32 = 1e4,
+        cut: np.float64 = 1e-12,
+        mode: str = "SA",
+        silent: bool = False,
+        copy: bool = True,
+    ):
+        if len(mps) != len(mps_target):
             raise ValueError(
-                f"The MPS has length {len(mps)}, "
-                f"the target MPS has length {len(mps_d)}, "
+                f"The MPS has length {len(mps)},"
+                f"the target MPS has length {len(mps_target)},"
                 "but the lengths should be equal."
             )
-        self.mps = mps
         if copy:
-            self.mps = deepcopy(mps)
+            self.mps = mps.copy()
+        if isinstance(self.mps, CanonicalMPS):
+            self.mps = self.mps.right_canonical()
+        self.mps = mps
         self.left_environments = [None] * len(mps)
         self.right_environments = [None] * len(mps)
-        self.mps_d = mps_d
+        mps_target = mps_target.right_canonical()
+        self.mps_target = mps_target
         self.chi_max = chi_max
         self.cut = cut
         self.mode = mode
         self.silent = silent
 
-        # Initialise left and right environments.
-        start_bond_dim = self.mps_d[0].shape[0]
+        start_bond_dim = self.mps_target.tensors[0].shape[0]
         chi = mps.tensors[0].shape[0]
         left_environment = np.zeros(
             [chi, start_bond_dim, start_bond_dim, chi], dtype=np.float64
@@ -188,43 +232,44 @@ class DephasingDMRG:
         )
         self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
-
-        # Update necessary right environments.
         for i in reversed(range(1, len(mps))):
             self.update_right_environment(i)
 
     def sweep(self):
-        """
-        A method performing one DMRG sweep, which consists of
+        """One Dephasing DMRG sweep.
+
+        A method performing one Dephasing DMRG sweep, which consists of
         two series of `update_bond` sweeps which go back and forth.
         """
 
-        # from left to right
-        for i in range(self.mps.nsites - 1):
+        for i in range(self.mps.num_sites - 1):
             self.update_bond(i)
 
-        # from right to left
-        for i in reversed(range(self.mps.nsites - 1)):
+        for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
-    def update_bond(self, i):
-        """
-        A method which updates the bond between site `i` and `i+1`.
-        """
+    def update_bond(self, i: np.int32):
+        """Updates the bond between sites `i` and `i+1`."""
 
         j = i + 1
 
         effective_density_operator = EffectiveDensityOperator(
             self.left_environments[i],
-            self.mps_d[i],
-            self.mps_d[j],
+            self.mps_target.tensors[i],
+            self.mps_target.tensors[j],
             self.right_environments[j],
         )
 
-        # Diagonalise the effective Hamiltonian, find its ground state.
-        initial_guess = self.mps.two_site_right_tensor(i).reshape(
-            effective_density_operator.shape[0]
-        )
+        if isinstance(self.mps, ExplicitMPS):
+            initial_guess = self.mps.two_site_right_iso(i).reshape(
+                effective_density_operator.shape[0]
+            )
+        if isinstance(self.mps, CanonicalMPS):
+            self.mps = self.mps.move_orth_centre(i)
+            initial_guess = self.mps.two_site_tensor_next(i).reshape(
+                effective_density_operator.shape[0]
+            )
+
         _, eigenvectors = eigsh(
             effective_density_operator,
             k=1,
@@ -238,55 +283,76 @@ class DephasingDMRG:
             x, chi_max=self.chi_max, cut=self.cut, renormalise=True
         )
 
-        # Put back into MPS
-        self.mps.tensors[i] = np.tensordot(
-            np.linalg.inv(np.diag(self.mps.singular_values[i])), left_iso_i, (1, 0)
-        )
-        self.mps.tensors[j] = np.tensordot(
-            right_iso_j, np.linalg.inv(np.diag(self.mps.singular_values[j + 1])), (2, 0)
-        )
-        self.mps.singular_values[j] = singular_values_j
+        if isinstance(self.mps, CanonicalMPS):
+            self.mps.tensors[i] = np.tensordot(
+                left_iso_i, np.diag(singular_values_j), (1, 0)
+            )
+            self.mps.orth_centre = i
+            self.mps.tensors[j] = right_iso_j
+
+        if isinstance(self.mps, ExplicitMPS):
+            self.mps.tensors[i] = np.tensordot(
+                np.linalg.inv(np.diag(self.mps.singular_values[i])), left_iso_i, (1, 0)
+            )
+            self.mps.tensors[j] = np.tensordot(
+                right_iso_j,
+                np.linalg.inv(np.diag(self.mps.singular_values[j + 1])),
+                (2, 0),
+            )
+            self.mps.singular_values[j] = singular_values_j
 
         self.update_left_environment(i)
         self.update_right_environment(j)
 
-    def update_right_environment(self, i):
+    def update_right_environment(self, i: np.int32):
         """
         Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
         """
 
         right_environment = self.right_environments[i]
-        right_iso = self.mps.single_site_right_iso(i)
+
+        if isinstance(self.mps, ExplicitMPS):
+            right_iso = self.mps.single_site_right_iso(i)
+        if isinstance(self.mps, CanonicalMPS):
+            self.mps = self.mps.move_orth_centre(i - 1)
+            right_iso = self.mps.single_site_tensor(i)
+
         right_environment = contract(
             "ijkl, omi, pmj, qnk, rnl -> opqr",
             right_environment,
             right_iso,
-            np.conj(self.mps_d[i]),
-            self.mps_d[i],
-            np.conj(right_iso),
+            np.conjugate(self.mps_target.tensors[i]),
+            self.mps_target.tensors[i],
+            np.conjugate(right_iso),
             optimize=[(0, 2), (0, 1), (0, 1), (0, 1)],
         )
         self.right_environments[i - 1] = right_environment
 
-    def update_left_environment(self, i):
+    def update_left_environment(self, i: np.int32):
         """
         Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
         """
 
         left_environment = self.left_environments[i]
-        left_iso = self.mps.single_site_left_iso(i)
+
+        if isinstance(self.mps, ExplicitMPS):
+            left_iso = self.mps.single_site_left_iso(i)
+        if isinstance(self.mps, CanonicalMPS):
+            self.mps = self.mps.move_orth_centre(i + 1)
+            left_iso = self.mps.single_site_tensor(i)
+
         left_environment = contract(
             "ijkl, imo, jmp, knq, lnr -> opqr",
             left_environment,
             left_iso,
-            np.conj(self.mps_d[i]),
-            self.mps_d[i],
-            np.conj(left_iso),
+            np.conjugate(self.mps_target.tensors[i]),
+            self.mps_target.tensors[i],
+            np.conjugate(left_iso),
             optimize=[(0, 2), (0, 1), (0, 1), (0, 1)],
         )
         self.left_environments[i + 1] = left_environment
 
-    def run(self, num_iter):
+    def run(self, num_iter: np.int32 = 1):
         """
         Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
         """
