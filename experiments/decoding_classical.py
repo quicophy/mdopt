@@ -2,7 +2,7 @@
 In this experiment, we decode a classical linear error correction code.
 First, we build the MPS containing the superposition of all codewords.
 Then, we demostrate simple decoding of a classical LDPC code using Dephasing DMRG --
-our own built-in DMRG-like algorithm to solve the main component problem --
+our own built-in DMRG-like optimisation algorithm to solve the main component problem --
 the problem of finding a computational basis state cotributing the most to a given state.
 """
 
@@ -17,12 +17,7 @@ from tqdm import tqdm
 sys.path[0] += "/.."
 
 from mpopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
-from mpopt.mps.canonical import (
-    find_orth_centre,
-    inner_product,
-    move_orth_centre,
-    to_dense,
-)
+from mpopt.mps.canonical import CanonicalMPS, inner_product
 from mpopt.mps.explicit import create_custom_product_state, create_simple_product_state
 from mpopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mpopt.utils.utils import mpo_to_matrix
@@ -32,7 +27,7 @@ class ConstraintString:
     """
     Class for storing a string of logical constraints in the
     Matrix Product Operator format.
-    Logical constraints are passed in the form of MPOs.
+    Logical constraints are passed in the form of 4-dimensional MPO tensors.
 
     Attributes:
         constraints : list
@@ -132,7 +127,7 @@ def bias_channel(p_bias, which="0"):
     Note, that this operation is unitary, which means it keeps the canonical form.
 
     Arguments:
-        p_bias : float
+        p_bias : np.float64
             Probability of the channel.
         which : str
             "0" or "1", depending on which single-qubit state we are acting on.
@@ -175,7 +170,7 @@ def apply_bias_channel(basis_mps, prob_channel, codeword_string):
     Arguments:
         basis_mps : list[np.ndarray[ndim=3]]
             The computational-basis-state MPS, e.g., |010010>.
-        prob_channel : float
+        prob_channel : np.float64
             The bias channel probability.
         codeword_string: str
             The string of "0" and "1" which corresponds to `basis_mps`.
@@ -187,26 +182,26 @@ def apply_bias_channel(basis_mps, prob_channel, codeword_string):
 
     if len(basis_mps) != len(codeword_string):
         raise ValueError(
-            f"The lengths of `basis_mps` and `codeword_string` should be equal, "
+            f"The lengths of `basis_mps` and `codeword_string` should be equal,"
             f"given {len(basis_mps)}."
         )
 
-    biased_mps = []
-    for i, mps_tensor in enumerate(basis_mps):
-        biased_mps.append(
+    biased_mps_tensors = []
+    for i, mps_tensor in enumerate(basis_mps.tensors):
+        biased_mps_tensors.append(
             apply_one_site_operator(
                 mps_tensor, bias_channel(prob_channel, which=codeword_string[i])
             )
         )
 
-    return biased_mps
+    return CanonicalMPS(biased_mps_tensors)
 
 
 # Below, we define some utility functions to operate with data structures from `qecstruct` --
 # an error-correction library we are using in this example.
 
 
-def bin_vec_to_dense(vector):
+def bin_vec_dense(vector):
     """
     Given a vector (1D array) in the :class:`qecstruct.sparse.BinaryVector` format
     (native to `qecstruct`), returns its dense representation.
@@ -268,7 +263,7 @@ def get_codewords(code):
 
     gen_mat = code.gen_mat()
     rows_bin = gen_mat.rows()
-    rows_dense = [bin_vec_to_dense(row_bin) for row_bin in rows_bin]
+    rows_dense = [bin_vec_dense(row_bin) for row_bin in rows_bin]
     rows_int = [row.dot(1 << np.arange(row.size)[::-1]) for row in rows_dense]
 
     # Append the all-zeros codeword which is always a codeword.
@@ -331,7 +326,7 @@ def prepare_codewords(
     Arguments:
     code : :class:`qecstruct.LinearCode`
         Linear code object.
-    prob_error : float
+    prob_error : np.float64
         Error probability of the error model.
     error_model : error model object from qecstruct
         The error model used to flip bits of a random codeword.
@@ -350,16 +345,13 @@ def prepare_codewords(
     perturbed_codeword = initial_codeword + error_model(prob_error).sample(
         num_bits, qec.Rng(seed)
     )
-    initial_codeword = "".join(str(bit) for bit in bin_vec_to_dense(initial_codeword))
-    perturbed_codeword = "".join(
-        str(bit) for bit in bin_vec_to_dense(perturbed_codeword)
-    )
+    initial_codeword = "".join(str(bit) for bit in bin_vec_dense(initial_codeword))
+    perturbed_codeword = "".join(str(bit) for bit in bin_vec_dense(perturbed_codeword))
 
     return initial_codeword, perturbed_codeword
 
 
-# Finally, the functions below are used to
-# apply constraints to a codeword MPS and to perform actual decoding.
+# The functions below are used to apply constraints to a codeword MPS and to perform actual decoding.
 
 
 def apply_parity_constraints(
@@ -376,7 +368,7 @@ def apply_parity_constraints(
 
     Arguments:
         codeword_state : list[np.ndarray[ndim=3]]
-            The codeword Matrix Product State.
+            The codeword MPS.
         strings : list[list[list]]
             The list of arguments for :class:`ConstraintString`.
         logical_tensors : list[np.ndarray]
@@ -392,7 +384,7 @@ def apply_parity_constraints(
 
     Returns:
         codeword_state : list[np.ndarray[ndim=3]]
-            The resulting Matrix Product State.
+            The resulting MPS.
     """
 
     if strategy == "naive":
@@ -400,10 +392,11 @@ def apply_parity_constraints(
         for string in tqdm(strings, disable=silent):
 
             # Finding the orthogonality centre.
-            orth_centres, flags_left, flags_right = find_orth_centre(
-                codeword_state, return_flags=True
+            orth_centres, flags_left, flags_right = codeword_state.find_orth_centre(
+                return_flags=True
             )
-            # Managing possible issues with multiple orthogonality centres
+
+            # Managing possible issues with multiple orthogonality centres.
             # arising if we do not renormalise.
             if not orth_centres and len(orth_centres) == 1:
                 orth_centre = orth_centres[0]
@@ -420,7 +413,7 @@ def apply_parity_constraints(
             start_site = min(string.flat())
 
             # Doing the contraction.
-            codeword_state = move_orth_centre(codeword_state, orth_centre, start_site)
+            codeword_state = codeword_state.move_orth_centre(orth_centre, start_site)
             codeword_state = mps_mpo_contract(
                 codeword_state,
                 mpo,
@@ -442,23 +435,23 @@ def decode(
 
     Arguments:
         message : list[np.ndarray[ndim=3]]
-            The message Matrix Product State.
+            The message MPS.
         codeword : list[np.ndarray[ndim=3]]
-            The codeword Matrix Product State.
+            The codeword MPS.
         code : :class:`qecstruct.LinearCode`
             Linear code object.
         num_runs : int
             Number of DMRG sweeps.
         chi_max_dmrg : int
             Maximum bond dimension to keep in the DMRG algorithm.
-        cut : float
+        cut : np.float64
             The lower boundary of the spectrum in the DMRG algorithm.
             All the singular values smaller than that will be discarded.
 
     Returns:
         engine : :class:`mpopt.optimiser.DMRG` instance
             The container class for the DMRG, see :class:`mpopt.optimiser.DMRG`.
-        overlap : float
+        overlap : np.float64
             The overlap between the decoded message and a given codeword,
             computed as the following inner product |<decoded_message|codeword>|.
     """
@@ -475,7 +468,7 @@ def decode(
         silent=silent,
     )
     engine.run(num_runs)
-    mps_dmrg_final = engine.mps.to_right_canonical()
+    mps_dmrg_final = engine.mps.right_canonical()
     overlap = abs(inner_product(mps_dmrg_final, codeword))
 
     return engine, overlap
@@ -529,8 +522,8 @@ if __name__ == "__main__":
     )
 
     # Preparing an initial state.
-    state = create_simple_product_state(NUM_BITS, which="+").to_right_canonical()
-    state_dense = to_dense(state)
+    state = create_simple_product_state(NUM_BITS, which="+")
+    state_dense = state.dense(flatten=True)
 
     # Getting the sites where each string of constraints should be applied.
     code_constraint_sites = get_constraint_sites(example_code)
@@ -566,8 +559,8 @@ if __name__ == "__main__":
         state_dense = mpo_dense @ state_dense
 
     # Tolerance under which we round tensor elements to zero.
-    TOL = 1e-14
-    mps_dense = to_dense(state)
+    TOL = 1e-12
+    mps_dense = state.dense(flatten=True)
     mps_dense[np.abs(mps_dense) < TOL] = 0
 
     # Retreiving codewords.
@@ -632,10 +625,10 @@ if __name__ == "__main__":
     # Building the corresponding matrix product states.
     initial_codeword_state = create_custom_product_state(
         INITIAL_CODEWORD
-    ).to_right_canonical()
+    ).right_canonical()
     perturbed_codeword_state = create_custom_product_state(
         PERTURBED_CODEWORD
-    ).to_right_canonical()
+    ).right_canonical()
 
     # Passing the perturbed codeword state through the bias channel.
     perturbed_codeword_state = apply_bias_channel(

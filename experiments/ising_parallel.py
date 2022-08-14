@@ -21,7 +21,7 @@ from threadpoolctl import threadpool_limits
 sys.path[0] += "/.."
 
 from experiments.ising import IsingExact, IsingMPO
-from mpopt.mps.explicit import create_simple_product_state
+from mpopt.mps.utils import create_simple_product_state
 from mpopt.optimiser import DMRG as dmrg
 
 
@@ -30,23 +30,23 @@ class Simulation:
     A container class to deal with parallelisation of multiple DMRG entities.
     """
 
-    def __init__(self, num_sites):
+    def __init__(self, num_sites: int):
         self.num_sites = num_sites
 
-    def exact_simulation(self, magnetic_field):
+    def exact_simulation(self, magnetic_field: np.float64):
         """
         Exact simulation container.
         """
 
         exact = IsingExact(self.num_sites, magnetic_field)
-        hamiltonian = exact.hamiltonian_sparse()
-        ground_state = eigsh(hamiltonian, k=6)[1][:, 0]
+        ham_sparse = exact.hamiltonian_sparse()
+        ground_state = eigsh(ham_sparse, k=2, tol=1e-9)[1][:, 0]
         return (
             ising_exact.average_chain_x_magnetisation(ground_state),
             ising_exact.average_chain_z_magnetisation(ground_state),
         )
 
-    def drmg_simulation(self, magnetic_field):
+    def drmg_simulation(self, magnetic_field: np.float64):
         """
         DMRG simulation container.
         """
@@ -58,7 +58,7 @@ class Simulation:
             start_mps,
             hamiltonian_mpo,
             chi_max=64,
-            cut=1e-14,
+            cut=1e-9,
             mode="SA",
             silent=False,
             copy=True,
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     )
     print("")
     print(
-        "Checking the ground states from exact diagonalisation and DMRG being the same (up to a phase): "
+        "Checking the ground states from exact diagonalisation and DMRG are the same (up to phase):"
     )
     print("")
     NUM_SITES = 20
@@ -92,13 +92,13 @@ if __name__ == "__main__":
 
     print("DMRG running")
     print("")
-    engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-14, mode="SA")
+    engine = dmrg(mps_start, ham_mpo, chi_max=64, cut=1e-9, mode="SA")
     engine.run(10)
     print("")
     ground_state_mps = engine.mps
     print("Eigensolver running")
     ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]
-    print(np.isclose(abs(ground_state_mps.to_dense()), abs(ground_state_exact)).all())
+    print(np.isclose(abs(ground_state_mps.dense()), abs(ground_state_exact)).all())
 
     print(
         "__________________________________________________________________________________________"
