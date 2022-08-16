@@ -351,9 +351,8 @@ class CanonicalMPS:
             ):
                 if flags_right == [not flag for flag in flags_left]:
                     return self.copy(), "last"
-            if (flags_left == [True] * self.num_sites) and (
-                flags_right == [True] * self.num_sites
-            ):
+            # Convention.
+            if all(flags_left) and all(flags_right):
                 return self.copy(), "first"
 
         else:
