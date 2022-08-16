@@ -243,6 +243,7 @@ def mps_mpo_contract(
         )
 
         orth_centre_index += 1
+        mps.orth_centre = orth_centre_index
 
         mps.tensors[orth_centre_index] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
