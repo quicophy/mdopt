@@ -4,6 +4,7 @@ of an open-bounded transverse field Ising chain. The Hamiltonian reads:
 $H = - sum_{i=1}^{N-1} Z_i Z_{i+1} - h * sum_{i=1}^{N} X_i$.
 Here, the magnetic field is in the units of the nearest-neighbour ZZ-interaction.
 We find the ground state of this Hamiltonian and compute some observables.
+Beware, this script will take a while to run (because of the eigensolver solving large matrices.)
 """
 
 
@@ -95,7 +96,7 @@ class IsingExact:
 
     def hamiltonian_sparse(self) -> csr_matrix:
         """
-        Returns a `scipy.sparse` representation of the Hamiltonian.
+        Returns a sparse representation of the Hamiltonian.
         """
         if self.num_sites == 2:
             return self.two_qubit_hamiltonian
@@ -107,7 +108,7 @@ class IsingExact:
         )
 
     def hamiltonian_dense(self) -> np.ndarray:
-        """Returns a dense (`np.array`) representation of the Hamiltonian.
+        """Returns a dense representation of the Hamiltonian.
         Warning: memory-intensive! Do not use for `num_sites` > 20.
         """
 
@@ -329,24 +330,25 @@ if __name__ == "__main__":
 
     NUM_SITES = 15
     H_MAGNETIC = 1.0
-    CHI_MAX = 64
-    CUT = 1e-8
+    NUM_DMRG_RUNS = 10
+    CHI_MAX = 128
+    CUT = 1e-9
     MODE = "SA"
-    TOL = 1e-10
+    TOL = 1e-9
     ising_exact = IsingExact(num_sites=NUM_SITES, h_magnetic=H_MAGNETIC)
     ising_mpo = IsingMPO(num_sites=NUM_SITES, h_magnetic=H_MAGNETIC)
     ham_mpo = ising_mpo.hamiltonian_mpo()
     ham_sparse = ising_exact.hamiltonian_sparse()
 
-    mps_start = create_simple_product_state(NUM_SITES, which="0")
+    mps_start = create_simple_product_state(NUM_SITES, which="+")
 
     print("DMRG running:")
     print("")
     engine = dmrg(mps_start, ham_mpo, chi_max=CHI_MAX, cut=CUT, mode=MODE)
-    engine.run(10)
+    engine.run(NUM_DMRG_RUNS)
     print("")
     ground_state_mps = engine.mps
-    print("Eigensolver running:")
+    print("Eigensolver running.")
     ground_state_exact = eigsh(ham_sparse, k=2, tol=TOL)[1][:, 0]
     print(
         "The ground states are the same:",
@@ -357,13 +359,11 @@ if __name__ == "__main__":
         "__________________________________________________________________________________________"
     )
     print("")
-    print(
-        "Let us compare the magnetisation plots from exact diagonalisation and DMRG."
-        "The plots should coincide exactly."
-    )
+    print("Let us compare the magnetisation plots from exact diagonalisation and DMRG.")
+    print("The plots should coincide exactly.")
     print("")
 
-    transverse_magnetic_field_space = np.linspace(0.1, 2.0, 10)
+    transverse_magnetic_field_space = np.linspace(0.01, 2.0, 20)
     mag_z_exact = []
     mag_x_exact = []
     mag_z_dmrg = []
@@ -373,14 +373,14 @@ if __name__ == "__main__":
         ising_mpo = IsingMPO(num_sites=NUM_SITES, h_magnetic=magnetic_field)
         ham_mpo = ising_mpo.hamiltonian_mpo()
         ham_sparse = ising_exact.hamiltonian_sparse()
-        mps_start = create_simple_product_state(num_sites=NUM_SITES, which="0")
+        mps_start = create_simple_product_state(num_sites=NUM_SITES, which="+")
         print("DMRG running:")
         print("")
         engine = dmrg(mps_start, ham_mpo, chi_max=CHI_MAX, cut=CUT, mode=MODE)
-        engine.run(10)
+        engine.run(NUM_DMRG_RUNS)
         print("")
         ground_state_mps = engine.mps
-        print("Eigensolver running:")
+        print("Eigensolver running.")
         print("")
         ground_state_exact = eigsh(ham_sparse, k=2, tol=TOL)[1][:, 0]
 
