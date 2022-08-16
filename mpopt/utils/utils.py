@@ -1,6 +1,7 @@
 """This module contains miscellaneous utilities."""
 
 import numpy as np
+import scipy
 from opt_einsum import contract
 
 
@@ -35,10 +36,18 @@ def svd(
         raise ValueError(
             f"A valid matrix must have 2 dimensions while the one given has {len(mat.shape)}."
         )
-
-    u_l, singular_values, v_r = np.linalg.svd(
-        mat, full_matrices=False, compute_uv=True, hermitian=False
-    )
+    try:
+        u_l, singular_values, v_r = np.linalg.svd(
+            mat, full_matrices=False, compute_uv=True, hermitian=False
+        )
+    except np.linalg.LinAlgError:
+        u_l, singular_values, v_r = scipy.linalg.svd(
+            mat, full_matrices=False, compute_uv=True, lapack_driver="gesdd"
+        )
+    except scipy.linalg.LinAlgError:
+        u_l, singular_values, v_r = scipy.linalg.svd(
+            mat, full_matrices=False, compute_uv=True, lapack_driver="gesvd"
+        )
 
     max_num = min(chi_max, np.sum(singular_values > cut))
     ind = np.argsort(singular_values)[::-1][:max_num]
