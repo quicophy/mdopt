@@ -81,7 +81,7 @@ class CanonicalMPS:
     def __init__(
         self,
         tensors: list[np.ndarray],
-        orth_centre: Optional[int] = None,
+        orth_centre: Optional[np.int32] = None,
         tolerance: np.float64 = 1e-12,
         chi_max: np.int32 = 1e4,
     ):
