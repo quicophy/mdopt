@@ -26,7 +26,7 @@ from mpopt.optimiser.dmrg import DMRG as dmrg
 
 
 def compute_one_site_expectation_value(
-    mps: Union[CanonicalMPS, ExplicitMPS], operator: np.ndarray, site: np.int32
+    mps: Union[CanonicalMPS, ExplicitMPS], operator: np.ndarray, site: np.int16
 ) -> Union[np.float64, np.complex128]:
     """Computes a one-site expectation value of an operator (not necessarily unitary)."""
 
@@ -46,7 +46,7 @@ def compute_one_site_expectation_value(
 
 
 def compute_two_site_expectation_value(
-    mps: Union[CanonicalMPS, ExplicitMPS], unitary: np.ndarray, site: np.int32
+    mps: Union[CanonicalMPS, ExplicitMPS], unitary: np.ndarray, site: np.int16
 ) -> np.float64:
     """Computes a two-site expectation value of a unitary
     on the given site and its next neighbour.
@@ -80,7 +80,7 @@ class IsingExact:
             Value of the transverse magnetic field scaled by the ZZ-interaction.
     """
 
-    def __init__(self, num_sites: np.int32 = 2, h_magnetic: np.float64 = 0):
+    def __init__(self, num_sites: np.int16 = 2, h_magnetic: np.float64 = 0):
         self.num_sites = num_sites
         self.h_magnetic = h_magnetic
         self.identity = np.identity(2)
@@ -120,7 +120,7 @@ class IsingExact:
         """
         return np.conjugate(state.T) @ self.hamiltonian_sparse @ state
 
-    def z_magnetisation(self, i: np.int32, state: np.ndarray) -> np.float64:
+    def z_magnetisation(self, i: np.int16, state: np.ndarray) -> np.float64:
         """
         Computes the z-magnetisation value
         corresponding to a quantum state `state`
@@ -146,7 +146,7 @@ class IsingExact:
             @ state
         )
 
-    def x_magnetisation(self, i: np.int32, state: np.ndarray) -> np.float64:
+    def x_magnetisation(self, i: np.int16, state: np.ndarray) -> np.float64:
         """
         Computes the x-magnetisation value
         corresponding to a quantum state `state`
@@ -207,7 +207,7 @@ class IsingMPO:
             Value of the transverse magnetic field scaled by the ZZ-interaction.
     """
 
-    def __init__(self, num_sites: np.int32 = 2, h_magnetic: np.float64 = 0):
+    def __init__(self, num_sites: np.int16 = 2, h_magnetic: np.float64 = 0):
         self.num_sites = num_sites
         self.h_magnetic = h_magnetic
         self.identity = np.identity(2)
@@ -248,7 +248,7 @@ class IsingMPO:
         return mpo_list
 
     def z_magnetisation(
-        self, i: np.int32, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, i: np.int16, mps: Union[CanonicalMPS, ExplicitMPS]
     ) -> np.float64:
         """
         Computes the z-magnetisation value
@@ -258,7 +258,7 @@ class IsingMPO:
         return compute_one_site_expectation_value(mps, self.pauli_z, i)
 
     def x_magnetisation(
-        self, i: np.int32, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, i: np.int16, mps: Union[CanonicalMPS, ExplicitMPS]
     ) -> np.float64:
         """
         Computes the x-magnetisation value
