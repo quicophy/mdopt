@@ -19,7 +19,7 @@ jobs:
         python-version: 3.9
     - uses: abatilo/actions-poetry@v2.1.6
     - name: install
-      run: poetry install --extras airflow-dbt-python --extras docs
+      run: poetry install --extras apache-airflow[amazon] --extras docs
     - name: Build documentation
       run: |
         mkdir gh-pages
