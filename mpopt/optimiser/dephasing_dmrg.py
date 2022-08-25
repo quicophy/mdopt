@@ -56,7 +56,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         """
         Initialise an effective dephased density operator tensor network.
 
-        Arguments:
+        Parameters
             left_environment :
                 The left environment for the effective dephased density operator.
             mps_target_1 :
@@ -111,7 +111,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
-        Arguments:
+        Parameters
             x : np.array
                 The two-site tensor we are acting on with an effective density operator.
         """
@@ -125,7 +125,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
             )
 
         copy_tensor = np.fromfunction(
-            lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=np.int32
+            lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=np.int16
         )
 
         einsum_string = (
@@ -192,7 +192,7 @@ class DephasingDMRG:
         self,
         mps: Union[ExplicitMPS, CanonicalMPS],
         mps_target: Union[ExplicitMPS, CanonicalMPS],
-        chi_max: np.int32 = 1e4,
+        chi_max: np.int16 = 1e4,
         cut: np.float64 = 1e-12,
         mode: str = "SA",
         silent: bool = False,
@@ -248,7 +248,7 @@ class DephasingDMRG:
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
-    def update_bond(self, i: np.int32):
+    def update_bond(self, i: np.int16):
         """Updates the bond between sites `i` and `i+1`."""
 
         j = i + 1
@@ -304,7 +304,7 @@ class DephasingDMRG:
         self.update_left_environment(i)
         self.update_right_environment(j)
 
-    def update_right_environment(self, i: np.int32):
+    def update_right_environment(self, i: np.int16):
         """
         Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
         """
@@ -328,7 +328,7 @@ class DephasingDMRG:
         )
         self.right_environments[i - 1] = right_environment
 
-    def update_left_environment(self, i: np.int32):
+    def update_left_environment(self, i: np.int16):
         """
         Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
         """
@@ -352,7 +352,7 @@ class DephasingDMRG:
         )
         self.left_environments[i + 1] = left_environment
 
-    def run(self, num_iter: np.int32 = 1):
+    def run(self, num_iter: np.int16 = 1):
         """
         Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
         """

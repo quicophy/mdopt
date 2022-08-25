@@ -48,26 +48,27 @@ class CanonicalMPS:
        Efficient numerical simulations with tensor networks:
        Tensor Network Python (TeNPy). SciPost Physics Lecture Notes, p.005.
 
-    Attributes:
-        tensors :
-            The tensors of the MPS, one per each physical site.
-            Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
-        orth_centre : Optional[int]
-            Position of the orthogonality centre, does not support negative indexing.
-            As a convention, this attribute is taken `0` for a right-canonical form,
-            `len(tensors) - 1` for a left-canonical form, `None` for a product state.
-        tolerance :
-            Numerical tolerance to zero out the singular values in Singular Value Decompositions.
-        bond_dimensions :
-            The list of all bond dimensions of the MPS.
-        bond_dimensions :
-            The list of all physical dimensions of the MPS.
-        chi_max :
-            The maximum bond dimension to keep in Singular Value Decompositions.
-        num_sites :
-            Number of sites.
-        num_bonds :
-            Number of bonds, which is equal to `num_sites - 1`.
+    Attributes
+    ----------
+    tensors : list[np.ndarray]
+        The tensors of the MPS, one per each physical site.
+        Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
+    orth_centre : np.int16 or None
+        Position of the orthogonality centre, does not support negative indexing.
+        As a convention, this attribute is taken `0` for a right-canonical form,
+        `len(tensors) - 1` for a left-canonical form, `None` for a product state.
+    tolerance : np.float64
+        Numerical tolerance to zero out the singular values in Singular Value Decompositions.
+    bond_dimensions :
+        The list of all bond dimensions of the MPS.
+    bond_dimensions :
+        The list of all physical dimensions of the MPS.
+    chi_max :
+        The maximum bond dimension to keep in Singular Value Decompositions.
+    num_sites :
+        Number of sites.
+    num_bonds :
+        Number of bonds, which is equal to `num_sites - 1`.
 
     Exceptions:
         ValueError:
@@ -81,9 +82,9 @@ class CanonicalMPS:
     def __init__(
         self,
         tensors: list[np.ndarray],
-        orth_centre: Optional[np.int32] = None,
+        orth_centre: Optional[np.int16] = None,
         tolerance: np.float64 = 1e-12,
-        chi_max: np.int32 = 1e4,
+        chi_max: np.int16 = 1e4,
     ):
 
         self.tensors = tensors
@@ -109,7 +110,7 @@ class CanonicalMPS:
                     f"while the one given has {len(tensor.shape)}."
                 )
 
-    def __len__(self) -> np.int32:
+    def __len__(self) -> np.int16:
         """Returns the number of sites in the MPS."""
         return self.num_sites
 
@@ -248,7 +249,7 @@ class CanonicalMPS:
         return self.explicit().entanglement_entropy()
 
     def move_orth_centre(
-        self, final_pos: np.int32, return_singular_values: bool = False
+        self, final_pos: np.int16, return_singular_values: bool = False
     ) -> tuple["CanonicalMPS", list]:
         """Moves the orthogonality centre from its current position to `final_pos`.
 

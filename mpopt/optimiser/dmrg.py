@@ -47,7 +47,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     ):
         """Initialises an effective operator tensor network.
 
-        Arguments:
+        Parameters
             left_environment :
                 The left environment for the effective operator.
             mpo_tensor_left :
@@ -103,7 +103,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         This function is being used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
         the effective operator with the Lanczos method, without generating the full matrix.
 
-        Arguments:
+        Parameters
             x :
                 The two-site tensor on which acts an effective operator.
         """
@@ -163,7 +163,7 @@ class DMRG:
         self,
         mps: Union[ExplicitMPS, CanonicalMPS],
         mpo: list[np.ndarray],
-        chi_max: np.int32 = 1e4,
+        chi_max: np.int16 = 1e4,
         cut: np.float64 = 1e-12,
         mode: str = "SA",
         silent: bool = False,
@@ -221,7 +221,7 @@ class DMRG:
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
-    def update_bond(self, i: np.int32):
+    def update_bond(self, i: np.int16):
         """Updates the bond between sites `i` and `i+1`."""
 
         j = i + 1
@@ -277,7 +277,7 @@ class DMRG:
         self.update_left_environment(i)
         self.update_right_environment(j)
 
-    def update_right_environment(self, i: np.int32):
+    def update_right_environment(self, i: np.int16):
         """
         Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
         """
@@ -300,7 +300,7 @@ class DMRG:
         )
         self.right_environments[i - 1] = right_environment
 
-    def update_left_environment(self, i: np.int32):
+    def update_left_environment(self, i: np.int16):
         """
         Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
         """
@@ -323,7 +323,7 @@ class DMRG:
         )
         self.left_environments[i + 1] = left_environment
 
-    def run(self, num_iter: np.int32 = 1):
+    def run(self, num_iter: np.int16 = 1):
         """
         Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
         """

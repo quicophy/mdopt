@@ -9,21 +9,44 @@ from mpopt.mps.canonical import CanonicalMPS
 from mpopt.mps.explicit import ExplicitMPS
 
 
-def create_state_vector(num_sites: np.int32, phys_dim: np.int32 = 2) -> np.ndarray:
-    """Creates a uniform random complex quantum state in the form of a state vector."""
+def create_state_vector(num_sites: np.int16, phys_dim: np.int16 = 2) -> np.ndarray:
+    """
+    Creates a uniform random complex quantum state in the form of a state vector.
 
-    psi = np.random.uniform(size=(2**num_sites)) + 1j * np.random.uniform(
+    Parameters
+    ----------
+    num_sites : np.int16
+        Number of degrees of freedom.
+    phys_dim : np.int16
+        Number of dimensions of each degree of freedom.
+
+    Returns
+    -------
+    state_vector
+        The resulting state vector.
+
+    """
+
+    state_vector = np.random.uniform(
         size=(phys_dim**num_sites)
-    )
-    psi /= np.linalg.norm(psi)
+    ) + 1j * np.random.uniform(size=(phys_dim**num_sites))
+    state_vector /= np.linalg.norm(state_vector)
 
-    return psi
+    return state_vector
 
 
 def find_orth_centre(
     mps: CanonicalMPS, return_orth_flags: bool = False, tolerance: np.float64 = 1e-12
 ):
-    """Returns a list of integers corresponding to positions of orthogonality centres of an MPS."""
+    """
+    Returns a list of integers corresponding to positions of orthogonality centres of an MPS.
+
+
+
+
+
+
+    """
 
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
@@ -167,8 +190,8 @@ def inner_product(
 
 def mps_from_dense(
     state_vector: np.ndarray,
-    phys_dim: np.int32 = 2,
-    chi_max: np.int32 = 1e4,
+    phys_dim: np.int16 = 2,
+    chi_max: np.int16 = 1e4,
     tolerance: np.float64 = 1e-12,
     form: str = "Explicit",
     orth_centre: Optional[int] = None,
@@ -177,7 +200,7 @@ def mps_from_dense(
     Returns the Matrix Product State,
     given a state in the dense (state-vector) form.
 
-    Arguments:
+    Parameters
         state_vector:
             The state vector.
         phys_dim:
@@ -189,7 +212,7 @@ def mps_from_dense(
         tolerance:
             Absolute tolerance of the normalisation of the singular value spectrum at each bond.
 
-    Returns:
+    Returns
         mps(tensors, singular_values):
     """
 
@@ -252,9 +275,9 @@ def mps_from_dense(
 
 
 def create_simple_product_state(
-    num_sites: np.int32,
+    num_sites: np.int16,
     which: str = "0",
-    phys_dim: np.int32 = 2,
+    phys_dim: np.int16 = 2,
     form: str = "Explicit",
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
@@ -284,7 +307,7 @@ def create_simple_product_state(
 
 
 def create_custom_product_state(
-    string: str, phys_dim: np.int32 = 2, form: str = "Explicit"
+    string: str, phys_dim: np.int16 = 2, form: str = "Explicit"
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
     Creates a custom product state defined by the `string` argument as an MPS.

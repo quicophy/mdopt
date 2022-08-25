@@ -8,28 +8,36 @@ from opt_einsum import contract
 def svd(
     mat: np.ndarray,
     cut: np.float64 = 1e-12,
-    chi_max: np.int32 = 1e4,
+    chi_max: np.int16 = 1e4,
     renormalise: bool = False,
 ) -> tuple[np.ndarray]:
-    """Returns the Singular Value Decomposition of a matrix `mat`.
+    """
+    Performs the Singular Value Decomposition with different features.
 
-    Arguments:
-        mat:
-            Matrix given as a `np.ndarray` with 2 dimensions.
-        cut:
-            Singular values smaller than this will be discarded.
-        chi_max:
-            Maximum number of singular values to keep.
-        renormalise:
-            Renormalisation of the singular value spectrum.
+    Parameters
+    ----------
+    mat : np.ndarray
+        Matrix provided as a tensor with 2 dimensions.
+    cut : np.float64
+        Singular values smaller than this will be discarded.
+    chi_max : np.int16
+        Maximum number of singular values to keep.
+    renormalise : bool
+        Whether to renormalise the singular value spectrum.
 
-    Returns:
-        u_l:
-            Unitary matrix having left singular vectors as columns.
-        singular_values:
-            The singular values, sorted in non-increasing order.
-        v_r:
-            Unitary matrix having right singular vectors as rows.
+    Returns
+    -------
+    u_l : np.ndarray
+        Unitary matrix having left singular vectors as columns.
+    singular_values : np.ndarray
+        The singular values, sorted in non-increasing order.
+    v_r : np.ndarray
+        Unitary matrix having right singular vectors as rows.
+
+    Raises
+    ------
+    ValueError
+        If the tensor provided is not two-dimensional.
     """
 
     if len(mat.shape) != 2:
@@ -66,7 +74,8 @@ def kron_tensors(
     conjugate_second: bool = False,
     merge_physicals: bool = True,
 ) -> np.ndarray:
-    """Computes a kronecker product of 2 MPS tensors with different options.
+    """
+    Computes a kronecker product of 2 MPS tensors with different features.
 
     An utility function which is used to compute
     different versions of a kronecker product of 2 MPS tensors.
@@ -85,15 +94,28 @@ def kron_tensors(
            tensor_1
     ```
 
-    Arguments:
-        tensor_1:
-            The first tensor of the product.
-        tensor_2:
-            The second tensor of the product.
-        conjugate_second: bool
-            Whether to complex-conjugate the second tensor.
-        merge_physicals: bool
-            Whether to merge physical indices.
+    Parameters
+    ----------
+    tensor_1 : np.ndarray
+        The first tensor of the product.
+    tensor_2 : np.ndarray
+        The second tensor of the product.
+    conjugate_second : bool
+        Whether to complex-conjugate the second tensor.
+    merge_physicals : bool
+        Whether to merge physical indices.
+
+    Returns
+    -------
+    product
+        The resulting kronecker product.
+
+    Raises
+    ------
+    ValueError
+        If the first MPS tensor is not three-dimensional.
+    ValueError
+        If the second MPS tensor is not three-dimensional.
     """
 
     if len(tensor_1.shape) != 3:
@@ -127,7 +149,7 @@ def kron_tensors(
 
 def split_two_site_tensor(
     tensor: np.ndarray,
-    chi_max: np.int32 = 1e4,
+    chi_max: np.int16 = 1e4,
     cut: np.float64 = 1e-12,
     renormalise: bool = False,
 ) -> tuple:
@@ -149,7 +171,7 @@ def split_two_site_tensor(
         eps :
             Discard any singular values smaller than eps.
 
-    Returns:
+    Returns
         a_l :
             Left isometry `(i, j, m)`.
         singular_values :
@@ -179,9 +201,9 @@ def split_two_site_tensor(
 
 
 def create_random_mpo(
-    num_sites: np.int32,
+    num_sites: np.int16,
     bond_dimensions: list[int],
-    phys_dim: np.int32,
+    phys_dim: np.int16,
     which: str = "uniform",
 ) -> list[np.ndarray]:
     """Creates a random complex-valued Matrix Product Operator.
@@ -194,7 +216,7 @@ def create_random_mpo(
     Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
     p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
 
-    Arguments:
+    Parameters
         num_sites:
             The number of sites for the MPO.
             This will be equal to the number of tensors.
@@ -268,7 +290,7 @@ def mpo_to_matrix(
     p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
     Warning: will cause memory overflow for number of sites > ~20.
 
-    Arguments:
+    Parameters
         mpo:
             The MPO to convert to a matrix.
         interlace:
@@ -316,10 +338,10 @@ def mpo_to_matrix(
 
 def mpo_from_matrix(
     mat: np.ndarray,
-    num_sites: np.int32,
+    num_sites: np.int16,
     interlaced: bool = True,
-    phys_dim: np.int32 = 2,
-    chi_max: np.int32 = 1e4,
+    phys_dim: np.int16 = 2,
+    chi_max: np.int16 = 1e4,
 ) -> list[np.ndarray]:
     """Creates an MPO from a matrix.
 
@@ -342,7 +364,7 @@ def mpo_from_matrix(
     Each tensor in the `mpo` list will have legs (vL, vR, pU, pD), where v stands for "virtual",
     p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
 
-    Arguments:
+    Parameters
         matrix:
             The matrix to convert to an MPO.
             Can be given with either physical legs grouped together or merged.

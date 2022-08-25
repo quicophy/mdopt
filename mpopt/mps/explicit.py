@@ -36,33 +36,50 @@ class ExplicitMPS:
        Efficient numerical simulations with tensor networks:
        Tensor Network Python (TeNPy). SciPost Physics Lecture Notes, p.005.
 
-    Attributes:
-        tensors :
-            The "physical" tensors of the MPS, one for each physical site.
-            Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
-        singular_values :
-            The singular values at each of the bonds, `singular_values[i]` is left of `tensors[i]`.
-            Each singular values list at each bond is normalised to 1.
-        num_sites :
-            Number of sites.
-        num_bonds :
-            Number of non-trivial bonds: `num_sites - 1`.
-        tolerance :
-            Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+    Attributes
+    ----------
+    tensors : list[np.ndarray]
+        The "physical" tensors of the MPS, one for each physical site.
+        Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
+    singular_values : list[np.ndarray]
+        The singular values at each of the bonds, `singular_values[i]` is left of `tensors[i]`.
+        Each singular values list at each bond is normalised to 1.
+    tolerance : np.float64
+        Comment #TODO
+    num_sites : np.int16
+        Number of sites.
+    num_bonds : np.int16
+        Number of non-trivial bonds: `num_sites - 1`.
+    tolerance :
+        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
 
-    Exceptions:
-        ValueError:
-            If `tensors` and `singular_values` do not have corresponding lengths.
-            The number of singular value matrices should be equal to the number of tensors + 1,
-            because there are two trivial singular value matrices at each of the ghost bonds.
+    self.tensors = tensors
+    self.num_sites = len(tensors)
+    self.num_bonds = self.num_sites - 1
+    self.bond_dimensions = [self.tensors[i].shape[2] for i in range(self.num_bonds)]
+    self.phys_dimensions = [self.tensors[i].shape[1] for i in range(self.num_sites)]
+    self.singular_values = singular_values
+    self.num_singval_mat = len(singular_values)
+    self.dtype = tensors[0].dtype
+    self.tolerance = tolerance
+    self.chi_max = chi_max
+
+    Raises
+    ------
+    ValueError
+        If `tensors` and `singular_values` do not have corresponding lengths.
+        The number of singular value matrices should be equal to the number of tensors + 1,
+        because there are two trivial singular value matrices at each of the ghost bonds.
+    ValueError
+    ValueError
     """
 
     def __init__(
         self,
         tensors: list[np.ndarray],
-        singular_values: list[list],
+        singular_values: list[np.ndarray],
         tolerance: np.float64 = 1e-12,
-        chi_max: np.int32 = 1e4,
+        chi_max: np.int16 = 1e4,
     ):
 
         self.tensors = tensors
@@ -99,7 +116,7 @@ class ExplicitMPS:
                     f"instead the norm is {norm} at bond {i + 1}."
                 )
 
-    def __len__(self) -> np.int32:
+    def __len__(self) -> np.int16:
         """Returns the number of sites in the MPS."""
         return self.num_sites
 
@@ -325,7 +342,7 @@ class ExplicitMPS:
         """Returns the MPS in the mixed-canonical form
         with the orthogonality centre being located at `orth_centre`.
 
-        Arguments:
+        Parameters
             orth_centre_index: int
                 An integer which can take values `0, 1, ..., num_sites-1`.
                 Denotes the position of the orthogonality centre --
