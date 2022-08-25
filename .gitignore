@@ -1,9 +1,6 @@
 # VS code stuff
 .vscode
 
-# Poetry stuff
-poetry.lock
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
