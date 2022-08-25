@@ -28,5 +28,5 @@ jobs:
         with:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: /home/runner/work/MPOpt/MPOpt/coverage.xml
+          files: /home/runner/work/mpopt/mpopt/coverage.xml
           verbose: true
