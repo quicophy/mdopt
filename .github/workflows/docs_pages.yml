@@ -1,4 +1,4 @@
-name: Docs2Pages
+name: docs2pages
 on:
   push:
     tags: '*'
