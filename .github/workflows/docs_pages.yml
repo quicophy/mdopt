@@ -1,15 +1,12 @@
 name: docs2pages
-on:
-  push:
-    tags: '*'
-  pull_request:
-    branches:
-      - main
+
+on: [push, pull_request, fork]
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
     steps:
+
     - name: Checkout
       uses: actions/checkout@v3
       with:
@@ -18,12 +15,15 @@ jobs:
       with:
         python-version: 3.9
     - uses: abatilo/actions-poetry@v2.1.6
+
     - name: install
       run: poetry install --extras docs
+
     - name: Build documentation
       run: |
         cd docs/
         poetry run make html
+
     - name: Deploy documentation
       if: ${{ github.event_name == 'push' }}
       uses: JamesIves/github-pages-deploy-action@v4.4.0
