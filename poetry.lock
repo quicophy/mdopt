@@ -50,7 +50,7 @@ python-versions = "*"
 
 [[package]]
 name = "astroid"
-version = "2.12.4"
+version = "2.12.5"
 description = "An abstract syntax tree for Python with inference support."
 category = "main"
 optional = false
@@ -897,7 +897,7 @@ socks = ["PySocks (>=1.5.6,!=1.5.7)"]
 
 [[package]]
 name = "scipy"
-version = "1.9.0"
+version = "1.9.1"
 description = "SciPy: Scientific Library for Python"
 category = "main"
 optional = false
