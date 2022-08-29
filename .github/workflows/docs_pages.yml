@@ -22,10 +22,8 @@ jobs:
       run: poetry install --extras docs
     - name: Build documentation
       run: |
-        touch .nojekyll
         cd docs/
-        poetry run sphinx-build -b html . _build
-        cp -r _build/* ../
+        poetry run make html
     - name: Deploy documentation
       if: ${{ github.event_name == 'push' }}
       uses: JamesIves/github-pages-deploy-action@v4.4.0
