@@ -1,6 +1,6 @@
 name: docs2pages
 
-on: [push, pull_request, fork]
+on: push
 
 jobs:
   build-docs:
@@ -21,11 +21,15 @@ jobs:
 
     - name: Build documentation
       run: |
+        mkdir gh-pages
+        touch gh-pages/.nojekyll
         cd docs/
-        poetry run make html
+        poetry run sphinx-build -b html . _build
+        cp -r _build/* ../gh-pages/
 
     - name: Deploy documentation
       if: ${{ github.event_name == 'push' }}
       uses: JamesIves/github-pages-deploy-action@v4.4.0
       with:
         branch: documentation
+        folder: gh-pages
