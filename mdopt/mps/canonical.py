@@ -5,8 +5,8 @@ from copy import deepcopy
 from typing import Optional, Iterable, Tuple
 import numpy as np
 
-import mpopt
-from mpopt.utils.utils import kron_tensors, split_two_site_tensor
+import mdopt
+from mdopt.utils.utils import kron_tensors, split_two_site_tensor
 
 
 class CanonicalMPS:
@@ -59,15 +59,15 @@ class CanonicalMPS:
         `len(tensors) - 1` for a left-canonical form, `None` for a product state.
     tolerance : np.float64
         Numerical tolerance to zero out the singular values in Singular Value Decompositions.
-    bond_dimensions :
+    bond_dimensions : list[np.int16]
         The list of all bond dimensions of the MPS.
-    bond_dimensions :
+    bond_dimensions : list[np.int16]
         The list of all physical dimensions of the MPS.
-    chi_max :
+    chi_max : np.int16
         The maximum bond dimension to keep in Singular Value Decompositions.
-    num_sites :
+    num_sites : np.int16
         Number of sites.
-    num_bonds :
+    num_bonds : np.int16
         Number of bonds, which is equal to `num_sites - 1`.
 
     Exceptions:
@@ -277,7 +277,7 @@ class CanonicalMPS:
         singular_values = []
 
         if self.orth_centre is None:
-            _, flags_left, flags_right = mpopt.mps.utils.find_orth_centre(
+            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(
                 self, return_orth_flags=True
             )
             if flags_left in (
@@ -337,7 +337,7 @@ class CanonicalMPS:
         """
 
         if self.orth_centre is None:
-            _, flags_left, flags_right = mpopt.mps.utils.find_orth_centre(
+            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(
                 self, return_orth_flags=True
             )
             if flags_left in (
@@ -366,7 +366,7 @@ class CanonicalMPS:
             )
         return mps, "last"
 
-    def explicit(self) -> "mpopt.mps.explicit.ExplicitMPS":
+    def explicit(self) -> "mdopt.mps.explicit.ExplicitMPS":
         """Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
 
         Essentially, retrieves each `Γ[i]` and `Λ[i]` from `A[i]` or `B[i]`.
@@ -399,7 +399,7 @@ class CanonicalMPS:
                 )
             )
 
-        return mpopt.mps.explicit.ExplicitMPS(explicit_tensors, singular_values)
+        return mdopt.mps.explicit.ExplicitMPS(explicit_tensors, singular_values)
 
     def right_canonical(self) -> "CanonicalMPS":
         """Returns the current MPS in the right-canonical form.

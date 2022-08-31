@@ -1,4 +1,4 @@
-mpopt package
+mdopt package
 =============
 
 Subpackages
@@ -7,15 +7,15 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   mpopt.contractor
-   mpopt.mps
-   mpopt.optimiser
-   mpopt.utils
+   mdopt.contractor
+   mdopt.mps
+   mdopt.optimiser
+   mdopt.utils
 
 Module contents
 ---------------
 
-.. automodule:: mpopt
+.. automodule:: mdopt
    :members:
    :undoc-members:
    :show-inheritance:

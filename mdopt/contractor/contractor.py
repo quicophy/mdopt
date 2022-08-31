@@ -1,17 +1,16 @@
 """
-mpopt.contractor
+mdopt.contractor
 ====================================
 This module contains the MPS-MPO contractor functions.
 """
-
 
 from typing import Union
 import numpy as np
 from opt_einsum import contract
 
-from mpopt.mps.canonical import CanonicalMPS
-from mpopt.mps.explicit import ExplicitMPS
-from mpopt.utils.utils import split_two_site_tensor
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.mps.explicit import ExplicitMPS
+from mdopt.utils.utils import split_two_site_tensor
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
@@ -32,7 +31,7 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
     Parameters
     ----------
     tensor : np.ndarray
-        The MPS tensor to apply the unitary to.
+        The MPS tensor to apply the operator to.
     operator : np.ndarray
         The operator we apply.
 

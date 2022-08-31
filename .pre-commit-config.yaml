@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: pylint
         name: pylint
-        entry: pylint mpopt
+        entry: pylint mdopt
         language: python
         args: [ "--fail-under=9" ]
         pass_filenames: false

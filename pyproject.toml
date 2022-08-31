@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "mpopt"
+name = "mdopt"
 version = "0.1.0"
-description = "A MPS-MPO optimiser library"
+description = "Discrete optimization in the MPS-MPO setting."
 authors = [
     "Aleksandr Berezutskii <berezutskii@phystech.edu>",
 ]

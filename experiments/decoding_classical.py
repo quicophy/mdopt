@@ -17,17 +17,17 @@ from tqdm import tqdm
 
 sys.path[0] += "/.."
 
-from mpopt.mps.explicit import ExplicitMPS
-from mpopt.mps.canonical import CanonicalMPS
-from mpopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
-from mpopt.mps.utils import (
+from mdopt.mps.explicit import ExplicitMPS
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
+from mdopt.mps.utils import (
     create_custom_product_state,
     create_simple_product_state,
     inner_product,
     find_orth_centre,
 )
-from mpopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-from mpopt.utils.utils import mpo_to_matrix
+from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
+from mdopt.utils.utils import mpo_to_matrix
 
 
 class ConstraintString:
@@ -306,7 +306,7 @@ def get_constraint_sites(code: qec.LinearCode) -> list[np.int16]:
             Linear code object.
 
     Returns
-        strings : list of ints
+        strings : list[np.int16]
             List of MPS sites.
     """
 
@@ -486,7 +486,7 @@ def decode(
             The codeword MPS.
         code :
             Linear code object.
-        num_runs : int
+        num_runs : np.int16
             Number of DMRG sweeps.
         chi_max_dmrg :
             Maximum bond dimension to keep in the DMRG algorithm.
@@ -496,7 +496,7 @@ def decode(
 
     Returns
         engine :
-            The container class for the DMRG, see :class:`mpopt.optimiser.DMRG`.
+            The container class for the DMRG, see :class:`mdopt.optimiser.DMRG`.
         overlap :
             The overlap between the decoded message and a given codeword,
             computed as the following inner product |<decoded_message|codeword>|.

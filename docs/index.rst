@@ -1,4 +1,4 @@
-Welcome to mpopt's documentation!
+Welcome to mdopt's documentation!
 =================================
 
 readme
@@ -6,16 +6,16 @@ readme
 .. toctree::
    :maxdepth: 4
 
-.. automodule:: mpopt.mps
+.. automodule:: mdopt.mps
     :members:
 
-.. automodule:: mpopt.contractor
+.. automodule:: mdopt.contractor
     :members:
 
-.. automodule:: mpopt.optimiser
+.. automodule:: mdopt.optimiser
     :members:
 
-.. automodule:: mpopt.utils
+.. automodule:: mdopt.utils
     :members:
 
 Indices and tables

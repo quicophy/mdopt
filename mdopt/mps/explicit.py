@@ -6,8 +6,8 @@ from typing import Iterable
 import numpy as np
 from opt_einsum import contract
 
-from mpopt.mps.canonical import CanonicalMPS
-from mpopt.utils.utils import kron_tensors
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.utils.utils import kron_tensors
 
 
 class ExplicitMPS:

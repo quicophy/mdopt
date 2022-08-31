@@ -4,7 +4,7 @@ from itertools import combinations
 import pytest
 import numpy as np
 
-from mpopt.mps.utils import (
+from mdopt.mps.utils import (
     create_state_vector,
     find_orth_centre,
     is_canonical,

@@ -5,13 +5,13 @@ import numpy as np
 from opt_einsum import contract
 from scipy.stats import unitary_group
 
-from mpopt.contractor.contractor import (
+from mdopt.contractor.contractor import (
     apply_one_site_operator,
     apply_two_site_unitary,
     mps_mpo_contract,
 )
-from mpopt.mps.utils import is_canonical, mps_from_dense, create_state_vector
-from mpopt.utils.utils import create_random_mpo, mpo_to_matrix
+from mdopt.mps.utils import is_canonical, mps_from_dense, create_state_vector
+from mdopt.utils.utils import create_random_mpo, mpo_to_matrix
 
 
 def test_contractor_apply_one_site_operator():

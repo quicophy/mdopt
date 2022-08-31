@@ -1,29 +1,29 @@
-mpopt.mps package
+mdopt.mps package
 =================
 
 Submodules
 ----------
 
-mpopt.mps.canonical module
+mdopt.mps.canonical module
 --------------------------
 
-.. automodule:: mpopt.mps.canonical
+.. automodule:: mdopt.mps.canonical
    :members:
    :undoc-members:
    :show-inheritance:
 
-mpopt.mps.explicit module
+mdopt.mps.explicit module
 -------------------------
 
-.. automodule:: mpopt.mps.explicit
+.. automodule:: mdopt.mps.explicit
    :members:
    :undoc-members:
    :show-inheritance:
 
-mpopt.mps.utils module
+mdopt.mps.utils module
 ----------------------
 
-.. automodule:: mpopt.mps.utils
+.. automodule:: mdopt.mps.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -31,7 +31,7 @@ mpopt.mps.utils module
 Module contents
 ---------------
 
-.. automodule:: mpopt.mps
+.. automodule:: mdopt.mps
    :members:
    :undoc-members:
    :show-inheritance:

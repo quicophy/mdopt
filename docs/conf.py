@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
 
-project = "mpopt"
+project = "mdopt"
 copyright = "2022, Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 

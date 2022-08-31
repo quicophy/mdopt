@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 from opt_einsum import contract
 
-from mpopt.mps.utils import (
+from mdopt.mps.utils import (
     create_state_vector,
     mps_from_dense,
     inner_product,
     is_canonical,
     find_orth_centre,
 )
-from mpopt.mps.canonical import CanonicalMPS
+from mdopt.mps.canonical import CanonicalMPS
 
 
 def test_canonical_init():

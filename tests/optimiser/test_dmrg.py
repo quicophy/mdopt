@@ -5,9 +5,9 @@ import numpy as np
 from scipy.sparse.linalg import eigsh
 
 from experiments.ising import IsingExact, IsingMPO
-from mpopt.mps.utils import create_simple_product_state
-from mpopt.optimiser.dmrg import DMRG as dmrg
-from mpopt.optimiser.dmrg import EffectiveOperator
+from mdopt.mps.utils import create_simple_product_state
+from mdopt.optimiser.dmrg import DMRG as dmrg
+from mdopt.optimiser.dmrg import EffectiveOperator
 
 
 def test_optimiser_effective_operator():

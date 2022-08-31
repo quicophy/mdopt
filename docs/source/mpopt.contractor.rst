@@ -1,13 +1,13 @@
-mpopt.contractor package
+mdopt.contractor package
 ========================
 
 Submodules
 ----------
 
-mpopt.contractor.contractor module
+mdopt.contractor.contractor module
 ----------------------------------
 
-.. automodule:: mpopt.contractor.contractor
+.. automodule:: mdopt.contractor.contractor
    :members:
    :undoc-members:
    :show-inheritance:
@@ -15,7 +15,7 @@ mpopt.contractor.contractor module
 Module contents
 ---------------
 
-.. automodule:: mpopt.contractor
+.. automodule:: mdopt.contractor
    :members:
    :undoc-members:
    :show-inheritance:

@@ -3,10 +3,10 @@
 import pytest
 import numpy as np
 
-from mpopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-from mpopt.optimiser.dmrg import DMRG as dmrg
-from mpopt.optimiser.dephasing_dmrg import EffectiveDensityOperator
-from mpopt.mps.utils import (
+from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
+from mdopt.optimiser.dmrg import DMRG as dmrg
+from mdopt.optimiser.dephasing_dmrg import EffectiveDensityOperator
+from mdopt.mps.utils import (
     create_state_vector,
     create_simple_product_state,
     create_custom_product_state,

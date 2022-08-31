@@ -1,7 +1,7 @@
-mpopt
+mdopt
 =====
 
 .. toctree::
    :maxdepth: 4
 
-   mpopt
+   mdopt

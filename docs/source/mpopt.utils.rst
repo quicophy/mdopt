@@ -1,13 +1,13 @@
-mpopt.utils package
+mdopt.utils package
 ===================
 
 Submodules
 ----------
 
-mpopt.utils.utils module
+mdopt.utils.utils module
 ------------------------
 
-.. automodule:: mpopt.utils.utils
+.. automodule:: mdopt.utils.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -15,7 +15,7 @@ mpopt.utils.utils module
 Module contents
 ---------------
 
-.. automodule:: mpopt.utils
+.. automodule:: mdopt.utils
    :members:
    :undoc-members:
    :show-inheritance:

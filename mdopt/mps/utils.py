@@ -4,9 +4,9 @@ from typing import Union, Optional
 from functools import reduce
 import numpy as np
 from opt_einsum import contract
-from mpopt.utils.utils import svd
-from mpopt.mps.canonical import CanonicalMPS
-from mpopt.mps.explicit import ExplicitMPS
+from mdopt.utils.utils import svd
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.mps.explicit import ExplicitMPS
 
 
 def create_state_vector(num_sites: np.int16, phys_dim: np.int16 = 2) -> np.ndarray:

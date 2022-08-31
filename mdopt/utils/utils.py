@@ -279,9 +279,9 @@ def mpo_to_matrix(
 
     ```
         p0U p1U p2U
-     ___|___|___|___
-    |              | -- example of a 3-site matrix with ungrouped legs.
-    |______________|
+     __|___|___|__
+    |            | -- example of a 3-site matrix with ungrouped legs.
+    |____________|
        |   |   |
       p0D p1D p2D
     ```
