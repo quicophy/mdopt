@@ -1,0 +1,15 @@
+version: 2
+
+build:
+  os: ubuntu-latest
+  tools:
+    python: "3.9"
+
+sphinx:
+   configuration: docs/source/conf.py
+   formats:
+    - pdf
+
+python:
+   install:
+   - requirements: docs/source/requirements.txt
