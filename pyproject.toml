@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "mdopt"
 version = "0.1.0"
-description = "Discrete optimization in the MPS-MPO language."
+description = "Discrete optimization in the tensor-network (specifically, MPS-MPO) language."
 authors = [
     "Aleksandr Berezutskii <berezutskii@phystech.edu>",
 ]

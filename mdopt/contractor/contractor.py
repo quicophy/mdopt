@@ -18,12 +18,10 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
     Applies a one-site operator to a canonical MPS. The operator can be non-unitary,
     however note that a non-unitary operator might break the canonical form.
 
-    ```
     ----(tensor)---  ->  ---(tensor_updated)---
            |                       |
        (operator)                  |
            |                       |
-    ```
 
     The operator has legs `(pU, pD)`, where `p` stands for "physical", and
     `U`, `D` -- for "up", "down" accordingly.
