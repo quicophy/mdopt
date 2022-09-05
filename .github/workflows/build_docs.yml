@@ -21,5 +21,5 @@ jobs:
 
     - name: Build documentation
       run: |
-        cd docs/source
+        cd docs/
         poetry run sphinx-build -b html . _build
