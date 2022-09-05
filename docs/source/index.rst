@@ -10,7 +10,7 @@ Welcome to mdopt's documentation!
    :maxdepth: 4
    :caption: Contents:
 
-   readme
+   README
    modules
 
 
