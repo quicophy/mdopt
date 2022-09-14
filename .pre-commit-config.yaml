@@ -29,7 +29,6 @@ repos:
     rev: 1.2.0rc1
     hooks:
       - id: poetry-check
-      - id: poetry-lock
       - id: poetry-export
-        args: ["--with dev", "-f", "requirements.txt", "-o", "requirements.txt"]
+        args: ["-f", "requirements.txt", "-o", "requirements.txt"]
         verbose: true
