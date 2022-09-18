@@ -23,7 +23,7 @@ def svd(
     chi_max : np.int16
         Maximum number of singular values to keep.
     renormalise : bool
-        Whether to renormalise the singular value spectrum.
+        Whether to renormalise the singular value spectrum after the cut.
 
     Returns
     -------
@@ -37,7 +37,7 @@ def svd(
     Raises
     ------
     ValueError
-        If the tensor provided is not two-dimensional.
+        If the `np.ndarray` provided is not two-dimensional.
     """
 
     if len(mat.shape) != 2:
@@ -49,10 +49,6 @@ def svd(
             mat, full_matrices=False, compute_uv=True, hermitian=False
         )
     except np.linalg.LinAlgError:
-        u_l, singular_values, v_r = scipy.linalg.svd(
-            mat, full_matrices=False, compute_uv=True, lapack_driver="gesdd"
-        )
-    except scipy.linalg.LinAlgError:
         u_l, singular_values, v_r = scipy.linalg.svd(
             mat, full_matrices=False, compute_uv=True, lapack_driver="gesvd"
         )
@@ -75,24 +71,7 @@ def kron_tensors(
     merge_physicals: bool = True,
 ) -> np.ndarray:
     """
-    Computes a kronecker product of 2 MPS tensors with different features.
-
-    An utility function which is used to compute
-    different versions of a kronecker product of 2 MPS tensors.
-    This function acts according to the following cartoon.
-    Note, that indices `i` and `m` can be merged if `merge_physicals=True`.
-
-    ```
-           tensor_2
-              i
-              |                      i
-        j ---( )--- k                |
-                        -->    jl---( )---kn == (jl, m, i, kn)
-        l ---( )--- n                |
-              |                      m
-              m
-           tensor_1
-    ```
+    Computes a kronecker product of 2 MPS tensors.
 
     Parameters
     ----------
@@ -116,6 +95,23 @@ def kron_tensors(
         If the first MPS tensor is not three-dimensional.
     ValueError
         If the second MPS tensor is not three-dimensional.
+
+    Notes
+    -----
+    This function acts according to the following diagram::
+
+           tensor_2
+              i
+              |                      i
+        j ---( )--- k                |
+                        -->    jl---( )---kn
+        l ---( )--- n                |
+              |                      m
+              m
+           tensor_1
+
+    The legs of the resulting tensor are indexed as ``(jl, m, i, kn)``.
+    Indices `i` and `m` can be merged if `merge_physicals=True`.
     """
 
     if len(tensor_1.shape) != 3:
@@ -154,30 +150,34 @@ def split_two_site_tensor(
     renormalise: bool = False,
 ) -> tuple:
     """
-    Split a two-site MPS tensor as follows:
+    Split a two-site MPS tensor according to the following diagram::
 
-    ```
-                                                 m         m
-           i ---(tensor)--- l     ->    i ---(A)---diag(S)---(B)--- l
-                 |   |                         |               |
-                 j   k                         j               k
-    ```
+       i ---(tensor)--- l     ->    i ---(A)---diag(S)---(B)--- l
+             |   |                         |               |
+             j   k                         j               k
 
-    Parameters:
-        tensor :
-            Two-site tensor `(i, j, k, l)`.
-        chi_max :
-            Maximum number of singular values to keep.
-        eps :
-            Discard any singular values smaller than eps.
+    Parameters
+    ----------
+    tensor : np.ndarray
+        Two-site tensor ``(i, j, k, l)``.
+    chi_max : np.int16
+        Maximum number of singular values to keep.
+    eps : np.float64
+        Discard any singular values smaller than eps.
 
     Returns
-        a_l :
-            Left isometry `(i, j, m)`.
-        singular_values :
-            List of singular values.
-        b_r :
-            Right isometry `(m, k, l)`.
+    -------
+    a_l : np.ndarray
+        Left isometry ``(i, j, m)``.
+    singular_values : np.ndarray
+        List of singular values.
+    b_r : np.ndarray
+        Right isometry ``(m, k, l)``.
+
+    Raises
+    ------
+    ValueError
+        If the tensor is not four-dimensional.
     """
 
     if len(tensor.shape) != 4:
@@ -202,32 +202,41 @@ def split_two_site_tensor(
 
 def create_random_mpo(
     num_sites: np.int16,
-    bond_dimensions: list[int],
+    bond_dimensions: list[np.int16],
     phys_dim: np.int16,
     which: str = "uniform",
 ) -> list[np.ndarray]:
-    """Creates a random complex-valued Matrix Product Operator.
-
-    The `bond_dimensions` argument should be given as a list of right virtual dimensions
-    without the last trivial virtual dimension. It means, the length of the list is `num_sites - 1`.
-
-    The distributions available: `uniform(0,1)`, `normal`, `random integer {0,1}`.
-
-    Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
-    p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
+    """
+    Creates a random complex-valued Matrix Product Operator.
 
     Parameters
-        num_sites:
-            The number of sites for the MPO.
-            This will be equal to the number of tensors.
-        bond_dimensions:
-            A list of bond dimensions.
-        phys_dim:
-            Physical dimension of the tensors.
-        which:
-            Specifies the distribution from which
-            the matrix elements are being taken.
-            Options: "uniform", "normal", "randint".
+    ----------
+    num_sites : np.int16
+        The number of sites for the MPO.
+        This will be equal to the number of tensors.
+    bond_dimensions : list[np.int16]
+        A list of bond dimensions.
+    phys_dim : np.int16
+        Physical dimension of the tensors.
+    which : str
+        Specifies the distribution from which
+        the matrix elements are being taken.
+        Options: "uniform", "normal", "randint".
+
+    Returns
+    -------
+    mpo : list[np.ndarray]
+        The resulting MPO.
+
+    Notes
+    -----
+    The ``bond_dimensions`` argument should be given as a list of right virtual dimensions
+    without the last trivial virtual dimension. Thus, the length of the list is ``num_sites - 1``.
+
+    The distributions available: uniform(0,1), normal, random integer {0,1}.
+
+    Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
+    ``p`` -- for "physical", and ``L, R, U, D`` -- for "left", "right", "up", "down" accordingly.
     """
 
     bonds = [[dim, dim] for dim in bond_dimensions]
@@ -265,39 +274,53 @@ def create_random_mpo(
 def mpo_to_matrix(
     mpo: list[np.ndarray], interlace: bool = False, group: bool = False
 ) -> np.ndarray:
-    """Creates a matrix from an MPO.
-
-    If `interlace` is `True`, the matrix' legs will go as
-    (p0U, p0D, p1U, p1D, ...), which means
-    physical legs sticking up and down with the site number.
-    If `interlace` is `False`, the matrix' legs will go as
-    (p0D, p1D, ..., p0U, p1U, ...), which means listing first
-    all physical legs sticking down with the site number,
-    and then all physical legs sticking up.
-    This is done to adjust the matrix to the @ matrix-vector multiplication.
-    Note, grouping (if wanted) is being done after the interlacing.
-
-    ```
-        p0U p1U p2U
-     __|___|___|__
-    |            | -- example of a 3-site matrix with ungrouped legs.
-    |____________|
-       |   |   |
-      p0D p1D p2D
-    ```
-
-    Each tensor in the MPO list has legs (vL, vR, pU, pD), where v stands for "virtual",
-    p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
-    Warning: will cause memory overflow for number of sites > ~20.
+    """
+    Creates a matrix from an MPO.
 
     Parameters
-        mpo:
-            The MPO to convert to a matrix.
-        interlace:
-            Whether to interlace the matrix' legs or not.
-        group:
-            Whether to group the matrix' legs or not.
-            Grouping means merging all the up legs into one leg and the same for the down legs.
+    ----------
+    mpo : list[np.ndarray]
+        The MPO to convert to a matrix.
+    interlace : bool
+        Whether to interlace the matrix' legs or not.
+    group : bool
+        Whether to group the matrix' legs or not, see the notes.
+        Grouping means merging all the up legs into one leg and the same for the down legs.
+
+    Returns
+    -------
+    matrix : np.ndarray
+        The resulting matrix.
+
+    Raises
+    ------
+    ValueError
+        If any of the MPO tensors is not four-dimensional.
+
+    Notes
+    -----
+    If ``interlace==True``, the matrix' legs will go as
+    ``(p0U, p0D, p1U, p1D, ...)``, which means
+    physical legs sticking up and down with the site number.
+    If ``interlace==False``, the matrix' legs will go as
+    ``(p0D, p1D, ..., p0U, p1U, ...)``, which means listing first
+    all physical legs sticking down with the site number,
+    and then all physical legs sticking up.
+    This is done to adjust the matrix to the ``@`` numpy-native matrix-vector multiplication.
+    Note, grouping (if wanted) is being done after the interlacing.
+
+    An example of a matrix with ungrouped legs on three sites::
+
+          p0U p1U p2U
+         __|___|___|__
+        |            |
+        |____________|
+           |   |   |
+          p0D p1D p2D
+
+    Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``, where v stands for "virtual",
+    p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
+    Warning: will cause memory overflow for number of sites > ~20.
     """
 
     for i, tensor in enumerate(mpo):
@@ -337,45 +360,59 @@ def mpo_to_matrix(
 
 
 def mpo_from_matrix(
-    mat: np.ndarray,
+    matrix: np.ndarray,
     num_sites: np.int16,
     interlaced: bool = True,
     phys_dim: np.int16 = 2,
     chi_max: np.int16 = 1e4,
 ) -> list[np.ndarray]:
-    """Creates an MPO from a matrix.
-
-    A utility function allowing the creation of a Matrix Product Operator from a matrix.
-
-    If `interlaced` is `True`, the matrix' legs are considered to go as
-    (p0U, p0D, p1U, p1D, ...), which means physical legs sticking up and down with the site number.
-    If `interlaced` is `False`, the matrix' legs are considered to go as
-    (p0D, p1D, ..., p0U, p1U, ...), which means listing first all physical legs sticking down
-    with the site number, and then all physical legs sticking up.
-    This is done to adjust the matrix to the @ matrix-vector multiplication.
-
-        p0U p1U p2U
-     ___|___|___|___
-    |              | -- example of a 3-site matrix
-    |______________|
-       |   |   |
-      p0D p1D p2D
-
-    Each tensor in the `mpo` list will have legs (vL, vR, pU, pD), where v stands for "virtual",
-    p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
+    """
+    Creates an MPO from a matrix.
 
     Parameters
-        matrix:
-            The matrix to convert to an MPO.
-            Can be given with either physical legs grouped together or merged.
-        interlaced:
-            Whether the matrix legs are interlaced or not.
-        num_sites:
-            The number of sites in the MPO.
-        phys_dim:
-            Local dimension of the physical legs.
-        chi_max:
-            Maximum bond dimension allowed in the MPO.
+    ----------
+    matrix : np.ndarray
+        The matrix to convert to an MPO.
+        Can be given with either physical legs grouped together or merged (see notes).
+    num_sites : np.int16
+        The number of sites in the MPO.
+    interlaced : bool
+        Whether the matrix legs are interlaced or not.
+    phys_dim : np.int16
+        Local dimension of the physical legs.
+    chi_max : np.int16
+        Maximum bond dimension allowed in the MPO.
+
+    Returns
+    -------
+    mpo : list[np.ndarray]
+        The resulting Matrix Product Operator.
+
+    Raises
+    ------
+    ValueError
+        If the matrix' shape does not correspond to ``phys_dim`` and ``num_sites``.
+
+    Notes
+    -----
+    If ``interlaced==True``, the matrix' legs are considered to go as
+    ``(p0U, p0D, p1U, p1D, ...)``, which means physical legs sticking up and down with the site number.
+    If ``interlaced==False``, the matrix' legs are considered to go as
+    ``(p0D, p1D, ..., p0U, p1U, ...)``, which means listing first all physical legs sticking down
+    with the site number, and then all physical legs sticking up.
+    This is done to adjust the matrix to the ``@`` numpy-native matrix-vector multiplication.
+
+    An example of a matrix with ungrouped legs on three sites::
+
+          p0U p1U p2U
+         __|___|___|__
+        |            |
+        |____________|
+           |   |   |
+          p0D p1D p2D
+
+    Each tensor in the ``mpo`` list will have legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
+    ``p`` -- for "physical", and ``L, R, U, D`` -- for "left", "right", "up", "down" accordingly.
     """
 
     hilbert_space_dim = phys_dim**num_sites
@@ -384,46 +421,46 @@ def mpo_from_matrix(
 
     # Checking the matrix has correct shapes for
     # a given physical dimension and number of sites.
-    if (mat.shape != tuple([hilbert_space_dim] * 2)) and (
-        mat.shape != tuple(phys_dims)
+    if (matrix.shape != tuple([hilbert_space_dim] * 2)) and (
+        matrix.shape != tuple(phys_dims)
     ):
         raise ValueError(
             f"The matrix' shape should be either {tuple([hilbert_space_dim] * 2)}, "
-            f"or {tuple(phys_dims)}, instead, the matrix given has shape {mat.shape}."
+            f"or {tuple(phys_dims)}, instead, the matrix given has shape {matrix.shape}."
         )
 
     # Copying the matrix not to change the original one inplace.
-    mat = mat.copy()
+    matrix = matrix.copy()
 
     # Reshaping the matrix.
-    if mat.shape == tuple([hilbert_space_dim] * 2):
-        mat = mat.reshape(tuple(phys_dims))
+    if matrix.shape == tuple([hilbert_space_dim] * 2):
+        matrix = matrix.reshape(tuple(phys_dims))
 
     # Dealing with possible interlacing.
     if not interlaced:
         correct_order = list([i + num_sites, i] for i in range(num_sites))
         correct_order = [item for sublist in correct_order for item in sublist]
-        mat = mat.transpose(correct_order)
+        matrix = matrix.transpose(correct_order)
 
     # Treating the MPO as an MPS with squared physical dimensions.
     mpo = []
-    mat = mat.reshape((-1, mps_dim))
-    mat, singular_values, v_r = svd(mat, chi_max=chi_max, renormalise=False)
+    matrix = matrix.reshape((-1, mps_dim))
+    matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
     v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
     mpo.append(np.expand_dims(v_r, -1))
-    while mat.shape[0] >= mps_dim:
-        mat = np.matmul(mat, np.diag(np.sqrt(singular_values)))
-        bond_dim = mat.shape[-1]
-        mat = mat.reshape((-1, mps_dim * bond_dim))
-        mat, singular_values, v_r = svd(mat, chi_max=chi_max, renormalise=False)
+    while matrix.shape[0] >= mps_dim:
+        matrix = np.matmul(matrix, np.diag(np.sqrt(singular_values)))
+        bond_dim = matrix.shape[-1]
+        matrix = matrix.reshape((-1, mps_dim * bond_dim))
+        matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
         v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
         v_r = v_r.reshape((-1, mps_dim, bond_dim))
         mpo.insert(0, v_r)
 
-    # Contracting the orthogonality centre.
+    # Contracting in the orthogonality centre.
     mpo[0] = contract(
         "ij, jk, klm",
-        mat,
+        matrix,
         np.diag(np.sqrt(singular_values)),
         mpo[0],
         optimize=[(0, 1), (0, 1)],

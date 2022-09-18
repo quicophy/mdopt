@@ -1,6 +1,6 @@
 """
-mdopt.contractor
-====================================
+The ``mdopt.contractor.contractor`` module.
+======================================================
 This module contains the MPS-MPO contractor functions.
 """
 
@@ -15,23 +15,24 @@ from mdopt.utils.utils import split_two_site_tensor
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
     """
-    Applies a one-site operator to a canonical MPS. The operator can be non-unitary,
-    however note that a non-unitary operator might break the canonical form.
+    Applies a one-site operator to a canonical MPS as follows::
 
-    ----(tensor)---  ->  ---(tensor_updated)---
-           |                       |
-       (operator)                  |
-           |                       |
+        ----(tensor)---  ->  ---(tensor_updated)---
+               |                       |
+           (operator)                  |
+               |                       |
 
-    The operator has legs `(pU, pD)`, where `p` stands for "physical", and
-    `U`, `D` -- for "up", "down" accordingly.
+    The operator can be non-unitary, however note
+    that a non-unitary operator might break the canonical form.
+    The operator has legs ``(pU, pD)``, where ``p`` stands for "physical", and
+    ``U``, ``D`` -- for "up", "down" accordingly.
 
     Parameters
     ----------
     tensor : np.ndarray
         The MPS tensor to apply the operator to.
     operator : np.ndarray
-        The operator we apply.
+        The operator to be applied.
 
     Returns
     -------
@@ -72,22 +73,21 @@ def apply_two_site_unitary(
     cut: np.float64 = 1e-12,
 ) -> tuple[np.ndarray]:
     """
-    Applies a two-site unitary operator to a right-canonical MPS.
+    Applies a two-site unitary operator to a right-canonical MPS as follows::
+
+
+        ---(lambda_0)---(b_1)---(b_2)---  ->  ---(b_1_updated)---(b_2_updated)---
+                          |      |                     |             |
+                          (unitary)                    |             |
+                          |      |                     |             |
 
     This function uses a trick which allows performing the contraction
     without computing the inverse of any singular value matrix,
     which can introduce numerical instabilities for small singular values.
     Returns back the resulting MPS tensors in the right-canonical form.
 
-    ```
-    ---(lambda_0)---(b_1)---(b_2)---  ->  ---(b_1_updated)---(b_2_updated)---
-                      |      |                     |             |
-                      (unitary)                    |             |
-                      |      |                     |             |
-    ```
-
-    Unitary has legs `(pUL pUR, pDL pDR)`, where `p` stands for "physical", and
-    `L`, `R`, `U`, `D` -- for "left", "right", "up", "down" accordingly.
+    Unitary has legs ``(pUL pUR, pDL pDR)``, where ``p`` stands for "physical", and
+    ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
 
     Parameters
     ----------
@@ -176,7 +176,7 @@ def mps_mpo_contract(
     Applies an MPO to an MPS.
 
     Applies an operator (not necessarily unitary) in the MPO format
-    to a canonical MPS with the orthogonality centre at site `start_site`
+    to a canonical MPS with the orthogonality centre at site ``start_site``
     while optionally renormalising singular values at each bond.
     Returning the updated MPS in the canonical form.
 
@@ -184,14 +184,12 @@ def mps_mpo_contract(
     In order to run from right to left, reverse both the MPS and the MPO manually.
 
     The initial configuration looks as follows with
-    `---O---` depicting the orthogonality centre.
+    ``---O---`` depicting the orthogonality centre::
 
-    ```
         ...---( )---O----( )---( )---...---( )---...
                     |     |     |           |
                    [ ]---[ ]---[ ]---...---[ ]
                     |     |     |           |
-    ```
 
     The contraction proceeds as described in the supplementary notes.
 

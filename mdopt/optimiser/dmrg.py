@@ -17,25 +17,23 @@ from mdopt.utils.utils import split_two_site_tensor
 class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     r"""Class to store an effective two-site operator.
 
-    In order to take more advantage of the :module:`scipy.sparse.linalg` module,
+    In order to take more advantage of the ``scipy.sparse.linalg`` module,
     we make a special class for local effective operators.
     It allows us to compute eigenvectors more effeciently.
 
     Such effective operator is to be diagonalised in the
-    :method:`update_bond` method of the :class:'DMRG' class.
+    ``update_bond`` method of the :class:'DMRG' class::
 
-    ```
-     ---uL                    uR---
-     |        i          j        |
-     |  vL    |    d     |    vR  |
-    (L)----(mpo_l)----(mpo_r)----(R)
-     |        |          |        |
-     |        k          l        |
-     ---dL                    dR---
-     ```
+        ---uL                    uR---
+        |        i          j        |
+        |  vL    |    d     |    vR  |
+        (L)----(mpo_l)----(mpo_r)----(R)
+        |        |          |        |
+        |        k          l        |
+        ---dL                    dR---
 
-    In our convention, the legs of left/right environments (tensors `L`/`R` in the cartoon)
-    are ordered as follows: (`uL`/`uR`, `vL`/`vR`, `dL`/`dR`) which means (up, virtual, down).
+    In our convention, the legs of left/right environments (tensors ``L``/``R`` in the cartoon)
+    are ordered as follows: ``(uL/uR, vL/vR, dL/dR)`` which means "(up, virtual, down)".
     """
 
     def __init__(
@@ -48,14 +46,15 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         """Initialises an effective operator tensor network.
 
         Parameters
-            left_environment :
-                The left environment for the effective operator.
-            mpo_tensor_left :
-                The left MPO tensor.
-            mpo_tensor_right :
-                The right MPO tensor.
-            right_environment:
-                The right environment for the effective operator.
+        ----------
+        left_environment : np.ndarray
+            The left environment for the effective operator.
+        mpo_tensor_left : np.ndarray
+            The left MPO tensor.
+        mpo_tensor_right : np.ndarray
+            The right MPO tensor.
+        right_environment : np.ndarray
+            The right environment for the effective operator.
         """
 
         if len(left_environment.shape) != 3:
@@ -97,15 +96,17 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         super().__init__(shape=self.shape, dtype=self.dtype)
 
     def _matvec(self, x: np.ndarray) -> np.ndarray:
-        """Performs matrix-vector multiplication.
+        """
+        Performs matrix-vector multiplication.
 
-        Computes effective_operator * |x> = |x'>.
+        Computes ``effective_operator * |x> = |x'>``.
         This function is being used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
         the effective operator with the Lanczos method, without generating the full matrix.
 
         Parameters
-            x :
-                The two-site tensor on which acts an effective operator.
+        ----------
+        x : np.ndarray
+            The two-site tensor on which acts an effective operator.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
@@ -136,27 +137,28 @@ class DMRG:
     Class holding the Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
-    Attributes:
-        mps :
-            MPS serving as a current approximation of the target state.
-        mpo :
-            The MPO of which the target state is to be computed.
-            Each tensor in the MPO list has legs `(vL, vR, pU, pD)`,
-            where `v` stands for "virtual", `p` -- for "physical",
-            and `L`, `R`, `U`, `D` -- for "left", "right", "up", "down" accordingly.
-        chi_max :
-            The highest bond dimension of an MPS allowed.
-        mode :
-            Available options:
-                "LM" : Largest (in magnitude) eigenvalues.
-                "SM" : Smallest (in magnitude) eigenvalues.
-                "LA" : Largest (algebraic) eigenvalues.
-                "SA" : Smallest (algebraic) eigenvalues.
-        cut :
-            The lower boundary of the spectrum.
-            All the singular values smaller than that will be discarded.
-        silent :
-            Whether to show/hide the progress bar.
+    Attributes
+    ----------
+    mps
+        MPS serving as a current approximation of the target state.
+    mpo
+        The MPO of which the target state is to be computed.
+        Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
+        where ``v`` stands for "virtual", ``p`` -- for "physical",
+        and ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
+    chi_max
+        The highest bond dimension of an MPS allowed.
+    mode
+        Available options:
+            ``LM`` : Largest (in magnitude) eigenvalues.
+            ``SM`` : Smallest (in magnitude) eigenvalues.
+            ``LA`` : Largest (algebraic) eigenvalues.
+            ``SA`` : Smallest (algebraic) eigenvalues.
+    cut :
+        The lower boundary of the spectrum, i.e., all the
+        singular values smaller than that will be discarded.
+    silent :
+        Whether to show/hide the progress bar.
     """
 
     def __init__(
@@ -209,10 +211,11 @@ class DMRG:
             self.update_right_environment(i)
 
     def sweep(self):
-        """One DMRG sweep.
+        """
+        One DMRG sweep.
 
         A method performing one DMRG sweep, which consists of
-        two series of `update_bond` sweeps which go back and forth.
+        two series of ``update_bond`` sweeps which go back and forth.
         """
 
         for i in range(self.mps.num_sites - 1):
@@ -222,7 +225,9 @@ class DMRG:
             self.update_bond(i)
 
     def update_bond(self, i: np.int16):
-        """Updates the bond between sites `i` and `i+1`."""
+        """
+        Updates the bond between sites ``i`` and ``i+1``.
+        """
 
         j = i + 1
 
@@ -279,7 +284,8 @@ class DMRG:
 
     def update_right_environment(self, i: np.int16):
         """
-        Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
+        Compute the ``right_environment`` right of site ``i-1``
+        from the ``right_environment`` right of site ``i``.
         """
 
         right_environment = self.right_environments[i]
@@ -302,7 +308,8 @@ class DMRG:
 
     def update_left_environment(self, i: np.int16):
         """
-        Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
+        Compute the ``left_environment`` left of site ``i+1``
+        from the ``left_environment`` left of site ``i``.
         """
 
         left_environment = self.left_environments[i]
@@ -325,7 +332,7 @@ class DMRG:
 
     def run(self, num_iter: np.int16 = 1):
         """
-        Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
+        Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of iterations.
         """
 
         for _ in tqdm(range(num_iter), disable=self.silent):

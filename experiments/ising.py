@@ -219,7 +219,7 @@ class IsingMPO:
     def hamiltonian_mpo(self) -> list[np.ndarray]:
         """Returns a Matrix Product Operator representation of the Hamiltonian.
 
-        Follows the convention of indices from ::module:: `mdopt.mps.explicit.py`:
+        Follows the convention of indices from :module: `mdopt.mps.explicit.py`:
         each tensor in the MPO list has legs (vL, vR, pU, pD),
         where v stands for "virtual", p -- for "physical",
         and L, R, U, D stand for "left", "right", "up", "down".

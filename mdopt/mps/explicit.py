@@ -1,4 +1,8 @@
-"""This module contains the ExplicitMPS class."""
+"""
+The ``mdopt.mps.explicit`` module.
+============================================
+This module contains the Explicit MPS class.
+"""
 
 from functools import reduce
 from copy import deepcopy
@@ -11,67 +15,54 @@ from mdopt.utils.utils import kron_tensors
 
 
 class ExplicitMPS:
-    """Class for finite-size explicit matrix product states (MPS) with open boundary conditions.
+    """
+    Class for finite-size explicit matrix product states (MPS) with open boundary conditions.
 
     Notes
     -----
     Hereafter by saying the MPS is in an explicit form we mean that
     the state is stored in the following format: for each three-dimensional tensor
-    at site `i`, there exists a singular values diagonal matrix at bond `i`.
-    For "ghost" bonds at indices `0`, `L-1` (i.e., bonds of dimension `1`),
+    at site `i`, there exists a singular values diagonal matrix at bond ``i``::
+
+               i     i    i+1    i
+        ...---[ ]---( )---[ ]---( )---...
+                     |           |
+                     |           |
+
+    For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
     the corresponding singular value tensors at the boundaries
     would be the identities of the same dimension.
-    We index sites with `i` from `0` to `L-1`, with bond `i` being left of site `i`.
-    Essentially, it corresponds to storing each `Γ[i]` and `Λ[i]` as shown in
+    We index sites with ``i`` from ``0`` to ``L-1``, with bond ``i`` being left of site ``i``.
+    Essentially, it corresponds to storing each ``Γ[i]`` and ``Λ[i]`` as shown in
     fig.4b in reference [1]_.
-
-    ```
-           i     i    i+1    i
-    ...---[ ]---( )---[ ]---( )---...
-                 |           |
-                 |           |
-    ```
-
-    .. [1] Hauschild, J. and Pollmann, F., 2018.
-       Efficient numerical simulations with tensor networks:
-       Tensor Network Python (TeNPy). SciPost Physics Lecture Notes, p.005.
 
     Attributes
     ----------
     tensors : list[np.ndarray]
         The "physical" tensors of the MPS, one for each physical site.
-        Each tensor has legs (virtual left, physical, virtual right), in short `(vL, i, vR)`.
+        Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
     singular_values : list[np.ndarray]
-        The singular values at each of the bonds, `singular_values[i]` is left of `tensors[i]`.
+        The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
     tolerance : np.float64
-        Comment #TODO
+        Numerical tolerance to zero out the singular values in Singular Value Decomposition.
     num_sites : np.int16
         Number of sites.
     num_bonds : np.int16
-        Number of non-trivial bonds: `num_sites - 1`.
+        Number of non-trivial bonds: ``num_sites - 1``.
     tolerance :
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
-
-    self.tensors = tensors
-    self.num_sites = len(tensors)
-    self.num_bonds = self.num_sites - 1
-    self.bond_dimensions = [self.tensors[i].shape[2] for i in range(self.num_bonds)]
-    self.phys_dimensions = [self.tensors[i].shape[1] for i in range(self.num_sites)]
-    self.singular_values = singular_values
-    self.num_singval_mat = len(singular_values)
-    self.dtype = tensors[0].dtype
-    self.tolerance = tolerance
-    self.chi_max = chi_max
 
     Raises
     ------
     ValueError
-        If `tensors` and `singular_values` do not have corresponding lengths.
+        If ``tensors`` and ``singular_values`` do not have corresponding lengths.
         The number of singular value matrices should be equal to the number of tensors + 1,
         because there are two trivial singular value matrices at each of the ghost bonds.
     ValueError
+        a
     ValueError
+        b
     """
 
     def __init__(
@@ -241,7 +232,7 @@ class ExplicitMPS:
     def dense(self, flatten: bool = True) -> np.ndarray:
         """Returns dense representation of the MPS.
 
-        Attention: will cause memory overload for number of sites > ~20!
+        Warning: will cause memory overload for number of sites > ~20!
         """
 
         tensors = list(self.single_site_right_iso_iter())
@@ -256,11 +247,16 @@ class ExplicitMPS:
         """
         Returns the MPO representation (as a list of tensors)
         of the density matrix defined by a given MPS.
-        Each tensor in the MPO list has legs (vL, vR, pU, pD),
-        where v stands for "virtual", p -- for "physical",
-        and L, R, U, D stand for "left", "right", "up", "down".
+        This operation is depicted in the following picture::
 
-        This operation is depicted in the following picture.
+                   i          j
+              a    |          |        c           i     j
+            ...---(*)---O*---(*)---O*---...    ab  |     |  cd
+                                        --> ...---[ ]---[ ]---...
+            ...---( )---O----( )---O----...        |     |
+              b    |          |        d           k     l
+                   k          l
+
         In the cartoon, `{i,j,k,l}` and `{a,b,c,d}` are single indices,
         while `ab` and `cd` denote multi indices.
         Here, the ( )'s represent the MPS tensors, the O's ---
@@ -270,16 +266,9 @@ class ExplicitMPS:
         The empty line between the MPS and its complex-conjugated version
         stands for the tensor (kronecker) product.
 
-        ```
-               i          j
-          a    |          |        c           i     j
-        ...---(*)---O*---(*)---O*---...    ab  |     |  cd
-                                    --> ...---[ ]---[ ]---...
-        ...---( )---O----( )---O----...        |     |
-          b    |          |        d           k     l
-               k          l
-        ```
-
+        Each tensor in the MPO list has legs (vL, vR, pU, pD),
+        where v stands for "virtual", p -- for "physical",
+        and L, R, U, D stand for "left", "right", "up", "down".
         """
 
         tensors = list(self.single_site_right_iso_iter())

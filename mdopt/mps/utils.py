@@ -1,4 +1,8 @@
-"""This module contains MPS utilities."""
+"""
+The ``mdopt.mps.utils`` module.
+===========================================
+This module contains various MPS utilities.
+"""
 
 from typing import Union, Optional
 from functools import reduce
@@ -41,11 +45,29 @@ def find_orth_centre(
     """
     Returns a list of integers corresponding to positions of orthogonality centres of an MPS.
 
+    Parameters
+    ----------
+    mps : CanonicalMPS
+        The MPS to find the orthogonality centre(s) in.
+    return_orth_flags : bool
+        Whether to return if each tensor is a right or a left isometry.
+    tolerance : np.float64
+        Numerical tolerance for checking the isometry property.
 
+    Returns
+    -------
+    orth_centres
+        Indices of sites at which tensors are orthogonality centres.
+    orth_flags_left
+        Boolean variables for each tensor corresponding to being a left isometry.
+    orth_flags_right
+        Boolean variables for each tensor corresponding to being a right isometry.
 
-
-
-
+    Raises
+    ------
+    ValueError
+        If an :class:`ExplicitMPS' instance is passed as an input.
+        These do not have orthogonality centres by definition.
     """
 
     if isinstance(mps, ExplicitMPS):
@@ -194,7 +216,7 @@ def mps_from_dense(
     chi_max: np.int16 = 1e4,
     tolerance: np.float64 = 1e-12,
     form: str = "Explicit",
-    orth_centre: Optional[int] = None,
+    orth_centre: Optional[np.int16] = None,
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
     Returns the Matrix Product State,

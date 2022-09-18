@@ -6,17 +6,14 @@ the computational basis states domain.
 In particular, we use it to find the main component of a Matrix Density Product Operator (MDPO),
 i.e., a computational basis state contributing the largest amplitude.
 
-In our notation, MDPO for `n` sites denotes the following object.
+In our notation, MDPO for ``n`` sites denotes the following object::
 
-```
-     |      |               |       |
-     |      |               |       |
-----(0*)---(1*)--- ... ---(n-2*)--(n-1*)---
-
-----(0)----(1)---- ... ---(n-2)---(n-1)----
-     |      |               |       |
-     |      |               |       |
-```
+         |      |               |       |
+         |      |               |       |
+    ----(0*)---(1*)--- ... ---(n-2*)--(n-1*)---
+    ----(0)----(1)---- ... ---(n-2)---(n-1)----
+         |      |               |       |
+         |      |               |       |
 
 An MDPO formed by an MPS and its complex-conjugated version.
 The main idea is to find the main component of this object without
@@ -37,9 +34,10 @@ from mdopt.utils.utils import split_two_site_tensor
 
 
 class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
-    r"""Class to store an effective two-site density operator.
+    """
+    Class to store an effective two-site density operator.
 
-    To take more advantage of :module:`scipy.sparse.linalg`, we make a special class
+    To take more advantage of the ``scipy.sparse.linalg`` module, we make a special class
     for local effective density operators extending the analogy from local effective operators.
     It allows us to compute eigenvectors more effeciently.
 
@@ -57,14 +55,26 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         Initialise an effective dephased density operator tensor network.
 
         Parameters
-            left_environment :
-                The left environment for the effective dephased density operator.
-            mps_target_1 :
-                The left target matrix product state tensor.
-            mps_target_2 :
-                The right target matrix product state tensor.
-            right_environment :
-                The right environment for the effective dephased density operator.
+        ----------
+        left_environment : np.ndarray
+            The left environment for the effective dephased density operator.
+        mps_target_1 : np.ndarray
+            The left target matrix product state tensor.
+        mps_target_2 : np.ndarray
+            The right target matrix product state tensor.
+        right_environment : np.ndarray
+            The right environment for the effective dephased density operator.
+
+        Raises
+        ------
+        ValueError
+            If the left environment tensor is not four-dimensional.
+        ValueError
+            If the first target MPS tensor is not three-dimensional.
+        ValueError
+            If the second target MPS tensor is not three-dimensional.
+        ValueError
+            If the right environment tensor is not four-dimensional.
         """
         if len(left_environment.shape) != 4:
             raise ValueError(
@@ -105,15 +115,17 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         super().__init__(shape=self.shape, dtype=self.dtype)
 
     def _matvec(self, x: np.ndarray) -> np.ndarray:
-        """Performs matrix-vector multiplication.
+        """
+        Performs matrix-vector multiplication.
 
-        Computes effective_density_operator * |x> = |x'>
+        Computes ``effective_density_operator * |x> = |x'>``.
         This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
         Parameters
-            x : np.array
-                The two-site tensor we are acting on with an effective density operator.
+        ----------
+        x : np.array
+            The two-site tensor to be acted on by an effective density operator.
         """
 
         two_site_tensor = np.reshape(x, self.x_shape)
@@ -162,30 +174,32 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
 
 class DephasingDMRG:
-    """Class storing the Dephasing DMRG methods.
+    """
+    Class storing the Dephasing DMRG methods.
 
     Class holding the Dephasing Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
-    Attributes:
-        mps :
-            MPS serving as a current approximation of the target state.
-        mps_target :
-            The "target" MPS in the right-canonical form.
-            This MPS is used to construct the dephased MDPO.
-        chi_max :
-            The highest bond dimension of an MPS allowed.
-        mode :
-            Available options:
-                "LM" : Largest (in magnitude) eigenvalues.
-                "SM" : Smallest (in magnitude) eigenvalues.
-                "LA" : Largest (algebraic) eigenvalues.
-                "SA" : Smallest (algebraic) eigenvalues.
-        cut :
-            The lower boundary of the spectrum.
-            All the singular values smaller than that will be discarded.
-        silent :
-            Whether to show/hide the progress bar.
+    Attributes
+    ----------
+    mps
+        MPS serving as a current approximation of the target state.
+    mps_target
+        The target MPS in the right-canonical form.
+        This MPS is used to construct the dephased MDPO.
+    chi_max
+        The highest bond dimension of an MPS allowed.
+    mode
+        Available options:
+            ``LM`` : Largest (in magnitude) eigenvalues.
+            ``SM`` : Smallest (in magnitude) eigenvalues.
+            ``LA`` : Largest (algebraic) eigenvalues.
+            ``SA`` : Smallest (algebraic) eigenvalues.
+    cut
+        The lower boundary of the spectrum, i.e., all
+        the singular values smaller than that will be discarded.
+    silent
+        Whether to show/hide the progress bar.
     """
 
     def __init__(
@@ -236,10 +250,11 @@ class DephasingDMRG:
             self.update_right_environment(i)
 
     def sweep(self):
-        """One Dephasing DMRG sweep.
+        """
+        One Dephasing DMRG sweep.
 
         A method performing one Dephasing DMRG sweep, which consists of
-        two series of `update_bond` sweeps which go back and forth.
+        two series of ``update_bond`` sweeps which go back and forth.
         """
 
         for i in range(self.mps.num_sites - 1):
@@ -249,7 +264,9 @@ class DephasingDMRG:
             self.update_bond(i)
 
     def update_bond(self, i: np.int16):
-        """Updates the bond between sites `i` and `i+1`."""
+        """
+        Updates the bond between sites ``i`` and ``i+1``.
+        """
 
         j = i + 1
 
@@ -306,7 +323,8 @@ class DephasingDMRG:
 
     def update_right_environment(self, i: np.int16):
         """
-        Compute `right_environment` right of site `i-1` from `right_environment` right of site `i`.
+        Compute the ``right_environment`` right of site ``i-1``
+        from the ``right_environment`` right of site ``i``.
         """
 
         right_environment = self.right_environments[i]
@@ -330,7 +348,8 @@ class DephasingDMRG:
 
     def update_left_environment(self, i: np.int16):
         """
-        Compute `left_environment` left of site `i+1` from `left_environment` left of site `i`.
+        Compute the ``left_environment`` left of site ``i+1``
+        from the  ``left_environment`` left of site ``i``.
         """
 
         left_environment = self.left_environments[i]
@@ -354,7 +373,7 @@ class DephasingDMRG:
 
     def run(self, num_iter: np.int16 = 1):
         """
-        Run the algorithm, i.e., run the `sweep` method for `num_iter` number of times.
+        Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of times.
         """
 
         for _ in tqdm(range(num_iter), disable=self.silent):
