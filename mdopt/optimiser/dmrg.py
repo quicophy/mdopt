@@ -26,7 +26,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
 
         ---uL                    uR---
         |        i          j        |
-        |  vL    |    d     |    vR  |
+        |  vL    |          |    vR  |
         (L)----(mpo_l)----(mpo_r)----(R)
         |        |          |        |
         |        k          l        |
@@ -150,10 +150,10 @@ class DMRG:
         The highest bond dimension of an MPS allowed.
     mode
         Available options:
-            ``LM`` : Largest (in magnitude) eigenvalues.
-            ``SM`` : Smallest (in magnitude) eigenvalues.
-            ``LA`` : Largest (algebraic) eigenvalues.
-            ``SA`` : Smallest (algebraic) eigenvalues.
+            | ``LM`` : Largest (in magnitude) eigenvalues.
+            | ``SM`` : Smallest (in magnitude) eigenvalues.
+            | ``LA`` : Largest (algebraic) eigenvalues.
+            | ``SA`` : Smallest (algebraic) eigenvalues.
     cut :
         The lower boundary of the spectrum, i.e., all the
         singular values smaller than that will be discarded.

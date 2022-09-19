@@ -15,7 +15,7 @@ In our notation, MDPO for ``n`` sites denotes the following object::
          |      |               |       |
          |      |               |       |
 
-An MDPO formed by an MPS and its complex-conjugated version.
+An MDPO is formed by an MPS and its complex-conjugated version.
 The main idea is to find the main component of this object without
 performing the kronecker product explicitly.
 """
@@ -175,8 +175,6 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
 class DephasingDMRG:
     """
-    Class storing the Dephasing DMRG methods.
-
     Class holding the Dephasing Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
@@ -191,10 +189,10 @@ class DephasingDMRG:
         The highest bond dimension of an MPS allowed.
     mode
         Available options:
-            ``LM`` : Largest (in magnitude) eigenvalues.
-            ``SM`` : Smallest (in magnitude) eigenvalues.
-            ``LA`` : Largest (algebraic) eigenvalues.
-            ``SA`` : Smallest (algebraic) eigenvalues.
+            | ``LM`` : Largest (in magnitude) eigenvalues.
+            | ``SM`` : Smallest (in magnitude) eigenvalues.
+            | ``LA`` : Largest (algebraic) eigenvalues.
+            | ``SA`` : Smallest (algebraic) eigenvalues.
     cut
         The lower boundary of the spectrum, i.e., all
         the singular values smaller than that will be discarded.
