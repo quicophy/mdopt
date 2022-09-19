@@ -3,7 +3,7 @@
 import numpy as np
 from opt_einsum import contract
 
-from mpopt.utils.utils import (
+from mdopt.utils.utils import (
     create_random_mpo,
     kron_tensors,
     mpo_from_matrix,

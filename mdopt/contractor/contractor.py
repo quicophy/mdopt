@@ -1,40 +1,51 @@
-"""This module contains the MPS-MPO contractor functions."""
-
+"""
+The ``mdopt.contractor.contractor`` module.
+======================================================
+This module contains the MPS-MPO contractor functions.
+"""
 
 from typing import Union
 import numpy as np
 from opt_einsum import contract
 
-from mpopt.mps.canonical import CanonicalMPS
-from mpopt.mps.explicit import ExplicitMPS
-from mpopt.utils.utils import split_two_site_tensor
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.mps.explicit import ExplicitMPS
+from mdopt.utils.utils import split_two_site_tensor
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
-    """A function which applies a one-site operator to a canonical MPS.
+    """
+    Applies a one-site operator to a canonical MPS as follows::
 
-    The operator can be non-unitary, however note that a non-unitary
-    operator might break the canonical form.
+        ----(tensor)---  ->  ---(tensor_updated)---
+               |                       |
+           (operator)                  |
+               |                       |
 
-    ```
-    ----(tensor)---  ->  ---(tensor_updated)---
-           |                       |
-       (operator)                  |
-           |                       |
-    ```
+    The operator can be non-unitary, however note
+    that a non-unitary operator might break the canonical form.
+    The operator has legs ``(pU, pD)``, where ``p`` stands for "physical", and
+    ``U``, ``D`` -- for "up", "down" accordingly.
 
-    The operator has legs `(pU, pD)`, where `p` stands for "physical", and
-    `U`, `D` -- for "up", "down" accordingly.
+    Parameters
+    ----------
+    tensor : np.ndarray
+        The MPS tensor to apply the operator to.
+    operator : np.ndarray
+        The operator to be applied.
 
-    Arguments:
-        tensor :
-            The MPS tensor to apply the unitary to.
-        operator :
-            The operator we apply.
+    Returns
+    -------
+    tensor_updated : np.ndarray
+        The updated MPS tensor.
 
-    Returns:
-        tensor_updated :
-            Resulting MPS tensor.
+    Raises
+    ------
+    ValueError
+        If the MPS tensor is not three-dimensional.
+    ValueError
+        If the operator tensor is not two-dimensional.
+
     """
 
     if len(tensor.shape) != 3:
@@ -58,45 +69,57 @@ def apply_two_site_unitary(
     b_1: np.ndarray,
     b_2: np.ndarray,
     unitary: np.ndarray,
-    chi_max: np.int32 = 1e4,
-    cut: float = 1e-12,
+    chi_max: np.int16 = 1e4,
+    cut: np.float64 = 1e-12,
 ) -> tuple[np.ndarray]:
-    """Applies a two-site unitary to a right-canonical MPS.
+    """
+    Applies a two-site unitary operator to a right-canonical MPS as follows::
+
+
+        ---(lambda_0)---(b_1)---(b_2)---  ->  ---(b_1_updated)---(b_2_updated)---
+                          |      |                     |             |
+                          (unitary)                    |             |
+                          |      |                     |             |
 
     This function uses a trick which allows performing the contraction
     without computing the inverse of any singular value matrix,
-    which can introduce numerical instabilities.
+    which can introduce numerical instabilities for small singular values.
     Returns back the resulting MPS tensors in the right-canonical form.
 
-    ```
-    ---(lambda_0)---(b_1)---(b_2)---  ->  ---(b_1_updated)---(b_2_updated)---
-                      |      |                     |             |
-                      (unitary)                    |             |
-                      |      |                     |             |
-    ```
+    Unitary has legs ``(pUL pUR, pDL pDR)``, where ``p`` stands for "physical", and
+    ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
 
-    Unitary has legs `(pUL pUR, pDL pDR)`, where `p` stands for "physical", and
-    `L`, `R`, `U`, `D` -- for "left", "right", "up", "down" accordingly.
+    Parameters
+    ----------
+    lambda_0 : list
+        A list of singular values to the left of first MPS tensor.
+    b_1 : np.ndarray
+        The first MPS right-isometric tensor to apply the unitary to.
+    b_2 : np.ndarray
+        The second MPS right-isometric tensor to apply the unitary to.
+    unitary : np.ndarray
+        The unitary tensor we apply.
+    cut: np.float64
+        Singular values smaller than this will be discarded.
+    chi_max: np.int16
+        Maximum number of singular values to keep.
 
-    Arguments:
-        lambda_0 :
-            A list of singular values to the left of first MPS tensor.
-        b_1 :
-            The first MPS right-isometric tensor to apply the unitary to.
-        b_2 :
-            The second MPS right-isometric tensor to apply the unitary to.
-        unitary :
-            The unitary tensor we apply.
-        cut:
-            Singular values smaller than this will be discarded.
-        chi_max:
-            Maximum number of singular values to keep.
+    Returns
+    -------
+    b_1_updated : np.ndarray
+        The first updated MPS right-isometric tensor.
+    b_2_updated : np.ndarray
+        The second updated MPS right-isometric tensor.
 
-    Returns:
-        b_1_updated :
-            The first updated MPS right-isometric tensor.
-        b_2_updated :
-            The second updated MPS right-isometric tensor.
+    Raises
+    ------
+    ValueError
+        If the first MPS tensor is not three-dimensional.
+    ValueError
+        If the second MPS tensor is not three-dimensional.
+    ValueError
+        If the operator tensor is not four-dimensional.
+
     """
 
     if len(b_1.shape) != 3:
@@ -143,16 +166,17 @@ def apply_two_site_unitary(
 def mps_mpo_contract(
     mps: Union[ExplicitMPS, CanonicalMPS],
     mpo: list[np.ndarray],
-    start_site: np.int32 = 0,
+    start_site: np.int16 = 0,
     renormalise: bool = False,
-    chi_max: np.int32 = 1e4,
+    chi_max: np.int64 = 1e4,
     cut: np.float64 = 1e-12,
     inplace: bool = False,
 ) -> CanonicalMPS:
-    """Applies an MPO to an MPS.
+    """
+    Applies an MPO to an MPS.
 
     Applies an operator (not necessarily unitary) in the MPO format
-    to a canonical MPS with the orthogonality centre at site `start_site`
+    to a canonical MPS with the orthogonality centre at site ``start_site``
     while optionally renormalising singular values at each bond.
     Returning the updated MPS in the canonical form.
 
@@ -160,42 +184,51 @@ def mps_mpo_contract(
     In order to run from right to left, reverse both the MPS and the MPO manually.
 
     The initial configuration looks as follows with
-    ---O--- depicting the orthogonality centre.
+    ``---O---`` depicting the orthogonality centre::
 
-    ```
         ...---( )---O----( )---( )---...---( )---...
                     |     |     |           |
                    [ ]---[ ]---[ ]---...---[ ]
                     |     |     |           |
-    ```
 
     The contraction proceeds as described in the supplementary notes.
 
-    Arguments:
-        mps :
-            The initial MPS in the canonical form.
-        mpo :
-            MPO as a list of tensors, where each tensor is corresponding to
-            an operator applied at a certain site.
-            The operators should be ordered in correspondence with the sites.
-            According to our convention, each operator has legs (vL, vR, pU, pD),
-            where v stands for "virtual", p -- for "physical",
-            and L, R, U, D stand for "left", "right", "up", "down".
-        start_site :
-            Index of the starting site.
-        renormalise :
-            Whether to renormalise the singular values after each contraction
-            involving two neigbouring MPS sites.
-        chi_max :
-            Maximum bond dimension to keep.
-        cut :
-            Cutoff for the singular values.
-        inplace :
-            Whether to modify the starting MPS or create a new one.
+    Parameters
+    ----------
+    mps : CanonicalMPS or ExplicitMPS
+        The initial MPS.
+    mpo : list[np.ndarray]
+        MPO as a list of tensors, where each tensor is corresponding to
+        an operator applied at a certain site.
+        The operators should be ordered in correspondence with the sites.
+        According to our convention, each operator has legs (vL, vR, pU, pD),
+        where v stands for "virtual", p -- for "physical",
+        and L, R, U, D stand for "left", "right", "up", "down".
+    start_site : np.int16
+        Index of the starting site.
+    renormalise : bool
+        Whether to renormalise the singular values after each contraction
+        involving two neigbouring MPS sites.
+    chi_max : np.int16
+        Maximum bond dimension to keep.
+    cut : np.float64
+        Cutoff for the singular values.
+    inplace : bool
+        Whether to modify the starting MPS or create a new one.
 
-    Returns:
-        mps :
-            The final MPS in the canonical form.
+    Returns
+    -------
+    mps : CanonicalMPS
+        The updated MPS in the canonical form.
+
+    Raises
+    ------
+    ValueError
+        If any of the MPO tensors is not four-dimensional.
+    ValueError
+        If the length of the MPO and the starting site doesn't correspond
+        to the number of sites of the MPS.
+
     """
 
     if not inplace:

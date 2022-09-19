@@ -7,11 +7,11 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: check-yaml
-      - id: trailing-whitespace
       - id: detect-private-key
+      - id: trailing-whitespace
 
   - repo: https://github.com/psf/black
-    rev: 22.6.0
+    rev: 22.8.0
     hooks:
       - id: black
         entry: black .
@@ -20,15 +20,15 @@ repos:
     hooks:
       - id: pylint
         name: pylint
-        entry: pylint mpopt
+        entry: pylint mdopt
         language: python
         args: [ "--fail-under=9" ]
         pass_filenames: false
 
   - repo: https://github.com/python-poetry/poetry
-    rev: 1.2.0b2
+    rev: 1.2.0rc1
     hooks:
       - id: poetry-check
-      - id: poetry-lock
       - id: poetry-export
         args: ["-f", "requirements.txt", "-o", "requirements.txt"]
+        verbose: true

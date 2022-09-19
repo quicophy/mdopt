@@ -6,8 +6,8 @@ import pytest
 import numpy as np
 from opt_einsum import contract
 
-from mpopt.mps.explicit import ExplicitMPS
-from mpopt.mps.utils import (
+from mdopt.mps.explicit import ExplicitMPS
+from mdopt.mps.utils import (
     create_state_vector,
     is_canonical,
     mps_from_dense,

@@ -1,9 +1,6 @@
 # VS code stuff
 .vscode
 
-# Poetry stuff
-poetry.lock 
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -21,6 +18,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+bin/
 lib64/
 parts/
 sdist/
@@ -110,6 +108,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+*.cfg
 env/
 venv/
 ENV/
