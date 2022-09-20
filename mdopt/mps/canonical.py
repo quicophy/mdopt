@@ -14,7 +14,7 @@ from mdopt.utils.utils import kron_tensors, split_two_site_tensor
 
 
 class CanonicalMPS:
-    r"""
+    """
     Class for finite-size canonical matrix product states with open boundary conditions.
 
     Attributes

@@ -45,24 +45,22 @@ class ExplicitMPS:
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
     tolerance : np.float64
-        Numerical tolerance to zero out the singular values in Singular Value Decomposition.
+        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
     num_sites : np.int16
         Number of sites.
     num_bonds : np.int16
-        Number of non-trivial bonds: ``num_sites - 1``.
-    tolerance :
-        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        Number of non-trivial bonds, which is equal to ``num_sites - 1``.
 
     Raises
     ------
     ValueError
-        If ``tensors`` and ``singular_values`` do not have corresponding lengths.
+        If the ``tensors`` and the ``singular_values`` lists do not have corresponding lengths.
         The number of singular value matrices should be equal to the number of tensors + 1,
         because there are two trivial singular value matrices at each of the ghost bonds.
     ValueError
-        a
+        If any of the MPS tensors is not three-dimensional.
     ValueError
-        b
+        If any of the singular-values tensors is not normalised within the `tolerance` attribute.
     """
 
     def __init__(
