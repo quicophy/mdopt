@@ -188,7 +188,7 @@ class DephasingDMRG:
     chi_max
         The highest bond dimension of an MPS allowed.
     mode
-        Available options:
+        The eigensolver mode. Available options:
             | ``LM`` : Largest (in magnitude) eigenvalues.
             | ``SM`` : Smallest (in magnitude) eigenvalues.
             | ``LA`` : Largest (algebraic) eigenvalues.

@@ -26,9 +26,8 @@ def create_state_vector(num_sites: np.int16, phys_dim: np.int16 = 2) -> np.ndarr
 
     Returns
     -------
-    state_vector
+    state_vector : np.ndarray
         The resulting state vector.
-
     """
 
     state_vector = np.random.uniform(
@@ -56,18 +55,18 @@ def find_orth_centre(
 
     Returns
     -------
-    orth_centres
+    orth_centres : list[np.int16]
         Indices of sites at which tensors are orthogonality centres.
-    orth_flags_left
+    orth_flags_left : Optional[list[bool]]
         Boolean variables for each tensor corresponding to being a left isometry.
-    orth_flags_right
+    orth_flags_right : Optional[list[bool]]
         Boolean variables for each tensor corresponding to being a right isometry.
 
     Raises
     ------
     ValueError
-        If an :class:`ExplicitMPS' instance is passed as an input.
-        These do not have orthogonality centres by definition.
+        If an :class:`ExplicitMPS` instance is passed as an input.
+        They do not have orthogonality centres by definition.
     """
 
     if isinstance(mps, ExplicitMPS):
@@ -128,7 +127,27 @@ def find_orth_centre(
 
 
 def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
-    """Checks if the MPS is in any of the canonical forms."""
+    """
+    Checks if the MPS is in any of the canonical forms.
+
+    Parameters
+    ----------
+    mps : CanonicalMPS
+        The MPS to check the canonical form of.
+    tolerance : np.float64
+        Numerical tolerance for checking the isometry property.
+
+    Returns
+    -------
+    if_canonical : bool
+        ``True`` if the MPS is in any of the canonical forms.
+
+    Raises
+    ------
+    ValueError
+        If an :class:`ExplicitMPS` instance is passed as an input.
+        They do not have orthogonality centres by definition.
+    """
 
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
@@ -164,14 +183,34 @@ def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
         return True
 
     orth_centres = find_orth_centre(mps)
+    if_canonical = len(orth_centres) == 1
 
-    return len(orth_centres) == 1
+    return if_canonical
 
 
 def inner_product(
     mps_1: Union[CanonicalMPS, ExplicitMPS], mps_2: Union[CanonicalMPS, ExplicitMPS]
 ) -> Union[np.float64, np.complex128]:
-    """Returns an inner product between 2 matrix product states."""
+    """
+    Returns an inner product between 2 Matrix Product States.
+
+    Parameters
+    ----------
+    mps_1 : Union[CanonicalMPS, ExplicitMPS]
+        The first MPS in the inner product.
+    mps_1 : Union[CanonicalMPS, ExplicitMPS]
+        The second MPS in the inner product.
+
+    Returns
+    -------
+    product : Union[np.float64, np.complex128]
+        The value of the inner product.
+
+    Raises
+    ------
+    ValueError
+        If the Matrix Product States are of different length.
+    """
 
     if len(mps_1) != len(mps_2):
         raise ValueError(
@@ -219,23 +258,37 @@ def mps_from_dense(
     orth_centre: Optional[np.int16] = None,
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
-    Returns the Matrix Product State,
-    given a state in the dense (state-vector) form.
+    Builds an MPS from a dense (state-vector) from.
 
     Parameters
-        state_vector:
-            The state vector.
-        phys_dim:
-            Dimensionality of the local Hilbert space.
-        limit_max:
-            Activate an upper limit to the spectrum's size.
-        chi_max:
-            Maximum number of singular values to keep.
-        tolerance:
-            Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+    ----------
+    state_vector : np.ndarray
+        The initial state vector.
+    phys_dim : np.int16
+        Dimensionality of the local Hilbert space, i.e.,
+        the dimension of each physical leg of the MPS.
+    chi_max : np.int16
+        Maximum number of singular values to keep.
+    tolerance : np.float64
+        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+    form : str
+        The form of the MPS. Available options:
+            | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
+            | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
+            | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+            | ``Mixed-canonical`` : The :class:`CanonicalMPS` mixed-canonical form.
+    orth_centre : Optional[np.int16]
+        The orthogonal centre position for the mixed-canonical form.
 
     Returns
-        mps(tensors, singular_values):
+    -------
+    mps : Union[CanonicalMPS, ExplicitMPS]
+        The resulting MPS.
+
+    Raises
+    ------
+    ValueError
+        If the vector's length does not correspond to the physical dimension.
     """
 
     state_vector = np.copy(state_vector)
@@ -302,8 +355,45 @@ def create_simple_product_state(
     phys_dim: np.int16 = 2,
     form: str = "Explicit",
 ) -> Union[CanonicalMPS, ExplicitMPS]:
-    """
-    Creates |0...0>/|1...1>/|+...+> as an MPS.
+    r"""
+    Creates a simple product-state MPS.
+
+    Parameters
+    ----------
+    num_sites : np.int16
+        The number of sites.
+    which : str
+        The form of the MPS, for explanation see the notes. Available options:
+            | ``0`` : The :math:`|0...0>` state.
+            | ``1`` : The :math:`|1...1>` state.
+            | ``+`` : The :math:`|+...+>` state.
+    phys_dim : np.int16
+        Dimensionality of the local Hilbert space, i.e.,
+        the dimension of each physical leg of the MPS.
+    form : str
+        The form of the MPS. Available options:
+            | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
+            | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
+            | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+
+    Returns
+    -------
+    mps : Union[CanonicalMPS, ExplicitMPS]
+        The resulting MPS.
+
+    Raises
+    ------
+    ValueError
+        If the chosen form is mixed-canonical.
+        This form is not available for product states.
+
+    Notes
+    -----
+    Produces a Matrix Product State consisting of tensors with bond dimenstions equal to 1.
+    The tensors are defined as follows:
+        | :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
+        | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
+        | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
     """
 
     tensor = np.zeros((phys_dim,))
@@ -331,30 +421,66 @@ def create_simple_product_state(
 def create_custom_product_state(
     string: str, phys_dim: np.int16 = 2, form: str = "Explicit"
 ) -> Union[CanonicalMPS, ExplicitMPS]:
-    """
-    Creates a custom product state defined by the `string` argument as an MPS.
+    r"""
+    Creates a custom product-state MPS defined by the ``string`` argument.
+
+    Parameters
+    ----------
+    string : str
+        The string defining the product-state MPS. Available characters: ``0``, ``1``, ``+``.
+    phys_dim : np.int16
+        Dimensionality of the local Hilbert space, i.e.,
+        the dimension of each physical leg of the MPS.
+    form : str
+        The form of the MPS. Available options:
+            | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
+            | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
+            | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+
+    Returns
+    -------
+    mps : Union[CanonicalMPS, ExplicitMPS]
+        The resulting MPS.
+
+    Raises
+    ------
+    ValueError
+        If a symbol inside the ``string`` argument does not belong to the available set.
+    ValueError
+        If the chosen form is mixed-canonical.
+        This form is not available for product states.
+
+    Notes
+    -----
+    Produces a Matrix Product State consisting of tensors with bond dimenstions equal to 1.
+    The tensors are defined as follows:
+        | :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
+        | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
+        | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
+    The state is normalized at the end.
     """
 
     num_sites = len(string)
     tensors = []
 
-    for k in string:
+    for symbol in string:
 
         tensor = np.zeros((phys_dim,))
-        if k == "0":
+        if symbol == "0":
             tensor[0] = 1.0
-        elif k == "1":
+        elif symbol == "1":
             tensor[-1] = 1.0
-        elif k == "+":
+        elif symbol == "+":
             for i in range(phys_dim):
                 tensor[i] = 1 / np.sqrt(phys_dim)
         else:
             raise ValueError(
-                f"The string argument accepts only 0, 1 or + as elements, given {k}."
+                f"The string argument accepts only 0, 1 or + as elements, given {symbol}."
             )
         tensors.append(tensor)
 
     tensors = [tensor.reshape((1, phys_dim, 1)) for tensor in tensors]
+    tensors /= np.linalg.norm(tensors)
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
