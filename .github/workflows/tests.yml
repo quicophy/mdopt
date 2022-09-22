@@ -17,7 +17,7 @@ jobs:
         run: pip install poetry
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --with test
 
       - name: Generate report
         run: |
