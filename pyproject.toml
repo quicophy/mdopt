@@ -11,14 +11,14 @@ maintainers = [
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.10"
-scipy = "^1.6.1"
 numpy = "^1.20.1"
-tqdm = "^4.62.3"
-qecstruct = {version="^0.2.2", optional = true}
+scipy = "^1.6.1"
 opt-einsum = "^3.3.0"
-more-itertools = "^8.12.0"
 matplotlib = "^3.6.0"
+tqdm = "^4.62.3"
+more-itertools = "^8.12.0"
 threadpoolctl = {version="^3.1.0", optional = true}
+qecstruct = {version="^0.2.2", optional = true}
 Sphinx = "^5.1.1"
 sphinx-rtd-theme = "^1.0.0"
 
