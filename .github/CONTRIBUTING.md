@@ -10,7 +10,7 @@ Additionally, make sure any new code is properly accompanied by working through 
   - [ ] Tests have been added for any new functionality in ``tests``
   - [ ] All other tests still pass (when running ``pytest`` in the root directory)
   - [ ] Any functions added have [``numpy`` style docstrings](http://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html)
-  - [ ] If suitable, funtionality is documented in ``mdopt/docs`` or an example added in ``mdopt/docs/examples``
+  - [ ] If suitable, funtionality is documented in ``docs`` or an example added in ``examples``
   - [ ] The code is linted with ``black``.
 
 
