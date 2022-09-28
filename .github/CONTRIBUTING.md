@@ -7,7 +7,7 @@ Any contributions to ``mdopt`` in the form of [pull requests](https://github.com
 
 Additionally, make sure any new code is properly accompanied by working through the following checklist:
 
-  - [ ] Tests have been added for any new functionality in ``mdopt/tests``
+  - [ ] Tests have been added for any new functionality in ``tests``
   - [ ] All other tests still pass (when running ``pytest`` in the root directory)
   - [ ] Any functions added have [``numpy`` style docstrings](http://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html)
   - [ ] If suitable, funtionality is documented in ``mdopt/docs`` or an example added in ``mdopt/docs/examples``
