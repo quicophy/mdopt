@@ -4,7 +4,7 @@ Contractor module
 Submodules
 ----------
 
-mdopt.contractor.contractor module
+The Contractor module
 ----------------------------------
 
 .. automodule:: mdopt.contractor.contractor

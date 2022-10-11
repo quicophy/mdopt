@@ -1,10 +1,10 @@
-mdopt.utils package
-===================
+Utils module
+=================
 
 Submodules
 ----------
 
-mdopt.utils.utils module
+The Utils module
 ------------------------
 
 .. automodule:: mdopt.utils.utils

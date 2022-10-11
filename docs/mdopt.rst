@@ -1,7 +1,4 @@
-mdopt package
-=============
-
-Subpackages
+Modules
 -----------
 
 .. toctree::
