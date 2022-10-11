@@ -1,10 +1,8 @@
 MPS module
 =================
 
-Submodules
-----------
 
-The Canonical MPS module
+The Canonical MPS submodule
 --------------------------
 
 .. automodule:: mdopt.mps.canonical
@@ -12,7 +10,7 @@ The Canonical MPS module
    :undoc-members:
    :show-inheritance:
 
-The Explicit MPS module
+The Explicit MPS submodule
 --------------------------
 
 .. automodule:: mdopt.mps.explicit
@@ -20,18 +18,10 @@ The Explicit MPS module
    :undoc-members:
    :show-inheritance:
 
-The Utils module
+The Utils submodule
 --------------------------
 
 .. automodule:: mdopt.mps.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: mdopt.mps
    :members:
    :undoc-members:
    :show-inheritance:

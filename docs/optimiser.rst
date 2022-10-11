@@ -1,10 +1,8 @@
 Optimiser module
 =================
 
-Submodules
-----------
 
-The DMRG module
+The DMRG submodule
 --------------------------
 
 .. automodule:: mdopt.optimiser.dmrg
@@ -13,19 +11,10 @@ The DMRG module
    :show-inheritance:
 
 
-The Dephasing DMRG module
+The Dephasing DMRG submodule
 --------------------------
 
 .. automodule:: mdopt.optimiser.dephasing_dmrg
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: mdopt.optimiser
    :members:
    :undoc-members:
    :show-inheritance:
