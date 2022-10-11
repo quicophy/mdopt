@@ -1,4 +1,5 @@
-"""This module contains the :class:`DMRG` and the :class:`EffectiveOperator` classes.
+"""
+This module contains the :class:`DMRG` and the :class:`EffectiveOperator` classes.
 Inspired by TenPy.
 """
 
@@ -132,33 +133,36 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
 
 
 class DMRG:
-    """Class storing the DMRG methods.
+    """
+    Class storing the DMRG methods.
 
     Class holding the Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
     Attributes
     ----------
-    mps
+    mps : Union[ExplicitMPS, CanonicalMPS]
         MPS serving as a current approximation of the target state.
-    mpo
+    mpo : list[np.ndarray]
         The MPO of which the target state is to be computed.
         Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
         where ``v`` stands for "virtual", ``p`` -- for "physical",
         and ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
-    chi_max
+    chi_max : np.int16
         The highest bond dimension of an MPS allowed.
-    mode
+    cut : np.float64
+        The lower boundary of the spectrum, i.e., all the
+        singular values smaller than that will be discarded.
+    mode : str
         The eigensolver mode. Available options:
             | ``LM`` : Largest (in magnitude) eigenvalues.
             | ``SM`` : Smallest (in magnitude) eigenvalues.
             | ``LA`` : Largest (algebraic) eigenvalues.
             | ``SA`` : Smallest (algebraic) eigenvalues.
-    cut :
-        The lower boundary of the spectrum, i.e., all the
-        singular values smaller than that will be discarded.
-    silent :
+    silent : np.float64
         Whether to show/hide the progress bar.
+    copy : bool
+        Whether to copy the input MPS or modify inplace.
     """
 
     def __init__(

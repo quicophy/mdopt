@@ -195,7 +195,7 @@ def mps_mpo_contract(
 
     Parameters
     ----------
-    mps : CanonicalMPS or ExplicitMPS
+    mps : Union[CanonicalMPS, ExplicitMPS]
         The initial MPS.
     mpo : list[np.ndarray]
         MPO as a list of tensors, where each tensor is corresponding to

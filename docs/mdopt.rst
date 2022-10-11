@@ -7,10 +7,10 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   mdopt.contractor
-   mdopt.mps
-   mdopt.optimiser
-   mdopt.utils
+   mps
+   contractor
+   utils
+   optimiser
 
 Module contents
 ---------------

@@ -1,4 +1,4 @@
-mdopt.contractor package
+Contractor module
 ========================
 
 Submodules

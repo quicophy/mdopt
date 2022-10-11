@@ -1,5 +1,5 @@
-"""This module contains the :class:`DephasingDMRG` and the :class:`EffectiveDensityOperator`
-classes.
+"""
+This module contains the :class:`DephasingDMRG` and the :class:`EffectiveDensityOperator` classes.
 
 This algorithm's main feature is that it restricts the target-state search to
 the computational basis states domain.
@@ -124,7 +124,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
         Parameters
         ----------
-        x : np.array
+        x : np.ndarray
             The two-site tensor to be acted on by an effective density operator.
         """
 
@@ -180,23 +180,23 @@ class DephasingDMRG:
 
     Attributes
     ----------
-    mps
+    mps : Union[ExplicitMPS, CanonicalMPS]
         MPS serving as a current approximation of the target state.
-    mps_target
+    mps_target : Union[ExplicitMPS, CanonicalMPS]
         The target MPS in the right-canonical form.
         This MPS is used to construct the dephased MDPO.
-    chi_max
+    chi_max : np.int16
         The highest bond dimension of an MPS allowed.
-    mode
+    mode : str
         The eigensolver mode. Available options:
             | ``LM`` : Largest (in magnitude) eigenvalues.
             | ``SM`` : Smallest (in magnitude) eigenvalues.
             | ``LA`` : Largest (algebraic) eigenvalues.
             | ``SA`` : Smallest (algebraic) eigenvalues.
-    cut
+    cut : np.float64
         The lower boundary of the spectrum, i.e., all
         the singular values smaller than that will be discarded.
-    silent
+    silent : bool
         Whether to show/hide the progress bar.
     """
 

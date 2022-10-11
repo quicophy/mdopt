@@ -1,7 +1,33 @@
 """
-The ``mdopt.mps.canonical`` module.
-=============================================
-This module contains the Canonical MPS class.
+This module contains the :class:`CanonicalMPS` class.
+Hereafter, by saying the Matrix Product State (MPS) is in a canonical form we mean one of the following.
+
+    1) Right-canonical: all tensors are right isometries, i.e.::
+
+        ---( )---     ---
+            |   |       |
+            |   |  ==   |
+            |   |       |
+        ---(*)---     ---
+
+    2) Left-canonical: all tensors are left isometries, i.e.::
+
+        ---( )---     ---
+        |   |         |
+        |   |    ==   |
+        |   |         |
+        ---(*)---     ---
+
+    3) Mixed-canonical: all but one tensors are left or right isometries.
+    This exceptional tensor will be hereafter called the **orthogonality centre**.
+
+    Note that, in the diagrams, a tensor with a star inside means that it is complex-conjugated.
+
+    The Matrix Product State is stored as a list of three-dimensional tensors.
+    Essentially, it corresponds to storing each ``A[i]`` or ``B[i]`` as shown in
+    fig.4c in reference `[1]`_.
+
+    .. _[1]: https://arxiv.org/abs/1805.00055
 """
 
 from functools import reduce
@@ -22,7 +48,7 @@ class CanonicalMPS:
     tensors : list[np.ndarray]
         The tensors of the MPS, one per each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    orth_centre : np.int16 or None
+    orth_centre : Optional[np.int16]
         Position of the orthogonality centre, does not support negative indexing.
         As a convention, this attribute is taken ``0`` for a right-canonical form,
         ``len(tensors) - 1`` for a left-canonical form, ``None`` for a product state.
@@ -45,38 +71,6 @@ class CanonicalMPS:
         If the orthogonality centre position does not correspond to the number of sites.
     ValueError
         If any of the tensors does not have three dimensions.
-
-    Notes
-    -----
-    Hereafter, by saying the MPS is in a canonical form we mean one of the following.
-
-    1) Right-canonical: all tensors are right isometries, i.e.::
-
-        ---( )---     ---
-            |   |       |
-            |   |  ==   |
-            |   |       |
-        ---(*)---     ---
-
-    2) Left-canonical: all tensors are left isometries, i.e.::
-
-        ---( )---     ---
-        |   |         |
-        |   |    ==   |
-        |   |         |
-        ---(*)---     ---
-
-    3) Mixed-canonical: all but one tensors are left or right isometries.
-    This exceptional tensor will be hereafter called the orthogonality centre.
-
-    The Matrix Product State is stored as a list of three-dimensional tensors.
-    Essentially, it corresponds to storing each ``A[i]`` or ``B[i]`` as shown in
-    fig.4c in reference `[1]_`.
-    Note, a tensor with a star inside is considered to be complex-conjugated.
-
-    .. [1] Hauschild, J. and Pollmann, F., 2018.
-       Efficient numerical simulations with tensor networks:
-       Tensor Network Python (TeNPy). SciPost Physics Lecture Notes, p.005.
     """
 
     def __init__(
@@ -199,7 +193,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        site: int
+        site : int
             The site index of the tensor.
         """
 
@@ -235,7 +229,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        flatten: bool
+        flatten : bool
             Whether to merge all the physical indices to form a vector or not.
         """
 
@@ -259,11 +253,11 @@ class CanonicalMPS:
         This operation is depicted in the following diagram::
 
                    i     j
-             a     |     |    c             i     j
-            ...---(*)---(*)---...       ab  |     |  cd
-                                 --> ...---[ ]---[ ]---...
-            ...---( )---( )---...           |     |
-             b     |     |    d             k     l
+             a     |     |    c                 i     j
+            ...---(*)---(*)---...           ab  |     |  cd
+                                    -->  ...---[ ]---[ ]---...
+            ...---( )---( )---...               |     |
+             b     |     |    d                 k     l
                    k     l
 
         In the cartoon, ``{i,j,k,l}`` and ``{a,b,c,d}`` are indices.
@@ -302,9 +296,9 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        final_pos: np.int16
+        final_pos : np.int16
             Final position of the orthogonality centre.
-        return_singular_values: bool
+        return_singular_values : bool
             Whether to return the singular values obtained at each involved bond.
 
         Raises
@@ -414,9 +408,8 @@ class CanonicalMPS:
     def explicit(self) -> "mdopt.mps.explicit.ExplicitMPS":
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
-
         Essentially, retrieves each ``Γ[i]`` and ``Λ[i]`` from ``A[i]`` or ``B[i]``.
-        See fig.4b in https://scipost.org/10.21468/SciPostPhysLectNotes.5 for reference.
+        See fig.4b in `[1]`_ for reference.
         """
 
         (mps_canonical, border) = self.move_orth_centre_to_border()
@@ -450,8 +443,7 @@ class CanonicalMPS:
     def right_canonical(self) -> "CanonicalMPS":
         """
         Returns the current MPS in the right-canonical form.
-
-        See eq.19 in [1]_ for reference.
+        See eq.19 in `[1]`_ for reference.
         """
 
         return self.move_orth_centre(0)
@@ -459,8 +451,7 @@ class CanonicalMPS:
     def left_canonical(self) -> "CanonicalMPS":
         """
         Returns the current MPS in the left-canonical form.
-
-        See eq.19 in [1]_ for reference.
+        See eq.19 in `[1]`_ for reference.
         """
 
         return self.move_orth_centre(self.num_sites - 1)

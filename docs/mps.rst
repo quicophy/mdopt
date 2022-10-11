@@ -1,10 +1,10 @@
-mdopt.mps package
+The MPS module
 =================
 
 Submodules
 ----------
 
-mdopt.mps.canonical module
+The Canonical MPS module
 --------------------------
 
 .. automodule:: mdopt.mps.canonical

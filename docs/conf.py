@@ -25,7 +25,7 @@ copyright = "2022, Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
-release = "0.1.0"
+release = "0.2.0"
 
 
 # -- General configuration ---------------------------------------------------

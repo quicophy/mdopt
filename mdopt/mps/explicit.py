@@ -1,7 +1,20 @@
 """
-The ``mdopt.mps.explicit`` module.
-============================================
-This module contains the Explicit MPS class.
+This module contains the :class:`ExplicitMPS` class.
+Hereafter by saying the MPS is in an explicit form we mean that
+the state is stored in the following format: for each three-dimensional tensor
+at site `i`, there exists a singular values diagonal matrix at bond ``i``::
+
+            i     i    i+1    i
+    ...---[ ]---( )---[ ]---( )---...
+                    |           |
+                    |           |
+
+For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
+the corresponding singular value tensors at the boundaries
+would be the identities of the same dimension.
+We index sites with ``i`` from ``0`` to ``L-1``, with bond ``i`` being left of site ``i``.
+Essentially, it corresponds to storing each ``Γ[i]`` and ``Λ[i]`` as shown in
+fig.4b in reference `[1]`_.
 """
 
 from functools import reduce
@@ -17,24 +30,6 @@ from mdopt.utils.utils import kron_tensors
 class ExplicitMPS:
     """
     Class for finite-size explicit matrix product states (MPS) with open boundary conditions.
-
-    Notes
-    -----
-    Hereafter by saying the MPS is in an explicit form we mean that
-    the state is stored in the following format: for each three-dimensional tensor
-    at site `i`, there exists a singular values diagonal matrix at bond ``i``::
-
-               i     i    i+1    i
-        ...---[ ]---( )---[ ]---( )---...
-                     |           |
-                     |           |
-
-    For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
-    the corresponding singular value tensors at the boundaries
-    would be the identities of the same dimension.
-    We index sites with ``i`` from ``0`` to ``L-1``, with bond ``i`` being left of site ``i``.
-    Essentially, it corresponds to storing each ``Γ[i]`` and ``Λ[i]`` as shown in
-    fig.4b in reference [1]_.
 
     Attributes
     ----------
