@@ -180,6 +180,5 @@ def test_mps_utils_create_custom_product_state():
         np.array([[[0.70710678], [0.70710678]]]),
         np.array([[[0.70710678], [0.70710678]]]),
     ]
-    mps_1_tensors /= np.linalg.norm(mps_1_tensors)
 
     assert np.isclose(mps_1.tensors, mps_1_tensors).all()
