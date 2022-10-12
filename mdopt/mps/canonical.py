@@ -319,18 +319,21 @@ class CanonicalMPS:
             _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(
                 self, return_orth_flags=True
             )
+
             if flags_left in (
                 [True] + [False] * (self.num_sites - 1),
                 [False] * self.num_sites,
             ):
                 if flags_right == [not flag for flag in flags_left]:
                     self.orth_centre = 0
+
             if flags_left in (
                 [True] * (self.num_sites - 1) + [False],
                 [True] * self.num_sites,
             ):
                 if flags_right == [not flag for flag in flags_left]:
                     self.orth_centre = self.num_sites - 1
+
             if (flags_left == [True] * self.num_sites) and (
                 flags_right == [True] * self.num_sites
             ):
