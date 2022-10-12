@@ -430,7 +430,7 @@ def apply_parity_constraints(
 
                     # Managing possible issues with multiple orthogonality centres
                     # arising if we do not renormalise.
-                    if not orth_centres and len(orth_centres) == 1:
+                    if orth_centres and len(orth_centres) == 1:
                         codeword_state.orth_centre = orth_centres[0]
                     # Convention.
                     if all(flags_left) and all(flags_right):
@@ -639,7 +639,7 @@ if __name__ == "__main__":
     print("")
 
     # Defining the parameters of a classical LDPC code.
-    NUM_BITS, NUM_CHECKS = 24, 18
+    NUM_BITS, NUM_CHECKS = 16, 12
     CHECK_DEGREE, BIT_DEGREE = 4, 3
     if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The Tanner graph of the code must be bipartite.")
@@ -672,11 +672,11 @@ if __name__ == "__main__":
 
     # Building the corresponding matrix product states.
     initial_codeword_state = create_custom_product_state(
-        INITIAL_CODEWORD
-    ).right_canonical()
+        INITIAL_CODEWORD, form="Right-canonical"
+    )
     perturbed_codeword_state = create_custom_product_state(
-        PERTURBED_CODEWORD
-    ).right_canonical()
+        PERTURBED_CODEWORD, form="Right-canonical"
+    )
 
     # Passing the perturbed codeword state through the bias channel.
     perturbed_codeword_state = apply_bias_channel(
