@@ -4,24 +4,25 @@ The ``mdopt.mps.utils`` module.
 This module contains various MPS utilities.
 """
 
-from typing import Union, Optional
+from typing import Union, Optional, cast
 from functools import reduce
 import numpy as np
 from opt_einsum import contract
+
 from mdopt.utils.utils import svd
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 
 
-def create_state_vector(num_sites: np.int16, phys_dim: np.int16 = 2) -> np.ndarray:
+def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
     """
     Creates a uniform random complex quantum state in the form of a state vector.
 
     Parameters
     ----------
-    num_sites : np.int16
+    num_sites : int
         Number of degrees of freedom.
-    phys_dim : np.int16
+    phys_dim : int
         Number of dimensions of each degree of freedom.
 
     Returns
@@ -39,7 +40,7 @@ def create_state_vector(num_sites: np.int16, phys_dim: np.int16 = 2) -> np.ndarr
 
 
 def find_orth_centre(
-    mps: CanonicalMPS, return_orth_flags: bool = False, tolerance: np.float64 = 1e-12
+    mps: CanonicalMPS, return_orth_flags: bool = False, tolerance: float = 1e-12
 ):
     """
     Returns a list of integers corresponding to positions of orthogonality centres of an MPS.
@@ -50,12 +51,12 @@ def find_orth_centre(
         The MPS to find the orthogonality centre(s) in.
     return_orth_flags : bool
         Whether to return if each tensor is a right or a left isometry.
-    tolerance : np.float64
+    tolerance : np.float32
         Numerical tolerance for checking the isometry property.
 
     Returns
     -------
-    orth_centres : list[np.int16]
+    orth_centres : list[int]
         Indices of sites at which tensors are orthogonality centres.
     orth_flags_left : Optional[list[bool]]
         Boolean variables for each tensor corresponding to being a left isometry.
@@ -74,7 +75,7 @@ def find_orth_centre(
             "Orthogonality centre is undefined for an Explicit MPS instance."
         )
 
-    num_sites = len(mps)
+    num_sites = mps.num_sites
 
     orth_flags_left = []
     orth_flags_right = []
@@ -82,11 +83,11 @@ def find_orth_centre(
 
     for i, tensor in enumerate(mps.tensors):
 
-        to_be_identity_left = contract(
-            "ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)]
+        to_be_identity_left = np.asarray(
+            contract("ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
-        to_be_identity_right = contract(
-            "ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)]
+        to_be_identity_right = np.asarray(
+            contract("ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
 
         identity_left = np.identity(to_be_identity_left.shape[0])
@@ -126,7 +127,7 @@ def find_orth_centre(
     return orth_centres
 
 
-def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
+def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
     """
     Checks if the MPS is in any of the canonical forms.
 
@@ -134,7 +135,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
     ----------
     mps : CanonicalMPS
         The MPS to check the canonical form of.
-    tolerance : np.float64
+    tolerance : np.float32
         Numerical tolerance for checking the isometry property.
 
     Returns
@@ -158,15 +159,15 @@ def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
     flags_right = []
     for _, tensor in enumerate(mps.tensors):
 
-        to_be_identity_left = contract(
-            "ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)]
+        to_be_identity_left = np.asarray(
+            contract("ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
-        to_be_identity_right = contract(
-            "ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)]
+        to_be_identity_right = np.asarray(
+            contract("ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
 
-        identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float64)
-        identity_right = np.identity(to_be_identity_right.shape[0], dtype=np.float64)
+        identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float32)
+        identity_right = np.identity(to_be_identity_right.shape[0], dtype=np.float32)
 
         flags_left.append(
             np.isclose(
@@ -190,7 +191,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: np.float64 = 1e-12):
 
 def inner_product(
     mps_1: Union[CanonicalMPS, ExplicitMPS], mps_2: Union[CanonicalMPS, ExplicitMPS]
-) -> Union[np.float64, np.complex128]:
+) -> Union[np.float32, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
@@ -203,7 +204,7 @@ def inner_product(
 
     Returns
     -------
-    product : Union[np.float64, np.complex128]
+    product : Union[np.float32, np.complex128]
         The value of the inner product.
 
     Raises
@@ -251,11 +252,11 @@ def inner_product(
 
 def mps_from_dense(
     state_vector: np.ndarray,
-    phys_dim: np.int16 = 2,
-    chi_max: np.int16 = 1e4,
-    tolerance: np.float64 = 1e-12,
+    phys_dim: int = int(2),
+    chi_max: int = int(1e4),
+    tolerance: np.float32 = np.float32(1e-12),
     form: str = "Explicit",
-    orth_centre: Optional[np.int16] = None,
+    orth_centre: Optional[int] = None,
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
     Builds an MPS from a dense (state-vector) from.
@@ -264,12 +265,12 @@ def mps_from_dense(
     ----------
     state_vector : np.ndarray
         The initial state vector.
-    phys_dim : np.int16
+    phys_dim : int
         Dimensionality of the local Hilbert space, i.e.,
         the dimension of each physical leg of the MPS.
-    chi_max : np.int16
+    chi_max : int
         Maximum number of singular values to keep.
-    tolerance : np.float64
+    tolerance : np.float32
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
     form : str
         The form of the MPS. Available options:
@@ -277,7 +278,7 @@ def mps_from_dense(
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
             | ``Mixed-canonical`` : The :class:`CanonicalMPS` mixed-canonical form.
-    orth_centre : Optional[np.int16]
+    orth_centre : Optional[int]
         The orthogonal centre position for the mixed-canonical form.
 
     Returns
@@ -325,7 +326,7 @@ def mps_from_dense(
         tensors.insert(0, v_r)
         singular_values.insert(0, singular_values_local)
 
-    singular_values.append(np.array([1.0]))
+    singular_values.append([1.0])
 
     for i, _ in enumerate(tensors):
 
@@ -342,6 +343,7 @@ def mps_from_dense(
             tensors, singular_values, tolerance=tolerance, chi_max=chi_max
         ).left_canonical()
     if form == "Mixed-canonical":
+        orth_centre = cast(int, orth_centre)
         return ExplicitMPS(
             tensors, singular_values, tolerance=tolerance, chi_max=chi_max
         ).mixed_canonical(orth_centre=orth_centre)
@@ -350,9 +352,9 @@ def mps_from_dense(
 
 
 def create_simple_product_state(
-    num_sites: np.int16,
+    num_sites: int,
     which: str = "0",
-    phys_dim: np.int16 = 2,
+    phys_dim: int = 2,
     form: str = "Explicit",
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     r"""
@@ -360,14 +362,14 @@ def create_simple_product_state(
 
     Parameters
     ----------
-    num_sites : np.int16
+    num_sites : int
         The number of sites.
     which : str
         The form of the MPS, for explanation see the notes. Available options:
             | ``0`` : The :math:`|0...0>` state.
             | ``1`` : The :math:`|1...1>` state.
             | ``+`` : The :math:`|+...+>` state.
-    phys_dim : np.int16
+    phys_dim : int
         Dimensionality of the local Hilbert space, i.e.,
         the dimension of each physical leg of the MPS.
     form : str
@@ -419,7 +421,7 @@ def create_simple_product_state(
 
 
 def create_custom_product_state(
-    string: str, phys_dim: np.int16 = 2, form: str = "Explicit"
+    string: str, phys_dim: int = 2, form: str = "Explicit"
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     r"""
     Creates a custom product-state MPS defined by the ``string`` argument.
@@ -428,7 +430,7 @@ def create_custom_product_state(
     ----------
     string : str
         The string defining the product-state MPS. Available characters: ``0``, ``1``, ``+``.
-    phys_dim : np.int16
+    phys_dim : int
         Dimensionality of the local Hilbert space, i.e.,
         the dimension of each physical leg of the MPS.
     form : str

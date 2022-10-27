@@ -4,7 +4,7 @@ The ``mdopt.contractor.contractor`` module.
 This module contains the MPS-MPO contractor functions.
 """
 
-from typing import Union
+from typing import Union, List, Tuple, cast
 import numpy as np
 from opt_einsum import contract
 
@@ -61,7 +61,7 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
 
     tensor_updated = contract("ijk, jl -> ilk", tensor, operator, optimize=[(0, 1)])
 
-    return tensor_updated
+    return np.asarray(tensor_updated)
 
 
 def apply_two_site_unitary(
@@ -69,9 +69,9 @@ def apply_two_site_unitary(
     b_1: np.ndarray,
     b_2: np.ndarray,
     unitary: np.ndarray,
-    chi_max: np.int16 = 1e4,
-    cut: np.float64 = 1e-12,
-) -> tuple[np.ndarray]:
+    chi_max: int = int(1e4),
+    cut: np.float32 = np.float32(1e-12),
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Applies a two-site unitary operator to a right-canonical MPS as follows::
 
@@ -99,9 +99,9 @@ def apply_two_site_unitary(
         The second MPS right-isometric tensor to apply the unitary to.
     unitary : np.ndarray
         The unitary tensor we apply.
-    cut: np.float64
+    cut : np.float32
         Singular values smaller than this will be discarded.
-    chi_max: np.int16
+    chi_max : int
         Maximum number of singular values to keep.
 
     Returns
@@ -160,18 +160,19 @@ def apply_two_site_unitary(
         optimize=[(0, 1)],
     )
 
-    return (b_1_updated, b_2_updated)
+    return np.asarray(b_1_updated), np.asarray(b_2_updated)
 
 
 def mps_mpo_contract(
     mps: Union[ExplicitMPS, CanonicalMPS],
-    mpo: list[np.ndarray],
-    start_site: np.int16 = 0,
+    mpo: List[np.ndarray],
+    start_site: int = int(0),
     renormalise: bool = False,
-    chi_max: np.int64 = 1e4,
-    cut: np.float64 = 1e-12,
+    chi_max: int = int(1e4),
+    cut: np.float32 = np.float32(1e-12),
     inplace: bool = False,
-) -> CanonicalMPS:
+    result_to_explicit: bool = False,
+) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     Applies an MPO to an MPS.
 
@@ -204,14 +205,14 @@ def mps_mpo_contract(
         According to our convention, each operator has legs (vL, vR, pU, pD),
         where v stands for "virtual", p -- for "physical",
         and L, R, U, D stand for "left", "right", "up", "down".
-    start_site : np.int16
+    start_site : int
         Index of the starting site.
     renormalise : bool
         Whether to renormalise the singular values after each contraction
         involving two neigbouring MPS sites.
-    chi_max : np.int16
+    chi_max : int
         Maximum bond dimension to keep.
-    cut : np.float64
+    cut : np.float32
         Cutoff for the singular values.
     inplace : bool
         Whether to modify the starting MPS or create a new one.
@@ -235,8 +236,9 @@ def mps_mpo_contract(
         mps = mps.copy()
     if isinstance(mps, ExplicitMPS):
         mps = mps.mixed_canonical(start_site)
+    assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = mps.move_orth_centre(start_site)
+        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site))
 
     for i, tensor in enumerate(mpo):
         if len(tensor.shape) != 4:
@@ -276,7 +278,8 @@ def mps_mpo_contract(
         )
 
         orth_centre_index += 1
-        mps.orth_centre = orth_centre_index
+        if isinstance(mps, CanonicalMPS):
+            mps.orth_centre = orth_centre_index
 
         mps.tensors[orth_centre_index] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
@@ -311,5 +314,8 @@ def mps_mpo_contract(
     mps.tensors[orth_centre_index + 1] = contract(
         "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
     )
+
+    if result_to_explicit and isinstance(mps, CanonicalMPS):
+        return mps.explicit()
 
     return mps

@@ -19,7 +19,7 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Iterable
+from typing import Iterable, List, cast
 import numpy as np
 from opt_einsum import contract
 
@@ -36,14 +36,14 @@ class ExplicitMPS:
     tensors : list[np.ndarray]
         The "physical" tensors of the MPS, one for each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    singular_values : list[np.ndarray]
+    singular_values : list[list]
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
-    tolerance : np.float64
+    tolerance : np.float32
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
-    num_sites : np.int16
+    num_sites : int
         Number of sites.
-    num_bonds : np.int16
+    num_bonds : int
         Number of non-trivial bonds, which is equal to ``num_sites - 1``.
 
     Raises
@@ -60,11 +60,11 @@ class ExplicitMPS:
 
     def __init__(
         self,
-        tensors: list[np.ndarray],
-        singular_values: list[np.ndarray],
-        tolerance: np.float64 = 1e-12,
-        chi_max: np.int16 = 1e4,
-    ):
+        tensors: List[np.ndarray],
+        singular_values: List[list],
+        tolerance: np.float32 = np.float32(1e-12),
+        chi_max: int = int(1e4),
+    ) -> None:
 
         self.tensors = tensors
         self.num_sites = len(tensors)
@@ -100,7 +100,7 @@ class ExplicitMPS:
                     f"instead the norm is {norm} at bond {i + 1}."
                 )
 
-    def __len__(self) -> np.int16:
+    def __len__(self) -> int:
         """Returns the number of sites in the MPS."""
         return self.num_sites
 
@@ -132,8 +132,10 @@ class ExplicitMPS:
 
         conjugated_tensors = [np.conjugate(tensor) for tensor in self.tensors]
         conjugated_sing_vals = [
-            np.conjugate(sing_vals) for sing_vals in self.singular_values
+            [np.conjugate(sigma) for sigma in sing_vals]
+            for sing_vals in self.singular_values
         ]
+        conjugated_sing_vals = cast(List[list], conjugated_sing_vals)
         return ExplicitMPS(
             conjugated_tensors,
             conjugated_sing_vals,
@@ -236,7 +238,7 @@ class ExplicitMPS:
 
         return dense
 
-    def density_mpo(self) -> list[np.ndarray]:
+    def density_mpo(self) -> List[np.ndarray]:
         """
         Returns the MPO representation (as a list of tensors)
         of the density matrix defined by a given MPS.
@@ -278,19 +280,21 @@ class ExplicitMPS:
     def entanglement_entropy(self) -> np.ndarray:
         """Returns the entanglement entropy for bipartitions at each of the bonds."""
 
-        def xlogx(arg):
-            if arg == 0:
-                return 0
+        def xlogx(arg: float) -> float:
+            if arg == 0.0:
+                return 0.0
             return arg * np.log(arg)
 
-        entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float64)
+        entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float32)
 
         for bond in range(self.num_bonds):
             singular_values = self.singular_values[bond].copy()
             singular_values[singular_values < self.tolerance] = 0
-            singular_values2 = singular_values * singular_values
-            entropy[bond] = -np.sum(
-                np.fromiter((xlogx(s) for s in singular_values2), dtype=np.float64)
+            singular_values2 = [
+                singular_value**2 for singular_value in singular_values
+            ]
+            entropy[bond] = -1 * np.sum(
+                np.fromiter((xlogx(s) for s in singular_values2), dtype=np.float32)
             )
         return entropy
 

@@ -1,6 +1,6 @@
 """
 This module contains the :class:`CanonicalMPS` class.
-Hereafter, by saying the Matrix Product State (MPS) is in a canonical form we mean one of the following.
+Hereafter, by saying the MPS is in a canonical form we will mean one of the following.
 
     1) Right-canonical: all tensors are right isometries, i.e.::
 
@@ -32,7 +32,7 @@ Hereafter, by saying the Matrix Product State (MPS) is in a canonical form we me
 
 from functools import reduce
 from copy import deepcopy
-from typing import Optional, Iterable, Tuple
+from typing import Optional, Iterable, Tuple, Union, List, cast
 import numpy as np
 
 import mdopt
@@ -48,21 +48,21 @@ class CanonicalMPS:
     tensors : list[np.ndarray]
         The tensors of the MPS, one per each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    orth_centre : Optional[np.int16]
+    orth_centre : Optional[int]
         Position of the orthogonality centre, does not support negative indexing.
         As a convention, this attribute is taken ``0`` for a right-canonical form,
         ``len(tensors) - 1`` for a left-canonical form, ``None`` for a product state.
-    tolerance : np.float64
+    tolerance : np.float32
         Numerical tolerance to zero out the singular values in Singular Value Decomposition.
-    chi_max : np.int16
+    chi_max : int
         The maximum bond dimension to keep in Singular Value Decompositions.
-    bond_dimensions : list[np.int16]
+    bond_dimensions : list[int]
         The list of all bond dimensions of the MPS.
-    phys_dimensions : list[np.int16]
+    phys_dimensions : list[int]
         The list of all physical dimensions of the MPS.
-    num_sites : np.int16
+    num_sites : int
         Number of sites.
-    num_bonds : np.int16
+    num_bonds : int
         Number of bonds.
 
     Raises
@@ -75,11 +75,11 @@ class CanonicalMPS:
 
     def __init__(
         self,
-        tensors: list[np.ndarray],
-        orth_centre: Optional[np.int16] = None,
-        tolerance: np.float64 = 1e-12,
-        chi_max: np.int16 = 1e4,
-    ):
+        tensors: List[np.ndarray],
+        orth_centre: Optional[int] = None,
+        tolerance: np.float32 = np.float32(1e-12),
+        chi_max: int = int(1e4),
+    ) -> None:
 
         self.tensors = tensors
         self.num_sites = len(tensors)
@@ -104,7 +104,7 @@ class CanonicalMPS:
                     f"while the one given has {len(tensor.shape)}."
                 )
 
-    def __len__(self) -> np.int16:
+    def __len__(self) -> int:
         """
         Returns the number of sites in the MPS.
         """
@@ -148,7 +148,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        site: int
+        site : int
             The site index of the tensor.
         """
 
@@ -240,7 +240,7 @@ class CanonicalMPS:
 
         return dense
 
-    def density_mpo(self) -> list[np.ndarray]:
+    def density_mpo(self) -> List[np.ndarray]:
         """
         Returns the MPO representation (as a list of tensors)
         of the density matrix defined by the MPS in a canonical form.
@@ -285,8 +285,8 @@ class CanonicalMPS:
         return self.explicit().entanglement_entropy()
 
     def move_orth_centre(
-        self, final_pos: np.int16, return_singular_values: bool = False
-    ) -> tuple["CanonicalMPS", list]:
+        self, final_pos: int, return_singular_values: bool = False
+    ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[list]]]:
         """
         Moves the orthogonality centre from its current position to ``final_pos``.
 
@@ -296,7 +296,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        final_pos : np.int16
+        final_pos : int
             Final position of the orthogonality centre.
         return_singular_values : bool
             Whether to return the singular values obtained at each involved bond.
@@ -316,7 +316,7 @@ class CanonicalMPS:
         singular_values = []
 
         if self.orth_centre is None:
-            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(
+            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
                 self, return_orth_flags=True
             )
 
@@ -339,12 +339,13 @@ class CanonicalMPS:
             ):
                 self.orth_centre = 0
 
+        assert self.orth_centre is not None
         if self.orth_centre < final_pos:
             begin, final = self.orth_centre, final_pos
             mps = self.copy()
         elif self.orth_centre > final_pos:
             mps = self.reverse()
-            begin = mps.orth_centre
+            begin = cast(int, mps.orth_centre)
             final = (self.num_sites - 1) - final_pos
         else:
             return self
@@ -362,7 +363,7 @@ class CanonicalMPS:
                 np.diag(singular_values_bond), v_r, (1, 0)
             )
 
-        if self.orth_centre > final_pos:
+        if cast(int, self.orth_centre) > final_pos:
             mps = mps.reverse()
             singular_values = list(reversed(singular_values))
 
@@ -380,7 +381,7 @@ class CanonicalMPS:
         """
 
         if self.orth_centre is None:
-            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(
+            _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
                 self, return_orth_flags=True
             )
             if flags_left in (
@@ -401,31 +402,33 @@ class CanonicalMPS:
         else:
             if self.orth_centre <= int(self.num_bonds / 2):
                 mps = self.move_orth_centre(final_pos=0, return_singular_values=False)
-                return mps, "first"
+                return cast("CanonicalMPS", mps), "first"
 
             mps = self.move_orth_centre(
                 final_pos=self.num_sites - 1, return_singular_values=False
             )
-        return mps, "last"
+        return cast("CanonicalMPS", mps), "last"
 
-    def explicit(self) -> "mdopt.mps.explicit.ExplicitMPS":
+    def explicit(self) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
         Essentially, retrieves each ``Γ[i]`` and ``Λ[i]`` from ``A[i]`` or ``B[i]``.
         See fig.4b in `[1]`_ for reference.
         """
 
-        (mps_canonical, border) = self.move_orth_centre_to_border()
+        mps_canonical, border = self.move_orth_centre_to_border()
 
         if border == "first":
             self.orth_centre = 0
-            mps_canonical, singular_values = self.move_orth_centre(
-                self.num_sites - 1, return_singular_values=True
+            mps_canonical, singular_values = cast(
+                Tuple[CanonicalMPS, List[np.ndarray]],
+                self.move_orth_centre(self.num_sites - 1, return_singular_values=True),
             )
-        else:
+        elif border == "last":
             self.orth_centre = self.num_sites - 1
-            mps_canonical, singular_values = self.move_orth_centre(
-                0, return_singular_values=True
+            mps_canonical, singular_values = cast(
+                Tuple[CanonicalMPS, List[np.ndarray]],
+                self.move_orth_centre(0, return_singular_values=True),
             )
 
         singular_values.insert(0, np.array([1.0]))
@@ -441,7 +444,9 @@ class CanonicalMPS:
                 )
             )
 
-        return mdopt.mps.explicit.ExplicitMPS(explicit_tensors, singular_values)
+        return mdopt.mps.explicit.ExplicitMPS(  # type: ignore
+            explicit_tensors, cast(List[np.ndarray], singular_values)
+        )
 
     def right_canonical(self) -> "CanonicalMPS":
         """
@@ -449,7 +454,7 @@ class CanonicalMPS:
         See eq.19 in `[1]`_ for reference.
         """
 
-        return self.move_orth_centre(0)
+        return cast(CanonicalMPS, self.move_orth_centre(0))
 
     def left_canonical(self) -> "CanonicalMPS":
         """
@@ -457,4 +462,4 @@ class CanonicalMPS:
         See eq.19 in `[1]`_ for reference.
         """
 
-        return self.move_orth_centre(self.num_sites - 1)
+        return cast(CanonicalMPS, self.move_orth_centre(self.num_sites - 1))

@@ -1,5 +1,7 @@
 """This module contains miscellaneous utilities."""
 
+from typing import Tuple, List, cast
+from itertools import chain
 import numpy as np
 import scipy
 from opt_einsum import contract
@@ -7,10 +9,10 @@ from opt_einsum import contract
 
 def svd(
     mat: np.ndarray,
-    cut: np.float64 = 1e-12,
-    chi_max: np.int16 = 1e4,
+    cut: np.float32 = np.float32(1e-12),
+    chi_max: int = int(1e4),
     renormalise: bool = False,
-) -> tuple[np.ndarray]:
+) -> Tuple[np.ndarray, list, np.ndarray]:
     """
     Performs the Singular Value Decomposition with different features.
 
@@ -18,9 +20,9 @@ def svd(
     ----------
     mat : np.ndarray
         Matrix provided as a tensor with 2 dimensions.
-    cut : np.float64
+    cut : np.float32
         Singular values smaller than this will be discarded.
-    chi_max : np.int16
+    chi_max : int
         Maximum number of singular values to keep.
     renormalise : bool
         Whether to renormalise the singular value spectrum after the cut.
@@ -61,7 +63,7 @@ def svd(
     if renormalise:
         singular_values /= np.linalg.norm(singular_values)
 
-    return u_l, singular_values, v_r
+    return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r)
 
 
 def kron_tensors(
@@ -145,10 +147,10 @@ def kron_tensors(
 
 def split_two_site_tensor(
     tensor: np.ndarray,
-    chi_max: np.int16 = 1e4,
-    cut: np.float64 = 1e-12,
+    chi_max: int = int(1e4),
+    cut: np.float32 = np.float32(1e-12),
     renormalise: bool = False,
-) -> tuple:
+) -> Tuple[np.ndarray, list, np.ndarray]:
     """
     Split a two-site MPS tensor according to the following diagram::
 
@@ -160,9 +162,9 @@ def split_two_site_tensor(
     ----------
     tensor : np.ndarray
         Two-site tensor ``(i, j, k, l)``.
-    chi_max : np.int16
+    chi_max : int
         Maximum number of singular values to keep.
-    eps : np.float64
+    cut : np.float32
         Discard any singular values smaller than eps.
 
     Returns
@@ -201,22 +203,22 @@ def split_two_site_tensor(
 
 
 def create_random_mpo(
-    num_sites: np.int16,
-    bond_dimensions: list[np.int16],
-    phys_dim: np.int16,
+    num_sites: int,
+    bond_dimensions: List[int],
+    phys_dim: int,
     which: str = "uniform",
-) -> list[np.ndarray]:
+) -> List[np.ndarray]:
     """
     Creates a random complex-valued Matrix Product Operator.
 
     Parameters
     ----------
-    num_sites : np.int16
+    num_sites : int
         The number of sites for the MPO.
         This will be equal to the number of tensors.
-    bond_dimensions : list[np.int16]
+    bond_dimensions : list[int]
         A list of bond dimensions.
-    phys_dim : np.int16
+    phys_dim : int
         Physical dimension of the tensors.
     which : str
         Specifies the distribution from which
@@ -242,11 +244,11 @@ def create_random_mpo(
     bonds = [[dim, dim] for dim in bond_dimensions]
     bonds.append([1])
     bonds.insert(0, [1])
-    bonds = [item for sublist in bonds for item in sublist]
+    bond_dims = list(chain.from_iterable(bonds))
 
     shapes = [
-        (bonds[i], bonds[i + 1], phys_dim, phys_dim)
-        for i in range(0, len(bonds) - 1, 2)
+        (bond_dims[i], bond_dims[i + 1], phys_dim, phys_dim)
+        for i in range(0, len(bond_dims) - 1, 2)
     ]
 
     if which == "uniform":
@@ -272,7 +274,7 @@ def create_random_mpo(
 
 
 def mpo_to_matrix(
-    mpo: list[np.ndarray], interlace: bool = False, group: bool = False
+    mpo: List[np.ndarray], interlace: bool = False, group: bool = False
 ) -> np.ndarray:
     """
     Creates a matrix from an MPO.
@@ -361,11 +363,11 @@ def mpo_to_matrix(
 
 def mpo_from_matrix(
     matrix: np.ndarray,
-    num_sites: np.int16,
+    num_sites: int,
     interlaced: bool = True,
-    phys_dim: np.int16 = 2,
-    chi_max: np.int16 = 1e4,
-) -> list[np.ndarray]:
+    phys_dim: int = 2,
+    chi_max: int = int(1e4),
+) -> List[np.ndarray]:
     """
     Creates an MPO from a matrix.
 
@@ -374,13 +376,13 @@ def mpo_from_matrix(
     matrix : np.ndarray
         The matrix to convert to an MPO.
         Can be given with either physical legs grouped together or merged (see notes).
-    num_sites : np.int16
+    num_sites : int
         The number of sites in the MPO.
     interlaced : bool
         Whether the matrix legs are interlaced or not.
-    phys_dim : np.int16
+    phys_dim : int
         Local dimension of the physical legs.
-    chi_max : np.int16
+    chi_max : int
         Maximum bond dimension allowed in the MPO.
 
     Returns
@@ -396,7 +398,7 @@ def mpo_from_matrix(
     Notes
     -----
     If ``interlaced==True``, the matrix' legs are considered to go as
-    ``(p0U, p0D, p1U, p1D, ...)``, which means physical legs sticking up and down with the site number.
+    ``(p0U, p0D, p1U, p1D, ...)``, which means physical legs sticking up and down with site number.
     If ``interlaced==False``, the matrix' legs are considered to go as
     ``(p0D, p1D, ..., p0U, p1U, ...)``, which means listing first all physical legs sticking down
     with the site number, and then all physical legs sticking up.
@@ -411,7 +413,7 @@ def mpo_from_matrix(
            |   |   |
           p0D p1D p2D
 
-    Each tensor in the ``mpo`` list will have legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
+    Each tensor in the ``mpo`` list has legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
     ``p`` -- for "physical", and ``L, R, U, D`` -- for "left", "right", "up", "down" accordingly.
     """
 
@@ -439,8 +441,7 @@ def mpo_from_matrix(
     # Dealing with possible interlacing.
     if not interlaced:
         correct_order = list([i + num_sites, i] for i in range(num_sites))
-        correct_order = [item for sublist in correct_order for item in sublist]
-        matrix = matrix.transpose(correct_order)
+        matrix = matrix.transpose(list(chain.from_iterable(correct_order)))
 
     # Treating the MPO as an MPS with squared physical dimensions.
     mpo = []

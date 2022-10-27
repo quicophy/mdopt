@@ -3,7 +3,7 @@ This module contains the :class:`DMRG` and the :class:`EffectiveOperator` classe
 Inspired by TenPy.
 """
 
-from typing import Union
+from typing import Union, List, cast
 import numpy as np
 import scipy.sparse
 from opt_einsum import contract
@@ -43,7 +43,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         mpo_tensor_left: np.ndarray,
         mpo_tensor_right: np.ndarray,
         right_environment: np.ndarray,
-    ):
+    ) -> None:
         """Initialises an effective operator tensor network.
 
         Parameters
@@ -127,6 +127,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
             self.mpo_tensor_right,
             self.right_environment,
             optimize=[(0, 1), (0, 3), (0, 2), (0, 1)],
+            use_blas=True,
         )
 
         return np.reshape(two_site_tensor, self.shape[0])
@@ -148,9 +149,9 @@ class DMRG:
         Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
         where ``v`` stands for "virtual", ``p`` -- for "physical",
         and ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
-    chi_max : np.int16
+    chi_max : int
         The highest bond dimension of an MPS allowed.
-    cut : np.float64
+    cut : np.float32
         The lower boundary of the spectrum, i.e., all the
         singular values smaller than that will be discarded.
     mode : str
@@ -159,7 +160,7 @@ class DMRG:
             | ``SM`` : Smallest (in magnitude) eigenvalues.
             | ``LA`` : Largest (algebraic) eigenvalues.
             | ``SA`` : Smallest (algebraic) eigenvalues.
-    silent : np.float64
+    silent : bool
         Whether to show/hide the progress bar.
     copy : bool
         Whether to copy the input MPS or modify inplace.
@@ -168,13 +169,13 @@ class DMRG:
     def __init__(
         self,
         mps: Union[ExplicitMPS, CanonicalMPS],
-        mpo: list[np.ndarray],
-        chi_max: np.int16 = 1e4,
-        cut: np.float64 = 1e-12,
+        mpo: List[np.ndarray],
+        chi_max: int = int(1e4),
+        cut: np.float32 = np.float32(1e-12),
         mode: str = "SA",
         silent: bool = False,
         copy: bool = True,
-    ):
+    ) -> None:
 
         if len(mps) != len(mpo):
             raise ValueError(
@@ -195,8 +196,8 @@ class DMRG:
             self.mps = mps.copy()
         if isinstance(self.mps, CanonicalMPS):
             self.mps = self.mps.right_canonical()
-        self.left_environments = [None] * len(mps)
-        self.right_environments = [None] * len(mps)
+        self.left_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
+        self.right_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
         self.mpo = mpo
         self.chi_max = chi_max
         self.cut = cut
@@ -205,16 +206,16 @@ class DMRG:
 
         start_bond_dim = self.mpo[0].shape[0]
         chi = mps.tensors[0].shape[0]
-        left_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float64)
-        right_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float64)
-        left_environment[:, 0, :] = np.eye(chi, dtype=np.float64)
-        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=np.float64)
+        left_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float32)
+        right_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float32)
+        left_environment[:, 0, :] = np.eye(chi, dtype=np.float32)
+        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=np.float32)
         self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
         for i in reversed(range(1, len(mps))):
             self.update_right_environment(i)
 
-    def sweep(self):
+    def sweep(self) -> None:
         """
         One DMRG sweep.
 
@@ -228,7 +229,7 @@ class DMRG:
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
-    def update_bond(self, i: np.int16):
+    def update_bond(self, i: int) -> None:
         """
         Updates the bond between sites ``i`` and ``i+1``.
         """
@@ -247,7 +248,7 @@ class DMRG:
                 effective_hamiltonian.shape[0]
             )
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
                 effective_hamiltonian.shape[0]
             )
@@ -286,7 +287,7 @@ class DMRG:
         self.update_left_environment(i)
         self.update_right_environment(j)
 
-    def update_right_environment(self, i: np.int16):
+    def update_right_environment(self, i: int) -> None:
         """
         Compute the ``right_environment`` right of site ``i-1``
         from the ``right_environment`` right of site ``i``.
@@ -297,7 +298,7 @@ class DMRG:
         if isinstance(self.mps, ExplicitMPS):
             right_iso = self.mps.single_site_right_iso(i)
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i - 1)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
             right_iso = self.mps.single_site_tensor(i)
 
         right_environment = contract(
@@ -310,7 +311,7 @@ class DMRG:
         )
         self.right_environments[i - 1] = right_environment
 
-    def update_left_environment(self, i: np.int16):
+    def update_left_environment(self, i: int) -> None:
         """
         Compute the ``left_environment`` left of site ``i+1``
         from the ``left_environment`` left of site ``i``.
@@ -321,7 +322,7 @@ class DMRG:
         if isinstance(self.mps, ExplicitMPS):
             left_iso = self.mps.single_site_left_iso(i)
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i + 1)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
             left_iso = self.mps.single_site_tensor(i)
 
         left_environment = contract(
@@ -334,7 +335,7 @@ class DMRG:
         )
         self.left_environments[i + 1] = left_environment
 
-    def run(self, num_iter: np.int16 = 1):
+    def run(self, num_iter: int = 1) -> None:
         """
         Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of iterations.
         """
