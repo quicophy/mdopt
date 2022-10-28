@@ -101,7 +101,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         Performs matrix-vector multiplication.
 
         Computes ``effective_operator * |x> = |x'>``.
-        This function is being used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
+        This function is being used by ``scipy.sparse.linalg.eigsh`` to diagonalise
         the effective operator with the Lanczos method, without generating the full matrix.
 
         Parameters

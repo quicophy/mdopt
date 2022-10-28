@@ -119,7 +119,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         Performs matrix-vector multiplication.
 
         Computes ``effective_density_operator * |x> = |x'>``.
-        This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
+        This function is used by ``scipy.sparse.linalg.eigsh`` to diagonalise
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
         Parameters
