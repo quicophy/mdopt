@@ -1,9 +1,9 @@
-"""Tests for the explicit MPS construction."""
+"""Tests for the ``mdopt.mps.explicit.ExplicitMPS`` class."""
 
 from functools import reduce
 from typing import Iterable
-import pytest
 import numpy as np
+import pytest
 from opt_einsum import contract
 
 from mdopt.mps.explicit import ExplicitMPS
@@ -18,9 +18,7 @@ from mdopt.mps.utils import (
 
 
 def test_explicit_init():
-    """Tests for the :method:`__init__`, :method:`__len__` and
-    :method:`__iter__` methods of the :class:`ExplicitMPS` class.
-    """
+    """Tests for the ``__init__`` and ``__len__`` methods of the ``ExplicitMPS`` class."""
 
     for _ in range(10):
 
@@ -77,7 +75,7 @@ def test_explicit_init():
 
 
 def test_explicit_copy():
-    """Test for the :method:`copy` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``copy`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -105,7 +103,7 @@ def test_explicit_copy():
 
 
 def test_explicit_reverse():
-    """Test for the :method:`reverse` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``reverse`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -132,7 +130,7 @@ def test_explicit_reverse():
 
 
 def test_explicit_conjugate():
-    """Test for the :method:`conjugate` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``conjugate`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -163,7 +161,7 @@ def test_explicit_conjugate():
 
 
 def test_explicit_single_site_left_iso():
-    """Test for the :method:`single_site_left_iso` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``single_site_left_iso`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -185,7 +183,7 @@ def test_explicit_single_site_left_iso():
 
 
 def test_explicit_single_site_right_iso():
-    """Test for the :method:`single_site_right_iso` method of the :method:`ExplicitMPS` class."""
+    """Test for the ``single_site_right_iso`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -208,7 +206,7 @@ def test_explicit_single_site_right_iso():
 
 
 def test_explicit_single_left_iso_iter():
-    """Test for the :method:`single_site_left_iso_iter` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``single_site_left_iso_iter`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -221,7 +219,7 @@ def test_explicit_single_left_iso_iter():
 
 
 def test_explicit_single_right_iso_iter():
-    """Test for the :method:`single_site_right_iso_iter` method of :class:`ExplicitMPS` class."""
+    """Test for the ``single_site_right_iso_iter`` method of ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -234,7 +232,7 @@ def test_explicit_single_right_iso_iter():
 
 
 def test_explicit_two_site_left_iso():
-    """Test for the :method:`two_site_left_iso` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``two_site_left_iso`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -263,7 +261,7 @@ def test_explicit_two_site_left_iso():
 
 
 def test_explicit_two_site_right_iso():
-    """Test for the :method:`two_site_right_iso` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``two_site_right_iso`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -292,8 +290,9 @@ def test_explicit_two_site_right_iso():
 
 
 def test_explicit_two_site_iter():
-    """Test for the :method:`two_site_right_iso_iter` and :method:`two_site_right_iso_iter`
-    methods of the :class:`ExplicitMPS` class.
+    """
+    Tests for the ``two_site_right_iso_iter`` and ``two_site_left_iso_iter``
+    methods of the ``ExplicitMPS`` class.
     """
 
     num_sites = np.random.randint(4, 9)
@@ -308,7 +307,7 @@ def test_explicit_two_site_iter():
 
 
 def test_explicit_dense():
-    """Test for the :method:`dense` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``dense`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -321,7 +320,7 @@ def test_explicit_dense():
 
 
 def test_explicit_density_mpo():
-    """Test for the :method:`density_mpo` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``density_mpo`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -332,7 +331,7 @@ def test_explicit_density_mpo():
 
         density_mpo = mps.density_mpo()
 
-        # Juggle the dimensions around to apply the `reduce` function later,
+        # Juggle the dimensions around to apply the ``reduce`` function later
         # which is used to create a density mpo to compare the method against.
         for i in range(num_sites):
             density_mpo[i] = density_mpo[i].transpose((0, 3, 2, 1))
@@ -343,12 +342,12 @@ def test_explicit_density_mpo():
 
         # Get rid of ghost dimensions of the MPO.
         density_matrix_mpo = density_matrix_mpo.squeeze()
+
         # Reshaping to the right order of indices.
         correct_order = list(range(0, 2 * num_sites, 2)) + list(
             range(1, 2 * num_sites, 2)
         )
-        print(correct_order)
-        print(density_matrix_mpo.shape)
+
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
         density_matrix_mpo = density_matrix_mpo.reshape(
@@ -371,14 +370,14 @@ def test_explicit_density_mpo():
 
 
 def test_explicit_entanglement_entropy():
-    """Test for the :method:`entanglement_entropy` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``entanglement_entropy`` method of the ``ExplicitMPS`` class."""
 
     num_sites = 4
 
-    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float64)
+    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float32)
     psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
-    mps_dimer = mps_from_dense(psi_many_body_dimer, form="Explicit")
+    mps_dimer = mps_from_dense(psi_many_body_dimer, form="Explicit", tolerance=1e-6)
 
     entropy_list = np.array(mps_dimer.entanglement_entropy())
 
@@ -386,11 +385,11 @@ def test_explicit_entanglement_entropy():
 
     zeros = entropy_list - correct_entropy_list
 
-    assert np.allclose(np.linalg.norm(zeros), 0)
+    assert np.allclose(np.linalg.norm(zeros), 0, atol=1e-6)
 
 
 def test_explicit_right_canonical():
-    """Test for the :method:`right_canonical` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``right_canonical`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -418,14 +417,14 @@ def test_explicit_right_canonical():
             )
 
             identity_right = np.identity(
-                to_be_identity_right.shape[0], dtype=np.float64
+                to_be_identity_right.shape[0], dtype=np.float32
             )
 
             assert np.isclose(np.linalg.norm(to_be_identity_right - identity_right), 0)
 
 
 def test_explicit_left_canonical():
-    """Test for the :method:`left_canonical` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``left_canonical`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -452,13 +451,13 @@ def test_explicit_left_canonical():
                 optimize=[(0, 1)],
             )
 
-            identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float64)
+            identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float32)
 
             assert np.isclose(np.linalg.norm(to_be_identity_left - identity_left), 0)
 
 
 def test_explicit_mixed_canonical():
-    """Test for the :method:`mixed_canonical` method of the :class:`ExplicitMPS` class."""
+    """Test for the ``mixed_canonical`` method of the ``ExplicitMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 

@@ -1,4 +1,4 @@
-"""Tests for the :module:`contractor` module."""
+"""Tests for the ``mdopt.contractor`` module."""
 
 import pytest
 import numpy as np
@@ -15,7 +15,7 @@ from mdopt.utils.utils import create_random_mpo, mpo_to_matrix
 
 
 def test_contractor_apply_one_site_operator():
-    r"""Test for the :func:`apply_one_site_operator` function."""
+    """Test for the ``mdopt.contractor.apply_one_site_operator`` function."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -82,7 +82,7 @@ def test_contractor_apply_one_site_operator():
 
 
 def test_contractor_apply_two_site_unitary():
-    r"""Test for the :func:`apply_two_site_unitary` function."""
+    """Test for the ``mdopt.contractor.apply_two_site_unitary`` function."""
 
     identity = np.eye(2)
     num_sites = np.random.randint(4, 9)
@@ -156,7 +156,7 @@ def test_contractor_apply_two_site_unitary():
 
 
 def test_contractor_mps_mpo_contract():
-    r"""Test for the :func:`mps_mpo_contract` function."""
+    """Test for the ``mdopt.contractor.mps_mpo_contract`` function."""
 
     num_sites = np.random.randint(4, 9)
     phys_dim = 2

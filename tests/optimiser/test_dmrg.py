@@ -1,17 +1,17 @@
-"""Tests for the :module:`dmrg` module."""
+"""Tests for the ``mdopt.optimiser.dmrg`` module."""
 
 import pytest
 import numpy as np
 from scipy.sparse.linalg import eigsh
 
-from examples.ising import IsingExact, IsingMPO
+from examples.ising.ground_state import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
 from mdopt.optimiser.dmrg import DMRG as dmrg
 from mdopt.optimiser.dmrg import EffectiveOperator
 
 
 def test_optimiser_effective_operator():
-    """Test for the :method:`__init__` method of :class:EffectiveOperator."""
+    """Test for the ``__init__`` method of the ``EffectiveOperator`` class."""
 
     left_environment = np.random.uniform(low=0, high=1, size=(2, 3, 2))
     mpo_tensor_left = np.random.uniform(low=0, high=1, size=(3, 3, 2, 2))
@@ -59,7 +59,7 @@ def test_optimiser_ground_states():
     """
     Test how DMRG finds the ground state of a 1D Ising model.
     Check that physical observables are correct and the MPS ground state
-    corresponds to the one from exact diagonalisation.
+    corresponds to the one given by virtue of exact diagonalisation.
     """
 
     for _ in range(5):
@@ -75,7 +75,7 @@ def test_optimiser_ground_states():
 
         mps_start = create_simple_product_state(num_sites, which="0", form="Explicit")
 
-        engine = dmrg(mps_start, ham_mpo, chi_max=1e4, cut=1e-12, mode="SA")
+        engine = dmrg(mps_start, ham_mpo)
         engine.run(num_runs)
         ground_state_mps = engine.mps
         ground_state_exact = eigsh(ham_exact, k=6)[1][:, 0]

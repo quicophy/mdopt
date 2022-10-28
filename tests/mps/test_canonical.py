@@ -1,4 +1,4 @@
-"""Tests for the CanonicalMPS class."""
+"""Tests for the ``mdopt.mps.canonical.CanonicalMPS`` class."""
 
 from functools import reduce
 from typing import Iterable
@@ -17,7 +17,7 @@ from mdopt.mps.canonical import CanonicalMPS
 
 
 def test_canonical_init():
-    """Test for the :method:`__init__` and `__len__` methods of the :class:`CanonicalMPS` class."""
+    """Tests for the ``__init__`` and ``__len__`` methods of the ``CanonicalMPS`` class."""
 
     for _ in range(10):
 
@@ -57,7 +57,7 @@ def test_canonical_init():
 
 
 def test_canonical_copy():
-    """Test for the :method:`copy` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``copy`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -81,7 +81,7 @@ def test_canonical_copy():
 
 
 def test_canonical_reverse():
-    """Test for the :method:`reverse` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``reverse`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -105,7 +105,7 @@ def test_canonical_reverse():
 
 
 def test_canonical_conjugate():
-    """Test for the :method:`conjugate` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``conjugate`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -129,7 +129,7 @@ def test_canonical_conjugate():
 
 
 def test_canonical_single_site_tensor():
-    """Test for the :method:`single_site_tensor` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``single_site_tensor`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -146,7 +146,7 @@ def test_canonical_single_site_tensor():
 
 
 def test_canonical_single_site_tensor_iter():
-    """Test for the :method:`single_site_tensor_iter` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``single_site_tensor_iter`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -159,7 +159,7 @@ def test_canonical_single_site_tensor_iter():
 
 
 def test_canonical_two_site_tensor_next():
-    """Test for the :method:`two_site_tensor_next` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``two_site_tensor_next`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -183,7 +183,7 @@ def test_canonical_two_site_tensor_next():
 
 
 def test_canonical_two_site_tensor_prev():
-    """Test for the :method:`two_site_tensor_prev` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``two_site_tensor_prev`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -207,7 +207,7 @@ def test_canonical_two_site_tensor_prev():
 
 
 def test_canonical_two_site_tensor_next_iter():
-    """Test for the :method:`two_site_tensor_next_iter` method of :class:`CanonicalMPS` class."""
+    """Test for the ``two_site_tensor_next_iter`` method of ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -220,7 +220,7 @@ def test_canonical_two_site_tensor_next_iter():
 
 
 def test_canonical_two_site_tensor_prev_iter():
-    """Test for the :method:`two_site_tensor_prev_iter` method of :class:`CanonicalMPS` class."""
+    """Test for the ``two_site_tensor_prev_iter`` method of ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -233,7 +233,7 @@ def test_canonical_two_site_tensor_prev_iter():
 
 
 def test_canonical_dense():
-    """Test for the :method:`dense` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``dense`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -246,7 +246,7 @@ def test_canonical_dense():
 
 
 def test_canonical_density_mpo():
-    """Test for the :method:`density_mpo` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``density_mpo`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -266,14 +266,14 @@ def test_canonical_density_mpo():
 
 
 def test_canonical_entanglement_entropy():
-    """Test for the :method:`density_mpo` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``density_mpo`` method of the ``CanonicalMPS`` class."""
 
     num_sites = 4
 
-    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float64)
+    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float32)
     psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
-    mps_dimer = mps_from_dense(psi_many_body_dimer)
+    mps_dimer = mps_from_dense(psi_many_body_dimer, tolerance=1e-6)
 
     entropy_list = mps_dimer.entanglement_entropy()
 
@@ -281,11 +281,11 @@ def test_canonical_entanglement_entropy():
 
     zeros = entropy_list - correct_entropy_list
 
-    assert np.allclose(np.linalg.norm(zeros), 0)
+    assert np.allclose(np.linalg.norm(zeros), 0, atol=1e-6)
 
 
 def test_canonical_move_orth_centre():
-    """Test for the :method:`move_orth_centre` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``move_orth_centre`` method of the ``CanonicalMPS`` class."""
 
     # num_sites = np.random.randint(4, 9)
     num_sites = 6
@@ -311,7 +311,7 @@ def test_canonical_move_orth_centre():
 
 
 def test_canonical_move_orth_centre_to_border():
-    """Test for the :method:`move_orth_centre_to_border` method of :class:`CanonicalMPS` class."""
+    """Test for the ``move_orth_centre_to_border`` method of ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -339,7 +339,7 @@ def test_canonical_move_orth_centre_to_border():
 
 
 def test_canonical_explicit():
-    """Test for the :method:`explicit` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``explicit`` method of the ``CanonicalMPS`` class."""
 
     num_sites = np.random.randint(4, 9)
 

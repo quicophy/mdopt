@@ -1,4 +1,4 @@
-"""Tests for the MPS utilities module."""
+"""Tests for the ``mdopt.mps.utils`` module."""
 
 from itertools import combinations
 import pytest
@@ -16,7 +16,7 @@ from mdopt.mps.utils import (
 
 
 def test_mps_utils_create_state_vector():
-    """Test for the :func:`create_state_vector` function"""
+    """Test for the ``create_state_vector`` function"""
 
     num_sites = np.random.randint(4, 9)
 
@@ -30,7 +30,7 @@ def test_mps_utils_create_state_vector():
 
 
 def test_mps_utils_find_orth_centre():
-    """Test for the :func:`find_orth_centre` function."""
+    """Test for the ``find_orth_centre`` function."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -52,7 +52,7 @@ def test_mps_utils_find_orth_centre():
 
 
 def test_mps_utils_is_canonical():
-    """Test for the :func:`is_canonical` function."""
+    """Test for the ``is_canonical`` function."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -70,7 +70,7 @@ def test_mps_utils_is_canonical():
 
 
 def test_mps_utils_inner_product():
-    """Test for the :func:`inner_product` function."""
+    """Test for the ``inner_product`` function."""
 
     num_sites = 5
 
@@ -99,7 +99,7 @@ def test_mps_utils_inner_product():
 
 
 def test_mps_utils_mps_from_dense():
-    """Test for the :func:`mps_from_dense` function."""
+    """Test for the ``mps_from_dense`` function."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -134,7 +134,7 @@ def test_mps_utils_mps_from_dense():
 
 
 def test_mps_utils_create_simple_product_state():
-    """Test for the :func:`create_simple_product_state` function."""
+    """Test for the ``create_simple_product_state`` function."""
 
     mps_1 = create_simple_product_state(4, "0").right_canonical()
     mps_2 = create_simple_product_state(4, "1").right_canonical()
@@ -165,7 +165,7 @@ def test_mps_utils_create_simple_product_state():
 
 
 def test_mps_utils_create_custom_product_state():
-    """Test for the :func:`create_custom_product_state` function."""
+    """Test for the ``create_custom_product_state`` function."""
 
     mps_1 = create_custom_product_state("0011++").right_canonical()
 

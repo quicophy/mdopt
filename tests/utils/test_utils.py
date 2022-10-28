@@ -1,4 +1,4 @@
-"""Tests for the :module:`utils` module."""
+"""Tests for the ``mdopt.utils.utils`` module."""
 
 import numpy as np
 from opt_einsum import contract
@@ -14,7 +14,7 @@ from mdopt.utils.utils import (
 
 
 def test_utils_svd():
-    r"""Tests for the :func:`svd` function."""
+    """Test for the ``svd`` function."""
 
     for _ in range(10):
 
@@ -45,7 +45,7 @@ def test_utils_svd():
 
 
 def test_utils_split_two_site_tensor():
-    r"""Test for the :func:`split_two_site_tensor` function."""
+    """Test for the ``split_two_site_tensor`` function."""
 
     for _ in range(10):
 
@@ -70,7 +70,7 @@ def test_utils_split_two_site_tensor():
 
 
 def test_utils_kron_tensors():
-    r"""Test for the :func:`kron_tensors` function."""
+    """Test for the ``kron_tensors`` function."""
 
     for _ in range(10):
 
@@ -138,7 +138,7 @@ def test_utils_kron_tensors():
 
 
 def test_utils_mpo_from_matrix():
-    r"""Test for the :func:`mpo_from_matrix` function."""
+    """Test for the ``mpo_from_matrix`` function."""
 
     for _ in range(10):
 
@@ -159,7 +159,7 @@ def test_utils_mpo_from_matrix():
 
 
 def test_utils_mpo_to_matrix():
-    r"""Tests for the :func:`mpo_to_matrix` function."""
+    """Test for the ``mpo_to_matrix`` function."""
 
     for _ in range(10):
 
@@ -204,7 +204,6 @@ def test_utils_mpo_to_matrix():
 
     for _ in range(10):
 
-        # Here, we Test of the order of indices, so we fix the number of sites.
         num_sites = 4
         mpo = create_random_mpo(
             num_sites,
