@@ -51,7 +51,7 @@ def find_orth_centre(
         The MPS to find the orthogonality centre(s) in.
     return_orth_flags : bool
         Whether to return if each tensor is a right or a left isometry.
-    tolerance : np.float32
+    tolerance : float
         Numerical tolerance for checking the isometry property.
 
     Returns
