@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 from scipy.sparse.linalg import eigsh
 
-from examples.ising.ground_state import IsingExact, IsingMPO
+from examples.ising.ising import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
 from mdopt.optimiser.dmrg import DMRG as dmrg
 from mdopt.optimiser.dmrg import EffectiveOperator
