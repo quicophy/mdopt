@@ -18,7 +18,7 @@ from mdopt.mps.utils import (
 
 
 def test_explicit_init():
-    """Tests for the ``__init__`` and ``__len__`` methods of the ``ExplicitMPS`` class."""
+    """Tests for the ``__init__`` and ``__len__`` methods of the :class:`ExplicitMPS` class."""
 
     for _ in range(10):
 
@@ -73,9 +73,17 @@ def test_explicit_init():
                 tensors=mps.tensors, singular_values=mps.singular_values + [0.0]
             )
 
+        with pytest.raises(ValueError):
+            two_tensors = [
+                np.array([1.0, 0.0]).reshape((1, 2, 1)),
+                np.array([1.0, 0.0]).reshape((1, 2, 1)),
+            ]
+            sing_val = [5.0]
+            ExplicitMPS(tensors=two_tensors, singular_values=sing_val)
+
 
 def test_explicit_copy():
-    """Test for the ``copy`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``copy`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -103,7 +111,7 @@ def test_explicit_copy():
 
 
 def test_explicit_reverse():
-    """Test for the ``reverse`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``reverse`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -130,7 +138,7 @@ def test_explicit_reverse():
 
 
 def test_explicit_conjugate():
-    """Test for the ``conjugate`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``conjugate`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -161,7 +169,7 @@ def test_explicit_conjugate():
 
 
 def test_explicit_single_site_left_iso():
-    """Test for the ``single_site_left_iso`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``single_site_left_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -181,9 +189,12 @@ def test_explicit_single_site_left_iso():
                 np.linalg.norm(to_be_identity - np.identity(to_be_identity.shape[0])), 0
             )
 
+        with pytest.raises(ValueError):
+            mps.single_site_left_iso(num_sites + 100)
+
 
 def test_explicit_single_site_right_iso():
-    """Test for the ``single_site_right_iso`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``single_site_right_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -204,9 +215,12 @@ def test_explicit_single_site_right_iso():
                 np.linalg.norm(to_be_identity - np.identity(to_be_identity.shape[0])), 0
             )
 
+        with pytest.raises(ValueError):
+            mps.single_site_right_iso(num_sites + 100)
+
 
 def test_explicit_single_left_iso_iter():
-    """Test for the ``single_site_left_iso_iter`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``single_site_left_iso_iter`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -219,7 +233,7 @@ def test_explicit_single_left_iso_iter():
 
 
 def test_explicit_single_right_iso_iter():
-    """Test for the ``single_site_right_iso_iter`` method of ``ExplicitMPS`` class."""
+    """Test for the ``single_site_right_iso_iter`` method of :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -232,7 +246,7 @@ def test_explicit_single_right_iso_iter():
 
 
 def test_explicit_two_site_left_iso():
-    """Test for the ``two_site_left_iso`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``two_site_left_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -261,7 +275,7 @@ def test_explicit_two_site_left_iso():
 
 
 def test_explicit_two_site_right_iso():
-    """Test for the ``two_site_right_iso`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``two_site_right_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -292,7 +306,7 @@ def test_explicit_two_site_right_iso():
 def test_explicit_two_site_iter():
     """
     Tests for the ``two_site_right_iso_iter`` and ``two_site_left_iso_iter``
-    methods of the ``ExplicitMPS`` class.
+    methods of the :class:`ExplicitMPS` class.
     """
 
     num_sites = np.random.randint(4, 9)
@@ -307,7 +321,7 @@ def test_explicit_two_site_iter():
 
 
 def test_explicit_dense():
-    """Test for the ``dense`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``dense`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -320,7 +334,7 @@ def test_explicit_dense():
 
 
 def test_explicit_density_mpo():
-    """Test for the ``density_mpo`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``density_mpo`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -370,7 +384,7 @@ def test_explicit_density_mpo():
 
 
 def test_explicit_entanglement_entropy():
-    """Test for the ``entanglement_entropy`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``entanglement_entropy`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = 4
 
@@ -389,7 +403,7 @@ def test_explicit_entanglement_entropy():
 
 
 def test_explicit_right_canonical():
-    """Test for the ``right_canonical`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``right_canonical`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -424,7 +438,7 @@ def test_explicit_right_canonical():
 
 
 def test_explicit_left_canonical():
-    """Test for the ``left_canonical`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``left_canonical`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -457,7 +471,7 @@ def test_explicit_left_canonical():
 
 
 def test_explicit_mixed_canonical():
-    """Test for the ``mixed_canonical`` method of the ``ExplicitMPS`` class."""
+    """Test for the ``mixed_canonical`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -474,3 +488,6 @@ def test_explicit_mixed_canonical():
         assert is_canonical(mps_mixed)
         assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
         assert find_orth_centre(mps_mixed) == [orth_centre_index]
+
+        with pytest.raises(ValueError):
+            mps.mixed_canonical(num_sites + 100)

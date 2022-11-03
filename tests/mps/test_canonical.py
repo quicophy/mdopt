@@ -17,7 +17,7 @@ from mdopt.mps.canonical import CanonicalMPS
 
 
 def test_canonical_init():
-    """Tests for the ``__init__`` and ``__len__`` methods of the ``CanonicalMPS`` class."""
+    """Tests for the ``__init__`` and ``__len__`` methods of the :class:`CanonicalMPS` class."""
 
     for _ in range(10):
 
@@ -53,11 +53,11 @@ def test_canonical_init():
             CanonicalMPS(tensors=tensors, orth_centre=num_sites + 1)
 
         with pytest.raises(ValueError):
-            CanonicalMPS(tensors=tensors + np.zeros((2, 2, 2, 2)))
+            CanonicalMPS(tensors=np.ones((2, 2, 2, 2)))
 
 
 def test_canonical_copy():
-    """Test for the ``copy`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``copy`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -81,7 +81,7 @@ def test_canonical_copy():
 
 
 def test_canonical_reverse():
-    """Test for the ``reverse`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``reverse`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -105,7 +105,7 @@ def test_canonical_reverse():
 
 
 def test_canonical_conjugate():
-    """Test for the ``conjugate`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``conjugate`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -129,7 +129,7 @@ def test_canonical_conjugate():
 
 
 def test_canonical_single_site_tensor():
-    """Test for the ``single_site_tensor`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``single_site_tensor`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -146,7 +146,7 @@ def test_canonical_single_site_tensor():
 
 
 def test_canonical_single_site_tensor_iter():
-    """Test for the ``single_site_tensor_iter`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``single_site_tensor_iter`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -159,7 +159,7 @@ def test_canonical_single_site_tensor_iter():
 
 
 def test_canonical_two_site_tensor_next():
-    """Test for the ``two_site_tensor_next`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``two_site_tensor_next`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -170,7 +170,7 @@ def test_canonical_two_site_tensor_next():
         site = np.random.randint(0, num_sites - 1)
 
         with pytest.raises(ValueError):
-            mps.single_site_tensor(-2)
+            mps.two_site_tensor_next(-2)
 
         assert np.isclose(
             mps.two_site_tensor_next(site),
@@ -183,7 +183,7 @@ def test_canonical_two_site_tensor_next():
 
 
 def test_canonical_two_site_tensor_prev():
-    """Test for the ``two_site_tensor_prev`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``two_site_tensor_prev`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -194,7 +194,7 @@ def test_canonical_two_site_tensor_prev():
         site = np.random.randint(1, num_sites)
 
         with pytest.raises(ValueError):
-            mps.single_site_tensor(-site)
+            mps.two_site_tensor_prev(-2)
 
         assert np.isclose(
             mps.two_site_tensor_prev(site),
@@ -207,7 +207,7 @@ def test_canonical_two_site_tensor_prev():
 
 
 def test_canonical_two_site_tensor_next_iter():
-    """Test for the ``two_site_tensor_next_iter`` method of ``CanonicalMPS`` class."""
+    """Test for the ``two_site_tensor_next_iter`` method of :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -220,7 +220,7 @@ def test_canonical_two_site_tensor_next_iter():
 
 
 def test_canonical_two_site_tensor_prev_iter():
-    """Test for the ``two_site_tensor_prev_iter`` method of ``CanonicalMPS`` class."""
+    """Test for the ``two_site_tensor_prev_iter`` method of :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -233,7 +233,7 @@ def test_canonical_two_site_tensor_prev_iter():
 
 
 def test_canonical_dense():
-    """Test for the ``dense`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``dense`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -246,7 +246,7 @@ def test_canonical_dense():
 
 
 def test_canonical_density_mpo():
-    """Test for the ``density_mpo`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``density_mpo`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -266,7 +266,7 @@ def test_canonical_density_mpo():
 
 
 def test_canonical_entanglement_entropy():
-    """Test for the ``density_mpo`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``density_mpo`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = 4
 
@@ -285,7 +285,7 @@ def test_canonical_entanglement_entropy():
 
 
 def test_canonical_move_orth_centre():
-    """Test for the ``move_orth_centre`` method of the ``CanonicalMPS`` class."""
+    """Test for the ``move_orth_centre`` method of the :class:`CanonicalMPS` class."""
 
     # num_sites = np.random.randint(4, 9)
     num_sites = 6
@@ -311,7 +311,7 @@ def test_canonical_move_orth_centre():
 
 
 def test_canonical_move_orth_centre_to_border():
-    """Test for the ``move_orth_centre_to_border`` method of ``CanonicalMPS`` class."""
+    """Test for the ``move_orth_centre_to_border`` method of :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -339,7 +339,10 @@ def test_canonical_move_orth_centre_to_border():
 
 
 def test_canonical_explicit():
-    """Test for the ``explicit`` method of the ``CanonicalMPS`` class."""
+    """
+    Tests for the ``explicit``, ``right_canonical`` and ``left_canonical``
+    methods of the :class:`CanonicalMPS` class.
+    """
 
     num_sites = np.random.randint(4, 9)
 
@@ -358,6 +361,9 @@ def test_canonical_explicit():
         explicit_from_right = mps_right.explicit()
         explicit_from_left = mps_left.explicit()
         explicit_from_mixed = mps_mixed.explicit()
+
+        assert isinstance(mps_mixed.right_canonical(), CanonicalMPS)
+        assert isinstance(mps_mixed.left_canonical(), CanonicalMPS)
 
         assert np.isclose(
             abs(inner_product(mps_right, explicit_from_right.right_canonical())), 1

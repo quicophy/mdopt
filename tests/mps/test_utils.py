@@ -38,10 +38,16 @@ def test_mps_utils_find_orth_centre():
 
         psi = create_state_vector(num_sites)
         orth_centre = np.random.randint(num_sites)
+        mps_explicit = mps_from_dense(psi, form="Explicit")
         mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_centre=orth_centre)
         mps_left = mps_from_dense(psi, form="Left-canonical")
         mps_right = mps_from_dense(psi, form="Right-canonical")
+        mps_product = create_simple_product_state(
+            num_sites=num_sites, which="0", form="Right-canonical"
+        )
 
+        with pytest.raises(ValueError):
+            find_orth_centre(mps_explicit)
         assert np.isclose(find_orth_centre(mps_mixed), [orth_centre])
         assert np.isclose(
             find_orth_centre(mps_left, return_orth_flags=True)[1], [True] * num_sites
@@ -49,6 +55,7 @@ def test_mps_utils_find_orth_centre():
         assert np.isclose(
             find_orth_centre(mps_right, return_orth_flags=True)[2], [True] * num_sites
         ).all()
+        assert np.isclose(find_orth_centre(mps_product), [0])
 
 
 def test_mps_utils_is_canonical():
@@ -60,10 +67,13 @@ def test_mps_utils_is_canonical():
 
         psi = create_state_vector(num_sites)
         orth_centre = np.random.randint(num_sites)
+        mps_explicit = mps_from_dense(psi, form="Explicit")
         mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_centre=orth_centre)
         mps_left = mps_from_dense(psi, form="Left-canonical")
         mps_right = mps_from_dense(psi, form="Right-canonical")
 
+        with pytest.raises(ValueError):
+            is_canonical(mps_explicit)
         assert is_canonical(mps_mixed)
         assert is_canonical(mps_left)
         assert is_canonical(mps_right)
@@ -96,6 +106,9 @@ def test_mps_utils_inner_product():
             assert np.isclose(
                 abs(inner_product(list_of_mps[pair[0]], list_of_mps[pair[1]])), 1
             )
+
+        with pytest.raises(ValueError):
+            inner_product(mps, create_simple_product_state(num_sites=6))
 
 
 def test_mps_utils_mps_from_dense():
@@ -132,6 +145,9 @@ def test_mps_utils_mps_from_dense():
         overlap = abs(np.conjugate(psi_from_mps_mixed) @ psi) ** 2
         assert np.isclose(overlap, 1)
 
+        with pytest.raises(ValueError):
+            mps_from_dense(np.ones(shape=(23,)))
+
 
 def test_mps_utils_create_simple_product_state():
     """Test for the ``create_simple_product_state`` function."""
@@ -162,6 +178,8 @@ def test_mps_utils_create_simple_product_state():
     assert np.isclose(mps_1.tensors, mps_1_tensors).all()
     assert np.isclose(mps_2.tensors, mps_2_tensors).all()
     assert np.isclose(mps_3.tensors, mps_3_tensors).all()
+    with pytest.raises(ValueError):
+        create_simple_product_state(4, "0", form="Mixed-canonical")
 
 
 def test_mps_utils_create_custom_product_state():
@@ -182,3 +200,5 @@ def test_mps_utils_create_custom_product_state():
     ]
 
     assert np.isclose(mps_1.tensors, mps_1_tensors).all()
+    with pytest.raises(ValueError):
+        create_custom_product_state("0011++", form="Mixed-canonical")
