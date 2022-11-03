@@ -1,5 +1,6 @@
 """Tests for the ``mdopt.utils.utils`` module."""
 
+import pytest
 import numpy as np
 from opt_einsum import contract
 
@@ -18,7 +19,7 @@ def test_utils_svd():
 
     for _ in range(10):
 
-        dim = np.random.randint(low=2, high=100, size=2)
+        dim = np.random.randint(low=10, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
 
         u, s, v_h = svd(m)
@@ -30,6 +31,11 @@ def test_utils_svd():
         m_trimmed_new = contract(
             "ij, j, jk -> ik", u, s, v_h, optimize=[(0, 1), (0, 1)]
         )
+
+        with pytest.raises(ValueError):
+            dim = np.random.randint(low=10, high=100, size=4)
+            m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+            svd(m)
 
         assert np.isclose(np.linalg.norm(m_trimmed - m_trimmed_new), 0)
 
@@ -67,6 +73,12 @@ def test_utils_split_two_site_tensor():
 
         assert t.shape == should_be_t.shape
         assert np.isclose(np.linalg.norm(t - should_be_t), 0)
+
+        with pytest.raises(ValueError):
+            t = np.random.uniform(
+                size=(bond_dim[0], d, d, d, bond_dim[1])
+            ) + 1j * np.random.uniform(size=(bond_dim[0], d, d, d, bond_dim[1]))
+            split_two_site_tensor(t)
 
 
 def test_utils_kron_tensors():
@@ -131,6 +143,28 @@ def test_utils_kron_tensors():
             )
         )
 
+        with pytest.raises(ValueError):
+
+            dims_1 = np.random.randint(2, 11, size=4)
+            dims_2 = np.random.randint(2, 11, size=3)
+            tensor_1 = np.random.uniform(
+                size=(dims_1[0], dims_1[1], dims_1[2], dims_1[3])
+            ) + 1j * np.random.uniform(size=(dims_1[0], dims_1[1], dims_1[2]))
+            tensor_2 = np.random.uniform(
+                size=(dims_2[0], dims_2[1], dims_2[2])
+            ) + 1j * np.random.uniform(size=(dims_2[0], dims_2[1], dims_2[2]))
+            kron_tensors(tensor_1, tensor_2)
+
+            dims_1 = np.random.randint(2, 11, size=3)
+            dims_2 = np.random.randint(2, 11, size=4)
+            tensor_1 = np.random.uniform(
+                size=(dims_1[0], dims_1[1], dims_1[2])
+            ) + 1j * np.random.uniform(size=(dims_1[0], dims_1[1], dims_1[2]))
+            tensor_2 = np.random.uniform(
+                size=(dims_2[0], dims_2[1], dims_2[2], dims_2[3])
+            ) + 1j * np.random.uniform(size=(dims_2[0], dims_2[1], dims_2[2]))
+            kron_tensors(tensor_1, tensor_2)
+
         assert np.isclose(np.linalg.norm(product_1 - product_5), 0)
         assert np.isclose(np.linalg.norm(product_2 - product_6), 0)
         assert np.isclose(np.linalg.norm(product_3 - product_7), 0)
@@ -156,6 +190,19 @@ def test_utils_mpo_from_matrix():
         matrix_from_mpo = mpo_to_matrix(mpo, interlace=True, group=True)
 
         assert np.isclose(abs(np.linalg.norm(matrix - matrix_from_mpo)), 0)
+
+        with pytest.raises(ValueError):
+            matrix_shape = (
+                phys_dim**num_sites,
+                phys_dim**num_sites,
+                phys_dim**num_sites,
+            )
+            matrix = np.random.uniform(size=matrix_shape) + 1j * np.random.uniform(
+                size=matrix_shape
+            )
+            mpo = mpo_from_matrix(
+                matrix, interlaced=True, num_sites=num_sites, phys_dim=phys_dim
+            )
 
 
 def test_utils_mpo_to_matrix():
@@ -191,6 +238,24 @@ def test_utils_mpo_to_matrix():
         mpo_3 = mpo_from_matrix(
             matrix_3, interlaced=True, num_sites=num_sites, phys_dim=phys_dim
         )
+
+        with pytest.raises(ValueError):
+            mpo = create_random_mpo(
+                num_sites,
+                dims_unique,
+                phys_dim=phys_dim,
+                which=np.random.choice(["uniform", "normal", "randint"], size=1),
+            )
+            mpo[1] = np.ones(
+                shape=(
+                    2,
+                    2,
+                    2,
+                    2,
+                    2,
+                )
+            )
+            mpo_to_matrix(mpo)
 
         matrix_00 = mpo_to_matrix(mpo_0, interlace=False, group=False)
         matrix_01 = mpo_to_matrix(mpo_1, interlace=False, group=True)
