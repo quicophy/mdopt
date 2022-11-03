@@ -1,13 +1,14 @@
 """
 This module contains the :class:`ExplicitMPS` class.
-Hereafter by saying the MPS is in an explicit form we mean that
-the state is stored in the following format: for each three-dimensional tensor
-at site `i`, there exists a singular values diagonal matrix at bond ``i``::
+Hereafter saying the MPS is in an explicit will mean that
+the state is stored in the following format:
+for each three-dimensional tensor at site ``i`` denoted by ``( )``,
+there exists a singular values diagonal matrix at bond ``i`` denoted by ``[ ]``::
 
-            i     i    i+1    i
+           i     i    i+1   i+1
     ...---[ ]---( )---[ ]---( )---...
-                    |           |
-                    |           |
+                 |           |
+                 |           |
 
 For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
 the corresponding singular value tensors at the boundaries
@@ -160,8 +161,7 @@ class ExplicitMPS:
 
         if site not in range(self.num_sites):
             raise ValueError(
-                f"Sites given {site}, {site + 1}, "
-                f"with the number of sites in the MPS {self.num_sites}."
+                f"Site given {site}, with the number of sites in the MPS {self.num_sites}."
             )
 
         return np.tensordot(
