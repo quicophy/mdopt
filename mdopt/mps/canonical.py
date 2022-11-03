@@ -97,11 +97,11 @@ class CanonicalMPS:
                 f"to {self.num_sites-1}, the one given is at position {orth_centre}."
             )
 
-        for _, tensor in enumerate(tensors):
+        for i, tensor in enumerate(tensors):
             if len(tensor.shape) != 3:
                 raise ValueError(
                     "A valid MPS tensor must have 3 legs"
-                    f"while the one given has {len(tensor.shape)}."
+                    f"while the one at site {i} has {len(tensor.shape)}."
                 )
 
     def __len__(self) -> int:

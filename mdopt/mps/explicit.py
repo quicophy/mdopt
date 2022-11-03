@@ -90,7 +90,7 @@ class ExplicitMPS:
             if len(tensor.shape) != 3:
                 raise ValueError(
                     "A valid MPS tensor must have 3 legs"
-                    f"while the one given has {len(tensor.shape)}."
+                    f"while the one at site {i} has {len(tensor.shape)}."
                 )
 
         for i, _ in enumerate(singular_values):

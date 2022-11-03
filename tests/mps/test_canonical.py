@@ -53,7 +53,8 @@ def test_canonical_init():
             CanonicalMPS(tensors=tensors, orth_centre=num_sites + 1)
 
         with pytest.raises(ValueError):
-            CanonicalMPS(tensors=np.ones((2, 2, 2, 2)))
+            mps.tensors[0] = np.expand_dims(mps.tensors[0], 0)
+            CanonicalMPS(tensors=mps.tensors)
 
 
 def test_canonical_copy():
