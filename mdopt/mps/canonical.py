@@ -1,6 +1,6 @@
 """
 This module contains the :class:`CanonicalMPS` class.
-Hereafter, by saying the MPS is in a canonical form we will mean one of the following.
+Hereafter, saying the MPS is in a canonical form will mean one of the following.
 
     1) Right-canonical: all tensors are right isometries, i.e.::
 
