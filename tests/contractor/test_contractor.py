@@ -10,6 +10,7 @@ from mdopt.contractor.contractor import (
     apply_two_site_unitary,
     mps_mpo_contract,
 )
+from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.utils import is_canonical, mps_from_dense, create_state_vector
 from mdopt.utils.utils import create_random_mpo, mpo_to_matrix
 
@@ -185,6 +186,9 @@ def test_contractor_mps_mpo_contract():
 
         mps_fin = mps_mpo_contract(mps_init, mpo, start_site, renormalise=False)
         mps_fin_1 = mps_mpo_contract(mps_init, mpo, start_site, renormalise=True)
+        mps_fin_2 = mps_mpo_contract(
+            mps_init, mpo, start_site, renormalise=False, result_to_explicit=True
+        )
         orthogonality_centre = mps_fin_1.tensors[int(start_site + mpo_length - 1)]
 
         mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
@@ -210,3 +214,4 @@ def test_contractor_mps_mpo_contract():
         assert is_canonical(mps_fin)
         assert np.isclose(abs(np.linalg.norm(mps_fin.dense() - psi_fin)), 0, atol=1e-7)
         assert np.isclose(np.linalg.norm(orthogonality_centre), 1)
+        assert isinstance(mps_fin_2, ExplicitMPS)

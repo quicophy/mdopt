@@ -12,6 +12,7 @@ from mdopt.mps.utils import (
     inner_product,
     is_canonical,
     find_orth_centre,
+    create_simple_product_state,
 )
 from mdopt.mps.canonical import CanonicalMPS
 
@@ -304,6 +305,9 @@ def test_canonical_move_orth_centre():
         )
         orth_centre_final = 0  # np.random.randint(num_sites)
         mps_mixed_final = mps_mixed_init.move_orth_centre(orth_centre_final)
+        mps_product = create_simple_product_state(
+            num_sites=num_sites, form="Right-canonical"
+        )
 
         with pytest.raises(ValueError):
             mps_mixed_init.move_orth_centre(-3)
@@ -312,6 +316,7 @@ def test_canonical_move_orth_centre():
         assert is_canonical(mps_mixed_final)
         assert find_orth_centre(mps_mixed_init) == [orth_centre_init]
         assert find_orth_centre(mps_mixed_final) == [orth_centre_final]
+        assert find_orth_centre(mps_product) == [0]
 
 
 def test_canonical_move_orth_centre_to_border():
@@ -325,6 +330,9 @@ def test_canonical_move_orth_centre_to_border():
         mps_mixed_init_1 = mps_from_dense(psi, form="Mixed-canonical", orth_centre=1)
         mps_mixed_init_2 = mps_from_dense(
             psi, form="Mixed-canonical", orth_centre=num_sites - 2
+        )
+        mps_product = create_simple_product_state(
+            num_sites=num_sites, form="Right-canonical"
         )
 
         mps, position = mps_mixed_init_1.move_orth_centre_to_border()
@@ -340,6 +348,11 @@ def test_canonical_move_orth_centre_to_border():
         ):
             assert np.isclose(tensor_1, tensor_2).all()
         assert position == "last"
+
+        mps, position = mps_product.move_orth_centre_to_border()
+        for tensor_1, tensor_2 in zip(mps.tensors, mps_product.tensors):
+            assert np.isclose(tensor_1, tensor_2).all()
+        assert position == "first"
 
 
 def test_canonical_explicit():
