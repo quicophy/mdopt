@@ -190,16 +190,16 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
 
 
 def inner_product(
-    mps_1: Union[CanonicalMPS, ExplicitMPS], mps_2: Union[CanonicalMPS, ExplicitMPS]
+    mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
 ) -> Union[np.float32, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
     Parameters
     ----------
-    mps_1 : Union[CanonicalMPS, ExplicitMPS]
+    mps_1 : Union[ExplicitMPS, CanonicalMPS]
         The first MPS in the inner product.
-    mps_1 : Union[CanonicalMPS, ExplicitMPS]
+    mps_1 : Union[ExplicitMPS, CanonicalMPS]
         The second MPS in the inner product.
 
     Returns
@@ -257,7 +257,7 @@ def mps_from_dense(
     tolerance: np.float32 = np.float32(1e-12),
     form: str = "Explicit",
     orth_centre: Optional[int] = None,
-) -> Union[CanonicalMPS, ExplicitMPS]:
+) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     Builds an MPS from a dense (state-vector) from.
 
@@ -283,7 +283,7 @@ def mps_from_dense(
 
     Returns
     -------
-    mps : Union[CanonicalMPS, ExplicitMPS]
+    mps : Union[ExplicitMPS, CanonicalMPS]
         The resulting MPS.
 
     Raises
@@ -356,7 +356,7 @@ def create_simple_product_state(
     which: str = "0",
     phys_dim: int = 2,
     form: str = "Explicit",
-) -> Union[CanonicalMPS, ExplicitMPS]:
+) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a simple product-state MPS.
 
@@ -380,7 +380,7 @@ def create_simple_product_state(
 
     Returns
     -------
-    mps : Union[CanonicalMPS, ExplicitMPS]
+    mps : Union[ExplicitMPS, CanonicalMPS]
         The resulting MPS.
 
     Raises
@@ -422,7 +422,7 @@ def create_simple_product_state(
 
 def create_custom_product_state(
     string: str, phys_dim: int = 2, form: str = "Explicit"
-) -> Union[CanonicalMPS, ExplicitMPS]:
+) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a custom product-state MPS defined by the ``string`` argument.
 
@@ -441,7 +441,7 @@ def create_custom_product_state(
 
     Returns
     -------
-    mps : Union[CanonicalMPS, ExplicitMPS]
+    mps : Union[ExplicitMPS, CanonicalMPS]
         The resulting MPS.
 
     Raises
