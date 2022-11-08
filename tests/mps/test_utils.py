@@ -152,9 +152,12 @@ def test_mps_utils_mps_from_dense():
 def test_mps_utils_create_simple_product_state():
     """Test for the ``create_simple_product_state`` function."""
 
-    mps_1 = create_simple_product_state(4, "0").right_canonical()
-    mps_2 = create_simple_product_state(4, "1").right_canonical()
-    mps_3 = create_simple_product_state(4, "+").right_canonical()
+    mps_1 = create_simple_product_state(4, "0", form="Right-canonical")
+    mps_2 = create_simple_product_state(4, "1", form="Right-canonical")
+    mps_3 = create_simple_product_state(4, "+", form="Right-canonical")
+    mps_4 = create_simple_product_state(4, "0", form="Left-canonical")
+    mps_5 = create_simple_product_state(4, "1", form="Left-canonical")
+    mps_6 = create_simple_product_state(4, "+", form="Left-canonical")
 
     mps_1_tensors = [
         np.array([[[1.0], [0.0]]]),
@@ -174,10 +177,16 @@ def test_mps_utils_create_simple_product_state():
         np.array([[[0.70710678], [0.70710678]]]),
         np.array([[[0.70710678], [0.70710678]]]),
     ]
+    mps_4_tensors = mps_1_tensors
+    mps_5_tensors = mps_2_tensors
+    mps_6_tensors = mps_3_tensors
 
     assert np.isclose(mps_1.tensors, mps_1_tensors).all()
     assert np.isclose(mps_2.tensors, mps_2_tensors).all()
     assert np.isclose(mps_3.tensors, mps_3_tensors).all()
+    assert np.isclose(mps_4.tensors, mps_4_tensors).all()
+    assert np.isclose(mps_5.tensors, mps_5_tensors).all()
+    assert np.isclose(mps_6.tensors, mps_6_tensors).all()
     with pytest.raises(ValueError):
         create_simple_product_state(4, "0", form="Mixed-canonical")
 
@@ -185,12 +194,13 @@ def test_mps_utils_create_simple_product_state():
 def test_mps_utils_create_custom_product_state():
     """Test for the ``create_custom_product_state`` function."""
 
-    mps_1 = create_custom_product_state("0011++").right_canonical()
+    mps_1 = create_custom_product_state("0011++", form="Right-canonical")
+    mps_2 = create_custom_product_state("0011++", form="Left-canonical")
 
     with pytest.raises(ValueError):
         create_custom_product_state("0213++")
 
-    mps_1_tensors = [
+    mps_tensors = [
         np.array([[[1.0], [0.0]]]),
         np.array([[[1.0], [0.0]]]),
         np.array([[[0.0], [1.0]]]),
@@ -199,6 +209,7 @@ def test_mps_utils_create_custom_product_state():
         np.array([[[0.70710678], [0.70710678]]]),
     ]
 
-    assert np.isclose(mps_1.tensors, mps_1_tensors).all()
+    assert np.isclose(mps_1.tensors, mps_tensors).all()
+    assert np.isclose(mps_2.tensors, mps_tensors).all()
     with pytest.raises(ValueError):
         create_custom_product_state("0011++", form="Mixed-canonical")

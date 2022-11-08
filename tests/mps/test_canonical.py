@@ -267,16 +267,19 @@ def test_canonical_density_mpo():
 
 
 def test_canonical_entanglement_entropy():
-    """Test for the ``density_mpo`` method of the :class:`CanonicalMPS` class."""
+    """Test for the ``entanglement_entropy`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = 4
 
     psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float32)
     psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
-    mps_dimer = mps_from_dense(psi_many_body_dimer, tolerance=1e-6)
+    mps_dimer = mps_from_dense(
+        psi_many_body_dimer, form="Right-canonical", tolerance=1e-6
+    )
+    mps_dimer.orth_centre = 0
 
-    entropy_list = mps_dimer.entanglement_entropy()
+    entropy_list = np.array(mps_dimer.entanglement_entropy(tolerance=1e-1))
 
     correct_entropy_list = np.array([0, np.log(2), 0, np.log(2), 0, np.log(2), 0])
 
@@ -365,6 +368,10 @@ def test_canonical_explicit():
 
         assert isinstance(mps_mixed.right_canonical(), CanonicalMPS)
         assert isinstance(mps_mixed.left_canonical(), CanonicalMPS)
+
+        assert np.isclose(explicit_from_right.tolerance, 1e-12)
+        assert np.isclose(explicit_from_left.tolerance, 1e-12)
+        assert np.isclose(explicit_from_mixed.tolerance, 1e-12)
 
         assert np.isclose(
             abs(inner_product(mps_right, explicit_from_right.right_canonical())), 1

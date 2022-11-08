@@ -278,11 +278,13 @@ class CanonicalMPS:
 
         return list(mpo)
 
-    def entanglement_entropy(self) -> np.ndarray:
+    def entanglement_entropy(
+        self, tolerance: np.float32 = np.float32(1e-12)
+    ) -> np.ndarray:
         """
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
-        return self.explicit().entanglement_entropy()
+        return self.explicit(tolerance=tolerance).entanglement_entropy()
 
     def move_orth_centre(
         self, final_pos: int, return_singular_values: bool = False
@@ -334,9 +336,7 @@ class CanonicalMPS:
                 if flags_right == [not flag for flag in flags_left]:
                     self.orth_centre = self.num_sites - 1
 
-            if (flags_left == [True] * self.num_sites) and (
-                flags_right == [True] * self.num_sites
-            ):
+            if all(flags_left) and all(flags_right):
                 self.orth_centre = 0
 
         assert self.orth_centre is not None
@@ -384,18 +384,21 @@ class CanonicalMPS:
             _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
                 self, return_orth_flags=True
             )
+
             if flags_left in (
                 [True] + [False] * (self.num_sites - 1),
                 [False] * self.num_sites,
             ):
                 if flags_right == [not flag for flag in flags_left]:
                     return self.copy(), "first"
+
             if flags_left in (
                 [True] * (self.num_sites - 1) + [False],
                 [True] * self.num_sites,
             ):
                 if flags_right == [not flag for flag in flags_left]:
                     return self.copy(), "last"
+
             if all(flags_left) and all(flags_right):
                 return self.copy(), "first"
 
@@ -409,7 +412,7 @@ class CanonicalMPS:
             )
         return cast("CanonicalMPS", mps), "last"
 
-    def explicit(self) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
+    def explicit(self, tolerance: np.float32 = np.float32(1e-12)) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
         Essentially, retrieves each ``Γ[i]`` and ``Λ[i]`` from ``A[i]`` or ``B[i]``.
@@ -445,7 +448,9 @@ class CanonicalMPS:
             )
 
         return mdopt.mps.explicit.ExplicitMPS(  # type: ignore
-            explicit_tensors, cast(List[np.ndarray], singular_values)
+            explicit_tensors,
+            cast(List[np.ndarray], singular_values),
+            tolerance=tolerance,
         )
 
     def right_canonical(self) -> "CanonicalMPS":
