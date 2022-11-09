@@ -2,8 +2,14 @@ coverage:
   status:
     project:
       default:
-        target: 0%
+        target: auto
         threshold: 90%
+        base: auto
+    patch:
+      default:
+        target: 90%
+        threshold: 0%
+        base: auto
 
 ignore:
   - "examples/"
