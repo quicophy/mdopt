@@ -212,6 +212,7 @@ def test_utils_mpo_from_matrix():
             )
             identity = np.identity(to_be_identity.shape[0])
             assert np.isclose(np.linalg.norm(identity - to_be_identity), 0)
+            assert mpo[site].shape == mpo_iso[site].shape
 
         with pytest.raises(ValueError):
             matrix_shape = (
