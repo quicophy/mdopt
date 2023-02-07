@@ -184,12 +184,34 @@ def test_utils_mpo_from_matrix():
         )
 
         mpo = mpo_from_matrix(
-            matrix, interlaced=True, num_sites=num_sites, phys_dim=phys_dim
+            matrix,
+            interlaced=True,
+            orthogonalise=False,
+            num_sites=num_sites,
+            phys_dim=phys_dim,
+        )
+        mpo_iso = mpo_from_matrix(
+            matrix,
+            interlaced=True,
+            orthogonalise=True,
+            num_sites=num_sites,
+            phys_dim=phys_dim,
         )
 
         matrix_from_mpo = mpo_to_matrix(mpo, interlace=True, group=True)
+        matrix_from_mpo_iso = mpo_to_matrix(mpo_iso, interlace=True, group=True)
 
         assert np.isclose(abs(np.linalg.norm(matrix - matrix_from_mpo)), 0)
+        assert np.isclose(abs(np.linalg.norm(matrix - matrix_from_mpo_iso)), 0)
+
+        for site in range(num_sites):
+            if site == 0:
+                mpo_iso[site] /= np.linalg.norm(mpo_iso[site])
+            to_be_identity = contract(
+                "ijkl, mjkl -> im", mpo_iso[site], np.conjugate(mpo_iso[site])
+            )
+            identity = np.identity(to_be_identity.shape[0])
+            assert np.isclose(np.linalg.norm(identity - to_be_identity), 0)
 
         with pytest.raises(ValueError):
             matrix_shape = (

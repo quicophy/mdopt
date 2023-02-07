@@ -281,7 +281,7 @@ def mpo_to_matrix(
 
     Parameters
     ----------
-    mpo : list[np.ndarray]
+    mpo : List[np.ndarray]
         The MPO to convert to a matrix.
     interlace : bool
         Whether to interlace the matrix' legs or not.
@@ -365,6 +365,7 @@ def mpo_from_matrix(
     matrix: np.ndarray,
     num_sites: int,
     interlaced: bool = True,
+    orthogonalise: bool = False,
     phys_dim: int = 2,
     chi_max: int = int(1e4),
 ) -> List[np.ndarray]:
@@ -380,6 +381,8 @@ def mpo_from_matrix(
         The number of sites in the MPO.
     interlaced : bool
         Whether the matrix' legs are interlaced or not.
+    orthogonalise: bool
+        Whether to make the MPO tensor isometric.
     phys_dim : int
         Local dimension of the physical legs.
     chi_max : int
@@ -403,6 +406,13 @@ def mpo_from_matrix(
     ``(p0D, p1D, ..., p0U, p1U, ...)``, which means listing first all physical legs sticking down
     with the site number, and then all physical legs sticking up.
     This is done to adjust the matrix to the ``@`` numpy-native matrix-vector multiplication.
+
+    If ``orthogonalise==True``, the singular values at each bond are being carried further to the
+    orthogonality centre thus making all the tensors except the latter isometric.
+    The orthogonality centre is then isometric up to a multiplier which would be its norm.
+    If ``orthogonalise==False``, the singular values at each bond are being splitted by taking
+    the square root and distribbuted to both MPO tensors at each bond thus leaving all the tensors
+    nonisometric. There is no orthogonality centre in this case.
 
     An example of a matrix with ungrouped legs on three sites::
 
@@ -447,22 +457,28 @@ def mpo_from_matrix(
     mps_dim = phys_dim**2
     matrix = matrix.reshape((-1, mps_dim))
     matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
-    v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
+    if not orthogonalise:
+        v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
     mpo.append(np.expand_dims(v_r, -1))
     while matrix.shape[0] >= mps_dim:
-        matrix = np.matmul(matrix, np.diag(np.sqrt(singular_values)))
+        if not orthogonalise:
+            singular_values = np.sqrt(singular_values)
+        matrix = np.matmul(matrix, np.diag(singular_values))
         bond_dim = matrix.shape[-1]
         matrix = matrix.reshape((-1, mps_dim * bond_dim))
         matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
-        v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
+        if not orthogonalise:
+            v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
         v_r = v_r.reshape((-1, mps_dim, bond_dim))
         mpo.insert(0, v_r)
 
     # Contracting in the orthogonality centre.
+    if not orthogonalise:
+        singular_values = np.sqrt(singular_values)
     mpo[0] = contract(
         "ij, jk, klm",
         matrix,
-        np.diag(np.sqrt(singular_values)),
+        np.diag(singular_values),
         mpo[0],
         optimize=[(0, 1), (0, 1)],
     )
