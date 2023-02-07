@@ -1,22 +1,16 @@
-from typing import Union, Optional
 from functools import reduce
+from typing import cast, Union, Optional, List, Tuple
 
 import numpy as np
+from tqdm import tqdm
 import qecstruct as qec
 from more_itertools import powerset
-from tqdm import tqdm
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
+from mdopt.mps.utils import find_orth_centre, inner_product, create_simple_product_state
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
-from mdopt.mps.utils import (
-    create_custom_product_state,
-    create_simple_product_state,
-    inner_product,
-    find_orth_centre,
-)
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-from mdopt.utils.utils import mpo_to_matrix
 
 # Here, we define the tensors which represent logical constraints.
 # We use the following tensors: XOR, SWAP, IDENTITY.
@@ -27,21 +21,29 @@ from mdopt.utils.utils import mpo_to_matrix
 # and L, R, U, D stand for "left", "right", "up", "down".
 
 IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
+
+COPY = np.fromfunction(
+    lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=int
+).reshape((2, 1, 2, 2))
+
 XOR_BULK = np.fromfunction(
     lambda i, j, k, l: (i ^ j ^ k ^ 1) * np.eye(2)[k, l],
     (2, 2, 2, 2),
     dtype=int,
 )
+
 XOR_LEFT = np.fromfunction(
     lambda i, j, k, l: np.eye(2)[j, k] * np.eye(2)[k, l],
     (1, 2, 2, 2),
     dtype=int,
 )
+
 XOR_RIGHT = np.fromfunction(
     lambda i, j, k, l: np.eye(2)[i, k] * np.eye(2)[k, l],
     (2, 1, 2, 2),
     dtype=int,
 )
+
 SWAP = np.fromfunction(
     lambda i, j, k, l: np.eye(2)[i, j] * np.eye(2)[k, l],
     (2, 2, 2, 2),
@@ -58,7 +60,7 @@ class ConstraintString:
     Attributes:
         constraints : list
             A list of logical constraints of which the string consists.
-        sites : list of lists
+        sites : list[list[int]]
             Each list inside corresponds to a constraint from the `constraints` list,
             and contains the sites to which each constraint is applied.
             For example, [[3, 5], [2, 4, 6], ...] means applying
@@ -75,7 +77,7 @@ class ConstraintString:
             Non-unique sites in the `sites` list.
     """
 
-    def __init__(self, constraints: list[np.ndarray], sites: list[list[int]]) -> None:
+    def __init__(self, constraints: List[np.ndarray], sites: List[List[int]]) -> None:
         self.constraints = constraints
         self.sites = sites
 
@@ -92,22 +94,27 @@ class ConstraintString:
             )
 
         seen = set()
-        uniq = [site for site in self.flat() if site not in seen and not seen.add(site)]
+        # TODO move to library anc cover with tests
+        uniq = [site for site in self.flat() if site not in seen and not seen.add(site)]  # type: ignore
         if uniq != self.flat():
             raise ValueError("Non-unique sites encountered in the list.")
+
+        if self.flat() != [site for site in range(min(self.sites), max(self.sites))]:  # type: ignore
+            raise ValueError("The string should not have breaks.")
 
     def __getitem__(self, index: int) -> tuple:
         """
         Returns the pair of a list of sites together with the corresponding MPO.
 
         Parameters
-            index :
-                The index of the list of sites.
+        ----------
+        index : int
+            The index of the list of sites.
         """
 
         return self.sites[index], self.constraints[index]
 
-    def flat(self) -> list[int]:
+    def flat(self) -> List[int]:
         """
         Returns a flattened list of sites.
         """
@@ -121,7 +128,7 @@ class ConstraintString:
 
         return max(self.flat()) - min(self.flat()) + 1
 
-    def get_mpo(self) -> list[np.ndarray]:
+    def get_mpo(self) -> List[np.ndarray]:
         """
         Returns the constraint string in the MPO format.
         Note, that it will not include identities, which means
@@ -145,7 +152,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
     """
     Here, we define a bias channel -- the operator which will bias us towards the initial message
     while decoding by ranking the bitstrings according to Hamming distance from the latter.
-    This function returns a single-site MPO,
+    This function returns a one-site MPO,
     corresponding to the bias channel, which acts on basis states,
     i.e., |0> and |1>, as follows:
     |0> -> √(1-p)|0> + √p|1>,
@@ -156,11 +163,11 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
         p_bias : np.float32
             Probability of the channel.
         which : str
-            "0" or "1", depending on which single-qubit state we are acting on.
+            "0" or "1", depending on which one-qubit state we are acting on.
 
     Returns
         b_ch : np.ndarray
-            The corresponding single-qubit MPO.
+            The corresponding one-qubit MPO.
     """
 
     if not 0 <= p_bias <= 1:
@@ -256,7 +263,7 @@ def bin_vec_to_dense(vector: "qec.sparse.BinaryVector") -> np.ndarray:
     return array
 
 
-def linear_code_checks(code: qec.LinearCode) -> list[tuple[np.ndarray]]:
+def linear_code_checks(code: qec.LinearCode) -> List[Tuple[np.ndarray]]:
     """
     Given a linear code, returns a list of its checks, where each check
     is represented as a list of indices of the bits adjacent to it.
@@ -314,7 +321,7 @@ def get_codewords(code: qec.LinearCode) -> np.ndarray:
     return np.sort(np.array(codewords))
 
 
-def get_constraint_sites(code: qec.LinearCode) -> list[int]:
+def get_constraint_sites(code: qec.LinearCode) -> List[List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -323,7 +330,7 @@ def get_constraint_sites(code: qec.LinearCode) -> list[int]:
             Linear code object.
 
     Returns
-        strings : list[int]
+        strings : List[List[List[int]]]
             List of MPS sites.
     """
 
@@ -347,7 +354,7 @@ def get_constraint_sites(code: qec.LinearCode) -> list[int]:
             [xor_left_sites, xor_bulk_sites, swap_sites, xor_right_sites]
         )
 
-    return constraints_strings
+    return cast(List[List[List[int]]], constraints_strings)
 
 
 def prepare_codewords(
@@ -355,7 +362,7 @@ def prepare_codewords(
     prob_error: np.float32 = np.float32(0.5),
     error_model: "qec.noise_model" = qec.BinarySymmetricChannel,
     seed: Optional[int] = None,
-) -> tuple[str, str]:
+) -> Tuple[str, str]:
     """
     This function prepares a codeword and its copy after applying an error model.
 
@@ -394,8 +401,8 @@ def prepare_codewords(
 
 def apply_parity_constraints(
     codeword_state: Union[ExplicitMPS, CanonicalMPS],
-    strings: list[list[list[int]]],
-    logical_tensors: list[np.ndarray],
+    strings: List[List[List[int]]],
+    logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     renormalise: bool = False,
     strategy: str = "naive",
@@ -405,24 +412,26 @@ def apply_parity_constraints(
     A function applying constraints to a codeword MPS.
 
     Parameters
-        codeword_state :
-            The codeword MPS.
-        strings :
-            The list of arguments for :class:`ConstraintString`.
-        logical_tensors
-            List of logical tensors for :class:`ConstraintString`.
-        chi_max : int
-            Maximum bond dimension to keep in the contractor.
-        renormalise :
-            To (not) renormalise the singular values at each MPS bond involved in contraction.
-        strategy :
-            The contractor strategy.
-        silent :
-            Whether to show the progress bar or not.
+    ----------
+    codeword_state :
+        The codeword MPS.
+    strings :
+        The list of arguments for :class:`ConstraintString`.
+    logical_tensors
+        List of logical tensors for :class:`ConstraintString`.
+    chi_max : int
+        Maximum bond dimension to keep in the contractor.
+    renormalise :
+        To (not) renormalise the singular values at each MPS bond involved in contraction.
+    strategy :
+        The contractor strategy.
+    silent :
+        Whether to show the progress bar or not.
 
     Returns
-        codeword_state :
-            The resulting MPS.
+    -------
+    codeword_state :
+        The resulting MPS.
     """
 
     if strategy == "naive":
@@ -468,7 +477,10 @@ def apply_parity_constraints(
                     elif all(flags_left):
                         codeword_state.orth_centre = codeword_state.num_sites - 1
 
-                codeword_state = codeword_state.move_orth_centre(final_pos=start_site)
+                codeword_state = cast(
+                    Union[ExplicitMPS, CanonicalMPS],
+                    codeword_state.move_orth_centre(final_pos=start_site),
+                )
 
             # Doing the contraction.
             codeword_state = mps_mpo_contract(
@@ -480,7 +492,7 @@ def apply_parity_constraints(
                 inplace=False,
             )
 
-    return codeword_state
+    return cast(CanonicalMPS, codeword_state)
 
 
 def decode(
@@ -491,33 +503,35 @@ def decode(
     chi_max_dmrg: int = int(1e4),
     cut: np.float32 = np.float32(1e-12),
     silent: bool = False,
-) -> tuple[deph_dmrg, np.float32]:
+) -> Tuple[deph_dmrg, np.float32]:
     """
     This function performs actual decoding of a message given a code and
     the DMRG truncation parameters.
     Returns the overlap between the decoded message given the initial message.
 
     Parameters
-        message :
-            The message MPS.
-        codeword :
-            The codeword MPS.
-        code :
-            Linear code object.
-        num_runs : int
-            Number of DMRG sweeps.
-        chi_max_dmrg : int
-            Maximum bond dimension to keep in the DMRG algorithm.
-        cut :
-            The lower boundary of the spectrum in the DMRG algorithm.
-            All the singular values smaller than that will be discarded.
+    ----------
+    message : Union[ExplicitMPS, CanonicalMPS]
+        The message MPS.
+    codeword : Union[ExplicitMPS, CanonicalMPS]
+        The codeword MPS.
+    code : qec.LinearCode
+        Linear code object.
+    num_runs : int
+        Number of DMRG sweeps.
+    chi_max_dmrg : int
+        Maximum bond dimension to keep in the DMRG algorithm.
+    cut : np.float32
+        The lower boundary of the spectrum in the DMRG algorithm.
+        All the singular values smaller than that will be discarded.
 
     Returns
-        engine :
-            The container class for the DMRG, see :class:`mdopt.optimiser.DMRG`.
-        overlap :
-            The overlap between the decoded message and a given codeword,
-            computed as the following inner product |<decoded_message|codeword>|.
+    -------
+    engine : DephasingDMRG
+        The container class for the DMRG, see :class:`mdopt.optimiser.DMRG`.
+    overlap : np.float32
+        The overlap between the decoded message and a given codeword,
+        computed as the following inner product |<decoded_message|codeword>|.
     """
 
     # Creating an all-plus state to start the DMRG with.

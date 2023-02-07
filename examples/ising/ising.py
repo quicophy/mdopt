@@ -2,72 +2,30 @@
 This module contains classes and functions we use to simulate the 1D Ising module.
 """
 
-from typing import Union
+from typing import Union, List
 import numpy as np
 from scipy.sparse import csr_matrix, eye, kron
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.contractor.contractor import apply_one_site_operator, apply_two_site_unitary
-from mdopt.mps.utils import inner_product, create_simple_product_state
-
-
-def compute_one_site_expectation_value(
-    mps: Union[CanonicalMPS, ExplicitMPS], operator: np.ndarray, site: int
-) -> Union[np.float32, np.complex128]:
-    """Computes a one-site expectation value of an operator (not necessarily unitary)."""
-
-    if site not in range(mps.num_sites):
-        raise ValueError(
-            f"Site given {site}, with the number of sites in the MPS {mps.num_sites}."
-        )
-
-    mps = mps.right_canonical()
-    mps_new = mps.copy()
-
-    mps_new.tensors[site] = apply_one_site_operator(
-        tensor=mps.single_site_tensor(site), operator=operator
-    )
-
-    return inner_product(mps, mps_new)
-
-
-def compute_two_site_expectation_value(
-    mps: Union[CanonicalMPS, ExplicitMPS], unitary: np.ndarray, site: int
-) -> np.float32:
-    """Computes a two-site expectation value of a unitary
-    on the given site and its next neighbour.
-    """
-
-    if site not in range(mps.num_sites - 1):
-        raise ValueError(
-            f"Sites given {site, site + 1} with the number of sites in the MPS {mps.num_sites}."
-        )
-
-    mps_old = mps.right_canonical()
-    mps_new = mps.copy()
-
-    mps_new.tensors[site], mps_new.tensors[site + 1] = apply_two_site_unitary(
-        lambda_0=mps.schmidt_values[site],
-        b_1=mps.single_site_right_iso(site),
-        b_2=mps.single_site_right_iso(site + 1),
-        unitary=unitary,
-    )
-
-    return inner_product(mps_old, mps_new)
 
 
 class IsingExact:
-    """Class for exact representation of a transverse field Ising model in 1D.
-
-    Attributes:
-        num_sites:
-            Number of spins in the chain.
-        h_magnetic:
-            Value of the transverse magnetic field scaled by the ZZ-interaction.
+    """
+    Class for exact representation of a transverse field Ising model in 1D.
     """
 
     def __init__(self, num_sites: int = 2, h_magnetic: np.float32 = 0) -> None:
+        """
+        Initialises an instance to exactly simulate the Ising model in 1D.
+
+        Parameters
+        ----------
+        num_sites : int
+            The number of spins in the chain.
+        h_magnetic : np.float32
+            Value of the transverse magnetic field scaled by the ZZ-interaction.
+        """
         self.num_sites = num_sites
         self.h_magnetic = h_magnetic
         self.identity = np.identity(2)
@@ -95,7 +53,8 @@ class IsingExact:
         )
 
     def hamiltonian_dense(self) -> np.ndarray:
-        """Returns a dense representation of the Hamiltonian.
+        """
+        Returns a dense representation of the Hamiltonian.
         Warning: memory-intensive! Do not use for `num_sites` > 20.
         """
 
@@ -186,17 +145,21 @@ class IsingMPO:
     """
     Class for a Matrix Product Operator (MPO) representation of
     a transverse field Ising model in 1D and computing relevant physical observables.
-
-    Attributes:
-        num_sites :int
-            Number of spins in the chain.
-        h_magnetic : np.float32
-            Value of the transverse magnetic field scaled by the ZZ-interaction.
     """
 
     def __init__(
         self, num_sites: int = int(2), h_magnetic: np.float32 = np.float32(0)
     ) -> None:
+        """
+        Initialises an instance to simulate the Ising model in 1D using MPS.
+
+        Parameters
+        ----------
+        num_sites :int
+            Number of spins in the chain.
+        h_magnetic : np.float32
+            Value of the transverse magnetic field scaled by the ZZ-interaction.
+        """
         self.num_sites = num_sites
         self.h_magnetic = h_magnetic
         self.identity = np.identity(2)
@@ -205,7 +168,7 @@ class IsingMPO:
         if num_sites < 2:
             raise ValueError(f"Number of sites should be >=2, given {num_sites}")
 
-    def hamiltonian_mpo(self) -> list[np.ndarray]:
+    def hamiltonian_mpo(self) -> List[np.ndarray]:
         """Returns a Matrix Product Operator representation of the Hamiltonian.
 
         Follows the convention of indices from ``mdopt.mps.explicit.py``:
@@ -237,27 +200,27 @@ class IsingMPO:
         return mpo_list
 
     def z_magnetisation(
-        self, i: int, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> np.float32:
         """
         Computes the z-magnetisation value
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
-        return compute_one_site_expectation_value(mps, self.pauli_z, i)
+        return mps.one_site_expectation_value(i, self.pauli_z)
 
     def x_magnetisation(
-        self, i: int, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> np.float32:
         """
         Computes the x-magnetisation value
         corresponding to a quantum state
         in the form of an MPS at site `i`.
         """
-        return compute_one_site_expectation_value(mps, self.pauli_x, i)
+        return mps.one_site_expectation_value(i, self.pauli_x)
 
     def average_chain_z_magnetisation(
-        self, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> np.float32:
         """
         Computes the average z-magnetisation
@@ -270,7 +233,7 @@ class IsingMPO:
         )
 
     def average_chain_x_magnetisation(
-        self, mps: Union[CanonicalMPS, ExplicitMPS]
+        self, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> np.float32:
         """
         Computes the average x-magnetisation
