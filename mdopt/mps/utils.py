@@ -4,7 +4,7 @@ The ``mdopt.mps.utils`` module.
 This module contains various MPS utilities.
 """
 
-from typing import Union, Optional, cast
+from typing import Union, Optional, List, cast
 from functools import reduce
 import numpy as np
 from opt_einsum import contract
@@ -16,7 +16,7 @@ from mdopt.mps.explicit import ExplicitMPS
 
 def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
     """
-    Creates a uniform random complex quantum state in the form of a state vector.
+    Creates a random uniform complex-valued vector of norm 1.
 
     Parameters
     ----------
@@ -191,7 +191,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
 
 def inner_product(
     mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
-) -> Union[np.float32, np.complex128]:
+) -> Union[np.float64, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
@@ -204,7 +204,7 @@ def inner_product(
 
     Returns
     -------
-    product : Union[np.float32, np.complex128]
+    product : Union[np.float64, np.complex128]
         The value of the inner product.
 
     Raises
@@ -492,3 +492,190 @@ def create_custom_product_state(
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
     return ExplicitMPS(tensors, singular_values)
+
+
+def marginalise(
+    mps: Union[ExplicitMPS, CanonicalMPS], sites_to_marginalise: List[int]
+) -> Union[CanonicalMPS, np.float64, np.complex128]:
+    r"""
+    Computes a marginal over a subset of sites of an MPS.
+    This function was created to not act inplace.
+    For the inplace version, take a look into the
+    corresponding methods of available MPS classes.
+
+    Parameters
+    ----------
+    mps : Union[ExplicitMPS, CanonicalMPS]
+        The MPS we operate on
+    sites_to_marginalise : list[int]
+        The sites to marginalise over.
+
+    Notes
+    -----
+    The algorithm proceeds by starting from the bond possessing the
+    maximum dimension and contracting the marginalised tensors into
+    the tensors left untouched. This subroutine proceeds until the
+    list of sites to marginalise is empty.
+    An example of marginalising is shown in the following diagram::
+
+        ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
+            |     |     |     |     ->     |     |
+            |     |     |     |            |     |
+           (+)   (+)
+
+    Here, the ``(+)`` tensor is defined as
+    | :math:`| \frac{1}{\text{phys_dim}}\underbrace{\text{phys_dim}}{1 \hdots 1}.`
+    """
+
+    mps = mps.copy()
+    sites_all = list(range(mps.num_sites))
+
+    if isinstance(mps, ExplicitMPS):
+        mps = mps.right_canonical()
+
+    if sites_to_marginalise == []:
+        return mps
+
+    if sites_to_marginalise == sites_all:
+        plus_state = create_simple_product_state(
+            num_sites=mps.num_sites, which="+", phys_dim=mps.phys_dimensions[0]
+        )
+        return inner_product(mps, plus_state)
+
+    for site in sites_to_marginalise:
+        if site not in sites_all:
+            raise ValueError(
+                "The list of sites to marginalise must be a subset of the list of all sites."
+            )
+
+    # This subroutine will be used to update the list of sites to marginalise on the fly.
+    def _update_sites_routine(site_checked, site):
+        if site_checked < site:
+            return site_checked
+        if site_checked > site:
+            return site_checked - 1
+        return None
+
+    # This subroutine will be used to update the MPS attributes on the fly.
+    def _update_attributes_routine(
+        tensors, num_sites, bond_dims, sites_all, sites_to_marg, site
+    ):
+        del tensors[site]
+        try:
+            del bond_dims[site]
+        except IndexError:
+            pass
+        sites_to_marg = [
+            _update_sites_routine(site_checked, site)
+            for site_checked in sites_to_marg
+            if site_checked != site
+        ]
+        return tensors, num_sites - 1, bond_dims, sites_all[:-1], sites_to_marg
+
+    # Contracting in the "+" tensors.
+    for site in sites_to_marginalise:
+        phys_dim = mps.phys_dimensions[site]
+        trace_tensor = np.zeros((phys_dim,))
+        for i in range(phys_dim):
+            trace_tensor[i] = 1 / np.sqrt(phys_dim)
+        mps.tensors[site] = np.tensordot(mps.tensors[site], trace_tensor, (1, 0))
+
+    bond_dims = mps.bond_dimensions
+
+    while sites_to_marginalise:
+
+        try:
+            site = int(np.argmax(bond_dims))
+        except ValueError:
+            site = sites_to_marginalise[0]
+
+        # Checking all possible tensor layouts on a given bond.
+        try:
+            if mps.tensors[site].ndim == 2 and mps.tensors[site + 1].ndim == 3:
+                mps.tensors[site + 1] = np.tensordot(
+                    mps.tensors[site], mps.tensors[site + 1], (-1, 0)
+                )
+                (
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                ) = _update_attributes_routine(
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                    site,
+                )
+            elif mps.tensors[site].ndim == 3 and mps.tensors[site + 1].ndim == 2:
+                mps.tensors[site] = np.tensordot(
+                    mps.tensors[site], mps.tensors[site + 1], (-1, 0)
+                )
+                (
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                ) = _update_attributes_routine(
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                    site + 1,
+                )
+            elif mps.tensors[site].ndim == 2 and mps.tensors[site + 1].ndim == 2:
+                mps.tensors[site] = np.tensordot(
+                    mps.tensors[site], mps.tensors[site + 1], (-1, 0)
+                )
+                (
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                ) = _update_attributes_routine(
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                    site + 1,
+                )
+        except IndexError:
+            if mps.tensors[site].ndim == 2 and mps.tensors[site - 1].ndim == 3:
+                mps.tensors[site - 1] = np.tensordot(
+                    mps.tensors[site - 1], mps.tensors[site], (-1, 0)
+                )
+                (
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                ) = _update_attributes_routine(
+                    mps.tensors,
+                    mps.num_sites,
+                    bond_dims,
+                    sites_all,
+                    sites_to_marginalise,
+                    site,
+                )
+        else:
+            try:
+                del bond_dims[site]
+            except IndexError:
+                pass
+
+    return cast(
+        CanonicalMPS,
+        CanonicalMPS(
+            tensors=mps.tensors,
+            orth_centre=mps.num_sites - 1,
+            tolerance=mps.tolerance,
+            chi_max=mps.chi_max,
+        ).move_orth_centre(0, renormalise=False),
+    )

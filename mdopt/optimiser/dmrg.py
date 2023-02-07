@@ -23,7 +23,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     It allows us to compute eigenvectors more effeciently.
 
     Such effective operator is to be diagonalised in the
-    ``update_bond`` method of the :class:'DMRG' class::
+    ``update_bond`` method of the :class:`DMRG` class::
 
         ---uL                    uR---
         |        i          j        |
@@ -44,7 +44,8 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         mpo_tensor_right: np.ndarray,
         right_environment: np.ndarray,
     ) -> None:
-        """Initialises an effective operator tensor network.
+        """
+        Initialises an effective operator tensor network.
 
         Parameters
         ----------
@@ -296,10 +297,10 @@ class DMRG:
         right_environment = self.right_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            right_iso = self.mps.single_site_right_iso(i)
+            right_iso = self.mps.one_site_right_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
-            right_iso = self.mps.single_site_tensor(i)
+            right_iso = self.mps.one_site_tensor(i)
 
         right_environment = contract(
             "ijk, lnjm, omp, knp -> ilo",
@@ -320,10 +321,10 @@ class DMRG:
         left_environment = self.left_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            left_iso = self.mps.single_site_left_iso(i)
+            left_iso = self.mps.one_site_left_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
-            left_iso = self.mps.single_site_tensor(i)
+            left_iso = self.mps.one_site_tensor(i)
 
         left_environment = contract(
             "ijk, lnjm, omp, ilo -> knp",

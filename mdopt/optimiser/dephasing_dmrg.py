@@ -329,10 +329,10 @@ class DephasingDMRG:
         right_environment = self.right_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            right_iso = self.mps.single_site_right_iso(i)
+            right_iso = self.mps.one_site_right_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
-            right_iso = self.mps.single_site_tensor(i)
+            right_iso = self.mps.one_site_tensor(i)
 
         right_environment = contract(
             "ijkl, omi, pmj, qnk, rnl -> opqr",
@@ -354,10 +354,10 @@ class DephasingDMRG:
         left_environment = self.left_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            left_iso = self.mps.single_site_left_iso(i)
+            left_iso = self.mps.one_site_left_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
-            left_iso = self.mps.single_site_tensor(i)
+            left_iso = self.mps.one_site_tensor(i)
 
         left_environment = contract(
             "ijkl, imo, jmp, knq, lnr -> opqr",

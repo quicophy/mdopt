@@ -6,7 +6,10 @@ import numpy as np
 import pytest
 from opt_einsum import contract
 
+from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
+from mdopt.utils.utils import mpo_from_matrix
+from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.mps.utils import (
     create_state_vector,
     is_canonical,
@@ -168,8 +171,8 @@ def test_explicit_conjugate():
         assert np.isclose(len(mps), len(mps_conjugated)).all()
 
 
-def test_explicit_single_site_left_iso():
-    """Test for the ``single_site_left_iso`` method of the :class:`ExplicitMPS` class."""
+def test_explicit_one_site_left_iso():
+    """Test for the ``one_site_left_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -179,7 +182,7 @@ def test_explicit_single_site_left_iso():
         mps = mps_from_dense(psi, form="Explicit")
 
         for site in range(num_sites):
-            isometry = mps.single_site_left_iso(site)
+            isometry = mps.one_site_left_iso(site)
 
             to_be_identity = contract(
                 "ijk, ijl -> kl", isometry, np.conjugate(isometry), optimize=[(0, 1)]
@@ -190,11 +193,11 @@ def test_explicit_single_site_left_iso():
             )
 
         with pytest.raises(ValueError):
-            mps.single_site_left_iso(num_sites + 100)
+            mps.one_site_left_iso(num_sites + 100)
 
 
-def test_explicit_single_site_right_iso():
-    """Test for the ``single_site_right_iso`` method of the :class:`ExplicitMPS` class."""
+def test_explicit_one_site_right_iso():
+    """Test for the ``one_site_right_iso`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -205,7 +208,7 @@ def test_explicit_single_site_right_iso():
 
         for site in range(num_sites):
 
-            isometry = mps.single_site_right_iso(site)
+            isometry = mps.one_site_right_iso(site)
 
             to_be_identity = contract(
                 "ijk, ljk -> il", isometry, np.conjugate(isometry), optimize=[(0, 1)]
@@ -216,24 +219,11 @@ def test_explicit_single_site_right_iso():
             )
 
         with pytest.raises(ValueError):
-            mps.single_site_right_iso(num_sites + 100)
+            mps.one_site_right_iso(num_sites + 100)
 
 
-def test_explicit_single_left_iso_iter():
-    """Test for the ``single_site_left_iso_iter`` method of the :class:`ExplicitMPS` class."""
-
-    num_sites = np.random.randint(4, 9)
-
-    for _ in range(10):
-
-        psi = create_state_vector(num_sites)
-        mps = mps_from_dense(psi, form="Explicit")
-
-        assert isinstance(mps.single_site_left_iso_iter(), Iterable)
-
-
-def test_explicit_single_right_iso_iter():
-    """Test for the ``single_site_right_iso_iter`` method of :class:`ExplicitMPS` class."""
+def test_explicit_one_left_iso_iter():
+    """Test for the ``one_site_left_iso_iter`` method of the :class:`ExplicitMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -242,7 +232,20 @@ def test_explicit_single_right_iso_iter():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
-        assert isinstance(mps.single_site_right_iso_iter(), Iterable)
+        assert isinstance(mps.one_site_left_iso_iter(), Iterable)
+
+
+def test_explicit_one_right_iso_iter():
+    """Test for the ``one_site_right_iso_iter`` method of :class:`ExplicitMPS` class."""
+
+    num_sites = np.random.randint(4, 9)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites)
+        mps = mps_from_dense(psi, form="Explicit")
+
+        assert isinstance(mps.one_site_right_iso_iter(), Iterable)
 
 
 def test_explicit_two_site_left_iso():
@@ -415,6 +418,7 @@ def test_explicit_right_canonical():
         mps_right = mps.right_canonical()
 
         assert is_canonical(mps_right)
+        assert isinstance(mps_right, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_right, mps_right)), 1)
         assert len(find_orth_centre(mps_right)) == 1
 
@@ -450,6 +454,7 @@ def test_explicit_left_canonical():
         mps_left = mps.left_canonical()
 
         assert is_canonical(mps_left)
+        assert isinstance(mps_left, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_left, mps_left)), 1)
         assert len(find_orth_centre(mps_left)) == 1
 
@@ -486,8 +491,126 @@ def test_explicit_mixed_canonical():
         for i in range(num_sites):
             assert mps.tensors[i].shape == mps_mixed.tensors[i].shape
         assert is_canonical(mps_mixed)
+        assert isinstance(mps_mixed, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
         assert find_orth_centre(mps_mixed) == [orth_centre_index]
 
         with pytest.raises(ValueError):
             mps.mixed_canonical(num_sites + 100)
+
+
+def test_explicit_norm():
+    """
+    Test for the ``norm`` method of the :class:`ExplicitMPS` class.
+    """
+
+    num_sites = np.random.randint(4, 9)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites)
+        mps = mps_from_dense(psi, form="Explicit")
+
+        assert isinstance(mps.norm(), np.float64)
+        assert np.isclose(abs(mps.norm() - abs(inner_product(mps, mps)) ** 2), 0)
+
+
+def test_explicit_one_site_expectation_value():
+    """
+    Test for the ``one_site_expectation_value`` method of the :class:`ExplicitMPS` class.
+    """
+
+    num_sites = np.random.randint(4, 9)
+    phys_dim = np.random.randint(2, 4)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
+        mps_copy = mps.copy()
+        operator = np.random.uniform(
+            size=(phys_dim, phys_dim)
+        ) + 1j * np.random.uniform(size=(phys_dim, phys_dim))
+        site = int(np.random.randint(num_sites))
+
+        with pytest.raises(ValueError):
+            mps.one_site_expectation_value(100, operator)
+        with pytest.raises(ValueError):
+            mps.one_site_expectation_value(
+                site, np.random.uniform(size=(phys_dim, phys_dim, phys_dim))
+            )
+
+        exp_value = mps.one_site_expectation_value(site, operator)
+
+        mps.tensors[site] = apply_one_site_operator(mps.tensors[site], operator)
+        exp_value_to_compare = inner_product(mps_copy, mps)
+
+        assert np.isclose(abs(exp_value - exp_value_to_compare) ** 2, 0)
+
+
+def test_explicit_two_site_expectation_value():
+    """
+    Test for the ``two_site_expectation_value`` method of the :class:`ExplicitMPS` class.
+    """
+
+    num_sites = np.random.randint(4, 9)
+    phys_dim = np.random.randint(2, 4)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        operator = np.random.uniform(
+            size=(phys_dim, phys_dim, phys_dim, phys_dim)
+        ) + 1j * np.random.uniform(size=(phys_dim, phys_dim, phys_dim, phys_dim))
+        site = int(np.random.randint(num_sites - 1))
+        mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
+        mps_copy = mps.copy()
+        operator_mpo = mpo_from_matrix(
+            matrix=operator, num_sites=2, phys_dim=phys_dim, interlaced=True
+        )
+
+        with pytest.raises(ValueError):
+            mps.two_site_expectation_value(100, operator_mpo)
+        with pytest.raises(ValueError):
+            mps.two_site_expectation_value(
+                site, np.random.uniform(size=(phys_dim, phys_dim, phys_dim))
+            )
+
+        exp_value = mps.two_site_expectation_value(site, operator)
+
+        mps = mps_mpo_contract(mps=mps, mpo=operator_mpo, start_site=site)
+        exp_value_to_compare = inner_product(mps_copy, mps)
+
+        assert np.isclose(abs(exp_value - exp_value_to_compare) ** 2, 0)
+
+
+def test_explicit_marginal():
+    """
+    Test for the ``marginal`` method of the :class:`ExplicitMPS` class.
+    """
+
+    num_sites = np.random.randint(4, 9)
+    phys_dim = np.random.randint(2, 4)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
+
+        sites_all = list(range(num_sites))
+        sites_to_marginalise = []
+        for site in sites_all:
+            if np.random.uniform() < 1 / 2:
+                sites_to_marginalise.append(site)
+        sites_left = [site for site in sites_all if site not in sites_to_marginalise]
+
+        mps_marginalised = mps.marginal(sites_to_marginalise)
+
+        with pytest.raises(ValueError):
+            mps.marginal([100, 200])
+
+        if isinstance(mps_marginalised, CanonicalMPS):
+            assert mps_marginalised.num_sites == len(sites_left)
+            assert is_canonical(mps_marginalised)
+        elif not isinstance(mps_marginalised, ExplicitMPS):
+            assert isinstance(mps_marginalised, np.complex128)

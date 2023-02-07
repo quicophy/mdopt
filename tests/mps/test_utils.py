@@ -4,6 +4,7 @@ from itertools import combinations
 import pytest
 import numpy as np
 
+from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import (
     create_state_vector,
     find_orth_centre,
@@ -12,6 +13,7 @@ from mdopt.mps.utils import (
     mps_from_dense,
     create_custom_product_state,
     create_simple_product_state,
+    marginalise,
 )
 
 
@@ -213,3 +215,44 @@ def test_mps_utils_create_custom_product_state():
     assert np.isclose(mps_2.tensors, mps_tensors).all()
     with pytest.raises(ValueError):
         create_custom_product_state("0011++", form="Mixed-canonical")
+
+
+def test_mps_utils_marginalise():
+    """Test for the ``marginalise`` function."""
+
+    num_sites = np.random.randint(4, 9)
+    phys_dim = np.random.randint(2, 4)
+
+    for _ in range(10):
+
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps_right = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
+        mps_explicit = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
+
+        sites_all = list(range(num_sites))
+        sites_to_marginalise = []
+        for site in sites_all:
+            if np.random.uniform() < 1 / 2:
+                sites_to_marginalise.append(site)
+        sites_left = [site for site in sites_all if site not in sites_to_marginalise]
+
+        mps_marginalised_r = marginalise(mps_right, sites_to_marginalise)
+        mps_marginalised_e = marginalise(mps_explicit, sites_to_marginalise)
+
+        with pytest.raises(ValueError):
+            mps_right.marginal([100, 200])
+
+        assert len(mps_right) == num_sites
+        assert len(mps_explicit) == num_sites
+
+        if isinstance(mps_marginalised_r, CanonicalMPS):
+            assert mps_marginalised_r.num_sites == len(sites_left)
+            assert is_canonical(mps_marginalised_r)
+        else:
+            assert isinstance(mps_marginalised_r, np.complex128)
+
+        if isinstance(mps_marginalised_e, CanonicalMPS):
+            assert mps_marginalised_e.num_sites == len(sites_left)
+            assert is_canonical(mps_marginalised_e)
+        else:
+            assert isinstance(mps_marginalised_e, np.complex128)

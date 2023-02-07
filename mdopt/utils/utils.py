@@ -379,7 +379,7 @@ def mpo_from_matrix(
     num_sites : int
         The number of sites in the MPO.
     interlaced : bool
-        Whether the matrix legs are interlaced or not.
+        Whether the matrix' legs are interlaced or not.
     phys_dim : int
         Local dimension of the physical legs.
     chi_max : int
@@ -419,7 +419,6 @@ def mpo_from_matrix(
 
     hilbert_space_dim = phys_dim**num_sites
     phys_dims = [phys_dim] * num_sites * 2
-    mps_dim = phys_dim**2
 
     # Checking the matrix has correct shapes for
     # a given physical dimension and number of sites.
@@ -445,6 +444,7 @@ def mpo_from_matrix(
 
     # Treating the MPO as an MPS with squared physical dimensions.
     mpo = []
+    mps_dim = phys_dim**2
     matrix = matrix.reshape((-1, mps_dim))
     matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
     v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
