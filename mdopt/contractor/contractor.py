@@ -1,6 +1,4 @@
 """
-The ``mdopt.contractor.contractor`` module.
-======================================================
 This module contains the MPS-MPO contractor functions.
 """
 
@@ -45,7 +43,6 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
         If the MPS tensor is not three-dimensional.
     ValueError
         If the operator tensor is not two-dimensional.
-
     """
 
     if len(tensor.shape) != 3:
@@ -55,7 +52,7 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
 
     if len(operator.shape) != 2:
         raise ValueError(
-            "A valid single-site operator must have 2 legs"
+            "A valid one-site operator must have 2 legs"
             f"while the one given has {len(operator.shape)}."
         )
 
@@ -215,7 +212,7 @@ def mps_mpo_contract(
     cut : np.float32
         Cutoff for the singular values.
     inplace : bool
-        Whether to modify the starting MPS or create a new one.
+        Whether to modify the current MPS or create a new one.
 
     Returns
     -------
