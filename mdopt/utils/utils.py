@@ -462,7 +462,7 @@ def mpo_from_matrix(
     mpo.append(np.expand_dims(v_r, -1))
     while matrix.shape[0] >= mps_dim:
         if not orthogonalise:
-            singular_values = np.sqrt(np.array(singular_values))
+            singular_values = list(np.sqrt(np.array(singular_values)))
         matrix = np.matmul(matrix, np.diag(singular_values))
         bond_dim = matrix.shape[-1]
         matrix = matrix.reshape((-1, mps_dim * bond_dim))
@@ -474,7 +474,7 @@ def mpo_from_matrix(
 
     # Contracting in the orthogonality centre.
     if not orthogonalise:
-        singular_values = np.sqrt(np.array(singular_values))
+        singular_values = list(np.sqrt(np.array(singular_values)))
     mpo[0] = contract(
         "ij, jk, klm",
         matrix,
