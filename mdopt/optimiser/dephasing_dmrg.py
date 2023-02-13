@@ -211,6 +211,12 @@ class DephasingDMRG:
         silent: bool = False,
         copy: bool = True,
     ) -> None:
+        """
+        Raises
+        ------
+        ValueError
+            If the current MPS and the target MPS do not have the same lengths.
+        """
         if len(mps) != len(mps_target):
             raise ValueError(
                 f"The MPS has length {len(mps)},"
