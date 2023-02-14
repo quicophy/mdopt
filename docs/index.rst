@@ -8,10 +8,7 @@ Welcome to mdopt's documentation!
    :caption: Contents:
 
    modules
-   examples/ising/ground_state_problem.ipynb
-   examples/main_component/main_component.ipynb
-   examples/decoding/classical.ipynb
-   examples/decoding/quantum.ipynb
+   examples
 
 Indices and tables
 ==================
