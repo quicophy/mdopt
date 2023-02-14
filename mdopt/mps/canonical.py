@@ -683,7 +683,7 @@ class CanonicalMPS:
             phys_dim = self.phys_dimensions[site]
             trace_tensor = np.zeros((phys_dim,))
             for i in range(phys_dim):
-                trace_tensor[i] = 1 / np.sqrt(phys_dim)
+                trace_tensor[i] = 1  # / np.sqrt(phys_dim) #TODO
             self.tensors[site] = np.tensordot(self.tensors[site], trace_tensor, (1, 0))
 
         bond_dims = self.bond_dimensions

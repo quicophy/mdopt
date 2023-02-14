@@ -577,7 +577,7 @@ def marginalise(
         phys_dim = mps.phys_dimensions[site]
         trace_tensor = np.zeros((phys_dim,))
         for i in range(phys_dim):
-            trace_tensor[i] = 1 / np.sqrt(phys_dim)
+            trace_tensor[i] = 1  # / np.sqrt(phys_dim) #TODO
         mps.tensors[site] = np.tensordot(mps.tensors[site], trace_tensor, (1, 0))
 
     bond_dims = mps.bond_dimensions

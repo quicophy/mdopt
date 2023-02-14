@@ -11,137 +11,15 @@ from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import find_orth_centre, inner_product, create_simple_product_state
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-
-# Here, we define the tensors which represent logical constraints.
-# We use the following tensors: XOR, SWAP, IDENTITY.
-# See the notes for additional information.
-
-# According to our convention, each tensor has legs (vL, vR, pU, pD),
-# where v stands for "virtual", p -- for "physical",
-# and L, R, U, D stand for "left", "right", "up", "down".
-
-IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
-
-COPY = np.fromfunction(
-    lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=int
-).reshape((2, 1, 2, 2))
-
-XOR_BULK = np.fromfunction(
-    lambda i, j, k, l: (i ^ j ^ k ^ 1) * np.eye(2)[k, l],
-    (2, 2, 2, 2),
-    dtype=int,
+from mdopt.optimiser.utils import (
+    IDENTITY,
+    COPY_RIGHT,
+    SWAP,
+    XOR_BULK,
+    XOR_LEFT,
+    XOR_RIGHT,
+    ConstraintString,
 )
-
-XOR_LEFT = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[j, k] * np.eye(2)[k, l],
-    (1, 2, 2, 2),
-    dtype=int,
-)
-
-XOR_RIGHT = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[i, k] * np.eye(2)[k, l],
-    (2, 1, 2, 2),
-    dtype=int,
-)
-
-SWAP = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[i, j] * np.eye(2)[k, l],
-    (2, 2, 2, 2),
-    dtype=int,
-)
-
-
-class ConstraintString:
-    """
-    Class for storing a string of logical constraints in the
-    Matrix Product Operator format.
-    Logical constraints are passed in the form of 4-dimensional MPO tensors.
-
-    Attributes:
-        constraints : list
-            A list of logical constraints of which the string consists.
-        sites : list[list[int]]
-            Each list inside corresponds to a constraint from the `constraints` list,
-            and contains the sites to which each constraint is applied.
-            For example, [[3, 5], [2, 4, 6], ...] means applying
-            `constraints[0]` to sites 3 and 5, `constraints[1]` to sites 2, 4, 6, etc.
-
-    Exceptions:
-        ValueError
-            Empty list of constraints.
-        ValueError
-            Empty list of sites.
-        ValueError
-            The `sites` list is longer than the `constraints` list.
-        ValueError
-            Non-unique sites in the `sites` list.
-    """
-
-    def __init__(self, constraints: List[np.ndarray], sites: List[List[int]]) -> None:
-        self.constraints = constraints
-        self.sites = sites
-
-        if self.constraints == []:
-            raise ValueError("Empty list of constraints passed.")
-
-        if self.sites == []:
-            raise ValueError("Empty list of sites passed.")
-
-        if len(self.sites) > len(self.constraints):
-            raise ValueError(
-                f"We have {len(self.constraints)} constraints in the constraints list, "
-                f"{len(self.sites)} constraints assumed by the sites list."
-            )
-
-        seen = set()
-        # TODO move to library anc cover with tests
-        uniq = [site for site in self.flat() if site not in seen and not seen.add(site)]  # type: ignore
-        if uniq != self.flat():
-            raise ValueError("Non-unique sites encountered in the list.")
-
-        if self.flat() != [site for site in range(min(self.sites), max(self.sites))]:  # type: ignore
-            raise ValueError("The string should not have breaks.")
-
-    def __getitem__(self, index: int) -> tuple:
-        """
-        Returns the pair of a list of sites together with the corresponding MPO.
-
-        Parameters
-        ----------
-        index : int
-            The index of the list of sites.
-        """
-
-        return self.sites[index], self.constraints[index]
-
-    def flat(self) -> List[int]:
-        """
-        Returns a flattened list of sites.
-        """
-
-        return [item for sites in self.sites for item in sites]
-
-    def span(self) -> int:
-        """
-        Returns the span (length) of the constraint string.
-        """
-
-        return max(self.flat()) - min(self.flat()) + 1
-
-    def get_mpo(self) -> List[np.ndarray]:
-        """
-        Returns the constraint string in the MPO format.
-        Note, that it will not include identities, which means
-        it needs to be manually adjusted to a corresponding MPS,
-        as the MPO can be smaller in size.
-        """
-
-        mpo = [None for _ in range(self.span())]
-        for index, sites_sites in enumerate(self.sites):
-            for site in sites_sites:
-                mpo[site - min(self.flat())] = self.constraints[index]
-
-        return mpo
 
 
 # Below, we define some decoding-specific functions over the MPS/MPO entities
@@ -220,8 +98,8 @@ def apply_bias_channel(
 
     if len(basis_mps) != len(codeword_string):
         raise ValueError(
-            f"The lengths of `basis_mps` and `codeword_string` should be equal,"
-            f"given {len(basis_mps)}."
+            f"The lengths of `basis_mps` and `codeword_string` should be equal, but given the "
+            f"MPS of length {len(basis_mps)} and the string of length {len(codeword_string)}."
         )
 
     if isinstance(basis_mps, ExplicitMPS):
@@ -283,6 +161,44 @@ def linear_code_checks(code: qec.LinearCode) -> List[Tuple[np.ndarray]]:
         for col in cols:
             array[row, col] = 1
     return [np.nonzero(row)[0] for row in array]
+
+
+def linear_css_code_checks(code: qec.CssCode) -> Tuple[List[int]]:
+    """
+    Given a CSS code, returns a list of its checks, where each check
+    is represented as a list of indices of the bits adjacent to it.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    -------
+    checks : tuple[list[np.ndarray]]
+        The checks.
+    """
+
+    parity_matrix_x = code.x_stabs_binary()
+    array_x = np.zeros(
+        (parity_matrix_x.num_rows(), parity_matrix_x.num_columns()), dtype=int
+    )
+    for row, cols in enumerate(parity_matrix_x.rows()):
+        for col in cols:
+            array_x[row, col] = 1
+
+    parity_matrix_z = code.z_stabs_binary()
+    array_z = np.zeros(
+        (parity_matrix_z.num_rows(), parity_matrix_z.num_columns()), dtype=int
+    )
+    for row, cols in enumerate(parity_matrix_z.rows()):
+        for col in cols:
+            array_z[row, col] = 1
+
+    return (
+        [2 * np.nonzero(row)[0] for row in array_x],
+        [2 * np.nonzero(row)[0] + 1 for row in array_z],
+    )
 
 
 def get_codewords(code: qec.LinearCode) -> np.ndarray:
@@ -355,6 +271,136 @@ def get_constraint_sites(code: qec.LinearCode) -> List[List[List[int]]]:
         )
 
     return cast(List[List[List[int]]], constraints_strings)
+
+
+def get_css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
+    """
+    Returns the list of MPS sites where the logical constraints should be applied.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    strings : tuple[list[list[int]]]
+        List of MPS sites.
+    """
+
+    sites_x, sites_z = linear_css_code_checks(code)
+
+    # check_x_degree = len(sites_x[0])
+    constraints_strings_x = []
+
+    # check_z_degree = len(sites_z[0])
+    constraints_strings_z = []
+
+    for sites in sites_x:
+
+        # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
+        xor_left_sites_x = [sites[0]]
+        xor_bulk_sites_x = [sites[i] for i in range(1, len(sites) - 1)]
+        xor_right_sites_x = [sites[-1]]
+
+        # Retreiving the sites indices where we apply the SWAP tensors.
+        swap_sites_x = list(range(sites[0] + 1, sites[-1]))
+        for k in range(1, len(sites) - 1):
+            swap_sites_x.remove(sites[k])
+
+        constraints_strings_x.append(
+            [xor_left_sites_x, xor_bulk_sites_x, swap_sites_x, xor_right_sites_x]
+        )
+
+    for sites in sites_z:
+
+        # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
+        xor_left_sites_z = [sites[0]]
+        xor_bulk_sites_z = [sites[i] for i in range(1, len(sites) - 1)]
+        xor_right_sites_z = [sites[-1]]
+
+        # Retreiving the sites indices where we apply the SWAP tensors.
+        swap_sites_z = list(range(sites[0] + 1, sites[-1]))
+        for k in range(1, len(sites) - 1):
+            swap_sites_z.remove(sites[k])
+
+        constraints_strings_z.append(
+            [xor_left_sites_z, xor_bulk_sites_z, swap_sites_z, xor_right_sites_z]
+        )
+
+    return constraints_strings_x, constraints_strings_z
+
+
+def css_code_logicals(code: qec.CssCode):
+    """
+    Returns the list of MPS sites where the logical constraints should be applied.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    logicals : tuple[list[int]]
+        List of logical operators, first X, then Z.
+    """
+
+    log_matrix_x = code.z_logicals_binary()
+    array_x = np.zeros((log_matrix_x.num_rows(), log_matrix_x.num_columns()), dtype=int)
+    for row, cols in enumerate(log_matrix_x.rows()):
+        for col in cols:
+            array_x[row, col] = 1
+
+    log_matrix_z = code.x_logicals_binary()
+    array_z = np.zeros((log_matrix_z.num_rows(), log_matrix_z.num_columns()), dtype=int)
+    for row, cols in enumerate(log_matrix_z.rows()):
+        for col in cols:
+            array_z[row, col] = 1
+
+    x_logical = [2 * np.nonzero(row)[0] + 1 for row in array_x]
+    z_logical = [2 * np.nonzero(row)[0] for row in array_z]
+
+    return x_logical[0], z_logical[0]
+
+
+def get_css_code_logicals_sites(code: qec.CssCode) -> Tuple[List[int]]:
+    """
+    Returns the list of MPS sites where the logical operators should be applied.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    -------
+    strings : tuple[list[int]]
+        List of MPS sites.
+    """
+
+    sites_x, sites_z = css_code_logicals(code)
+
+    # Retreiving the sites indices where we apply the COPY tensors.
+    copy_site_x = [2 * (len(code)) + code.num_x_logicals() + code.num_z_logicals() - 2]
+    copy_site_z = [2 * (len(code)) + code.num_x_logicals() + code.num_z_logicals() - 1]
+
+    # Retreiving the sites indices where we apply the left XOR tensors.
+    xor_left_site_x = [sites_x[0]]
+    xor_left_site_z = [sites_z[0]]
+
+    # Retreiving the sites indices where we apply the bulk XOR tensors.
+    xor_bulk_sites_x = [sites_x[i] for i in range(1, len(sites_x))]
+    xor_bulk_sites_z = [sites_z[i] for i in range(1, len(sites_z))]
+
+    # Retreiving the sites indices where we apply the SWAP tensors.
+    swap_sites_x = list(range(sites_x[0] + 1, copy_site_x[0]))
+    swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
+    swap_sites_z = list(range(sites_z[0] + 1, copy_site_z[0]))
+    swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+
+    string_x = [xor_left_site_x, xor_bulk_sites_x, swap_sites_x, copy_site_x]
+    string_z = [xor_left_site_z, xor_bulk_sites_z, swap_sites_z, copy_site_z]
+
+    return string_x, string_z
 
 
 def prepare_codewords(
