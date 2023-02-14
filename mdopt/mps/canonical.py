@@ -608,7 +608,7 @@ class CanonicalMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: list[int]) -> "CanonicalMPS":  # type: ignore
+    def marginal(self, sites_to_marginalise: List[int]) -> "CanonicalMPS":  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method acts inplace. For the non-inplace version,
