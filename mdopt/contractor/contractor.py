@@ -213,10 +213,12 @@ def mps_mpo_contract(
         Cutoff for the singular values.
     inplace : bool
         Whether to modify the current MPS or create a new one.
+    result_to_explicit : bool
+        Whether to tranform the result to the explicit form.
 
     Returns
     -------
-    mps : CanonicalMPS
+    mps : Union[ExplicitMPS, CanonicalMPS]
         The updated MPS in the canonical form.
 
     Raises
