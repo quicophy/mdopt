@@ -46,7 +46,7 @@ class CanonicalMPS:
 
     Attributes
     ----------
-    tensors : list[np.ndarray]
+    tensors : List[np.ndarray]
         The tensors of the MPS, one per each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
     orth_centre : Optional[int]
@@ -57,9 +57,9 @@ class CanonicalMPS:
         Numerical tolerance to zero out the singular values in Singular Value Decomposition.
     chi_max : int
         The maximum bond dimension to keep in Singular Value Decompositions.
-    bond_dimensions : list[int]
+    bond_dimensions : List[int]
         The list of all bond dimensions of the MPS.
-    phys_dimensions : list[int]
+    phys_dimensions : List[int]
         The list of all physical dimensions of the MPS.
     num_sites : int
         Number of sites.
@@ -616,7 +616,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        sites_to_marginalise : list[int]
+        sites_to_marginalise : List[int]
             The sites to marginalise over.
 
         Notes

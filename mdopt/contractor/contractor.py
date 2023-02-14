@@ -195,7 +195,7 @@ def mps_mpo_contract(
     ----------
     mps : Union[ExplicitMPS, CanonicalMPS]
         The initial MPS.
-    mpo : list[np.ndarray]
+    mpo : List[np.ndarray]
         MPO as a list of tensors, where each tensor is corresponding to
         an operator applied at a certain site.
         The operators should be ordered in correspondence with the sites.

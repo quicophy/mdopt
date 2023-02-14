@@ -56,11 +56,11 @@ def find_orth_centre(
 
     Returns
     -------
-    orth_centres : list[int]
+    orth_centres : List[int]
         Indices of sites at which tensors are orthogonality centres.
-    orth_flags_left : Optional[list[bool]]
+    orth_flags_left : Optional[List[bool]]
         Boolean variables for each tensor corresponding to being a left isometry.
-    orth_flags_right : Optional[list[bool]]
+    orth_flags_right : Optional[List[bool]]
         Boolean variables for each tensor corresponding to being a right isometry.
 
     Raises
@@ -507,7 +507,7 @@ def marginalise(
     ----------
     mps : Union[ExplicitMPS, CanonicalMPS]
         The MPS we operate on
-    sites_to_marginalise : list[int]
+    sites_to_marginalise : List[int]
         The sites to marginalise over.
 
     Notes

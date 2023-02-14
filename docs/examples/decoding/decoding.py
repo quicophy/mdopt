@@ -60,7 +60,7 @@ class ConstraintString:
     Attributes:
         constraints : list
             A list of logical constraints of which the string consists.
-        sites : list[list[int]]
+        sites : List[List[int]]
             Each list inside corresponds to a constraint from the `constraints` list,
             and contains the sites to which each constraint is applied.
             For example, [[3, 5], [2, 4, 6], ...] means applying

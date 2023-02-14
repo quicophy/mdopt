@@ -175,7 +175,7 @@ def linear_css_code_checks(code: qec.CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    checks : tuple[list[np.ndarray]]
+    checks : tuple[List[np.ndarray]]
         The checks.
     """
 
@@ -283,7 +283,7 @@ def get_css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
         The CSS code object.
 
     Returns
-    strings : tuple[list[list[int]]]
+    strings : tuple[List[List[int]]]
         List of MPS sites.
     """
 
@@ -340,7 +340,7 @@ def css_code_logicals(code: qec.CssCode):
         The CSS code object.
 
     Returns
-    logicals : tuple[list[int]]
+    logicals : tuple[List[int]]
         List of logical operators, first X, then Z.
     """
 
@@ -373,7 +373,7 @@ def get_css_code_logicals_sites(code: qec.CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    strings : tuple[list[int]]
+    strings : tuple[List[int]]
         List of MPS sites.
     """
 

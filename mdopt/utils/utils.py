@@ -216,7 +216,7 @@ def create_random_mpo(
     num_sites : int
         The number of sites for the MPO.
         This will be equal to the number of tensors.
-    bond_dimensions : list[int]
+    bond_dimensions : List[int]
         A list of bond dimensions.
     phys_dim : int
         Physical dimension of the tensors.
@@ -227,7 +227,7 @@ def create_random_mpo(
 
     Returns
     -------
-    mpo : list[np.ndarray]
+    mpo : List[np.ndarray]
         The resulting MPO.
 
     Notes
@@ -390,7 +390,7 @@ def mpo_from_matrix(
 
     Returns
     -------
-    mpo : list[np.ndarray]
+    mpo : List[np.ndarray]
         The resulting Matrix Product Operator.
 
     Raises

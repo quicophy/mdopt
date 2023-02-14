@@ -35,10 +35,10 @@ class ExplicitMPS:
 
     Attributes
     ----------
-    tensors : list[np.ndarray]
+    tensors : List[np.ndarray]
         The "physical" tensors of the MPS, one for each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    singular_values : list[list]
+    singular_values : List[List]
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
     tolerance : np.float32
@@ -63,7 +63,7 @@ class ExplicitMPS:
     def __init__(
         self,
         tensors: List[np.ndarray],
-        singular_values: List[list],
+        singular_values: List[List],
         tolerance: np.float32 = np.float32(1e-12),
         chi_max: int = int(1e4),
     ) -> None:
@@ -519,7 +519,7 @@ class ExplicitMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: list[int]) -> "CanonicalMPS":  # type: ignore
+    def marginal(self, sites_to_marginalise: List[int]) -> "CanonicalMPS":  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method acts inplace. For the non-inplace version,
@@ -527,7 +527,7 @@ class ExplicitMPS:
 
         Parameters
         ----------
-        sites_to_marginalise : list[int]
+        sites_to_marginalise : List[int]
             The sites to marginalise over.
 
         Notes

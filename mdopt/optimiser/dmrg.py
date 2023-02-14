@@ -145,7 +145,7 @@ class DMRG:
     ----------
     mps : Union[ExplicitMPS, CanonicalMPS]
         MPS serving as a current approximation of the target state.
-    mpo : list[np.ndarray]
+    mpo : List[np.ndarray]
         The MPO of which the target state is to be computed.
         Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
         where ``v`` stands for "virtual", ``p`` -- for "physical",
