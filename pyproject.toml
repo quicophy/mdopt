@@ -26,7 +26,7 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 black = "^22.3.0"
 pylint = "^2.15.3"
-setuptools = "^65.3.0"
+setuptools = ">=65.3,<68.0"
 
 [tool.poetry.group.test]
 optional = true
