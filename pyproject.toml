@@ -24,7 +24,7 @@ qecstruct = "^0.2.9"
 optional = true
 
 [tool.poetry.group.dev.dependencies]
-black = "^22.3.0"
+black = ">=22.3,<24.0"
 pylint = "^2.15.3"
 setuptools = ">=65.3,<68.0"
 
