@@ -32,7 +32,7 @@ setuptools = ">=65.3,<68.0"
 optional = true
 
 [tool.poetry.group.test.dependencies]
-coverage = "^6.4.4"
+coverage = ">=6.4.4,<8.0.0"
 pytest-cov = ">=3,<5"
 pytest = "^7.1.3"
 
