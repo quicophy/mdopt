@@ -339,7 +339,6 @@ def get_constraint_sites(code: qec.LinearCode) -> List[List[List[int]]]:
     constraints_strings = []
 
     for sites in sites_all:
-
         # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
         xor_left_sites = [sites[0]]
         xor_bulk_sites = [sites[i] for i in range(1, check_degree - 1)]
@@ -435,9 +434,7 @@ def apply_parity_constraints(
     """
 
     if strategy == "naive":
-
         for string in tqdm(strings, disable=silent):
-
             # Preparing the MPO.
             string = ConstraintString(logical_tensors, string)
             mpo = string.get_mpo()

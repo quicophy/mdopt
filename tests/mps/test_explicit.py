@@ -24,7 +24,6 @@ def test_explicit_init():
     """Tests for the ``__init__`` and ``__len__`` methods of the :class:`ExplicitMPS` class."""
 
     for _ in range(10):
-
         num_sites = np.random.randint(4, 9)
 
         product_mps = create_simple_product_state(
@@ -91,7 +90,6 @@ def test_explicit_copy():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
         mps_copied = mps.copy()
@@ -119,7 +117,6 @@ def test_explicit_reverse():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
         mps_reversed = mps.reverse()
@@ -146,7 +143,6 @@ def test_explicit_conjugate():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
         mps_conjugated = mps.conjugate()
@@ -177,7 +173,6 @@ def test_explicit_one_site_left_iso():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -202,12 +197,10 @@ def test_explicit_one_site_right_iso():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
         for site in range(num_sites):
-
             isometry = mps.one_site_right_iso(site)
 
             to_be_identity = contract(
@@ -228,7 +221,6 @@ def test_explicit_one_left_iso_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -241,7 +233,6 @@ def test_explicit_one_right_iso_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -254,7 +245,6 @@ def test_explicit_two_site_left_iso():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -283,7 +273,6 @@ def test_explicit_two_site_right_iso():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -315,7 +304,6 @@ def test_explicit_two_site_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -329,7 +317,6 @@ def test_explicit_dense():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -342,7 +329,6 @@ def test_explicit_density_mpo():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -411,7 +397,6 @@ def test_explicit_right_canonical():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -426,7 +411,6 @@ def test_explicit_right_canonical():
             assert mps.tensors[i].shape == mps_right.tensors[i].shape
 
         for i, _ in enumerate(mps_right.tensors):
-
             to_be_identity_right = contract(
                 "ijk, ljk -> il",
                 mps_right.tensors[i],
@@ -447,7 +431,6 @@ def test_explicit_left_canonical():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -462,7 +445,6 @@ def test_explicit_left_canonical():
             assert mps.tensors[i].shape == mps_left.tensors[i].shape
 
         for i, tensor in enumerate(mps_left.tensors):
-
             to_be_identity_left = contract(
                 "ijk, ijl -> kl",
                 tensor,
@@ -481,7 +463,6 @@ def test_explicit_mixed_canonical():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -507,7 +488,6 @@ def test_explicit_norm():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -524,7 +504,6 @@ def test_explicit_one_site_expectation_value():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
         mps_copy = mps.copy()
@@ -557,7 +536,6 @@ def test_explicit_two_site_expectation_value():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         operator = np.random.uniform(
             size=(phys_dim, phys_dim, phys_dim, phys_dim)
@@ -593,7 +571,6 @@ def test_explicit_marginal():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
 

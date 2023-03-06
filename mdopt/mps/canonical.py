@@ -81,7 +81,6 @@ class CanonicalMPS:
         tolerance: np.float32 = np.float32(1e-12),
         chi_max: int = int(1e4),
     ) -> None:
-
         self.tensors = tensors
         self.num_sites = len(tensors)
         self.num_bonds = self.num_sites - 1
@@ -689,7 +688,6 @@ class CanonicalMPS:
         bond_dims = self.bond_dimensions
 
         while sites_to_marginalise:
-
             try:
                 site = int(np.argmax(bond_dims))
             except ValueError:

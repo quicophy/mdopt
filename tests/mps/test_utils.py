@@ -23,7 +23,6 @@ def test_mps_utils_create_state_vector():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         assert psi.shape[0] == 2**num_sites
         assert isinstance(psi, np.ndarray)
@@ -37,7 +36,6 @@ def test_mps_utils_find_orth_centre():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         orth_centre = np.random.randint(num_sites)
         mps_explicit = mps_from_dense(psi, form="Explicit")
@@ -66,7 +64,6 @@ def test_mps_utils_is_canonical():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         orth_centre = np.random.randint(num_sites)
         mps_explicit = mps_from_dense(psi, form="Explicit")
@@ -87,7 +84,6 @@ def test_mps_utils_inner_product():
     num_sites = 5
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
@@ -119,7 +115,6 @@ def test_mps_utils_mps_from_dense():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps_explicit = mps_from_dense(psi, form="Explicit")
         psi_from_mps_explicit = mps_explicit.dense().reshape((2**num_sites))
@@ -224,7 +219,6 @@ def test_mps_utils_marginalise():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps_right = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
         mps_explicit = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")

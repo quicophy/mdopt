@@ -63,7 +63,6 @@ def test_optimiser_ground_states():
     """
 
     for _ in range(5):
-
         num_sites = 8
         num_runs = 5
         transverse_magnetic_field = np.random.uniform(0.1, 1)

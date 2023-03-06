@@ -23,7 +23,6 @@ def test_canonical_init():
     """Tests for the ``__init__`` and ``__len__`` methods of the :class:`CanonicalMPS` class."""
 
     for _ in range(10):
-
         num_sites = np.random.randint(4, 9)
         tensors = [
             np.random.uniform(low=0, high=1, size=(1, 2, 1))
@@ -67,7 +66,6 @@ def test_canonical_copy():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
         mps_copied = mps.copy()
@@ -91,7 +89,6 @@ def test_canonical_reverse():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Mixed-canonical", orth_centre=num_sites - 2)
         mps_reversed = mps.reverse()
@@ -115,7 +112,6 @@ def test_canonical_conjugate():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
         mps_conjugated = mps.conjugate()
@@ -139,7 +135,6 @@ def test_canonical_one_site_tensor():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
         site = np.random.randint(0, num_sites)
@@ -156,7 +151,6 @@ def test_canonical_one_site_tensor_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
@@ -169,7 +163,6 @@ def test_canonical_two_site_tensor_next():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
         site = np.random.randint(0, num_sites - 1)
@@ -193,7 +186,6 @@ def test_canonical_two_site_tensor_prev():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
         site = np.random.randint(1, num_sites)
@@ -217,7 +209,6 @@ def test_canonical_two_site_tensor_next_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
@@ -230,7 +221,6 @@ def test_canonical_two_site_tensor_prev_iter():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
@@ -243,7 +233,6 @@ def test_canonical_dense():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
@@ -256,7 +245,6 @@ def test_canonical_density_mpo():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps_exp = mps_from_dense(psi, form="Explicit")
         mps_can = mps_from_dense(psi, form="Right-canonical")
@@ -298,7 +286,6 @@ def test_canonical_move_orth_centre():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
 
         orth_centre_init = np.random.randint(num_sites)
@@ -327,7 +314,6 @@ def test_canonical_move_orth_centre_to_border():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps_mixed_init_1 = mps_from_dense(psi, form="Mixed-canonical", orth_centre=1)
         mps_mixed_init_2 = mps_from_dense(
@@ -366,7 +352,6 @@ def test_canonical_explicit():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         left = mps_from_dense(psi, form="Left-canonical")
         right = mps_from_dense(psi, form="Right-canonical")
@@ -451,7 +436,6 @@ def test_canonical_norm():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
@@ -468,7 +452,6 @@ def test_canonical_one_site_expectation_value():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
         mps_copy = mps.copy()
@@ -501,7 +484,6 @@ def test_canonical_two_site_expectation_value():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         operator = np.random.uniform(
             size=(phys_dim, phys_dim, phys_dim, phys_dim)
@@ -539,7 +521,6 @@ def test_canonical_marginal():
     phys_dim = np.random.randint(2, 4)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
 

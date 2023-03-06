@@ -1,6 +1,6 @@
 """
 This module contains the :class:`DMRG` and the :class:`EffectiveOperator` classes.
-Inspired by TenPy.
+The class structure is inspired by TenPy.
 """
 
 from typing import Union, List, cast
@@ -177,7 +177,6 @@ class DMRG:
         silent: bool = False,
         copy: bool = True,
     ) -> None:
-
         if len(mps) != len(mpo):
             raise ValueError(
                 f"The MPS has length {len(mps)},"

@@ -255,7 +255,6 @@ def get_constraint_sites(code: qec.LinearCode) -> List[List[List[int]]]:
     constraints_strings = []
 
     for sites in sites_all:
-
         # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
         xor_left_sites = [sites[0]]
         xor_bulk_sites = [sites[i] for i in range(1, check_degree - 1)]
@@ -296,7 +295,6 @@ def get_css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
     constraints_strings_z = []
 
     for sites in sites_x:
-
         # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
         xor_left_sites_x = [sites[0]]
         xor_bulk_sites_x = [sites[i] for i in range(1, len(sites) - 1)]
@@ -312,7 +310,6 @@ def get_css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
         )
 
     for sites in sites_z:
-
         # Retreiving the sites indices where we apply the "bulk"/"boundary" XOR tensors.
         xor_left_sites_z = [sites[0]]
         xor_bulk_sites_z = [sites[i] for i in range(1, len(sites) - 1)]
@@ -481,9 +478,7 @@ def apply_parity_constraints(
     """
 
     if strategy == "naive":
-
         for string in tqdm(strings, disable=silent):
-
             # Preparing the MPO.
             string = ConstraintString(logical_tensors, string)
             mpo = string.get_mpo()

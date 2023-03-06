@@ -271,7 +271,6 @@ def mps_mpo_contract(
     )
 
     for i in range(len(mpo) - 2):
-
         mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
             two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, renormalise=renormalise
         )

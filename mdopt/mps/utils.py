@@ -82,7 +82,6 @@ def find_orth_centre(
     orth_centres = []
 
     for i, tensor in enumerate(mps.tensors):
-
         to_be_identity_left = np.asarray(
             contract("ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
@@ -158,7 +157,6 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
     flags_left = []
     flags_right = []
     for _, tensor in enumerate(mps.tensors):
-
         to_be_identity_left = np.asarray(
             contract("ijk, ijl -> kl", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
@@ -232,7 +230,6 @@ def inner_product(
     tensors = []
 
     for i in range(num_sites):
-
         dims_1 = mps_1.tensors[i].shape
         dims_2 = mps_2.tensors[i].shape
 
@@ -313,7 +310,6 @@ def mps_from_dense(
     singular_values.append(singular_values_local)
 
     while state_vector.shape[0] >= phys_dim:
-
         state_vector = np.matmul(state_vector, np.diag(singular_values_local))
 
         bond_dim = state_vector.shape[-1]
@@ -329,7 +325,6 @@ def mps_from_dense(
     singular_values.append([1.0])
 
     for i, _ in enumerate(tensors):
-
         tensors[i] = np.tensordot(
             tensors[i], np.linalg.inv(np.diag(singular_values[i + 1])), (2, 0)
         )
@@ -466,7 +461,6 @@ def create_custom_product_state(
     tensors = []
 
     for symbol in string:
-
         tensor = np.zeros((phys_dim,))
         if symbol == "0":
             tensor[0] = 1.0
@@ -583,7 +577,6 @@ def marginalise(
     bond_dims = mps.bond_dimensions
 
     while sites_to_marginalise:
-
         try:
             site = int(np.argmax(bond_dims))
         except ValueError:

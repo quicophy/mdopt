@@ -18,7 +18,6 @@ def test_utils_svd():
     """Test for the ``svd`` function."""
 
     for _ in range(10):
-
         dim = np.random.randint(low=10, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
 
@@ -40,7 +39,6 @@ def test_utils_svd():
         assert np.isclose(np.linalg.norm(m_trimmed - m_trimmed_new), 0)
 
     for _ in range(10):
-
         dim = np.random.randint(low=50, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
@@ -54,7 +52,6 @@ def test_utils_split_two_site_tensor():
     """Test for the ``split_two_site_tensor`` function."""
 
     for _ in range(10):
-
         d = 2
         bond_dim = np.random.randint(2, 18, size=2)
         t = np.random.uniform(
@@ -85,7 +82,6 @@ def test_utils_kron_tensors():
     """Test for the ``kron_tensors`` function."""
 
     for _ in range(10):
-
         dims_1 = np.random.randint(2, 11, size=3)
         dims_2 = np.random.randint(2, 11, size=3)
 
@@ -144,7 +140,6 @@ def test_utils_kron_tensors():
         )
 
         with pytest.raises(ValueError):
-
             dims_1 = np.random.randint(2, 11, size=4)
             dims_2 = np.random.randint(2, 11, size=3)
             tensor_1 = np.random.uniform(
@@ -175,7 +170,6 @@ def test_utils_mpo_from_matrix():
     """Test for the ``mpo_from_matrix`` function."""
 
     for _ in range(10):
-
         num_sites = np.random.randint(4, 6)
         phys_dim = np.random.randint(2, 4)
         matrix_shape = (phys_dim**num_sites, phys_dim**num_sites)
@@ -232,7 +226,6 @@ def test_utils_mpo_to_matrix():
     """Test for the ``mpo_to_matrix`` function."""
 
     for _ in range(10):
-
         num_sites = np.random.randint(4, 6)
         phys_dim = np.random.randint(2, 4)
 
@@ -291,7 +284,6 @@ def test_utils_mpo_to_matrix():
         assert np.isclose(abs(np.linalg.norm(matrix_3 - matrix_03)), 0, atol=1e-6)
 
     for _ in range(10):
-
         num_sites = 4
         mpo = create_random_mpo(
             num_sites,

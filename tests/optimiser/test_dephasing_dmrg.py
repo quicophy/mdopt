@@ -68,7 +68,6 @@ def test_optimiser_main_component():
     """
 
     for _ in range(5):
-
         num_sites = 8
         num_runs = 1
 

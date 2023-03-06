@@ -340,7 +340,6 @@ def mpo_to_matrix(
     )
 
     for i in range(num_sites - 2):
-
         matrix = (
             np.tensordot(matrix, mpo[i + 2], (1, 0))
             .transpose((0, 3, 1, 2, 4, 5))

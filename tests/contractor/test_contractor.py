@@ -27,7 +27,6 @@ def test_contractor_apply_one_site_operator():
     paulis = [pauli_x, pauli_y, pauli_z]
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
 
         mps = mps_from_dense(psi, form="Explicit")
@@ -89,7 +88,6 @@ def test_contractor_apply_two_site_unitary():
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
 
         mps = mps_from_dense(psi)
@@ -164,7 +162,6 @@ def test_contractor_mps_mpo_contract():
     identity = np.eye(2).reshape((1, 1, 2, 2))
 
     for _ in range(10):
-
         psi_init = create_state_vector(num_sites)
         start_site = np.random.randint(0, num_sites - 1)
         mps_init = mps_from_dense(
