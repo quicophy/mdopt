@@ -15,7 +15,7 @@ from mdopt.optimiser.utils import (
 
 
 def test_optimiser_utils_tensors():
-    """Test for the combinatorial optimization operations."""
+    """Test for the combinatorial optimisation operations."""
 
     id = np.eye(2).reshape((1, 1, 2, 2))
 
@@ -49,3 +49,52 @@ def test_optimiser_utils_tensors():
 
 def test_optimiser_utils_constraint_string():
     """Tests for the ``ConstraintString`` class."""
+
+    tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    for _ in range(10):
+        num_sites = 20
+        xor_left_site = np.random.randint(low=0, high=10)
+        xor_right_site = np.random.randint(low=xor_left_site + 1, high=num_sites)
+        sites = list(range(xor_left_site + 1, xor_right_site))
+        xor_bulk_sites = list(
+            np.sort(np.random.choice(sites, size=int(len(sites) / 2)))
+        )
+        xor_bulk_sites = list(set(xor_bulk_sites))
+        swap_sites = [site for site in sites if site not in xor_bulk_sites]
+
+        constraints_sites = [
+            [xor_left_site],
+            xor_bulk_sites,
+            swap_sites,
+            [xor_right_site],
+        ]
+        string = ConstraintString(constraints=tensors, sites=constraints_sites)
+
+        with pytest.raises(ValueError):
+            ConstraintString(constraints=[], sites=constraints_sites)
+
+        with pytest.raises(ValueError):
+            ConstraintString(constraints=tensors, sites=[])
+
+        with pytest.raises(ValueError):
+            ConstraintString(
+                constraints=[XOR_LEFT, XOR_BULK, XOR_RIGHT], sites=constraints_sites
+            )
+
+        with pytest.raises(ValueError):
+            constraints_sites = [
+                [0],
+                [1, 2, 3],
+                [3, 4, 5],
+                [6],
+            ]
+            ConstraintString(constraints=tensors, sites=constraints_sites)
+
+        with pytest.raises(ValueError):
+            constraints_sites = [
+                [0],
+                [1],
+                [3, 4, 5],
+                [6],
+            ]
+            ConstraintString(constraints=tensors, sites=constraints_sites)
