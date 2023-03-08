@@ -1,4 +1,4 @@
-"""Tests for the :module:`contractor` module."""
+"""Tests for the ``mdopt.contractor`` module."""
 
 import pytest
 import numpy as np
@@ -10,12 +10,13 @@ from mdopt.contractor.contractor import (
     apply_two_site_unitary,
     mps_mpo_contract,
 )
+from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.utils import is_canonical, mps_from_dense, create_state_vector
 from mdopt.utils.utils import create_random_mpo, mpo_to_matrix
 
 
 def test_contractor_apply_one_site_operator():
-    r"""Test for the :func:`apply_one_site_operator` function."""
+    """Test for the ``mdopt.contractor.apply_one_site_operator`` function."""
 
     num_sites = np.random.randint(4, 9)
 
@@ -26,7 +27,6 @@ def test_contractor_apply_one_site_operator():
     paulis = [pauli_x, pauli_y, pauli_z]
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
 
         mps = mps_from_dense(psi, form="Explicit")
@@ -82,13 +82,12 @@ def test_contractor_apply_one_site_operator():
 
 
 def test_contractor_apply_two_site_unitary():
-    r"""Test for the :func:`apply_two_site_unitary` function."""
+    """Test for the ``mdopt.contractor.apply_two_site_unitary`` function."""
 
     identity = np.eye(2)
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
-
         psi = create_state_vector(num_sites)
 
         mps = mps_from_dense(psi)
@@ -156,14 +155,13 @@ def test_contractor_apply_two_site_unitary():
 
 
 def test_contractor_mps_mpo_contract():
-    r"""Test for the :func:`mps_mpo_contract` function."""
+    """Test for the ``mdopt.contractor.mps_mpo_contract`` function."""
 
     num_sites = np.random.randint(4, 9)
     phys_dim = 2
     identity = np.eye(2).reshape((1, 1, 2, 2))
 
     for _ in range(10):
-
         psi_init = create_state_vector(num_sites)
         start_site = np.random.randint(0, num_sites - 1)
         mps_init = mps_from_dense(
@@ -185,6 +183,9 @@ def test_contractor_mps_mpo_contract():
 
         mps_fin = mps_mpo_contract(mps_init, mpo, start_site, renormalise=False)
         mps_fin_1 = mps_mpo_contract(mps_init, mpo, start_site, renormalise=True)
+        mps_fin_2 = mps_mpo_contract(
+            mps_init, mpo, start_site, renormalise=False, result_to_explicit=True
+        )
         orthogonality_centre = mps_fin_1.tensors[int(start_site + mpo_length - 1)]
 
         mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
@@ -210,3 +211,4 @@ def test_contractor_mps_mpo_contract():
         assert is_canonical(mps_fin)
         assert np.isclose(abs(np.linalg.norm(mps_fin.dense() - psi_fin)), 0, atol=1e-7)
         assert np.isclose(np.linalg.norm(orthogonality_centre), 1)
+        assert isinstance(mps_fin_2, ExplicitMPS)

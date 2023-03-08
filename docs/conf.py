@@ -25,7 +25,7 @@ copyright = "2022, Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
-release = "0.2.0"
+release = "0.3.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -39,6 +39,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "myst_parser",
     "sphinx_rtd_theme",
+    "nbsphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

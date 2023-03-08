@@ -1,4 +1,4 @@
-"""Tests for the :module:`dephasing_dmrg` module."""
+"""Tests for the ``mdopt.optimiser.dephasing_dmrg`` module."""
 
 import pytest
 import numpy as np
@@ -16,7 +16,7 @@ from mdopt.mps.utils import (
 
 
 def test_optimiser_effective_density_operator():
-    """Test for the :method:`__init__` method of :class:EffectiveDensityOperator."""
+    """Test for the ``__init__`` method of the ``EffectiveDensityOperator`` class."""
 
     left_environment = np.random.uniform(low=0, high=1, size=(2, 2, 2, 2))
     mps_target_1 = np.random.uniform(low=0, high=1, size=(2, 2, 2))
@@ -62,13 +62,12 @@ def test_optimiser_effective_density_operator():
 
 def test_optimiser_main_component():
     """
-    Test the dephasing DMRG method with the main component problem.
+    Test the dephasing DMRG optimiser with the main component problem.
     We solve the problem using exact diagonalisation, DMRG and dephasing DMRG.
     Next, we compare the solutions which should be exactly the same.
     """
 
     for _ in range(5):
-
         num_sites = 8
         num_runs = 1
 
@@ -154,8 +153,6 @@ def test_optimiser_main_component():
         ]
 
         # Check that all the three answers are the same.
-        print(np.binary_repr(main_component_exact, width=num_sites))
-        print(np.binary_repr(main_component_dephased, width=num_sites))
         assert np.logical_and(
             main_component_exact == main_component_dmrg,
             main_component_exact == main_component_dephased,

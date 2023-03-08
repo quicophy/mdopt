@@ -25,12 +25,10 @@
    :alt: Code style: black
 
 
-
-
 mdopt
 =====
 
-mdopt is a python package built on top of numpy for discrete optimization in the tensor-network (specifically, MPS-MPO) language. The code is hosted on github, so please feel free to submit issues and pull requests.
+mdopt is a python package built on top of numpy for discrete optimisation in the tensor-network (specifically, MPS-MPO) language. The code is hosted on github, so please feel free to submit issues and pull requests.
 
 Installation
 ------------

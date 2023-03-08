@@ -1,13 +1,14 @@
 """
 This module contains the :class:`ExplicitMPS` class.
-Hereafter by saying the MPS is in an explicit form we mean that
-the state is stored in the following format: for each three-dimensional tensor
-at site `i`, there exists a singular values diagonal matrix at bond ``i``::
+Hereafter saying the MPS is in the explicit form will mean that
+the state is stored in the following format:
+for each three-dimensional tensor at site ``i`` denoted by ``( )``,
+there exists a singular values diagonal matrix at bond ``i`` denoted by ``<>``::
 
-            i     i    i+1    i
-    ...---[ ]---( )---[ ]---( )---...
-                    |           |
-                    |           |
+           i    i    i+1  i+1
+    ...---<>---( )---<>---( )---...
+                |          |
+                |          |
 
 For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
 the corresponding singular value tensors at the boundaries
@@ -19,10 +20,11 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Iterable
+from typing import Iterable, List, Union, cast
 import numpy as np
 from opt_einsum import contract
 
+import mdopt
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.utils.utils import kron_tensors
 
@@ -33,17 +35,17 @@ class ExplicitMPS:
 
     Attributes
     ----------
-    tensors : list[np.ndarray]
+    tensors : List[np.ndarray]
         The "physical" tensors of the MPS, one for each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    singular_values : list[np.ndarray]
+    singular_values : List[List]
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
-    tolerance : np.float64
+    tolerance : np.float32
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
-    num_sites : np.int16
+    num_sites : int
         Number of sites.
-    num_bonds : np.int16
+    num_bonds : int
         Number of non-trivial bonds, which is equal to ``num_sites - 1``.
 
     Raises
@@ -60,16 +62,17 @@ class ExplicitMPS:
 
     def __init__(
         self,
-        tensors: list[np.ndarray],
-        singular_values: list[np.ndarray],
-        tolerance: np.float64 = 1e-12,
-        chi_max: np.int16 = 1e4,
-    ):
-
+        tensors: List[np.ndarray],
+        singular_values: List[List],
+        tolerance: np.float32 = np.float32(1e-12),
+        chi_max: int = int(1e4),
+    ) -> None:
         self.tensors = tensors
         self.num_sites = len(tensors)
         self.num_bonds = self.num_sites - 1
-        self.bond_dimensions = [self.tensors[i].shape[2] for i in range(self.num_bonds)]
+        self.bond_dimensions = [
+            self.tensors[i].shape[-1] for i in range(self.num_bonds)
+        ]
         self.phys_dimensions = [self.tensors[i].shape[1] for i in range(self.num_sites)]
         self.singular_values = singular_values
         self.num_singval_mat = len(singular_values)
@@ -89,7 +92,7 @@ class ExplicitMPS:
             if len(tensor.shape) != 3:
                 raise ValueError(
                     "A valid MPS tensor must have 3 legs"
-                    f"while the one given has {len(tensor.shape)}."
+                    f"while the one at site {i} has {len(tensor.shape)}."
                 )
 
         for i, _ in enumerate(singular_values):
@@ -100,16 +103,22 @@ class ExplicitMPS:
                     f"instead the norm is {norm} at bond {i + 1}."
                 )
 
-    def __len__(self) -> np.int16:
-        """Returns the number of sites in the MPS."""
+    def __len__(self) -> int:
+        """
+        Returns the number of sites in the MPS.
+        """
         return self.num_sites
 
     def __iter__(self) -> Iterable:
-        """Returns an iterator over (singular_values, tensors) pair for each site."""
+        """
+        Returns an iterator over (singular_values, tensors) pair for each site.
+        """
         return zip(self.singular_values, self.tensors)
 
     def copy(self) -> "ExplicitMPS":
-        """Returns a copy of the current MPS."""
+        """
+        Returns a copy of the current MPS.
+        """
         return ExplicitMPS(
             deepcopy(self.tensors),
             deepcopy(self.singular_values),
@@ -118,7 +127,9 @@ class ExplicitMPS:
         )
 
     def reverse(self) -> "ExplicitMPS":
-        """Returns a reversed version of a given MPS."""
+        """
+        Returns a reversed version of a given MPS.
+        """
 
         reversed_tensors = list(np.transpose(t) for t in reversed(self.tensors))
         reversed_singular_values = list(reversed(self.singular_values))
@@ -128,12 +139,16 @@ class ExplicitMPS:
         )
 
     def conjugate(self) -> "ExplicitMPS":
-        """Returns a complex-conjugated version of the current MPS."""
+        """
+        Returns a complex-conjugated version of the current MPS.
+        """
 
         conjugated_tensors = [np.conjugate(tensor) for tensor in self.tensors]
         conjugated_sing_vals = [
-            np.conjugate(sing_vals) for sing_vals in self.singular_values
+            [np.conjugate(sigma) for sigma in sing_vals]
+            for sing_vals in self.singular_values
         ]
+        conjugated_sing_vals = cast(List[list], conjugated_sing_vals)
         return ExplicitMPS(
             conjugated_tensors,
             conjugated_sing_vals,
@@ -141,8 +156,10 @@ class ExplicitMPS:
             self.chi_max,
         )
 
-    def single_site_left_iso(self, site: int) -> np.ndarray:
-        """Computes a single-site left isometry at a given site."""
+    def one_site_left_iso(self, site: int) -> np.ndarray:
+        """
+        Computes a one-site left isometry at a given site.
+        """
 
         if site not in range(self.num_sites):
             raise ValueError(
@@ -153,32 +170,38 @@ class ExplicitMPS:
             np.diag(self.singular_values[site]), self.tensors[site], (1, 0)
         )
 
-    def single_site_right_iso(self, site: int) -> np.ndarray:
-        """Computes a single-site right isometry at a given site."""
+    def one_site_right_iso(self, site: int) -> np.ndarray:
+        """
+        Computes a one-site right isometry at a given site.
+        """
 
         if site not in range(self.num_sites):
             raise ValueError(
-                f"Sites given {site}, {site + 1}, "
-                f"with the number of sites in the MPS {self.num_sites}."
+                f"Site given {site}, with the number of sites in the MPS {self.num_sites}."
             )
 
         return np.tensordot(
             self.tensors[site], np.diag(self.singular_values[site + 1]), (2, 0)
         )
 
-    def single_site_left_iso_iter(self) -> Iterable:
-        """Returns an iterator over the left isometries for every site."""
+    def one_site_left_iso_iter(self) -> Iterable:
+        """
+        Returns an iterator over the left isometries for every site.
+        """
 
-        return (self.single_site_left_iso(i) for i in range(self.num_sites))
+        return (self.one_site_left_iso(i) for i in range(self.num_sites))
 
-    def single_site_right_iso_iter(self) -> Iterable:
-        """Returns an iterator over the right isometries for every site."""
+    def one_site_right_iso_iter(self) -> Iterable:
+        """
+        Returns an iterator over the right isometries for every site.
+        """
 
-        return (self.single_site_right_iso(i) for i in range(self.num_sites))
+        return (self.one_site_right_iso(i) for i in range(self.num_sites))
 
     def two_site_left_iso(self, site: int) -> np.ndarray:
-        """Computes a two-site isometry on a given site and
-        the following one from two single-site left isometries.
+        """
+        Computes a two-site isometry on a given site and
+        the following one from two one-site left isometries.
         """
 
         if site not in range(self.num_sites):
@@ -188,14 +211,15 @@ class ExplicitMPS:
             )
 
         return np.tensordot(
-            self.single_site_left_iso(site),
-            self.single_site_left_iso(site + 1),
+            self.one_site_left_iso(site),
+            self.one_site_left_iso(site + 1),
             (2, 0),
         )
 
     def two_site_right_iso(self, site: int) -> np.ndarray:
-        """Computes a two-site isometry on a given site and
-        the following one from two single-site right isometries.
+        """
+        Computes a two-site isometry on a given site and
+        the following one from two one-site right isometries.
         """
 
         if site not in range(self.num_sites):
@@ -205,30 +229,33 @@ class ExplicitMPS:
             )
 
         return np.tensordot(
-            self.single_site_right_iso(site),
-            self.single_site_right_iso(site + 1),
+            self.one_site_right_iso(site),
+            self.one_site_right_iso(site + 1),
             (2, 0),
         )
 
     def two_site_right_iso_iter(self) -> Iterable:
-        """Returns an iterator over the two-site right isometries for every site and
+        """
+        Returns an iterator over the two-site right isometries for every site and
         its right neighbour.
         """
         return (self.two_site_right_iso(i) for i in range(self.num_sites))
 
     def two_site_left_iso_iter(self) -> Iterable:
-        """Returns an iterator over the two-site left isometries for every site and
+        """
+        Returns an iterator over the two-site left isometries for every site and
         its right neighbour.
         """
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
     def dense(self, flatten: bool = True) -> np.ndarray:
-        """Returns dense representation of the MPS.
+        """
+        Returns dense representation of the MPS.
 
         Warning: will cause memory overload for number of sites > ~20!
         """
 
-        tensors = list(self.single_site_right_iso_iter())
+        tensors = list(self.one_site_right_iso_iter())
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
 
         if flatten:
@@ -236,23 +263,23 @@ class ExplicitMPS:
 
         return dense
 
-    def density_mpo(self) -> list[np.ndarray]:
+    def density_mpo(self) -> List[np.ndarray]:
         """
         Returns the MPO representation (as a list of tensors)
         of the density matrix defined by a given MPS.
         This operation is depicted in the following picture::
 
-                   i          j
-              a    |          |        c           i     j
-            ...---(*)---O*---(*)---O*---...    ab  |     |  cd
-                                        --> ...---[ ]---[ ]---...
-            ...---( )---O----( )---O----...        |     |
-              b    |          |        d           k     l
-                   k          l
+                   i           j
+              a    |           |          c          i     j
+            ...---(*)---<>*---(*)---<>*---...    ab  |     |  cd
+                                          --> ...---[ ]---[ ]---...
+            ...---( )---<>----( )---<>----...        |     |
+              b    |           |          d          k     l
+                   k           l
 
         In the cartoon, `{i,j,k,l}` and `{a,b,c,d}` are single indices,
         while `ab` and `cd` denote multi indices.
-        Here, the ( )'s represent the MPS tensors, the O's ---
+        Here, the ( )'s represent the MPS tensors, the <>'s ---
         the singular values tensors, the [ ]'s --- the MPO tensors.
         The MPS with the physical legs up is complex-conjugated element-wise,
         this is denoted by the star sign.
@@ -264,7 +291,7 @@ class ExplicitMPS:
         and L, R, U, D stand for "left", "right", "up", "down".
         """
 
-        tensors = list(self.single_site_right_iso_iter())
+        tensors = list(self.one_site_right_iso_iter())
 
         mpo = map(
             lambda t: kron_tensors(
@@ -276,59 +303,67 @@ class ExplicitMPS:
         return list(mpo)
 
     def entanglement_entropy(self) -> np.ndarray:
-        """Returns the entanglement entropy for bipartitions at each of the bonds."""
+        """
+        Returns the entanglement entropy for bipartitions at each of the bonds.
+        """
 
-        def xlogx(arg):
-            if arg == 0:
-                return 0
+        def xlogx(arg: float) -> float:
+            if arg == 0.0:
+                return 0.0
             return arg * np.log(arg)
 
-        entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float64)
+        entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float32)
 
         for bond in range(self.num_bonds):
             singular_values = self.singular_values[bond].copy()
             singular_values[singular_values < self.tolerance] = 0
-            singular_values2 = singular_values * singular_values
-            entropy[bond] = -np.sum(
-                np.fromiter((xlogx(s) for s in singular_values2), dtype=np.float64)
+            singular_values2 = [
+                singular_value**2 for singular_value in singular_values
+            ]
+            entropy[bond] = -1 * np.sum(
+                np.fromiter((xlogx(s) for s in singular_values2), dtype=np.float32)
             )
         return entropy
 
     def right_canonical(self) -> CanonicalMPS:
-        """Returns the MPS in the right-canonical form given the MPS in the explicit form.
+        """
+        Returns the current MPS in the right-canonical form given the MPS in the explicit form.
 
         (see eq.19 in https://scipost.org/10.21468/SciPostPhysLectNotes.5 for reference),
         """
 
         return CanonicalMPS(
-            list(self.single_site_right_iso_iter()),
+            list(self.one_site_right_iso_iter()),
             orth_centre=None,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
 
     def left_canonical(self) -> CanonicalMPS:
-        """Returns the MPS in the left-canonical form given the MPS in the explicit form.
+        """
+        Returns the current MPS in the left-canonical form given the MPS in the explicit form.
 
         (see eq.19 in https://scipost.org/10.21468/SciPostPhysLectNotes.5 for reference),
         """
 
         return CanonicalMPS(
-            list(self.single_site_left_iso_iter()),
+            list(self.one_site_left_iso_iter()),
             orth_centre=None,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
 
     def mixed_canonical(self, orth_centre: int) -> CanonicalMPS:
-        """Returns the MPS in the mixed-canonical form
-        with the orthogonality centre being located at `orth_centre`.
+        """
+        Returns the current MPS in the mixed-canonical form
+        with the orthogonality centre being located at ``orth_centre``.
 
         Parameters
-            orth_centre_index: int
-                An integer which can take values `0, 1, ..., num_sites-1`.
-                Denotes the position of the orthogonality centre --
-                the only non-isometry in the new MPS.
+        ----------
+        orth_centre_index : int
+            An integer which can take values ``0, 1, ..., num_sites-1``.
+            Denotes the position of the orthogonality centre --
+            the only non-isometry in the new canonical MPS.
         """
 
         if orth_centre not in range(self.num_sites):
@@ -340,7 +375,7 @@ class ExplicitMPS:
         mixed_can_mps = []
 
         for i in range(orth_centre):
-            mixed_can_mps.append(self.single_site_left_iso(i))
+            mixed_can_mps.append(self.one_site_left_iso(i))
 
         orth_centre_tensor = contract(
             "ij, jkl, lm -> ikm",
@@ -352,11 +387,325 @@ class ExplicitMPS:
         mixed_can_mps.append(orth_centre_tensor)
 
         for i in range(orth_centre + 1, self.num_sites):
-            mixed_can_mps.append(self.single_site_right_iso(i))
+            mixed_can_mps.append(self.one_site_right_iso(i))
 
         return CanonicalMPS(
             mixed_can_mps,
             orth_centre=orth_centre,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
+        )
+
+    def norm(self) -> np.float64:
+        """
+        Computes the norm of the current MPS, that is,
+        the modulus squared of its inner product with itself.
+        """
+
+        return abs(mdopt.mps.utils.inner_product(self, self)) ** 2  # type: ignore
+
+    def one_site_expectation_value(
+        self,
+        site: int,
+        operator: np.ndarray,
+    ) -> Union[np.float64, np.complex128]:
+        """
+        Computes an expectation value of an arbitrary one-site operator
+        (not necessarily unitary) on the given site.
+
+        Parameters
+        ----------
+        site : int
+            The site where the operator is applied.
+        operator : np.ndarray
+            The one-site operator
+
+        Notes
+        -----
+        An example of a one-site expectation value is shown in the following diagram::
+
+            ( )-<>-( )-<>-( )-<>-( )
+             |      |      |      |
+             |     (o)     |      |
+             |      |      |      |
+            ( )-<>-( )-<>-( )-<>-( )
+        """
+
+        if site not in range(self.num_sites):
+            raise ValueError(
+                f"Site given {site}, with the number of sites in the MPS {self.num_sites}."
+            )
+
+        if len(operator.shape) != 2:
+            raise ValueError(
+                "A valid one-site operator must have 2 legs"
+                f"while the one given has {len(operator.shape)}."
+            )
+
+        orthogonality_centre = contract(
+            "ij, jkl, lm -> ikm",
+            np.diag(self.singular_values[site]),
+            self.tensors[site],
+            np.diag(self.singular_values[site + 1]),
+            optimize=[(0, 1), (0, 1)],
+        )
+
+        return contract(
+            "ijk, jl, ilk",
+            orthogonality_centre,
+            operator,
+            np.conjugate(orthogonality_centre),
+            optimize=[(0, 1), (0, 1)],
+        )
+
+    def two_site_expectation_value(
+        self,
+        site: int,
+        operator: np.ndarray,
+    ) -> Union[np.float64, np.complex128]:
+        """
+        Computes an expectation value of an arbitrary two-site operator
+        (not necessarily unitary) on the given site and its next neighbour.
+        The operator has legs ``(UL, DL, UR, DR)``, where ``L``, ``R``, ``U``, ``D``
+        stand for "left", "right", "up", "down" accordingly.
+
+        Parameters
+        ----------
+        site : int
+            The first site where the operator is applied, the second site to be ``site + 1``.
+        operator : np.ndarray
+            The two-site operator.
+
+        Notes
+        -----
+        An example of a two-site expectation value is shown in the following diagram::
+
+            ( )-<>-( )-<>-( )-<>-( )
+             |      |      |      |
+             |     (operator)     |
+             |      |      |      |
+            ( )-<>-( )-<>-( )-<>-( )
+
+        """
+
+        if site not in range(self.num_sites - 1):
+            raise ValueError(
+                f"Sites given {site, site + 1},"
+                f"with the number of sites in the MPS {self.num_sites}."
+            )
+
+        if len(operator.shape) != 4:
+            raise ValueError(
+                "A valid two-site operator must have 4 legs"
+                f"while the one given has {len(operator.shape)}."
+            )
+
+        two_site_orthogonality_centre = contract(
+            "ij, jkl, lm, mno, op -> iknp",
+            np.diag(self.singular_values[site]),
+            self.tensors[site],
+            np.diag(self.singular_values[site + 1]),
+            self.tensors[site + 1],
+            np.diag(self.singular_values[site + 2]),
+            optimize=[(0, 1), (0, 1), (0, 1), (0, 1)],
+        )
+
+        return contract(
+            "ijkl, jmkn, imnl",
+            two_site_orthogonality_centre,
+            operator,
+            np.conjugate(two_site_orthogonality_centre),
+            optimize=[(0, 1), (0, 1)],
+        )
+
+    def marginal(self, sites_to_marginalise: List[int]) -> "CanonicalMPS":  # type: ignore
+        r"""
+        Computes a marginal over a subset of sites of an MPS.
+        Attention, this method acts inplace. For the non-inplace version,
+        take a look into the ``mps.utils`` module.
+
+        Parameters
+        ----------
+        sites_to_marginalise : List[int]
+            The sites to marginalise over.
+
+        Notes
+        -----
+        The algorithm proceeds by starting from the bond possessing the
+        maximum dimension and contracting the marginalised tensors into
+        the tensors left untouched. The list of sites to marginalise is then
+        updated by removing the corresponding site from it. This subroutine
+        continues until the list of sites to marginalise is empty.
+        An example of marginalising is shown in the following diagram::
+
+            -<>-(0)-<>-(1)-<>-(2)-<>-(3)-<>-    ---(2)---(3)---
+                 |      |      |      |      ->     |     |
+                 |      |      |      |             |     |
+                (+)    (+)
+
+        Here, the ``(+)`` tensor is defined as
+        | :math:`| \frac{1}{\text{phys_dim}}\underbrace{\text{phys_dim}}{1 \hdots 1}.`
+        """
+
+        mps_can = self.right_canonical()
+        sites_all = list(range(self.num_sites))
+
+        if sites_to_marginalise == []:
+            return self.right_canonical()
+
+        if sites_to_marginalise == sites_all:
+            plus_state = mdopt.mps.utils.create_simple_product_state(  # type: ignore
+                num_sites=self.num_sites, which="+", phys_dim=self.phys_dimensions[0]
+            )
+            return mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
+
+        for site in sites_to_marginalise:
+            if site not in sites_all:
+                raise ValueError(
+                    "The list of sites to marginalise must be a subset of the list of all sites."
+                )
+
+        # This subroutine will be used to update the list of sites to marginalise on the fly.
+        def _update_sites_routine(site_checked, site):
+            if site_checked < site:
+                return site_checked
+            if site_checked > site:
+                return site_checked - 1
+            return None
+
+        # This subroutine will be used to update the MPS attributes on the fly.
+        def _update_attributes_routine(
+            tensors, num_sites, bond_dims, sites_all, sites_to_marg, site
+        ):
+            del tensors[site]
+            try:
+                del bond_dims[site]
+            except IndexError:
+                pass
+            sites_to_marg = [
+                _update_sites_routine(site_checked, site)
+                for site_checked in sites_to_marg
+                if site_checked != site
+            ]
+            return tensors, num_sites - 1, bond_dims, sites_all[:-1], sites_to_marg
+
+        # Contracting in the "+" tensors.
+        for site in sites_to_marginalise:
+            phys_dim = mps_can.phys_dimensions[site]
+            trace_tensor = np.zeros((phys_dim,))
+            for i in range(phys_dim):
+                trace_tensor[i] = 1 / np.sqrt(phys_dim)
+            mps_can.tensors[site] = np.tensordot(
+                mps_can.tensors[site], trace_tensor, (1, 0)
+            )
+
+        bond_dims = mps_can.bond_dimensions
+
+        while sites_to_marginalise:
+            try:
+                site = int(np.argmax(bond_dims))
+            except ValueError:
+                site = sites_to_marginalise[0]
+
+            # Checking all possible tensor layouts on a given bond.
+            try:
+                if (
+                    mps_can.tensors[site].ndim == 2
+                    and mps_can.tensors[site + 1].ndim == 3
+                ):
+                    mps_can.tensors[site + 1] = np.tensordot(
+                        mps_can.tensors[site], mps_can.tensors[site + 1], (-1, 0)
+                    )
+                    (
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                    ) = _update_attributes_routine(
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                        site,
+                    )
+                elif (
+                    mps_can.tensors[site].ndim == 3
+                    and mps_can.tensors[site + 1].ndim == 2
+                ):
+                    mps_can.tensors[site] = np.tensordot(
+                        mps_can.tensors[site], mps_can.tensors[site + 1], (-1, 0)
+                    )
+                    (
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                    ) = _update_attributes_routine(
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                        site + 1,
+                    )
+                elif (
+                    mps_can.tensors[site].ndim == 2
+                    and mps_can.tensors[site + 1].ndim == 2
+                ):
+                    mps_can.tensors[site] = np.tensordot(
+                        mps_can.tensors[site], mps_can.tensors[site + 1], (-1, 0)
+                    )
+                    (
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                    ) = _update_attributes_routine(
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                        site + 1,
+                    )
+            except IndexError:
+                if (
+                    mps_can.tensors[site].ndim == 2
+                    and mps_can.tensors[site - 1].ndim == 3
+                ):
+                    mps_can.tensors[site - 1] = np.tensordot(
+                        mps_can.tensors[site - 1], mps_can.tensors[site], (-1, 0)
+                    )
+                    (
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                    ) = _update_attributes_routine(
+                        mps_can.tensors,
+                        mps_can.num_sites,
+                        bond_dims,
+                        sites_all,
+                        sites_to_marginalise,
+                        site,
+                    )
+            else:
+                try:
+                    del bond_dims[site]
+                except IndexError:
+                    pass
+
+        return cast(
+            CanonicalMPS,
+            CanonicalMPS(
+                tensors=mps_can.tensors,
+                orth_centre=mps_can.num_sites - 1,
+                tolerance=mps_can.tolerance,
+                chi_max=mps_can.chi_max,
+            ).move_orth_centre(0, renormalise=False),
         )

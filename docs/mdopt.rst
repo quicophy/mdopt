@@ -1,4 +1,4 @@
-Modules
+modules
 -----------
 
 .. toctree::
@@ -8,11 +8,3 @@ Modules
    contractor
    utils
    optimiser
-
-Module contents
----------------
-
-.. automodule:: mdopt
-   :members:
-   :undoc-members:
-   :show-inheritance:

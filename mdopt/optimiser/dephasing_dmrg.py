@@ -21,7 +21,7 @@ performing the kronecker product explicitly.
 """
 
 
-from typing import Union
+from typing import Union, cast
 import numpy as np
 import scipy.sparse
 from opt_einsum import contract
@@ -50,7 +50,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         mps_target_1: np.ndarray,
         mps_target_2: np.ndarray,
         right_environment: np.ndarray,
-    ):
+    ) -> None:
         """
         Initialise an effective dephased density operator tensor network.
 
@@ -119,7 +119,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         Performs matrix-vector multiplication.
 
         Computes ``effective_density_operator * |x> = |x'>``.
-        This function is used by :func:`scipy.sparse.linalg.eigsh` to diagonalise
+        This function is used by ``scipy.sparse.linalg.eigsh`` to diagonalise
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
         Parameters
@@ -137,7 +137,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
             )
 
         copy_tensor = np.fromfunction(
-            lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=np.int16
+            lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=int
         )
 
         einsum_string = (
@@ -168,6 +168,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
                 (1, 2),
                 (0, 1),
             ],
+            use_blas=True,
         )
 
         return np.reshape(two_site_tensor, self.shape[0])
@@ -185,7 +186,7 @@ class DephasingDMRG:
     mps_target : Union[ExplicitMPS, CanonicalMPS]
         The target MPS in the right-canonical form.
         This MPS is used to construct the dephased MDPO.
-    chi_max : np.int16
+    chi_max : int
         The highest bond dimension of an MPS allowed.
     mode : str
         The eigensolver mode. Available options:
@@ -193,7 +194,7 @@ class DephasingDMRG:
             | ``SM`` : Smallest (in magnitude) eigenvalues.
             | ``LA`` : Largest (algebraic) eigenvalues.
             | ``SA`` : Smallest (algebraic) eigenvalues.
-    cut : np.float64
+    cut : np.float32
         The lower boundary of the spectrum, i.e., all
         the singular values smaller than that will be discarded.
     silent : bool
@@ -204,12 +205,18 @@ class DephasingDMRG:
         self,
         mps: Union[ExplicitMPS, CanonicalMPS],
         mps_target: Union[ExplicitMPS, CanonicalMPS],
-        chi_max: np.int16 = 1e4,
-        cut: np.float64 = 1e-12,
+        chi_max: int = int(1e4),
+        cut: np.float32 = np.float32(1e-12),
         mode: str = "SA",
         silent: bool = False,
         copy: bool = True,
-    ):
+    ) -> None:
+        """
+        Raises
+        ------
+        ValueError
+            If the current MPS and the target MPS do not have the same lengths.
+        """
         if len(mps) != len(mps_target):
             raise ValueError(
                 f"The MPS has length {len(mps)},"
@@ -221,8 +228,8 @@ class DephasingDMRG:
         if isinstance(self.mps, CanonicalMPS):
             self.mps = self.mps.right_canonical()
         self.mps = mps
-        self.left_environments = [None] * len(mps)
-        self.right_environments = [None] * len(mps)
+        self.left_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
+        self.right_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
         mps_target = mps_target.right_canonical()
         self.mps_target = mps_target
         self.chi_max = chi_max
@@ -233,21 +240,21 @@ class DephasingDMRG:
         start_bond_dim = self.mps_target.tensors[0].shape[0]
         chi = mps.tensors[0].shape[0]
         left_environment = np.zeros(
-            [chi, start_bond_dim, start_bond_dim, chi], dtype=np.float64
+            [chi, start_bond_dim, start_bond_dim, chi], dtype=np.float32
         )
         right_environment = np.zeros(
-            [chi, start_bond_dim, start_bond_dim, chi], dtype=np.float64
+            [chi, start_bond_dim, start_bond_dim, chi], dtype=np.float32
         )
-        left_environment[:, 0, 0, :] = np.eye(chi, dtype=np.float64)
+        left_environment[:, 0, 0, :] = np.eye(chi, dtype=np.float32)
         right_environment[:, start_bond_dim - 1, start_bond_dim - 1, :] = np.eye(
-            chi, dtype=np.float64
+            chi, dtype=np.float32
         )
         self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
         for i in reversed(range(1, len(mps))):
             self.update_right_environment(i)
 
-    def sweep(self):
+    def sweep(self) -> None:
         """
         One Dephasing DMRG sweep.
 
@@ -261,7 +268,7 @@ class DephasingDMRG:
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
-    def update_bond(self, i: np.int16):
+    def update_bond(self, i: int) -> None:
         """
         Updates the bond between sites ``i`` and ``i+1``.
         """
@@ -280,7 +287,7 @@ class DephasingDMRG:
                 effective_density_operator.shape[0]
             )
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
                 effective_density_operator.shape[0]
             )
@@ -319,7 +326,7 @@ class DephasingDMRG:
         self.update_left_environment(i)
         self.update_right_environment(j)
 
-    def update_right_environment(self, i: np.int16):
+    def update_right_environment(self, i: int) -> None:
         """
         Compute the ``right_environment`` right of site ``i-1``
         from the ``right_environment`` right of site ``i``.
@@ -328,10 +335,10 @@ class DephasingDMRG:
         right_environment = self.right_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            right_iso = self.mps.single_site_right_iso(i)
+            right_iso = self.mps.one_site_right_iso(i)
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i - 1)
-            right_iso = self.mps.single_site_tensor(i)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
+            right_iso = self.mps.one_site_tensor(i)
 
         right_environment = contract(
             "ijkl, omi, pmj, qnk, rnl -> opqr",
@@ -344,7 +351,7 @@ class DephasingDMRG:
         )
         self.right_environments[i - 1] = right_environment
 
-    def update_left_environment(self, i: np.int16):
+    def update_left_environment(self, i: int) -> None:
         """
         Compute the ``left_environment`` left of site ``i+1``
         from the  ``left_environment`` left of site ``i``.
@@ -353,10 +360,10 @@ class DephasingDMRG:
         left_environment = self.left_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
-            left_iso = self.mps.single_site_left_iso(i)
+            left_iso = self.mps.one_site_left_iso(i)
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.move_orth_centre(i + 1)
-            left_iso = self.mps.single_site_tensor(i)
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
+            left_iso = self.mps.one_site_tensor(i)
 
         left_environment = contract(
             "ijkl, imo, jmp, knq, lnr -> opqr",
@@ -369,7 +376,7 @@ class DephasingDMRG:
         )
         self.left_environments[i + 1] = left_environment
 
-    def run(self, num_iter: np.int16 = 1):
+    def run(self, num_iter: int = 1) -> None:
         """
         Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of times.
         """

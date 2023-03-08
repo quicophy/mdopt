@@ -8,6 +8,7 @@ Welcome to mdopt's documentation!
    :caption: Contents:
 
    modules
+   examples
 
 Indices and tables
 ==================
