@@ -481,7 +481,7 @@ def apply_parity_constraints(
         for string in tqdm(strings, disable=silent):
             # Preparing the MPO.
             string = ConstraintString(logical_tensors, string)
-            mpo = string.get_mpo()
+            mpo = string.mpo()
 
             # Finding the starting site for the MPS to perform contraction.
             start_site = min(string.flat())
