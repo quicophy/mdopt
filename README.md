@@ -3,9 +3,6 @@
 [![Documentation Status](https://readthedocs.org/projects/mdopt/badge/?version=latest)](https://mdopt.readthedocs.io/en/latest/?badge=latest)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-<a href="https://trackgit.com">
-<img src="https://us-central1-trackgit-analytics.cloudfunctions.net/token/ping/lduin48uqc1m8tid5nld" alt="trackgit-views" />
-</a>
 
 # mdopt
 mdopt is a python package built on top of numpy for discrete optimisation in the tensor-network (specifically, MPS-MPO) language. The code is hosted on github, so please feel free to submit issues and pull requests.
