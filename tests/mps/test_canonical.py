@@ -235,8 +235,10 @@ def test_canonical_dense():
     for _ in range(10):
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
+        shape = [2] * num_sites
 
         assert np.isclose(psi, mps.dense(flatten=True)).all()
+        assert np.isclose(psi.reshape(shape), mps.dense(flatten=False)).all()
 
 
 def test_canonical_density_mpo():

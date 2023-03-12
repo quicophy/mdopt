@@ -240,7 +240,7 @@ class CanonicalMPS:
         if flatten:
             return dense.flatten()
 
-        return dense
+        return np.squeeze(dense)
 
     def density_mpo(self) -> List[np.ndarray]:
         """

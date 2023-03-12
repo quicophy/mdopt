@@ -207,6 +207,21 @@ def test_contractor_mps_mpo_contract():
                 mpo,
                 start_site,
             )
+        with pytest.raises(ValueError):
+            mpo[1] = np.zeros(
+                (
+                    2,
+                    2,
+                    2,
+                    2,
+                    2,
+                )
+            )
+            mps_mpo_contract(
+                mps_init,
+                mpo,
+                start_site,
+            )
 
         assert is_canonical(mps_fin)
         assert np.isclose(abs(np.linalg.norm(mps_fin.dense() - psi_fin)), 0, atol=1e-7)
