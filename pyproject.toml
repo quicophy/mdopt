@@ -8,6 +8,7 @@ authors = [
 maintainers = [
     "Aleksandr Berezutskii <berezutskii@phystech.edu>"
 ]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
