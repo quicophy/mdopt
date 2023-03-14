@@ -23,6 +23,7 @@ from copy import deepcopy
 from typing import Iterable, List, Union, cast
 import numpy as np
 from opt_einsum import contract
+from scipy.special import xlogy
 
 import mdopt
 from mdopt.mps.canonical import CanonicalMPS
@@ -261,7 +262,7 @@ class ExplicitMPS:
         if flatten:
             return dense.flatten()
 
-        return dense
+        return np.squeeze(dense)
 
     def density_mpo(self) -> List[np.ndarray]:
         """
@@ -307,11 +308,6 @@ class ExplicitMPS:
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
 
-        def xlogx(arg: float) -> float:
-            if arg == 0.0:
-                return 0.0
-            return arg * np.log(arg)
-
         entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float32)
 
         for bond in range(self.num_bonds):
@@ -321,7 +317,7 @@ class ExplicitMPS:
                 singular_value**2 for singular_value in singular_values
             ]
             entropy[bond] = -1 * np.sum(
-                np.fromiter((xlogx(s) for s in singular_values2), dtype=np.float32)
+                np.fromiter((xlogy(s, s) for s in singular_values2), dtype=np.float32)
             )
         return entropy
 
