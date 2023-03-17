@@ -8,6 +8,7 @@ authors = [
 maintainers = [
     "Aleksandr Berezutskii <berezutskii.aleksandr@gmail.com>"
 ]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
@@ -48,7 +49,7 @@ Sphinx = "^5.2.3"
 sphinx-rtd-theme = "^1.0.0"
 sphinxcontrib-napoleon = "^0.7"
 myst-parser = "^1.0.0"
-nbsphinx = "^0.8.12"
+nbsphinx = "^0.9.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
