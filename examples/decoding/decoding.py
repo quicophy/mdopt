@@ -1,3 +1,8 @@
+"""
+Below, we define some decoding-specific functions over the MPS/MPO entities
+we encounter in the decoding process.
+"""
+
 from functools import reduce
 from typing import cast, Union, Optional, List, Tuple
 
@@ -11,19 +16,7 @@ from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import find_orth_centre, inner_product, create_simple_product_state
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-from mdopt.optimiser.utils import (
-    IDENTITY,
-    COPY_RIGHT,
-    SWAP,
-    XOR_BULK,
-    XOR_LEFT,
-    XOR_RIGHT,
-    ConstraintString,
-)
-
-
-# Below, we define some decoding-specific functions over the MPS/MPO entities
-# we encounter in the decoding process.
+from mdopt.optimiser.utils import ConstraintString
 
 
 def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.ndarray:
@@ -53,7 +46,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
             f"The channel parameter `p_bias` should be a probability, "
             f"given {p_bias}."
         )
-    if which not in ["0", "1"]:
+    if which not in ["0", "1", "+"]:
         raise ValueError("Invalid qubit basis state given.")
 
     if which == "0":
@@ -63,11 +56,18 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
                 [np.sqrt(p_bias), -np.sqrt(1 - p_bias)],
             ]
         )
-    else:
+    if which == "1":
         b_channel = np.array(
             [
                 [-np.sqrt(1 - p_bias), np.sqrt(p_bias)],
                 [np.sqrt(p_bias), np.sqrt(1 - p_bias)],
+            ]
+        )
+    else:
+        b_channel = np.array(
+            [
+                [1, 0],
+                [0, 1],
             ]
         )
 
