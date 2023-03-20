@@ -30,6 +30,7 @@ setuptools = "^67.6.0"
 mypy = "^1.1"
 ipykernel = "^6.21.1"
 notebook = "^6.5.3"
+jupyter = "^1.0.0"
 
 [tool.poetry.group.test]
 optional = true
