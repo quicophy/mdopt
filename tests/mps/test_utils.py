@@ -230,8 +230,12 @@ def test_mps_utils_marginalise():
                 sites_to_marginalise.append(site)
         sites_left = [site for site in sites_all if site not in sites_to_marginalise]
 
-        mps_marginalised_r = marginalise(mps_right, sites_to_marginalise)
-        mps_marginalised_e = marginalise(mps_explicit, sites_to_marginalise)
+        mps_marginalised_r = marginalise(
+            mps_right, sites_to_marginalise, canonicalise=True
+        )
+        mps_marginalised_e = marginalise(
+            mps_explicit, sites_to_marginalise, canonicalise=True
+        )
 
         with pytest.raises(ValueError):
             mps_right.marginal([100, 200])
