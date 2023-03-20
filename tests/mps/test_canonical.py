@@ -519,12 +519,47 @@ def test_canonical_marginal():
     Test for the ``marginal`` method of the :class:`CanonicalMPS` class.
     """
 
+    # Testing marginalisation on product states.
     num_sites = np.random.randint(4, 9)
     phys_dim = np.random.randint(2, 4)
+    sites_to_marginalise = [0, 1]
 
+    mps_prod = create_simple_product_state(
+        num_sites=num_sites, which="0", phys_dim=phys_dim, form="Right-canonical"
+    )
+    mps_prod_result = create_simple_product_state(
+        num_sites=num_sites - len(sites_to_marginalise),
+        which="0",
+        phys_dim=phys_dim,
+        form="Right-canonical",
+    )
+    mps_marginalised = mps_prod.marginal(sites_to_marginalise)
+    for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
+        assert np.isclose(tensor_0, tensor_1).all()
+
+    mps_prod = create_simple_product_state(
+        num_sites=num_sites, which="+", phys_dim=phys_dim, form="Right-canonical"
+    )
+    for tensor in mps_prod.tensors:
+        tensor *= np.sqrt(phys_dim)
+    mps_prod_result = create_simple_product_state(
+        num_sites=num_sites - len(sites_to_marginalise),
+        which="+",
+        phys_dim=phys_dim,
+        form="Right-canonical",
+    )
+    for tensor in mps_prod_result.tensors:
+        tensor *= np.sqrt(phys_dim)
+    mps_prod_result.tensors[0] *= phys_dim ** len(sites_to_marginalise)
+    mps_marginalised = mps_prod.marginal(sites_to_marginalise)
+    for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
+        assert np.isclose(tensor_0, tensor_1).all()
+
+    # Testing marginalisation on random states.
     for _ in range(10):
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
+        mps_copy = mps.copy()
 
         sites_all = list(range(num_sites))
         sites_to_marginalise = []
@@ -533,13 +568,51 @@ def test_canonical_marginal():
                 sites_to_marginalise.append(site)
         sites_left = [site for site in sites_all if site not in sites_to_marginalise]
 
-        mps_marginalised = mps.marginal(sites_to_marginalise)
+        mps_marginalised = mps_copy.marginal(sites_to_marginalise, canonicalise=False)
+        mps_marginalised_canonical = mps.marginal(
+            sites_to_marginalise, canonicalise=True
+        )
 
         with pytest.raises(ValueError):
             mps.marginal([100, 200])
 
         if isinstance(mps_marginalised, CanonicalMPS):
             assert mps_marginalised.num_sites == len(sites_left)
-            assert is_canonical(mps_marginalised)
+            assert is_canonical(mps_marginalised_canonical)
         else:
             assert isinstance(mps_marginalised, np.complex128)
+
+    # Testing marginalisation on a particular random state.
+    num_sites = 8
+    phys_dim = 2
+
+    sites_all = list(range(num_sites))
+    sites_to_marginalise = [0, 1, 4]
+    sites_left = [site for site in sites_all if site not in sites_to_marginalise]
+
+    psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+    mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
+
+    mps_start = mps.copy()
+    trace_tensor = np.ones(phys_dim)
+
+    mps_marginalised = mps.marginal(sites_to_marginalise, canonicalise=True)
+
+    mps_start.tensors[0] = np.tensordot(mps_start.tensors[0], trace_tensor, (1, 0))
+    mps_start.tensors[1] = np.tensordot(mps_start.tensors[1], trace_tensor, (1, 0))
+    mps_start.tensors[4] = np.tensordot(mps_start.tensors[4], trace_tensor, (1, 0))
+    mps_start.tensors[2] = contract(
+        "ij, jk, klm", mps_start.tensors[0], mps_start.tensors[1], mps_start.tensors[2]
+    )
+    mps_start.tensors[3] = contract(
+        "ijk, kl", mps_start.tensors[3], mps_start.tensors[4]
+    )
+
+    new_tensors = [tensor for tensor in mps_start.tensors if len(tensor.shape) == 3]
+    mps_start = CanonicalMPS(
+        tensors=new_tensors, orth_centre=num_sites - len(sites_to_marginalise) - 1
+    )
+    mps_start = mps_start.move_orth_centre(0, renormalise=False)
+    for tensor_0, tensor_1 in zip(mps_start.tensors, mps_marginalised.tensors):
+        assert tensor_0.shape == tensor_1.shape
+        assert np.isclose(tensor_0, tensor_1).all()

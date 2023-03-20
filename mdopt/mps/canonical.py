@@ -607,7 +607,7 @@ class CanonicalMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: List[int]) -> "CanonicalMPS":  # type: ignore
+    def marginal(self, sites_to_marginalise: List[int], canonicalise: bool = False) -> "CanonicalMPS":  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method acts inplace. For the non-inplace version,
@@ -617,6 +617,9 @@ class CanonicalMPS:
         ----------
         sites_to_marginalise : List[int]
             The sites to marginalise over.
+        canonicalise : bool
+            Whether to put the result in the canonical form,
+            i.e., whether to sweep with SVDs over the left bonds.
 
         Notes
         -----
@@ -630,10 +633,9 @@ class CanonicalMPS:
             ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
                 |     |     |     |     ->     |     |
                 |     |     |     |            |     |
-               (+)   (+)
+               (t)   (t)
 
-        Here, the ``(+)`` tensor is defined as
-        | :math:`| \frac{1}{\text{phys_dim}}\underbrace{\text{phys_dim}}{1 \hdots 1}.`
+        Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's.
         """
 
         sites_all = list(range(self.num_sites))
@@ -645,7 +647,9 @@ class CanonicalMPS:
             plus_state = mdopt.mps.utils.create_simple_product_state(  # type: ignore
                 num_sites=self.num_sites, which="+", phys_dim=self.phys_dimensions[0]
             )
-            return mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
+            result = mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
+            result *= np.prod(self.phys_dimensions)
+            return result  # type: ignore
 
         for site in sites_to_marginalise:
             if site not in sites_all:
@@ -677,12 +681,10 @@ class CanonicalMPS:
             ]
             return tensors, num_sites - 1, bond_dims, sites_all[:-1], sites_to_marg
 
-        # Contracting in the "+" tensors.
+        # Contracting in the "t" tensors.
         for site in sites_to_marginalise:
             phys_dim = self.phys_dimensions[site]
-            trace_tensor = np.zeros((phys_dim,))
-            for i in range(phys_dim):
-                trace_tensor[i] = 1  # / np.sqrt(phys_dim) #TODO
+            trace_tensor = np.ones((phys_dim,))
             self.tensors[site] = np.tensordot(self.tensors[site], trace_tensor, (1, 0))
 
         bond_dims = self.bond_dimensions
@@ -774,6 +776,17 @@ class CanonicalMPS:
                 except IndexError:
                     pass
 
+        if canonicalise:
+            return cast(
+                CanonicalMPS,
+                CanonicalMPS(
+                    tensors=self.tensors,
+                    orth_centre=self.num_sites - 1,
+                    tolerance=self.tolerance,
+                    chi_max=self.chi_max,
+                ).move_orth_centre(0, renormalise=False),
+            )
+
         return cast(
             CanonicalMPS,
             CanonicalMPS(
@@ -781,5 +794,5 @@ class CanonicalMPS:
                 orth_centre=self.num_sites - 1,
                 tolerance=self.tolerance,
                 chi_max=self.chi_max,
-            ).move_orth_centre(0, renormalise=False),
+            ),
         )
