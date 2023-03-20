@@ -514,7 +514,7 @@ class ExplicitMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: List[int], canonicalise: bool = False) -> "CanonicalMPS":  # type: ignore
+    def marginal(self, sites_to_marginalise: List[int], canonicalise: bool = False) -> Union[ExplicitMPS, "CanonicalMPS"]:  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method does not act inplace, but creates a new object.
@@ -548,7 +548,7 @@ class ExplicitMPS:
         sites_all = list(range(self.num_sites))
 
         if sites_to_marginalise == []:
-            return self.right_canonical()
+            return self.copy()
 
         if sites_to_marginalise == sites_all:
             plus_state = mdopt.mps.utils.create_simple_product_state(  # type: ignore
