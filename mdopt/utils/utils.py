@@ -154,6 +154,7 @@ def split_two_site_tensor(
     """
     Split a two-site MPS tensor according to the following diagram::
 
+                                             m         n
        i ---(tensor)--- l     ->    i ---(A)---diag(S)---(B)--- l
              |   |                         |               |
              j   k                         j               k
@@ -174,7 +175,7 @@ def split_two_site_tensor(
     singular_values : np.ndarray
         List of singular values.
     b_r : np.ndarray
-        Right isometry ``(m, k, l)``.
+        Right isometry ``(n, k, l)``.
 
     Raises
     ------
