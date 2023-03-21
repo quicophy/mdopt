@@ -616,3 +616,26 @@ def test_canonical_marginal():
     for tensor_0, tensor_1 in zip(mps_start.tensors, mps_marginalised.tensors):
         assert tensor_0.shape == tensor_1.shape
         assert np.isclose(tensor_0, tensor_1).all()
+
+    # Testing extreme cases.
+    num_sites = 8
+    phys_dim = 2
+
+    sites_all = list(range(num_sites))
+
+    psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+    mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
+    mps_copy = mps.copy()
+    mps_check = mps_copy.marginal([])
+
+    for tensor_0, tensor_1 in zip(mps.tensors, mps_check.tensors):
+        assert tensor_0.shape == tensor_1.shape
+        assert np.isclose(tensor_0, tensor_1).all()
+
+    mps_plus = create_simple_product_state(
+        num_sites=num_sites, which="+", phys_dim=phys_dim
+    )
+    assert np.isclose(
+        mps.marginal(sites_all, canonicalise=True),
+        inner_product(mps_copy, mps_plus) * np.prod(mps.phys_dimensions),
+    )
