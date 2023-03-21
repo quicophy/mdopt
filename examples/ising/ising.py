@@ -55,22 +55,22 @@ class IsingExact:
     def hamiltonian_dense(self) -> np.ndarray:
         """
         Returns a dense representation of the Hamiltonian.
-        Warning: memory-intensive! Do not use for `num_sites` > 20.
+        Warning: memory-intensive! Do not use for ``num_sites`` > 20.
         """
 
         return self.hamiltonian_sparse().todense()
 
     def energy(self, state: np.ndarray) -> np.float32:
         """
-        Computes the energy corresponding to a quantum state `state`.
+        Computes the energy corresponding to a quantum state ``state``.
         """
         return np.conjugate(state.T) @ self.hamiltonian_sparse @ state
 
     def z_magnetisation(self, i: int, state: np.ndarray) -> np.float32:
         """
         Computes the z-magnetisation value
-        corresponding to a quantum state `state`
-        at site `i`.
+        corresponding to a quantum state ``state``
+        at site ``i``.
         """
         if i == 0:
             return (
@@ -95,8 +95,8 @@ class IsingExact:
     def x_magnetisation(self, i: int, state: np.ndarray) -> np.float32:
         """
         Computes the x-magnetisation value
-        corresponding to a quantum state `state`
-        at site `i`.
+        corresponding to a quantum state ``state``
+        at site ``i``.
         """
         if i == 0:
             return (
@@ -121,7 +121,7 @@ class IsingExact:
     def average_chain_z_magnetisation(self, state: np.ndarray) -> np.float32:
         """
         Computes the average z-magnetisation
-        corresponding to a quantum state `state`
+        corresponding to a quantum state ``state``
         of the whole chain.
         """
         return (
@@ -132,7 +132,7 @@ class IsingExact:
     def average_chain_x_magnetisation(self, state: np.ndarray) -> np.float32:
         """
         Computes the average x-magnetisation
-        corresponding to a quantum state `state`
+        corresponding to a quantum state ``state``
         of the whole chain.
         """
         return (
@@ -155,7 +155,7 @@ class IsingMPO:
 
         Parameters
         ----------
-        num_sites :int
+        num_sites : int
             Number of spins in the chain.
         h_magnetic : np.float32
             Value of the transverse magnetic field scaled by the ZZ-interaction.
@@ -172,10 +172,10 @@ class IsingMPO:
         """Returns a Matrix Product Operator representation of the Hamiltonian.
 
         Follows the convention of indices from ``mdopt.mps.explicit.py``:
-        each tensor in the MPO list has legs (vL, vR, pU, pD),
-        where v stands for "virtual", p -- for "physical",
-        and L, R, U, D stand for "left", "right", "up", "down".
-        For explanation of what `v_right` and `v_left` are,
+        each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
+        where ``v`` stands for "virtual", p -- for "physical",
+        and ``L, R, U, D`` stand for "left", "right", "up", "down".
+        For explanation of what ``v_right`` and ``v_left`` are,
         see https://arxiv.org/abs/1603.03039 page 22.
         """
         v_left = np.array([0.0, 0.0, 1.0])
@@ -205,7 +205,7 @@ class IsingMPO:
         """
         Computes the z-magnetisation value
         corresponding to a quantum state
-        in the form of an MPS at site `i`.
+        in the form of an MPS at site ``i``.
         """
         return mps.one_site_expectation_value(i, self.pauli_z)
 
@@ -215,7 +215,7 @@ class IsingMPO:
         """
         Computes the x-magnetisation value
         corresponding to a quantum state
-        in the form of an MPS at site `i`.
+        in the form of an MPS at site ``i``.
         """
         return mps.one_site_expectation_value(i, self.pauli_x)
 
@@ -225,7 +225,7 @@ class IsingMPO:
         """
         Computes the average z-magnetisation
         corresponding to a quantum state
-        in the form of an MPS at site `i`.
+        in the form of an MPS at site ``i``.
         """
         return (
             sum([self.z_magnetisation(i, mps) for i in range(self.num_sites)])
@@ -238,7 +238,7 @@ class IsingMPO:
         """
         Computes the average x-magnetisation
         corresponding to a quantum state
-        in the form of an MPS at site `i`.
+        in the form of an MPS at site ``i``.
         """
         return (
             sum([self.x_magnetisation(i, mps) for i in range(self.num_sites)])
