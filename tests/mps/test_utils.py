@@ -236,6 +236,10 @@ def test_mps_utils_marginalise():
         mps_marginalised_e = marginalise(
             mps_explicit, sites_to_marginalise, canonicalise=True
         )
+        mps_marginalised_ex = marginalise(
+            mps_explicit, sites_to_marginalise, canonicalise=False
+        )
+        assert isinstance(mps_marginalised_ex, CanonicalMPS)
 
         with pytest.raises(ValueError):
             mps_right.marginal([100, 200])
