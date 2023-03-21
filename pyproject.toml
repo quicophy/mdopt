@@ -16,7 +16,7 @@ scipy = "^1.9.2"
 numpy = "^1.20.1"
 opt-einsum = "^3.3.0"
 more-itertools = ">=8.12,<10.0"
-threadpoolctl = {version="^3.1.0", optional = true}
+threadpoolctl = "^3.1.0"
 tqdm = "^4.64.1"
 qecstruct = "^0.2.9"
 
@@ -31,6 +31,7 @@ mypy = "^1.1"
 ipykernel = "^6.21.1"
 notebook = "^6.5.3"
 jupyter = "^1.0.0"
+matplotlib = "^3.7.1"
 
 [tool.poetry.group.test]
 optional = true
