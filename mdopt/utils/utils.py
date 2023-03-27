@@ -14,7 +14,7 @@ def svd(
     renormalise: bool = False,
 ) -> Tuple[np.ndarray, list, np.ndarray]:
     """
-    Performs the Singular Value Decomposition with different features.
+    Performs Singular Value Decomposition with different features.
 
     Parameters
     ----------
@@ -39,7 +39,7 @@ def svd(
     Raises
     ------
     ValueError
-        If the `np.ndarray` provided is not two-dimensional.
+        If the ``np.ndarray`` provided is not two-dimensional.
     """
 
     if len(mat.shape) != 2:
