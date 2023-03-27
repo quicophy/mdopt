@@ -381,7 +381,8 @@ def mpo_from_matrix(
     interlaced : bool
         Whether the matrix' legs are interlaced or not.
     orthogonalise: bool
-        Whether to make the MPO tensor isometric.
+        Whether to make the MPO tensors isometric
+        with respect to 2 physical legs and one virtual.
     phys_dim : int
         Local dimension of the physical legs.
     chi_max : int
