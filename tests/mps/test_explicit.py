@@ -493,7 +493,7 @@ def test_explicit_norm():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
-        assert isinstance(mps.norm(), np.float64)
+        assert isinstance(mps.norm(), np.float32)
         assert np.isclose(abs(mps.norm() - abs(inner_product(mps, mps)) ** 2), 0)
 
 

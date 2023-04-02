@@ -444,6 +444,7 @@ class CanonicalMPS:
 
         singular_values.insert(0, np.array([1.0]))
         singular_values.append(np.array([1.0]))
+        singular_values = [list(sigma) for sigma in singular_values]  # type: ignore
 
         explicit_tensors = []
         for i in range(self.num_sites):
@@ -457,9 +458,9 @@ class CanonicalMPS:
 
         return mdopt.mps.explicit.ExplicitMPS(  # type: ignore
             explicit_tensors,
-            cast(List[np.ndarray], singular_values),
+            singular_values,
             tolerance=tolerance,
-        )
+        )  # type: ignore
 
     def right_canonical(self) -> "CanonicalMPS":
         """
@@ -492,19 +493,19 @@ class CanonicalMPS:
 
         return cast(CanonicalMPS, self.move_orth_centre(orth_centre))
 
-    def norm(self) -> np.float64:
+    def norm(self) -> np.float32:
         """
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
 
-        return abs(mdopt.mps.utils.inner_product(self, self)) ** 2  # type: ignore
+        return np.float32(abs(mdopt.mps.utils.inner_product(self, self)) ** 2)  # type: ignore
 
     def one_site_expectation_value(
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary one-site operator
         (not necessarily unitary) on the given site.
@@ -552,7 +553,7 @@ class CanonicalMPS:
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
         (not necessarily unitary) on the given site and its next neighbour.

@@ -312,6 +312,7 @@ class ExplicitMPS:
 
         for bond in range(self.num_bonds):
             singular_values = self.singular_values[bond].copy()
+            singular_values = np.array(singular_values)  # type: ignore
             singular_values[singular_values < self.tolerance] = 0
             singular_values2 = [
                 singular_value**2 for singular_value in singular_values
@@ -392,19 +393,19 @@ class ExplicitMPS:
             chi_max=self.chi_max,
         )
 
-    def norm(self) -> np.float64:
+    def norm(self) -> np.float32:
         """
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
 
-        return abs(mdopt.mps.utils.inner_product(self, self)) ** 2  # type: ignore
+        return np.float32(abs(mdopt.mps.utils.inner_product(self, self)) ** 2)  # type: ignore
 
     def one_site_expectation_value(
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary one-site operator
         (not necessarily unitary) on the given site.
@@ -458,7 +459,7 @@ class ExplicitMPS:
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
         (not necessarily unitary) on the given site and its next neighbour.

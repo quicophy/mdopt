@@ -441,7 +441,7 @@ def test_canonical_norm():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
-        assert isinstance(mps.norm(), np.float64)
+        assert isinstance(mps.norm(), np.float32)
         assert np.isclose(mps.norm() - abs(inner_product(mps, mps)) ** 2, 0)
 
 

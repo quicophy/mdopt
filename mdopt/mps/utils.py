@@ -189,7 +189,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
 
 def inner_product(
     mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
-) -> Union[np.float64, np.complex128]:
+) -> Union[np.float32, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
@@ -202,7 +202,7 @@ def inner_product(
 
     Returns
     -------
-    product : Union[np.float64, np.complex128]
+    product : Union[np.float32, np.complex128]
         The value of the inner product.
 
     Raises
@@ -242,9 +242,12 @@ def inner_product(
             ).reshape((dims_1[0] * dims_2[0], dims_1[2] * dims_2[2]))
         )
 
-    product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
+    product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)[0][0]
 
-    return product[0][0]
+    if np.isclose(np.imag(product), 0):
+        return np.float32(np.real(product))
+
+    return np.complex128(product)
 
 
 def mps_from_dense(
@@ -492,7 +495,7 @@ def marginalise(
     mps: Union[ExplicitMPS, CanonicalMPS],
     sites_to_marginalise: List[int],
     canonicalise: bool = False,
-) -> Union[CanonicalMPS, np.float64, np.complex128]:
+) -> Union[CanonicalMPS, np.float32, np.complex128]:
     r"""
     Computes a marginal over a subset of sites of an MPS.
     This function was created to not act inplace.
@@ -538,7 +541,7 @@ def marginalise(
         plus_state = create_simple_product_state(
             num_sites=mps.num_sites, which="+", phys_dim=mps.phys_dimensions[0]
         )
-        return inner_product(mps, plus_state) * np.prod(mps.phys_dimensions)
+        return inner_product(mps, plus_state) * np.prod(mps.phys_dimensions)  # type: ignore
 
     for site in sites_to_marginalise:
         if site not in sites_all:
