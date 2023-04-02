@@ -15,9 +15,9 @@ import numpy as np
 
 IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
 
-COPY_RIGHT = np.fromfunction(
-    lambda i, j, k, l: np.logical_and(i == k, k == l),
-    (2, 1, 2, 2),
+COPY_LEFT = np.fromfunction(
+    lambda i, j, k, l: np.eye(2)[j, l],
+    (1, 2, 2, 2),
     dtype=int,
 )
 
@@ -91,7 +91,9 @@ class ConstraintString:
             )
 
         seen = set()
-        uniq = [site for site in self.flat() if site not in seen and not seen.add(site)]  # type: ignore
+        uniq = [
+            site for site in self.flat() if site not in seen and not seen.add(site)  # type: ignore
+        ]
         if uniq != self.flat():
             raise ValueError("Non-unique sites encountered in the list.")
 

@@ -4,12 +4,12 @@ import pytest
 import numpy as np
 
 from mdopt.optimiser.utils import (
-    IDENTITY,
-    COPY_RIGHT,
     SWAP,
     XOR_BULK,
     XOR_LEFT,
     XOR_RIGHT,
+    COPY_LEFT,
+    IDENTITY,
     ConstraintString,
 )
 
@@ -17,11 +17,11 @@ from mdopt.optimiser.utils import (
 def test_optimiser_utils_tensors():
     """Test for the combinatorial optimisation operations."""
 
-    id = np.eye(2).reshape((1, 1, 2, 2))
+    identity = np.eye(2).reshape((1, 1, 2, 2))
 
-    copy_right = np.zeros(shape=(2, 1, 2, 2))
-    copy_right[0, 0, :, :] = np.array([[1, 0], [0, 0]])
-    copy_right[1, 0, :, :] = np.array([[0, 0], [0, 1]])
+    copy_left = np.zeros(shape=(1, 2, 2, 2))
+    copy_left[0, :, 0, :] = np.eye(2)
+    copy_left[0, :, 1, :] = np.eye(2)
 
     swap = np.zeros(shape=(2, 2, 2, 2))
     swap[0, 0] = np.eye(2)
@@ -39,8 +39,8 @@ def test_optimiser_utils_tensors():
     xor_right = np.zeros(shape=(2, 1, 2, 2))
     xor_right[:, 0] = xor_bulk[:, 0]
 
-    assert (id == IDENTITY).all()
-    assert (copy_right == COPY_RIGHT).all()
+    assert (identity == IDENTITY).all()
+    assert (copy_left == COPY_LEFT).all()
     assert (swap == SWAP).all()
     assert (xor_bulk == XOR_BULK).all()
     assert (xor_left == XOR_LEFT).all()
