@@ -649,7 +649,7 @@ def test_explicit_marginal():
     mps = mps_from_dense(psi, phys_dim=phys_dim, form="Explicit")
 
     mps_start = mps.copy().right_canonical()
-    trace_tensor = np.ones(phys_dim)
+    trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
 
     mps_marginalised = mps.marginal(sites_to_marginalise, canonicalise=False)
 

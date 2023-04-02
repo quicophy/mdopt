@@ -534,6 +534,7 @@ def test_canonical_marginal():
         form="Right-canonical",
     )
     mps_marginalised = mps_prod.marginal(sites_to_marginalise)
+    mps_prod_result.tensors[0] /= phys_dim
     for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
         assert np.isclose(tensor_0, tensor_1).all()
 
@@ -550,7 +551,7 @@ def test_canonical_marginal():
     )
     for tensor in mps_prod_result.tensors:
         tensor *= np.sqrt(phys_dim)
-    mps_prod_result.tensors[0] *= phys_dim ** len(sites_to_marginalise)
+    mps_prod.tensors[0] /= phys_dim
     mps_marginalised = mps_prod.marginal(sites_to_marginalise)
     for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
         assert np.isclose(tensor_0, tensor_1).all()
@@ -594,7 +595,7 @@ def test_canonical_marginal():
     mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
 
     mps_start = mps.copy()
-    trace_tensor = np.ones(phys_dim)
+    trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
 
     mps_marginalised = mps.marginal(sites_to_marginalise, canonicalise=True)
 

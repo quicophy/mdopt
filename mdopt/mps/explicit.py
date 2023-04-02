@@ -514,7 +514,11 @@ class ExplicitMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: List[int], canonicalise: bool = False) -> Union["ExplicitMPS", "CanonicalMPS"]:  # type: ignore
+    def marginal(
+        self,
+        sites_to_marginalise: List[int],
+        canonicalise: bool = False,
+    ) -> Union["ExplicitMPS", "CanonicalMPS"]:  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method does not act inplace, but creates a new object.
@@ -591,7 +595,7 @@ class ExplicitMPS:
         # Contracting in the "t" tensors.
         for site in sites_to_marginalise:
             phys_dim = mps_can.phys_dimensions[site]
-            trace_tensor = np.ones((phys_dim,))
+            trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
             mps_can.tensors[site] = np.tensordot(
                 mps_can.tensors[site], trace_tensor, (1, 0)
             )

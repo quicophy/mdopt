@@ -607,7 +607,9 @@ class CanonicalMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: List[int], canonicalise: bool = False) -> "CanonicalMPS":  # type: ignore
+    def marginal(
+        self, sites_to_marginalise: List[int], canonicalise: bool = False
+    ) -> "CanonicalMPS":  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method acts inplace. For the non-inplace version,
@@ -684,7 +686,7 @@ class CanonicalMPS:
         # Contracting in the "t" tensors.
         for site in sites_to_marginalise:
             phys_dim = self.phys_dimensions[site]
-            trace_tensor = np.ones((phys_dim,))
+            trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
             self.tensors[site] = np.tensordot(self.tensors[site], trace_tensor, (1, 0))
 
         bond_dims = self.bond_dimensions

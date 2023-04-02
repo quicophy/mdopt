@@ -4,6 +4,7 @@ from itertools import combinations
 import pytest
 import numpy as np
 
+from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import (
     create_state_vector,
@@ -226,7 +227,7 @@ def test_mps_utils_marginalise():
         sites_all = list(range(num_sites))
         sites_to_marginalise = []
         for site in sites_all:
-            if np.random.uniform() < 1 / 2:
+            if np.random.uniform() < 0.5:
                 sites_to_marginalise.append(site)
         sites_left = [site for site in sites_all if site not in sites_to_marginalise]
 
@@ -239,7 +240,10 @@ def test_mps_utils_marginalise():
         mps_marginalised_ex = marginalise(
             mps_explicit, sites_to_marginalise, canonicalise=False
         )
-        assert isinstance(mps_marginalised_ex, CanonicalMPS)
+
+        if sites_all != sites_to_marginalise:
+            assert isinstance(mps_marginalised_e, CanonicalMPS)
+            assert not isinstance(mps_marginalised_ex, ExplicitMPS)
 
         with pytest.raises(ValueError):
             mps_right.marginal([100, 200])

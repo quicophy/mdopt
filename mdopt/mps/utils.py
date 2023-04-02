@@ -573,7 +573,7 @@ def marginalise(
     # Contracting in the "+" tensors.
     for site in sites_to_marginalise:
         phys_dim = mps.phys_dimensions[site]
-        trace_tensor = np.ones((phys_dim,))
+        trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
         mps.tensors[site] = np.tensordot(mps.tensors[site], trace_tensor, (1, 0))
 
     bond_dims = mps.bond_dimensions
