@@ -19,6 +19,7 @@ more-itertools = ">=8.12,<10.0"
 threadpoolctl = "^3.1.0"
 tqdm = "^4.64.1"
 qecstruct = "^0.2.9"
+qecsim = "^1.0b9"
 
 [tool.poetry.group.dev]
 optional = true
