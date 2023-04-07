@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information -----------------------------------------------------
 
 project = "mdopt"
-copyright = "2022, Aleksandr Berezutskii"
+copyright = "2023, Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
