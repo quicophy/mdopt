@@ -249,15 +249,25 @@ class ExplicitMPS:
         """
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
-    def dense(self, flatten: bool = True) -> np.ndarray:
+    def dense(self, flatten: bool = True, renormalise: bool = False) -> np.ndarray:
         """
-        Returns dense representation of the MPS.
+        Returns a dense representation of the MPS.
 
-        Warning: will cause memory overload for number of sites > ~20!
+        Warning: this method can cause memory overload for number of sites > ~20!
+
+        Parameters
+        ----------
+        flatten : bool
+            Whether to merge all the physical indices to form a vector or not.
+        renormalise : bool
+            Whether to renormalise the resulting tensor.
         """
 
         tensors = list(self.one_site_right_iso_iter())
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
+
+        if renormalise:
+            dense /= np.linalg.norm(dense)
 
         if flatten:
             return dense.flatten()

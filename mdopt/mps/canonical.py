@@ -223,19 +223,24 @@ class CanonicalMPS:
         """
         return (self.two_site_tensor_prev(i) for i in range(1, self.num_sites))
 
-    def dense(self, flatten: bool = True) -> np.ndarray:
+    def dense(self, flatten: bool = True, renormalise: bool = False) -> np.ndarray:
         """
-        Returns a dense representation of an MPS, given as a list of tensors.
+        Returns a dense representation of the MPS.
 
-        Warning: this method will cause memory overload for number of sites > ~20!
+        Warning: this method can cause memory overload for number of sites > ~20!
 
         Parameters
         ----------
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
+        renormalise : bool
+            Whether to renormalise the resulting tensor.
         """
 
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), self.tensors)
+
+        if renormalise:
+            dense /= np.linalg.norm(dense)
 
         if flatten:
             return dense.flatten()

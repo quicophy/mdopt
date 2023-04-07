@@ -321,8 +321,11 @@ def test_explicit_dense():
         mps = mps_from_dense(psi, form="Explicit")
         shape = [2] * num_sites
 
-        assert np.isclose(psi, mps.dense(flatten=True)).all()
-        assert np.isclose(psi.reshape(shape), mps.dense(flatten=False)).all()
+        assert np.isclose(psi, mps.dense(flatten=True, renormalise=False)).all()
+        assert np.isclose(np.linalg.norm(mps.dense(flatten=True, renormalise=True)), 1)
+        assert np.isclose(
+            psi.reshape(shape), mps.dense(flatten=False, renormalise=False)
+        ).all()
 
 
 def test_explicit_density_mpo():
