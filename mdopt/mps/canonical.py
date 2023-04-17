@@ -32,7 +32,7 @@ Hereafter, saying the MPS is in a canonical form will mean one of the following.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Optional, Iterable, Tuple, Union, List, cast
+from typing import Optional, Iterable, Tuple, Union, List, Any, cast
 import numpy as np
 from opt_einsum import contract
 
@@ -223,22 +223,32 @@ class CanonicalMPS:
         """
         return (self.two_site_tensor_prev(i) for i in range(1, self.num_sites))
 
-    def dense(self, flatten: bool = True) -> np.ndarray:
+    def dense(
+        self, flatten: bool = True, renormalise: bool = False, norm: Any = 2
+    ) -> np.ndarray:
         """
-        Returns a dense representation of an MPS, given as a list of tensors.
+        Returns a dense representation of the MPS.
 
-        Warning: this method will cause memory overload for number of sites > ~20!
+        Warning: this method can cause memory overload for number of sites > ~20!
 
         Parameters
         ----------
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
+        renormalise : bool
+            Whether to renormalise the resulting tensor.
+        norm : Any
+            The order of the norm to use while renormalising, see ``numpy.linalg.norm``.
         """
 
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), self.tensors)
+        dense = dense.squeeze()
 
         if flatten:
-            return dense.flatten()
+            dense = dense.flatten()
+
+        if renormalise:
+            dense /= np.linalg.norm(dense, ord=norm)
 
         return dense
 
@@ -444,6 +454,7 @@ class CanonicalMPS:
 
         singular_values.insert(0, np.array([1.0]))
         singular_values.append(np.array([1.0]))
+        singular_values = [list(sigma) for sigma in singular_values]  # type: ignore
 
         explicit_tensors = []
         for i in range(self.num_sites):
@@ -457,9 +468,9 @@ class CanonicalMPS:
 
         return mdopt.mps.explicit.ExplicitMPS(  # type: ignore
             explicit_tensors,
-            cast(List[np.ndarray], singular_values),
+            singular_values,
             tolerance=tolerance,
-        )
+        )  # type: ignore
 
     def right_canonical(self) -> "CanonicalMPS":
         """
@@ -492,19 +503,19 @@ class CanonicalMPS:
 
         return cast(CanonicalMPS, self.move_orth_centre(orth_centre))
 
-    def norm(self) -> np.float64:
+    def norm(self) -> np.float32:
         """
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
 
-        return abs(mdopt.mps.utils.inner_product(self, self)) ** 2  # type: ignore
+        return np.float32(abs(mdopt.mps.utils.inner_product(self, self)) ** 2)  # type: ignore
 
     def one_site_expectation_value(
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary one-site operator
         (not necessarily unitary) on the given site.
@@ -552,7 +563,7 @@ class CanonicalMPS:
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float64, np.complex128]:
+    ) -> Union[np.float32, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
         (not necessarily unitary) on the given site and its next neighbour.
@@ -607,7 +618,9 @@ class CanonicalMPS:
             optimize=[(0, 1), (0, 1)],
         )
 
-    def marginal(self, sites_to_marginalise: List[int]) -> "CanonicalMPS":  # type: ignore
+    def marginal(
+        self, sites_to_marginalise: List[int], canonicalise: bool = False
+    ) -> "CanonicalMPS":  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
         Attention, this method acts inplace. For the non-inplace version,
@@ -617,6 +630,9 @@ class CanonicalMPS:
         ----------
         sites_to_marginalise : List[int]
             The sites to marginalise over.
+        canonicalise : bool
+            Whether to put the result in the canonical form,
+            i.e., whether to sweep with SVDs over the left bonds.
 
         Notes
         -----
@@ -630,10 +646,9 @@ class CanonicalMPS:
             ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
                 |     |     |     |     ->     |     |
                 |     |     |     |            |     |
-               (+)   (+)
+               (t)   (t)
 
-        Here, the ``(+)`` tensor is defined as
-        | :math:`| \frac{1}{\text{phys_dim}}\underbrace{\text{phys_dim}}{1 \hdots 1}.`
+        Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's.
         """
 
         sites_all = list(range(self.num_sites))
@@ -645,7 +660,9 @@ class CanonicalMPS:
             plus_state = mdopt.mps.utils.create_simple_product_state(  # type: ignore
                 num_sites=self.num_sites, which="+", phys_dim=self.phys_dimensions[0]
             )
-            return mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
+            result = mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
+            result *= np.prod(self.phys_dimensions)
+            return result  # type: ignore
 
         for site in sites_to_marginalise:
             if site not in sites_all:
@@ -677,12 +694,10 @@ class CanonicalMPS:
             ]
             return tensors, num_sites - 1, bond_dims, sites_all[:-1], sites_to_marg
 
-        # Contracting in the "+" tensors.
+        # Contracting in the "t" tensors.
         for site in sites_to_marginalise:
             phys_dim = self.phys_dimensions[site]
-            trace_tensor = np.zeros((phys_dim,))
-            for i in range(phys_dim):
-                trace_tensor[i] = 1  # / np.sqrt(phys_dim) #TODO
+            trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
             self.tensors[site] = np.tensordot(self.tensors[site], trace_tensor, (1, 0))
 
         bond_dims = self.bond_dimensions
@@ -774,6 +789,17 @@ class CanonicalMPS:
                 except IndexError:
                     pass
 
+        if canonicalise:
+            return cast(
+                CanonicalMPS,
+                CanonicalMPS(
+                    tensors=self.tensors,
+                    orth_centre=self.num_sites - 1,
+                    tolerance=self.tolerance,
+                    chi_max=self.chi_max,
+                ).move_orth_centre(0, renormalise=False),
+            )
+
         return cast(
             CanonicalMPS,
             CanonicalMPS(
@@ -781,5 +807,5 @@ class CanonicalMPS:
                 orth_centre=self.num_sites - 1,
                 tolerance=self.tolerance,
                 chi_max=self.chi_max,
-            ).move_orth_centre(0, renormalise=False),
+            ),
         )

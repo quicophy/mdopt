@@ -4,12 +4,12 @@ import pytest
 import numpy as np
 
 from mdopt.optimiser.utils import (
-    IDENTITY,
-    COPY_RIGHT,
     SWAP,
     XOR_BULK,
     XOR_LEFT,
     XOR_RIGHT,
+    COPY_LEFT,
+    IDENTITY,
     ConstraintString,
 )
 
@@ -17,11 +17,11 @@ from mdopt.optimiser.utils import (
 def test_optimiser_utils_tensors():
     """Test for the combinatorial optimisation operations."""
 
-    id = np.eye(2).reshape((1, 1, 2, 2))
+    identity = np.eye(2).reshape((1, 1, 2, 2))
 
-    copy_right = np.zeros(shape=(2, 1, 2, 2))
-    copy_right[0, 0, :, :] = np.array([[1, 0], [0, 0]])
-    copy_right[1, 0, :, :] = np.array([[0, 0], [0, 1]])
+    copy_left = np.zeros(shape=(1, 2, 2, 2))
+    copy_left[0, :, 0, :] = np.eye(2)
+    copy_left[0, :, 1, :] = np.eye(2)
 
     swap = np.zeros(shape=(2, 2, 2, 2))
     swap[0, 0] = np.eye(2)
@@ -39,8 +39,8 @@ def test_optimiser_utils_tensors():
     xor_right = np.zeros(shape=(2, 1, 2, 2))
     xor_right[:, 0] = xor_bulk[:, 0]
 
-    assert (id == IDENTITY).all()
-    assert (copy_right == COPY_RIGHT).all()
+    assert (identity == IDENTITY).all()
+    assert (copy_left == COPY_LEFT).all()
     assert (swap == SWAP).all()
     assert (xor_bulk == XOR_BULK).all()
     assert (xor_left == XOR_LEFT).all()
@@ -68,7 +68,23 @@ def test_optimiser_utils_constraint_string():
             swap_sites,
             [xor_right_site],
         ]
+
         string = ConstraintString(constraints=tensors, sites=constraints_sites)
+
+        mpo = [None for _ in range(num_sites)]
+        mpo[xor_left_site] = XOR_LEFT
+        mpo[xor_right_site] = XOR_RIGHT
+        for site in xor_bulk_sites:
+            mpo[site] = XOR_BULK
+        for site in swap_sites:
+            mpo[site] = SWAP
+        mpo = [tensor for tensor in mpo if tensor is not None]
+
+        for tensor_string, tensor_test in zip(string.mpo(), mpo):
+            assert (tensor_string == tensor_test).all()
+        for i in range(4):
+            assert string[i] == (constraints_sites[i], tensors[i])
+        assert string.span() == xor_right_site - xor_left_site + 1
 
         with pytest.raises(ValueError):
             ConstraintString(constraints=[], sites=constraints_sites)

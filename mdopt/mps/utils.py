@@ -33,7 +33,7 @@ def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
 
     state_vector = np.random.uniform(
         size=(phys_dim**num_sites)
-    ) + 1j * np.random.uniform(size=(phys_dim**num_sites))
+    ) + 1j * np.random.uniform(size=phys_dim**num_sites)
     state_vector /= np.linalg.norm(state_vector)
 
     return state_vector
@@ -189,7 +189,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
 
 def inner_product(
     mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
-) -> Union[np.float64, np.complex128]:
+) -> Union[np.float32, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
@@ -202,7 +202,7 @@ def inner_product(
 
     Returns
     -------
-    product : Union[np.float64, np.complex128]
+    product : Union[np.float32, np.complex128]
         The value of the inner product.
 
     Raises
@@ -242,9 +242,12 @@ def inner_product(
             ).reshape((dims_1[0] * dims_2[0], dims_1[2] * dims_2[2]))
         )
 
-    product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
+    product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)[0][0]
 
-    return product[0][0]
+    if np.isclose(np.imag(product), 0):
+        return np.float32(np.real(product))
+
+    return np.complex128(product)
 
 
 def mps_from_dense(
@@ -489,8 +492,10 @@ def create_custom_product_state(
 
 
 def marginalise(
-    mps: Union[ExplicitMPS, CanonicalMPS], sites_to_marginalise: List[int]
-) -> Union[CanonicalMPS, np.float64, np.complex128]:
+    mps: Union[ExplicitMPS, CanonicalMPS],
+    sites_to_marginalise: List[int],
+    canonicalise: bool = False,
+) -> Union[CanonicalMPS, np.float32, np.complex128]:
     r"""
     Computes a marginal over a subset of sites of an MPS.
     This function was created to not act inplace.
@@ -500,9 +505,12 @@ def marginalise(
     Parameters
     ----------
     mps : Union[ExplicitMPS, CanonicalMPS]
-        The MPS we operate on
+        The MPS we operate upon.
     sites_to_marginalise : List[int]
         The sites to marginalise over.
+    canonicalise : bool
+        Whether to put the result in the canonical form,
+        i.e., whether to sweep with SVDs over the left bonds.
 
     Notes
     -----
@@ -515,10 +523,9 @@ def marginalise(
         ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
             |     |     |     |     ->     |     |
             |     |     |     |            |     |
-           (+)   (+)
+           (t)   (t)
 
-    Here, the ``(+)`` tensor is defined as
-    | :math:`| \frac{1}{\text{phys_dim}}\underbrace{\text{phys_dim}}{1 \hdots 1}.`
+    Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's.
     """
 
     mps = mps.copy()
@@ -534,7 +541,7 @@ def marginalise(
         plus_state = create_simple_product_state(
             num_sites=mps.num_sites, which="+", phys_dim=mps.phys_dimensions[0]
         )
-        return inner_product(mps, plus_state)
+        return inner_product(mps, plus_state) * np.prod(mps.phys_dimensions)  # type: ignore
 
     for site in sites_to_marginalise:
         if site not in sites_all:
@@ -569,9 +576,7 @@ def marginalise(
     # Contracting in the "+" tensors.
     for site in sites_to_marginalise:
         phys_dim = mps.phys_dimensions[site]
-        trace_tensor = np.zeros((phys_dim,))
-        for i in range(phys_dim):
-            trace_tensor[i] = 1  # / np.sqrt(phys_dim) #TODO
+        trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
         mps.tensors[site] = np.tensordot(mps.tensors[site], trace_tensor, (1, 0))
 
     bond_dims = mps.bond_dimensions
@@ -663,6 +668,17 @@ def marginalise(
             except IndexError:
                 pass
 
+    if canonicalise:
+        return cast(
+            CanonicalMPS,
+            CanonicalMPS(
+                tensors=mps.tensors,
+                orth_centre=mps.num_sites - 1,
+                tolerance=mps.tolerance,
+                chi_max=mps.chi_max,
+            ).move_orth_centre(0, renormalise=False),
+        )
+
     return cast(
         CanonicalMPS,
         CanonicalMPS(
@@ -670,5 +686,5 @@ def marginalise(
             orth_centre=mps.num_sites - 1,
             tolerance=mps.tolerance,
             chi_max=mps.chi_max,
-        ).move_orth_centre(0, renormalise=False),
+        ),
     )
