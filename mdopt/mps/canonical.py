@@ -234,13 +234,13 @@ class CanonicalMPS:
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
         renormalise : bool
-            Whether to renormalise the resulting tensor.
+            Whether to renormalise the resulting tensor by the L-1 norm.
         """
 
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), self.tensors)
 
         if renormalise:
-            dense /= np.linalg.norm(dense)
+            dense /= np.linalg.norm(dense, ord=1)
 
         if flatten:
             return dense.flatten()
