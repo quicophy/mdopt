@@ -20,7 +20,7 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Iterable, List, Union, cast
+from typing import Iterable, List, Union, Any, cast
 import numpy as np
 from opt_einsum import contract
 from scipy.special import xlogy
@@ -249,7 +249,9 @@ class ExplicitMPS:
         """
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
-    def dense(self, flatten: bool = True, renormalise: bool = False) -> np.ndarray:
+    def dense(
+        self, flatten: bool = True, renormalise: bool = False, norm: Any = 2
+    ) -> np.ndarray:
         """
         Returns a dense representation of the MPS.
 
@@ -265,14 +267,15 @@ class ExplicitMPS:
 
         tensors = list(self.one_site_right_iso_iter())
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
-
-        if renormalise:
-            dense /= np.linalg.norm(dense, ord=1)
+        dense = dense.squeeze()
 
         if flatten:
-            return dense.flatten()
+            dense = dense.flatten()
 
-        return np.squeeze(dense)
+        if renormalise:
+            dense /= np.linalg.norm(dense, ord=norm)
+
+        return dense
 
     def density_mpo(self) -> List[np.ndarray]:
         """

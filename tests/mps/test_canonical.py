@@ -238,7 +238,9 @@ def test_canonical_dense():
         shape = [2] * num_sites
 
         assert np.isclose(psi, mps.dense(flatten=True, renormalise=False)).all()
-        assert np.isclose(np.sum(mps.dense(flatten=True, renormalise=True)), 1)
+        assert np.isclose(
+            np.linalg.norm(mps.dense(flatten=True, renormalise=True, norm=1), ord=1), 1
+        )
         assert np.isclose(
             psi.reshape(shape), mps.dense(flatten=False, renormalise=False)
         ).all()

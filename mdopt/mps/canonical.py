@@ -32,7 +32,7 @@ Hereafter, saying the MPS is in a canonical form will mean one of the following.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Optional, Iterable, Tuple, Union, List, cast
+from typing import Optional, Iterable, Tuple, Union, List, Any, cast
 import numpy as np
 from opt_einsum import contract
 
@@ -223,7 +223,9 @@ class CanonicalMPS:
         """
         return (self.two_site_tensor_prev(i) for i in range(1, self.num_sites))
 
-    def dense(self, flatten: bool = True, renormalise: bool = False) -> np.ndarray:
+    def dense(
+        self, flatten: bool = True, renormalise: bool = False, norm: Any = 2
+    ) -> np.ndarray:
         """
         Returns a dense representation of the MPS.
 
@@ -234,18 +236,21 @@ class CanonicalMPS:
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
         renormalise : bool
-            Whether to renormalise the resulting tensor by the L-1 norm.
+            Whether to renormalise the resulting tensor.
+        norm : Any
+            The order of the norm to use while renormalising, see ``numpy.linalg.norm``.
         """
 
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), self.tensors)
-
-        if renormalise:
-            dense /= np.linalg.norm(dense, ord=1)
+        dense = dense.squeeze()
 
         if flatten:
-            return dense.flatten()
+            dense = dense.flatten()
 
-        return np.squeeze(dense)
+        if renormalise:
+            dense /= np.linalg.norm(dense, ord=norm)
+
+        return dense
 
     def density_mpo(self) -> List[np.ndarray]:
         """
