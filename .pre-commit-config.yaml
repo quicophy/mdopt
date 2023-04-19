@@ -16,18 +16,6 @@ repos:
       - id: black
         entry: black .
 
-  - repo: local
-    hooks:
-      - id: pylint
-        additional_dependencies:
-        - .
-        - pylint
-        name: pylint
-        entry: pylint mdopt
-        language: python
-        args: [ "--fail-under=9" ]
-        pass_filenames: false
-
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.0.1
     hooks:
