@@ -14,14 +14,18 @@ repos:
     rev: 23.1.0
     hooks:
       - id: black
-        entry: black
+        entry: black .
 
   - repo: local
     hooks:
       - id: pylint
         additional_dependencies:
         - .
-        - numpy scipy tqdm opt_einsum pylint
+        - numpy
+        - scipy
+        - tqdm
+        - opt_einsum
+        - pylint
         name: pylint
         entry: pylint mdopt
         language: python
