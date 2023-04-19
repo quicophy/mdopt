@@ -20,7 +20,8 @@ repos:
     hooks:
       - id: pylint
         additional_dependencies:
-        - . --with dev
+        - .
+        - pylint
         name: pylint
         entry: pylint mdopt
         language: python
