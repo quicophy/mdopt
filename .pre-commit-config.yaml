@@ -19,6 +19,8 @@ repos:
   - repo: local
     hooks:
       - id: pylint
+        additional_dependencies:
+        - . --with dev
         name: pylint
         entry: pylint mdopt
         language: python
