@@ -19,6 +19,13 @@ repos:
   - repo: local
     hooks:
       - id: pylint
+        additional_dependencies:
+        - .
+        - numpy
+        - scipy
+        - tqdm
+        - opt_einsum
+        - pylint
         name: pylint
         entry: pylint mdopt
         language: python
@@ -29,7 +36,7 @@ repos:
     rev: v1.0.1
     hooks:
         - id: mypy
-          exclude: ^examples/
+          exclude: '(^examples|^docs)/.*'
 
   - repo: https://github.com/python-poetry/poetry
     rev: 1.4.0
