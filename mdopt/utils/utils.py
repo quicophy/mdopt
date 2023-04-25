@@ -156,8 +156,8 @@ def split_two_site_tensor(
 
                                              m         n
        i ---(tensor)--- l     ->    i ---(A)---diag(S)---(B)--- l
-             |   |                         |               |
-             j   k                         j               k
+             |   |                        |               |
+             j   k                        j               k
 
     Parameters
     ----------
