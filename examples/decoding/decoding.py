@@ -27,7 +27,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
     This function returns a one-site bias channel MPO which
     acts on one-qubit computational basis states as follows:
     |0> -> √(1-p)|0> + √p|1>,
-    |1> -> √(1-p)|1> + √p|0>,
+    |1> -> √p|0> - √(1-p)|1>,
     Note, that this operation is unitary, which means that it preserves the canonical form.
 
     Parameters
