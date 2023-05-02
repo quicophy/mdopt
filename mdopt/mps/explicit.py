@@ -333,6 +333,7 @@ class ExplicitMPS:
             entropy[bond] = -1 * np.sum(
                 np.fromiter((xlogy(s, s) for s in singular_values2), dtype=np.float32)
             )
+
         return entropy
 
     def right_canonical(self) -> CanonicalMPS:
