@@ -22,7 +22,7 @@ from mdopt.optimiser.utils import ConstraintString
 
 def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.ndarray:
     """
-    Here, we define bias channel -- an operator which will bias us towards the initial message
+    Here, we define the bias channel -- an operator which will bias us towards the initial message
     while decoding by ranking the bitstrings according to Hamming distance from the latter.
     This function returns a one-site bias channel MPO which
     acts on one-qubit computational basis states as follows:
@@ -41,6 +41,11 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
     -------
     b_ch : np.ndarray
         The corresponding one-site MPO.
+
+    Raises
+    ------
+    ValueError
+        If the channel's probability has incorrect value.
     """
 
     if not 0 <= p_bias <= 1:
@@ -48,6 +53,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
             f"The channel parameter `p_bias` should be a probability, "
             f"given {p_bias}."
         )
+
     if which not in ["0", "1", "+"]:
         raise ValueError("Invalid one-qubit basis state given.")
 
@@ -74,6 +80,169 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
         )
 
     return b_channel
+
+
+def depolarising_channel(
+    p_depolarising: np.float32 = np.float32(0.5), which: str = "00"
+) -> np.ndarray:
+    """
+    Here, we define the depolarising channel -- an operator which will depolarise
+    ---------------------------------------------------------#TODO
+    This function returns a two-site depolarising channel MPO which
+    acts on two-qubit computational basis states as follows:
+    |00> -> x,
+    |01> -> x,
+    |10> -> x,
+    |11> -> x,
+    Note, that this operation is unitary, which means that it preserves the canonical form.
+
+    Parameters
+    ----------
+    p_depolarising : np.float32
+        Probability of the channel.
+    which : str
+        The computational-basis two-qubit state we are acting on.
+
+    Returns
+    -------
+    d_ch : np.ndarray
+        The corresponding two-site MPO.
+
+    Raises
+    ------
+    ValueError
+        If the channel's probability has incorrect value.
+    """
+
+    if not 0 <= p_depolarising <= 1:
+        raise ValueError(
+            f"The channel parameter `p_depolarising` should be a probability, "
+            f"given {p_depolarising}."
+        )
+
+    if which not in ["00", "01", "10", "11", "++"]:
+        raise ValueError("Invalid two-qubit basis state given.")
+
+    if which == "00":
+        d_channel = 0.5 * np.array(
+            [
+                [
+                    -np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                ],
+            ]
+        ).reshape((2, 2, 2, 2))
+    if which == "01":
+        d_channel = 0.5 * np.array(
+            [
+                [
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    -np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                ],
+            ]
+        ).reshape((2, 2, 2, 2))
+    if which == "10":
+        d_channel = 0.5 * np.array(
+            [
+                [
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    -np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                ],
+            ]
+        ).reshape((2, 2, 2, 2))
+    if which == "11":
+        d_channel = 0.5 * np.array(
+            [
+                [
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(4 - 3 * p_depolarising),
+                    np.sqrt(p_depolarising),
+                ],
+                [
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    np.sqrt(p_depolarising),
+                    -np.sqrt(4 - 3 * p_depolarising),
+                ],
+            ]
+        ).reshape((2, 2, 2, 2))
+    if which == "++":
+        d_channel = np.identity(4).reshape((2, 2, 2, 2))
+
+    return d_channel
 
 
 def apply_bias_channel(
@@ -550,7 +719,7 @@ def apply_constraints(
 
                 mps = cast(
                     Union[ExplicitMPS, CanonicalMPS],
-                    mps.move_orth_centre(final_pos=start_site),
+                    mps.move_orth_centre(final_pos=start_site, renormalise=renormalise),
                 )
 
             # Doing the contraction.
@@ -561,6 +730,7 @@ def apply_constraints(
                 renormalise=renormalise,
                 chi_max=chi_max,
                 inplace=False,
+                result_to_explicit=True,
             )
 
     return cast(CanonicalMPS, mps)
