@@ -653,7 +653,7 @@ def apply_constraints(
     renormalise: bool = False,
     strategy: str = "naive",
     silent: bool = False,
-) -> CanonicalMPS:
+) -> Union[CanonicalMPS, ExplicitMPS]:
     """
     This function applies logical constraints to an MPS.
 
@@ -676,7 +676,7 @@ def apply_constraints(
 
     Returns
     -------
-    mps : CanonicalMPS
+    mps : Union[CanonicalMPS, ExplicitMPS]
         The resulting MPS.
     """
 
