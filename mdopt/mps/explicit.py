@@ -21,7 +21,7 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Iterable, List, Union, cast
+from typing import Literal, Iterable, List, Union, cast
 import numpy as np
 from opt_einsum import contract
 from scipy.special import xlogy
@@ -251,7 +251,10 @@ class ExplicitMPS:
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
     def dense(
-        self, flatten: bool = True, renormalise: bool = False, norm: Union[str, int] = 2
+        self,
+        flatten: bool = True,
+        renormalise: bool = False,
+        norm: Union[None, float, Literal["fro", "nuc"]] = 2,
     ) -> np.ndarray:
         """
         Returns a dense representation of the MPS.

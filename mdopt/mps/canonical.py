@@ -32,7 +32,7 @@ Hereafter, saying the MPS is in a canonical form will mean one of the following.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Optional, Iterable, Tuple, Union, List, Any, cast
+from typing import Optional, Literal, Iterable, Tuple, Union, List, cast
 import numpy as np
 from opt_einsum import contract
 
@@ -224,7 +224,10 @@ class CanonicalMPS:
         return (self.two_site_tensor_prev(i) for i in range(1, self.num_sites))
 
     def dense(
-        self, flatten: bool = True, renormalise: bool = False, norm: Any = 2
+        self,
+        flatten: bool = True,
+        renormalise: bool = False,
+        norm: Union[None, float, Literal["fro", "nuc"]] = 2,
     ) -> np.ndarray:
         """
         Returns a dense representation of the MPS.
