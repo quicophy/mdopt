@@ -317,6 +317,8 @@ class CanonicalMPS:
             Final position of the orthogonality centre.
         return_singular_values : bool
             Whether to return the singular values obtained at each involved bond.
+        renormalise : bool
+            Whether to renormalise singular values during each SVD.
 
         Raises
         ------
@@ -354,14 +356,18 @@ class CanonicalMPS:
             if all(flags_left) and all(flags_right):
                 self.orth_centre = 0
 
-        assert self.orth_centre is not None
+        if self.orth_centre is None:
+            raise ValueError("The orthogonality centre value is set to None.")
+
         if self.orth_centre < final_pos:
             begin, final = self.orth_centre, final_pos
             mps = self.copy()
+
         elif self.orth_centre > final_pos:
             mps = self.reverse()
             begin = cast(int, mps.orth_centre)
             final = (self.num_sites - 1) - final_pos
+
         else:
             return self
 
@@ -388,9 +394,16 @@ class CanonicalMPS:
 
         return mps
 
-    def move_orth_centre_to_border(self) -> Tuple["CanonicalMPS", str]:
+    def move_orth_centre_to_border(
+        self, renormalise: bool = True
+    ) -> Tuple["CanonicalMPS", str]:
         """
         Moves the orthogonality centre from its current position to the closest border.
+
+        Parameters
+        ----------
+        renormalise : bool
+            Whether to renormalise singular values during each SVD.
 
         Returns a new version of the current :class:`CanonicalMPS` instance with
         the orthogonality centre moved to the closest (from the current position) border.
@@ -420,36 +433,57 @@ class CanonicalMPS:
 
         else:
             if self.orth_centre <= int(self.num_bonds / 2):
-                mps = self.move_orth_centre(final_pos=0, return_singular_values=False)
+                mps = self.move_orth_centre(
+                    final_pos=0,
+                    return_singular_values=False,
+                    renormalise=renormalise,
+                )
                 return cast("CanonicalMPS", mps), "first"
 
             mps = self.move_orth_centre(
-                final_pos=self.num_sites - 1, return_singular_values=False
+                final_pos=self.num_sites - 1,
+                return_singular_values=False,
+                renormalise=renormalise,
             )
         return cast("CanonicalMPS", mps), "last"
 
     def explicit(
-        self, tolerance: np.float32 = np.float32(1e-12)
+        self, tolerance: np.float32 = np.float32(1e-12), renormalise: bool = True
     ) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
         Essentially, retrieves each ``Γ[i]`` and ``Λ[i]`` from ``A[i]`` or ``B[i]``.
         See fig.4b in `[1]`_ for reference.
+
+        Parameters
+        ----------
+        tolerance : np.float32
+            Numerical tolerance for the singular values.
+        renormalise : bool
+            Whether to renormalise singular values during each SVD.
         """
 
-        mps_canonical, border = self.move_orth_centre_to_border()
+        mps_canonical, border = self.move_orth_centre_to_border(renormalise=renormalise)
 
         if border == "first":
             self.orth_centre = 0
             mps_canonical, singular_values = cast(
                 Tuple[CanonicalMPS, List[np.ndarray]],
-                self.move_orth_centre(self.num_sites - 1, return_singular_values=True),
+                self.move_orth_centre(
+                    self.num_sites - 1,
+                    return_singular_values=True,
+                    renormalise=renormalise,
+                ),
             )
         elif border == "last":
             self.orth_centre = self.num_sites - 1
             mps_canonical, singular_values = cast(
                 Tuple[CanonicalMPS, List[np.ndarray]],
-                self.move_orth_centre(0, return_singular_values=True),
+                self.move_orth_centre(
+                    0,
+                    return_singular_values=True,
+                    renormalise=renormalise,
+                ),
             )
 
         singular_values.insert(0, np.array([1.0]))
@@ -472,23 +506,28 @@ class CanonicalMPS:
             tolerance=tolerance,
         )  # type: ignore
 
-    def right_canonical(self) -> "CanonicalMPS":
+    def right_canonical(self, renormalise: bool = True) -> "CanonicalMPS":
         """
         Returns the current MPS in the right-canonical form.
         See eq.19 in `[1]`_ for reference.
         """
 
-        return cast(CanonicalMPS, self.move_orth_centre(0))
+        return cast(CanonicalMPS, self.move_orth_centre(0, renormalise=renormalise))
 
-    def left_canonical(self) -> "CanonicalMPS":
+    def left_canonical(self, renormalise: bool = True) -> "CanonicalMPS":
         """
         Returns the current MPS in the left-canonical form.
         See eq.19 in `[1]`_ for reference.
         """
 
-        return cast(CanonicalMPS, self.move_orth_centre(self.num_sites - 1))
+        return cast(
+            CanonicalMPS,
+            self.move_orth_centre(self.num_sites - 1, renormalise=renormalise),
+        )
 
-    def mixed_canonical(self, orth_centre: int) -> "CanonicalMPS":
+    def mixed_canonical(
+        self, orth_centre: int, renormalise: bool = True
+    ) -> "CanonicalMPS":
         """
         Returns the current MPS in the mixed-canonical form
         with the orthogonality centre being located at ``orth_centre``.
@@ -501,7 +540,9 @@ class CanonicalMPS:
             the only non-isometry in the new canonical MPS.
         """
 
-        return cast(CanonicalMPS, self.move_orth_centre(orth_centre))
+        return cast(
+            CanonicalMPS, self.move_orth_centre(orth_centre, renormalise=renormalise)
+        )
 
     def norm(self) -> np.float32:
         """

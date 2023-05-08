@@ -237,7 +237,9 @@ def mps_mpo_contract(
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site))
+        mps = cast(
+            CanonicalMPS, mps.move_orth_centre(start_site, renormalise=renormalise)
+        )
 
     for i, tensor in enumerate(mpo):
         if len(tensor.shape) != 4:
@@ -314,6 +316,6 @@ def mps_mpo_contract(
     )
 
     if result_to_explicit and isinstance(mps, CanonicalMPS):
-        return mps.explicit()
+        return mps.explicit(tolerance=mps.tolerance, renormalise=renormalise)
 
     return mps

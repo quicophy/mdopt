@@ -11,6 +11,7 @@ there exists a singular values diagonal matrix at bond ``i`` denoted by ``<>``::
                 |          |
 
 For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
+where ``L`` is the length of the MPS,
 the corresponding singular value tensors at the boundaries
 would be the identities of the same dimension.
 We index sites with ``i`` from ``0`` to ``L-1``, with bond ``i`` being left of site ``i``.
@@ -20,7 +21,7 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Iterable, List, Union, Any, cast
+from typing import Iterable, List, Union, cast
 import numpy as np
 from opt_einsum import contract
 from scipy.special import xlogy
@@ -149,7 +150,7 @@ class ExplicitMPS:
             [np.conjugate(sigma) for sigma in sing_vals]
             for sing_vals in self.singular_values
         ]
-        conjugated_sing_vals = cast(List[list], conjugated_sing_vals)
+        conjugated_sing_vals = cast(List[List], conjugated_sing_vals)
         return ExplicitMPS(
             conjugated_tensors,
             conjugated_sing_vals,
@@ -250,7 +251,7 @@ class ExplicitMPS:
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
     def dense(
-        self, flatten: bool = True, renormalise: bool = False, norm: Any = 2
+        self, flatten: bool = True, renormalise: bool = False, norm: Union[str, int] = 2
     ) -> np.ndarray:
         """
         Returns a dense representation of the MPS.
@@ -262,7 +263,9 @@ class ExplicitMPS:
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
         renormalise : bool
-            Whether to renormalise the resulting tensor by the L-1 norm.
+            Whether to renormalise the resulting tensor.
+        norm : Union[str, int]
+            Which norm to use for renormalisation of the final tensor.
         """
 
         tensors = list(self.one_site_right_iso_iter())
@@ -284,11 +287,11 @@ class ExplicitMPS:
         This operation is depicted in the following picture::
 
                    i           j
-              a    |           |          c          i     j
-            ...---(*)---<>*---(*)---<>*---...    ab  |     |  cd
-                                          --> ...---[ ]---[ ]---...
-            ...---( )---<>----( )---<>----...        |     |
-              b    |           |          d          k     l
+              a    |           |          c              i     j
+            ...---(*)---<>*---(*)---<>*---...        ab  |     |  cd
+                                              --> ...---[ ]---[ ]---...
+            ...---( )---<>----( )---<>----...            |     |
+              b    |           |          d              k     l
                    k           l
 
         In the cartoon, `{i,j,k,l}` and `{a,b,c,d}` are single indices,

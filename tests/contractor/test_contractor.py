@@ -184,7 +184,7 @@ def test_contractor_mps_mpo_contract():
         mps_fin = mps_mpo_contract(mps_init, mpo, start_site, renormalise=False)
         mps_fin_1 = mps_mpo_contract(mps_init, mpo, start_site, renormalise=True)
         mps_fin_2 = mps_mpo_contract(
-            mps_init, mpo, start_site, renormalise=False, result_to_explicit=True
+            mps_init, mpo, start_site, renormalise=True, result_to_explicit=True
         )
         orthogonality_centre = mps_fin_1.tensors[int(start_site + mpo_length - 1)]
 
