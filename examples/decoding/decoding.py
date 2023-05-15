@@ -10,299 +10,300 @@ from typing import cast, Union, Optional, List, Tuple
 import numpy as np
 from tqdm import tqdm
 import qecstruct as qec
+from opt_einsum import contract
 from more_itertools import powerset
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import find_orth_centre, inner_product, create_simple_product_state
+from mdopt.mps.utils import (
+    marginalise,
+    inner_product,
+    find_orth_centre,
+    create_simple_product_state,
+    create_custom_product_state,
+)
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
+from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
+from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.utils import ConstraintString
 
 
-def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.ndarray:
+def bitflip_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
     """
-    Here, we define the bias channel -- an operator which will bias us towards the initial message
-    while decoding by ranking the bitstrings according to Hamming distance from the latter.
-    This function returns a one-site bias channel MPO which
-    acts on one-qubit computational basis states as follows:
-    |0> -> √(1-p)|0> + √p|1>,
-    |1> -> √p|0> - √(1-p)|1>,
-    Note, that this operation is unitary, which means that it preserves the canonical form.
+    This function returns a bitflip bias operator -- the operator which will bias us
+    towards the initial input by ranking the bitstrings according to
+    the Hamming distance from the latter by virtue of bitflip.
 
     Parameters
     ----------
-    p_bias : np.float32
-        Probability of the channel.
-    which : str
-        "0" or "1", depending on which one-qubit basis state we are acting on.
+    prob_bias : np.float32
+        Probability of the operator.
 
     Returns
     -------
-    b_ch : np.ndarray
+    bias_operator : np.ndarray
         The corresponding one-site MPO.
 
     Raises
     ------
     ValueError
         If the channel's probability has incorrect value.
+
+    Notes
+    -----
+    This function returns a one-site bias channel MPO which
+    acts on one-qubit computational basis states as follows:
+    |0> -> √(1-p)|0> + √p|1>,
+    |1> -> √p|0>  + √(1-p)|1>,
+    Note, that this operation is not unitary, which means that it does not
+    preserve the canonical form without enforcing renormalisation.
     """
 
-    if not 0 <= p_bias <= 1:
+    if not 0 <= prob_bias <= 1:
         raise ValueError(
-            f"The channel parameter `p_bias` should be a probability, "
-            f"given {p_bias}."
+            f"The channel parameter `prob_bias` should be a probability, "
+            f"given {prob_bias}."
         )
 
-    if which not in ["0", "1", "+"]:
-        raise ValueError("Invalid one-qubit basis state given.")
+    bias_operator = np.full(shape=(2, 2), fill_value=np.sqrt(prob_bias))
+    np.fill_diagonal(bias_operator, np.sqrt(1 - prob_bias))
 
-    if which == "0":
-        b_channel = np.array(
-            [
-                [np.sqrt(1 - p_bias), np.sqrt(p_bias)],
-                [np.sqrt(p_bias), -np.sqrt(1 - p_bias)],
-            ]
-        )
-    if which == "1":
-        b_channel = np.array(
-            [
-                [-np.sqrt(1 - p_bias), np.sqrt(p_bias)],
-                [np.sqrt(p_bias), np.sqrt(1 - p_bias)],
-            ]
-        )
-    if which == "+":
-        b_channel = np.array(
-            [
-                [1.0, 0.0],
-                [0.0, 1.0],
-            ]
-        )
-
-    return b_channel
+    return bias_operator
 
 
-def depolarising_channel(
-    p_depolarising: np.float32 = np.float32(0.5), which: str = "00"
-) -> np.ndarray:
+def depolarising_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
     """
-    Here, we define the depolarising channel -- an operator which will depolarise
-    ---------------------------------------------------------#TODO
-    This function returns a two-site depolarising channel MPO which
-    acts on two-qubit computational basis states as follows:
-    |00> -> x,
-    |01> -> x,
-    |10> -> x,
-    |11> -> x,
-    Note, that this operation is unitary, which means that it preserves the canonical form.
+    This function returns a depolarising bias operator -- the operator which will bias us
+    towards the initial input by ranking the bitstrings according to
+    the Hamming distance from the latter by virtue of depolarisation.
 
     Parameters
     ----------
-    p_depolarising : np.float32
-        Probability of the channel.
-    which : str
-        The computational-basis two-qubit state we are acting on.
+    prob_bias : np.float32
+        Probability of the operator.
 
     Returns
     -------
-    d_ch : np.ndarray
+    bias_operator : np.ndarray
         The corresponding two-site MPO.
 
     Raises
     ------
     ValueError
         If the channel's probability has incorrect value.
+
+    Notes
+    -----
+    This function returns a two-site bias channel MPO which
+    acts on two-qubit computational basis states as follows:
+    |00> -> √(1-p)|00> + √(p/3)|01> + √(p/3)|10> + √(p/3)|11>,
+    |01> -> √(p/3)|00> + √(1-p)|01> + √(p/3)|10> + √(p/3)|11>,
+    |10> -> √(p/3)|00> + √(p/3)|01> + √(1-p)|10> + √(p/3)|11>,
+    |11> -> √(p/3)|00> + √(p/3)|01> + √(p/3)|10> + √(1-p)|11>,
+    Note, that this operation is not unitary, which means that it does not
+    preserve the canonical form without enforcing renormalisation.
+    Following our convention, the operator has legs ``(pUL pUR, pDL pDR)``,
+    where ``p`` stands for "physical", and
+    ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
     """
 
-    if not 0 <= p_depolarising <= 1:
+    if not 0 <= prob_bias <= 1:
         raise ValueError(
-            f"The channel parameter `p_depolarising` should be a probability, "
-            f"given {p_depolarising}."
+            f"The channel parameter `prob_bias` should be a probability, "
+            f"given {prob_bias}."
         )
 
-    if which not in ["00", "01", "10", "11", "++"]:
-        raise ValueError("Invalid two-qubit basis state given.")
+    bias_operator = np.full(shape=(2, 2, 2, 2), fill_value=np.sqrt(prob_bias / 3))
+    np.fill_diagonal(bias_operator, np.sqrt(1 - prob_bias))
 
-    if which == "00":
-        d_channel = 0.5 * np.array(
-            [
-                [
-                    -np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                ],
-            ]
-        ).reshape((2, 2, 2, 2))
-    if which == "01":
-        d_channel = 0.5 * np.array(
-            [
-                [
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    -np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                ],
-            ]
-        ).reshape((2, 2, 2, 2))
-    if which == "10":
-        d_channel = 0.5 * np.array(
-            [
-                [
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    -np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                ],
-            ]
-        ).reshape((2, 2, 2, 2))
-    if which == "11":
-        d_channel = 0.5 * np.array(
-            [
-                [
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(4 - 3 * p_depolarising),
-                    np.sqrt(p_depolarising),
-                ],
-                [
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    np.sqrt(p_depolarising),
-                    -np.sqrt(4 - 3 * p_depolarising),
-                ],
-            ]
-        ).reshape((2, 2, 2, 2))
-    if which == "++":
-        d_channel = np.identity(4).reshape((2, 2, 2, 2))
-
-    return d_channel
+    return bias_operator
 
 
-def apply_bias_channel(
-    basis_mps: Union[ExplicitMPS, CanonicalMPS],
-    basis_string: str,
-    prob_channel: np.float32 = np.float32(0.5),
+def apply_bitflip_bias(
+    mps: Union[ExplicitMPS, CanonicalMPS],
+    sites_to_bias: Union[str, List[int]] = "All",
+    prob_bias_list: Union[np.float32, List[np.float32]] = 0.1,
+    renormalise: bool = True,
+    result_to_explicit: bool = False,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     """
-    The function which applies a bias channel to a computational-basis-state MPS.
+    The function which applies a bitflip bias to a MPS.
 
     Parameters
     ----------
-    basis_mps : Union[ExplicitMPS, CanonicalMPS]
-        The computational-basis-state MPS, e.g., ``|010010>``.
-    basis_string : str
-        The string of "0", "1" and "+" which corresponds to ``basis_mps``.
-    prob_channel : np.float32
-        The bias channel probability.
-
+    mps : Union[ExplicitMPS, CanonicalMPS]
+        The MPS to apply the operator to.
+    sites_to_bias : Union[str, List[int]]
+        The list of sites to which the operators are applied.
+        If set to "All", takes all sites of the MPS.
+    prob_bias_list : Union[np.float32, List[np.float32]]
+        The list of probabilities of each operator at each site.
+        If set to a number, applies it to all of the sites.
+    renormalise : bool
+        Whether to renormalise during contraction.
+    result_to_explicit : bool
+        Whether to transform the resulting MPS into the Explicit form.
 
     Returns
     -------
-    biased_mps : CanonicalMPS
+    biased_mps : Union[ExplicitMPS, CanonicalMPS]
         The resulting MPS.
     """
 
-    if len(basis_mps) != len(basis_string):
+    if sites_to_bias == "All":
+        sites_to_bias = list(range(mps.num_sites))
+
+    if not isinstance(prob_bias_list, List):
+        prob_bias_list = [prob_bias_list for _ in range(len(sites_to_bias))]
+
+    if len(sites_to_bias) != len(prob_bias_list):
         raise ValueError(
-            f"The lengths of `basis_mps` and `codeword_string` should be equal, but given the "
-            f"MPS of length {len(basis_mps)} and the string of length {len(basis_string)}."
+            f"The number of sites in the list is {len(sites_to_bias)}, which is not"
+            f"equal to the number of probabilies -- {len(prob_bias_list)}."
         )
 
-    biased_mps_tensors = []
-    for i, mps_tensor in enumerate(basis_mps.tensors):
-        biased_mps_tensors.append(
-            apply_one_site_operator(
-                tensor=mps_tensor,
-                operator=bias_channel(prob_channel, which=basis_string[i]),
+    for site, probability in enumerate(prob_bias_list):
+        if not 0 <= probability <= 1:
+            raise ValueError(
+                f"The channel parameter should be a probability, "
+                f"given {probability} at site {site}."
             )
+
+    for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+        mps.tensors[site] = apply_one_site_operator(
+            tensor=mps.tensors[site],
+            operator=bitflip_bias(prob_bias),
         )
 
-    if isinstance(basis_mps, ExplicitMPS):
-        return ExplicitMPS(
-            tensors=biased_mps_tensors,
-            singular_values=basis_mps.singular_values,
-            tolerance=basis_mps.tolerance,
-            chi_max=basis_mps.chi_max,
+    if isinstance(mps, CanonicalMPS):
+        mps.orth_centre = mps.num_sites - 1
+        mps = mps.move_orth_centre(final_pos=0, renormalise=renormalise)
+        if result_to_explicit:
+            return mps.explicit(renormalise=renormalise)
+
+    if isinstance(mps, ExplicitMPS):
+        mps = mps.mixed_canonical(orth_centre=mps.num_sites - 1)
+        mps = mps.move_orth_centre(final_pos=0, renormalise=renormalise)
+
+    return mps
+
+
+def apply_depolarising_bias(
+    mps: Union[ExplicitMPS, CanonicalMPS],
+    sites_to_bias: Union[str, List[int]] = "All",
+    prob_bias_list: Union[np.float32, List[np.float32]] = 0.1,
+    renormalise: bool = True,
+    result_to_explicit: bool = False,
+) -> Union[ExplicitMPS, CanonicalMPS]:
+    """
+    The function which applies a depolarising bias to a MPS.
+
+    Parameters
+    ----------
+    mps : Union[ExplicitMPS, CanonicalMPS]
+        The MPS to apply the operator to.
+    sites_to_bias : Union[str, List[int]]
+        The list of sites to which the operators are applied.
+        If set to "All", takes all sites of the MPS.
+        Note, each site in this list means the next site is also
+        taken into account.
+    prob_bias_list : Union[np.float32, List[np.float32]]
+        The list of probabilities of each operator at each site.
+        If set to a number, applies it to all of the sites.
+    renormalise : bool
+        Whether to renormalise during contraction.
+    result_to_explicit : bool
+        Whether to transform the resulting MPS into the Explicit form.
+
+    Returns
+    -------
+    biased_mps : Union[ExplicitMPS, CanonicalMPS]
+        The resulting MPS.
+    """
+
+    if sites_to_bias == "All":
+        sites_to_bias = list(range(0, mps.num_sites, step=2))
+
+    if not isinstance(prob_bias_list, List):
+        prob_bias_list = [prob_bias_list for _ in range(len(sites_to_bias))]
+
+    if len(sites_to_bias) != len(prob_bias_list):
+        raise ValueError(
+            f"The number of sites in the list is {len(sites_to_bias)}, which is not"
+            f"equal to the number of probabilies -- {len(prob_bias_list)}."
         )
 
-    if isinstance(basis_mps, CanonicalMPS):
-        return CanonicalMPS(
-            tensors=biased_mps_tensors,
-            orth_centre=basis_mps.orth_centre,
-            tolerance=basis_mps.tolerance,
-            chi_max=basis_mps.chi_max,
+    for site, probability in enumerate(prob_bias_list):
+        if not 0 <= probability <= 1:
+            raise ValueError(
+                f"The channel parameter should be a probability, "
+                f"given {probability} at site {site}."
+            )
+
+    mps = mps.mixed_canonical(orth_centre=min(sites_to_bias))
+
+    for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+        two_site_tensor = contract(
+            "ijk, klm, jlno -> inom",
+            mps.tensors[site],
+            mps.tensors[site + 1],
+            depolarising_bias(prob_bias=prob_bias),
+            optimize=[(0, 1), (0, 1)],
         )
+        mps.tensors[site], singular_values, b_r = split_two_site_tensor(
+            two_site_tensor, renormalise=renormalise
+        )
+        mps.tensors[site + 1] = contract(
+            "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
+        )
+        mps.orth_centre = site + 1
+
+    if result_to_explicit:
+        return mps.explicit(renormalise=renormalise)
+
+    return mps
 
 
-# Below, we define some utility functions to operate with data structures from `qecstruct` --
-# an error-correction library we are using in this example.
+# Below, we define some utility functions to operate with data structures from qecstruct and
+# qecsim -- quantum error-correction libraries we use for our decoding examples.
+
+
+def pauli_to_mps(pauli_string: str) -> str:
+    """
+    This function converts a Pauli string to our MPS decoder string.
+    The encoding is done as follows:
+    "I" -> "00"
+    "X" -> "10"
+    "Y" -> "11"
+    "Z" -> "01"
+    Example: "IXYZ" -> "00101101".
+
+    Parameters
+    ----------
+    pauli_string : str
+        The Pauli string.
+
+    Returns
+    -------
+    mps_string : str
+        The MPS string.
+    """
+
+    mps_string = ""
+    for pauli in pauli_string:
+        if pauli == "I":
+            mps_string += "00"
+        elif pauli == "X":
+            mps_string += "10"
+        elif pauli == "Y":
+            mps_string += "11"
+        elif pauli == "Z":
+            mps_string += "01"
+        else:
+            raise ValueError(f"Invalid Pauli encountered -- {pauli}.")
+
+    return mps_string
 
 
 def bin_vec_to_dense(vector: "qec.sparse.BinaryVector") -> np.ndarray:
@@ -651,7 +652,8 @@ def apply_constraints(
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     renormalise: bool = False,
-    strategy: str = "naive",
+    result_to_explicit: bool = True,
+    strategy: str = "Naive",
     silent: bool = False,
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
@@ -669,6 +671,8 @@ def apply_constraints(
         Maximum bond dimension to keep in the contractor.
     renormalise : bool
         Whether to renormalise the singular values at each MPS bond involved in contraction.
+    result_to_explicit : bool
+        Whether to transform the resulting MPS into the Explicit form.
     strategy : str
         The contractor strategy.
     silent : bool
@@ -680,7 +684,7 @@ def apply_constraints(
         The resulting MPS.
     """
 
-    if strategy == "naive":
+    if strategy == "Naive":
         for string in tqdm(strings, disable=silent):
             # Preparing the MPO.
             string = ConstraintString(logical_tensors, string)
@@ -730,13 +734,13 @@ def apply_constraints(
                 renormalise=renormalise,
                 chi_max=chi_max,
                 inplace=False,
-                result_to_explicit=True,
+                result_to_explicit=result_to_explicit,
             )
 
     return cast(CanonicalMPS, mps)
 
 
-def decode(
+def decode_linear(
     message: Union[ExplicitMPS, CanonicalMPS],
     codeword: Union[ExplicitMPS, CanonicalMPS],
     code: "qec.LinearCode",
@@ -791,3 +795,104 @@ def decode(
     overlap = abs(inner_product(mps_dmrg_final, codeword))
 
     return engine, overlap
+
+
+def decode_shor(
+    error: str,
+    renormalise: bool = True,
+    result_to_explicit: bool = True,
+    silent: bool = True,
+):
+    """
+    This function does error-based decoding of Shor's code.
+    It takes as input an error string and returns the most likely Pauli correction.
+
+    Parameters
+    ----------
+    error : str
+        The error in a string format.
+        The way the decoder takes the error is as follows:
+        "X_0 Z_0 X_1 Z_1 ..."
+    renormalise : bool
+        Whether to renormalise the singular values during contraction.
+    result_to_explicit : True
+        Whether to transform the resulting MPS into the Explicit form.
+    silent : bool
+        Whether to show the progress bars or not.
+
+    Raises
+    ------
+    ValueError
+        If the error string length does not correspond to the code.
+    """
+
+    code = qec.shor_code()
+    num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
+    num_logicals = code.num_x_logicals() + code.num_z_logicals()
+    assert num_sites == 20
+    assert num_logicals == 2
+
+    if len(error) != num_sites - num_logicals:
+        raise ValueError(
+            f"The error length is {len(error)}, expected {num_sites - num_logicals}."
+        )
+
+    logicals_state = "+" * num_logicals
+    state_string = logicals_state + error
+    error_mps = create_custom_product_state(string=state_string)
+    constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    constraints_sites = css_code_constraint_sites(code)
+    logicals_sites = css_code_logicals_sites(code)
+    sites_to_bias = list(range(num_logicals, num_sites))
+
+    error_mps = apply_bitflip_bias(
+        mps=error_mps,
+        sites_to_bias=sites_to_bias,
+        renormalise=renormalise,
+        result_to_explicit=result_to_explicit,
+    )
+
+    error_mps = apply_constraints(
+        error_mps,
+        constraints_sites[0],
+        constraints_tensors,
+        renormalise=renormalise,
+        result_to_explicit=result_to_explicit,
+        silent=silent,
+    )
+    error_mps = apply_constraints(
+        error_mps,
+        constraints_sites[1],
+        constraints_tensors,
+        renormalise=renormalise,
+        result_to_explicit=result_to_explicit,
+        silent=silent,
+    )
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites,
+        logicals_tensors,
+        renormalise=renormalise,
+        result_to_explicit=result_to_explicit,
+        silent=silent,
+    )
+
+    sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
+    logical = marginalise(
+        mps=error_mps,
+        sites_to_marginalise=sites_to_marginalise,
+    ).dense(flatten=True, renormalise=True, norm=1)
+
+    if np.argmax(logical) == 0:
+        return "I", logical
+    if np.argmax(logical) == 1:
+        return "X", logical
+    if np.argmax(logical) == 2:
+        return "Z", logical
+    if np.argmax(logical) == 3:
+        return "Y", logical
+
+
+def decode_hyperproduct():
+    raise NotImplementedError
