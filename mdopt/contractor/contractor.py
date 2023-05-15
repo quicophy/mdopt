@@ -13,7 +13,7 @@ from mdopt.utils.utils import split_two_site_tensor
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
     """
-    Applies a one-site operator to a canonical MPS as follows::
+    Applies a one-site operator to a MPS as follows::
 
         ----(tensor)---  ->  ---(tensor_updated)---
                |                       |
