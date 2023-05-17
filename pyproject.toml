@@ -13,13 +13,13 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
 scipy = "^1.9.2"
-numpy = "^1.24.3"
 opt-einsum = "^3.3.0"
 more-itertools = ">=8.12,<10.0"
 threadpoolctl = "^3.1.0"
 tqdm = "^4.64.1"
 qecstruct = "^0.2.9"
 qecsim = "^1.0b9"
+numpy = "1.24.2"
 
 [tool.poetry.group.dev]
 optional = true
