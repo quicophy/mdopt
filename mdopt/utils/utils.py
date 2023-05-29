@@ -145,12 +145,14 @@ def kron_tensors(
     return product
 
 
+# TODO better docstring
 def split_two_site_tensor(
     tensor: np.ndarray,
     chi_max: int = int(1e4),
     cut: np.float32 = np.float32(1e-12),
     renormalise: bool = False,
-) -> Tuple[np.ndarray, list, np.ndarray]:
+    strategy: str = "svd",
+) -> Tuple:
     """
     Split a two-site MPS tensor according to the following diagram::
 
@@ -167,6 +169,11 @@ def split_two_site_tensor(
         Maximum number of singular values to keep.
     cut : np.float32
         Discard any singular values smaller than eps.
+    renormalise : bool
+        Whether to renormalise the singular value spectrum after the cut.
+    strategy : str
+        Which strategy to use for the splitting.
+        Available options: ``svd``, ``qr``, ``lq``, ``eig``.
 
     Returns
     -------
@@ -192,15 +199,32 @@ def split_two_site_tensor(
     chi_v_l, d_l, d_r, chi_v_r = tensor.shape
     tensor = tensor.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
-    u_l, singular_values, v_r = svd(
-        tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
-    )
+    if strategy == "svd":
+        u_l, singular_values, v_r = svd(
+            tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
+        )
+        chi_v_cut = len(singular_values)
+        a_l = u_l.reshape((chi_v_l, d_l, chi_v_cut))
+        b_r = v_r.reshape((chi_v_cut, d_r, chi_v_r))
+        return a_l, singular_values, b_r
 
-    chi_v_cut = len(singular_values)
-    a_l = u_l.reshape((chi_v_l, d_l, chi_v_cut))
-    b_r = v_r.reshape((chi_v_cut, d_r, chi_v_r))
+    if strategy == "qr":
+        q_tensor, r_tensor = np.linalg.qr(tensor, mode="reduced")
+        q_tensor = q_tensor.reshape((chi_v_l, d_l, -1))
+        r_tensor = r_tensor.reshape((-1, d_r, chi_v_r))
+        return q_tensor, r_tensor
 
-    return a_l, singular_values, b_r
+    if strategy == "rq":
+        r_tensor, q_tensor = scipy.linalg.rq(tensor, mode="economic")
+        r_tensor = r_tensor.reshape((chi_v_l, d_l, -1))
+        q_tensor = q_tensor.reshape((-1, d_r, chi_v_r))
+        return r_tensor, q_tensor
+
+    if strategy == "eig":
+        w_tensor, v_tensor = np.linalg.eig(tensor)
+        w_tensor = w_tensor.reshape((chi_v_l, d_l, -1))
+        v_tensor = v_tensor.reshape((-1, d_r, chi_v_r))
+        return w_tensor, v_tensor
 
 
 def create_random_mpo(

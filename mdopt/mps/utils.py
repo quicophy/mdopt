@@ -688,3 +688,49 @@ def marginalise(
             chi_max=mps.chi_max,
         ),
     )
+
+
+def compress_bond(t_0, t_1):
+    """
+    Compresses the bond between two tensors.
+
+    Parameters
+    ----------
+    t_0 : np.ndarray
+        The first tensor.
+    t_1 : np.ndarray
+        The second tensor.
+
+    Returns
+    -------
+    t_0_new : np.ndarray
+        The first tensor after compression.
+    t_1_new : np.ndarray
+        The second tensor after compression.
+
+    Notes
+    -----
+    The compression follows a scheme outlined in https://arxiv.org/abs/1708.08932.
+    """
+
+    chi_0, phys_0, _ = t_0.shape
+    _, phys_1, chi_2 = t_1.shape
+
+    t_0 = t_0.reshape(chi_0 * phys_0, -1)
+    t_1 = t_1.reshape(-1, phys_1 * chi_2)
+
+    u_0, s_0, v_0 = svd(t_0)
+    u_1, s_1, v_1 = svd(t_1)
+
+    two_site_tensor = contract(
+        "ij, jk, kl, lm -> im", np.diag(s_0), v_0, u_1, np.diag(s_1)
+    )
+    u_2, s_2, v_2 = svd(two_site_tensor)
+
+    t_0_new = contract("ij, jk, kl -> il", u_0, u_2, np.sqrt(np.diag(s_2)))
+    t_1_new = contract("ij, jk, kl -> il", np.sqrt(np.diag(s_2)), v_2, v_1)
+
+    t_0_new = t_0_new.reshape(chi_0, phys_0, -1)
+    t_1_new = t_1_new.reshape(-1, phys_0, chi_2)
+
+    return t_0_new, t_1_new
