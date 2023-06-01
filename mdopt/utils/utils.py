@@ -199,15 +199,6 @@ def split_two_site_tensor(
     chi_v_l, d_l, d_r, chi_v_r = tensor.shape
     tensor = tensor.reshape((chi_v_l * d_l, d_r * chi_v_r))
 
-    if strategy == "svd":
-        u_l, singular_values, v_r = svd(
-            tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
-        )
-        chi_v_cut = len(singular_values)
-        a_l = u_l.reshape((chi_v_l, d_l, chi_v_cut))
-        b_r = v_r.reshape((chi_v_cut, d_r, chi_v_r))
-        return a_l, singular_values, b_r
-
     if strategy == "qr":
         q_tensor, r_tensor = np.linalg.qr(tensor, mode="reduced")
         q_tensor = q_tensor.reshape((chi_v_l, d_l, -1))
@@ -225,6 +216,17 @@ def split_two_site_tensor(
         w_tensor = w_tensor.reshape((chi_v_l, d_l, -1))
         v_tensor = v_tensor.reshape((-1, d_r, chi_v_r))
         return w_tensor, v_tensor
+
+    if strategy == "svd":
+        u_l, singular_values, v_r = svd(
+            tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
+        )
+        chi_v_cut = len(singular_values)
+        a_l = u_l.reshape((chi_v_l, d_l, chi_v_cut))
+        b_r = v_r.reshape((chi_v_cut, d_r, chi_v_r))
+        return a_l, singular_values, b_r
+
+    return tuple()
 
 
 def create_random_mpo(
