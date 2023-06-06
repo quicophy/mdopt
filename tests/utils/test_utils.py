@@ -52,15 +52,17 @@ def test_utils_split_two_site_tensor():
     """Test for the ``split_two_site_tensor`` function."""
 
     for _ in range(10):
-        d = 2
+        phys_dim = 2
         bond_dim = np.random.randint(2, 18, size=2)
-        t = np.random.uniform(
-            size=(bond_dim[0], d, d, bond_dim[1])
-        ) + 1j * np.random.uniform(size=(bond_dim[0], d, d, bond_dim[1]))
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
 
-        u_l, singular_values, v_r = split_two_site_tensor(t)
+        u_l, singular_values, v_r = split_two_site_tensor(tensor, strategy="svd")
+        q_l, r_r = split_two_site_tensor(tensor, strategy="qr")
+        r_l, q_r = split_two_site_tensor(tensor, strategy="rq")
 
-        should_be_t = contract(
+        should_be_t_0 = contract(
             "ijk, kl, lmn -> ijmn",
             u_l,
             np.diag(singular_values),
@@ -68,14 +70,44 @@ def test_utils_split_two_site_tensor():
             optimize=[(0, 1), (0, 1)],
         )
 
-        assert t.shape == should_be_t.shape
-        assert np.isclose(np.linalg.norm(t - should_be_t), 0)
+        should_be_t_1 = contract(
+            "ijk, klm -> ijlm",
+            q_l,
+            r_r,
+            optimize=[(0, 1)],
+        )
+
+        should_be_t_2 = contract(
+            "ijk, klm -> ijlm",
+            r_l,
+            q_r,
+            optimize=[(0, 1)],
+        )
+
+        assert tensor.shape == should_be_t_0.shape
+        assert np.isclose(np.linalg.norm(tensor - should_be_t_0), 0)
+
+        assert tensor.shape == should_be_t_1.shape
+        assert np.isclose(np.linalg.norm(tensor - should_be_t_1), 0)
+
+        assert tensor.shape == should_be_t_2.shape
+        assert np.isclose(np.linalg.norm(tensor - should_be_t_2), 0)
 
         with pytest.raises(ValueError):
-            t = np.random.uniform(
-                size=(bond_dim[0], d, d, d, bond_dim[1])
-            ) + 1j * np.random.uniform(size=(bond_dim[0], d, d, d, bond_dim[1]))
-            split_two_site_tensor(t)
+            tensor = np.random.uniform(
+                size=(bond_dim[0], phys_dim, phys_dim, phys_dim, bond_dim[1])
+            ) + 1j * np.random.uniform(
+                size=(bond_dim[0], phys_dim, phys_dim, phys_dim, bond_dim[1])
+            )
+            split_two_site_tensor(tensor)
+
+        with pytest.raises(ValueError):
+            tensor = np.random.uniform(
+                size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+            ) + 1j * np.random.uniform(
+                size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+            )
+            split_two_site_tensor(tensor, strategy="bla")
 
 
 def test_utils_kron_tensors():
