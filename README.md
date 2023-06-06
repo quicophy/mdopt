@@ -19,3 +19,13 @@ pip install mdopt
 ## Usage
 
 For usage, see the examples folder.
+
+## Cite
+```
+@software{mdopt2022,
+  author = {Aleksandr Berezutskii},
+  title = {mdopt: Discrete optimization in the tensor-network (specifically, MPS-MPO) language.},
+  url = {https://github.com/quicophy/mdopt},
+  year = {2022},
+}
+```
