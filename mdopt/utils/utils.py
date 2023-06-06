@@ -145,7 +145,6 @@ def kron_tensors(
     return product
 
 
-# TODO better docstring
 def split_two_site_tensor(
     tensor: np.ndarray,
     chi_max: int = int(1e4),
@@ -154,7 +153,8 @@ def split_two_site_tensor(
     strategy: str = "svd",
 ) -> Tuple:
     """
-    Split a two-site MPS tensor according to the following diagram::
+    Split a two-site MPS tensor according to the following diagram
+    (in case of the SVD strategy, similarly but without the singular vals for the others)::
 
                                              m         n
        i ---(tensor)--- l     ->    i ---(A)---diag(S)---(B)--- l
@@ -173,7 +173,7 @@ def split_two_site_tensor(
         Whether to renormalise the singular value spectrum after the cut.
     strategy : str
         Which strategy to use for the splitting.
-        Available options: ``svd``, ``qr``, ``lq``, ``eig``.
+        Available options: ``svd``, ``qr``, ``rq``.
 
     Returns
     -------
@@ -196,35 +196,32 @@ def split_two_site_tensor(
             f"while the one given has {len(tensor.shape)}."
         )
 
-    chi_v_l, d_l, d_r, chi_v_r = tensor.shape
-    tensor = tensor.reshape((chi_v_l * d_l, d_r * chi_v_r))
+    if strategy not in ["svd", "qr", "rq"]:
+        raise ValueError("The strategy must be one of 'svd', 'qr', 'rq'.")
 
-    if strategy == "qr":
-        q_tensor, r_tensor = np.linalg.qr(tensor, mode="reduced")
-        q_tensor = q_tensor.reshape((chi_v_l, d_l, -1))
-        r_tensor = r_tensor.reshape((-1, d_r, chi_v_r))
-        return q_tensor, r_tensor
-
-    if strategy == "rq":
-        r_tensor, q_tensor = scipy.linalg.rq(tensor, mode="economic")
-        r_tensor = r_tensor.reshape((chi_v_l, d_l, -1))
-        q_tensor = q_tensor.reshape((-1, d_r, chi_v_r))
-        return r_tensor, q_tensor
-
-    if strategy == "eig":
-        w_tensor, v_tensor = np.linalg.eig(tensor)
-        w_tensor = w_tensor.reshape((chi_v_l, d_l, -1))
-        v_tensor = v_tensor.reshape((-1, d_r, chi_v_r))
-        return w_tensor, v_tensor
+    chi_v_l, phys_l, phys_r, chi_v_r = tensor.shape
+    tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
         u_l, singular_values, v_r = svd(
             tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
         )
         chi_v_cut = len(singular_values)
-        a_l = u_l.reshape((chi_v_l, d_l, chi_v_cut))
-        b_r = v_r.reshape((chi_v_cut, d_r, chi_v_r))
-        return a_l, singular_values, b_r
+        u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
+        v_r = v_r.reshape((chi_v_cut, phys_r, chi_v_r))
+        return u_l, singular_values, v_r  # pylint: disable=unbalanced-tuple-unpacking
+
+    if strategy == "qr":
+        q_l, r_r = np.linalg.qr(tensor, mode="reduced")
+        q_l = q_l.reshape((chi_v_l, phys_l, -1))
+        r_r = r_r.reshape((-1, phys_r, chi_v_r))
+        return q_l, r_r  # pylint: disable=unbalanced-tuple-unpacking
+
+    if strategy == "rq":
+        r_l, q_r = scipy.linalg.rq(tensor, mode="economic")
+        r_l = r_l.reshape((chi_v_l, phys_l, -1))
+        q_r = q_r.reshape((-1, phys_r, chi_v_r))
+        return r_l, q_r  # pylint: disable=unbalanced-tuple-unpacking
 
     return tuple()
 
