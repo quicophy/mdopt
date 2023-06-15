@@ -1,7 +1,7 @@
 sphinx==5.3.0
 sphinx-rtd-theme==1.2.2
 sphinxcontrib-napoleon==0.7
-myst-parser==0.18.1
+myst-parser==2.0.0
 ipykernel
 nbsphinx
 mdopt
