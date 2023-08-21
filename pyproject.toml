@@ -48,7 +48,7 @@ optional = true
 
 [tool.poetry.group.docs.dependencies]
 matplotlib = "^3.7.0"
-Sphinx = "^6.2.1"
+Sphinx = ">=6.2.1,<8.0.0"
 sphinx-rtd-theme = "^1.2.1"
 sphinxcontrib-napoleon = "^0.7"
 myst-parser = ">=1,<3"
