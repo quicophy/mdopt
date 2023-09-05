@@ -19,7 +19,7 @@ def svd(
     Parameters
     ----------
     mat : np.ndarray
-        Matrix provided as a tensor with 2 dimensions.
+        Matrix provided as a ``np.ndarray`` with 2 dimensions.
     cut : np.float32
         Singular values smaller than this will be discarded.
     chi_max : int
@@ -46,14 +46,20 @@ def svd(
         raise ValueError(
             f"A valid matrix must have 2 dimensions while the one given has {len(mat.shape)}."
         )
+
     try:
         u_l, singular_values, v_r = np.linalg.svd(
             mat, full_matrices=False, compute_uv=True, hermitian=False
         )
     except np.linalg.LinAlgError:
-        u_l, singular_values, v_r = scipy.linalg.svd(
-            mat, full_matrices=False, compute_uv=True, lapack_driver="gesvd"
-        )
+        try:
+            u_l, singular_values, v_r = scipy.linalg.svd(
+                mat, full_matrices=False, compute_uv=True, lapack_driver="gesvd"
+            )
+        except np.linalg.LinAlgError:
+            u_l, singular_values, v_r = scipy.linalg.svd(
+                mat, full_matrices=False, compute_uv=True, lapack_driver="gesdd"
+            )
 
     max_num = min(chi_max, np.sum(singular_values > cut))
     ind = np.argsort(singular_values)[::-1][:max_num]
@@ -73,7 +79,7 @@ def kron_tensors(
     merge_physicals: bool = True,
 ) -> np.ndarray:
     """
-    Computes a kronecker product of 2 MPS tensors.
+    Computes a Kronecker product of 2 MPS tensors.
 
     Parameters
     ----------
@@ -89,7 +95,7 @@ def kron_tensors(
     Returns
     -------
     product
-        The resulting kronecker product.
+        The resulting Kronecker product.
 
     Raises
     ------
@@ -197,7 +203,7 @@ def split_two_site_tensor(
         )
 
     if strategy not in ["svd", "qr", "rq"]:
-        raise ValueError("The strategy must be one of 'svd', 'qr', 'rq'.")
+        raise ValueError("The strategy must be one of `svd`, `qr`, `rq`.")
 
     chi_v_l, phys_l, phys_r, chi_v_r = tensor.shape
     tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
