@@ -16,7 +16,11 @@
 	// 👇 Configure tool-specific properties.
 	"customizations": {
         "vscode": {
-            "extensions":["ms-python.python", "njpwerner.autodocstring"]
+            "extensions":[
+				"ms-python.python",
+				"njpwerner.autodocstring",
+				"ms-toolsai.jupyter"
+				]
             }
 		},
 		"features": {
