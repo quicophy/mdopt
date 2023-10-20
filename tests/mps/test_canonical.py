@@ -300,7 +300,12 @@ def test_canonical_move_orth_centre():
             psi, form="Mixed-canonical", orth_centre=orth_centre_init
         )
         orth_centre_final = np.random.randint(num_sites)
-        mps_mixed_final = mps_mixed_init.move_orth_centre(orth_centre_final)
+        mps_mixed_final = mps_mixed_init.move_orth_centre(
+            final_pos=orth_centre_final, return_singular_values=False, renormalise=False
+        )
+        mps_mixed_final_renorm = mps_mixed_init.move_orth_centre(
+            final_pos=orth_centre_final, return_singular_values=False, renormalise=True
+        )
         mps_product = create_simple_product_state(
             num_sites=num_sites, form="Right-canonical"
         )
@@ -312,7 +317,9 @@ def test_canonical_move_orth_centre():
         assert is_canonical(mps_mixed_final)
         assert find_orth_centre(mps_mixed_init) == [orth_centre_init]
         assert find_orth_centre(mps_mixed_final) == [orth_centre_final]
+        assert find_orth_centre(mps_mixed_final_renorm) == [orth_centre_final]
         assert find_orth_centre(mps_product) == [0]
+        assert mps_mixed_final_renorm.norm() == 1
 
 
 def test_canonical_move_orth_centre_to_border():
