@@ -72,10 +72,6 @@ class ExplicitMPS:
         self.tensors = tensors
         self.num_sites = len(tensors)
         self.num_bonds = self.num_sites - 1
-        self.bond_dimensions = [
-            self.tensors[i].shape[-1] for i in range(self.num_bonds)
-        ]
-        self.phys_dimensions = [self.tensors[i].shape[1] for i in range(self.num_sites)]
         self.singular_values = singular_values
         self.num_singval_mat = len(singular_values)
         self.dtype = tensors[0].dtype
@@ -105,6 +101,20 @@ class ExplicitMPS:
                     f"instead the norm is {norm} at bond {i + 1}."
                 )
 
+    @property
+    def bond_dimensions(self) -> List[int]:
+        """
+        Returns the list of all bond dimensions of the MPS.
+        """
+        return [self.tensors[i].shape[-1] for i in range(self.num_bonds)]
+
+    @property
+    def phys_dimensions(self) -> List[int]:
+        """
+        Returns the list of all physical dimensions of the MPS.
+        """
+        return [self.tensors[i].shape[1] for i in range(self.num_sites)]
+
     def __len__(self) -> int:
         """
         Returns the number of sites in the MPS.
@@ -130,7 +140,7 @@ class ExplicitMPS:
 
     def reverse(self) -> "ExplicitMPS":
         """
-        Returns a reversed version of a given MPS.
+        Returns a reversed version of the current MPS.
         """
 
         reversed_tensors = list(np.transpose(t) for t in reversed(self.tensors))
