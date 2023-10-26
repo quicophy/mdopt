@@ -6,8 +6,6 @@
 [![mypy](https://github.com/quicophy/mdopt/actions/workflows/mypy.yml/badge.svg)](https://github.com/quicophy/mdopt/actions/workflows/mypy.yml)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 [![Unitary Fund](https://img.shields.io/badge/Supported%20By-UNITARY%20FUND-brightgreen.svg?style=for-the-badge)](https://unitary.fund)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/quicophy/mdopt/HEAD)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 # mdopt
 mdopt is a python package built on top of numpy for discrete optimisation in the tensor-network (specifically, MPS-MPO) language. The code is hosted on github, so please feel free to submit issues and pull requests.
