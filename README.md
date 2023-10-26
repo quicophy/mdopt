@@ -5,7 +5,7 @@
 [![lint](https://github.com/quicophy/mdopt/actions/workflows/lint.yml/badge.svg)](https://github.com/quicophy/mdopt/actions/workflows/lint.yml)
 [![mypy](https://github.com/quicophy/mdopt/actions/workflows/mypy.yml/badge.svg)](https://github.com/quicophy/mdopt/actions/workflows/mypy.yml)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
-![Static Badge](https://img.shields.io/badge/supported_by-unitary_fund-brightgreen?link=https%3A%2F%2Funitary.fund%2F)
+[![Unitary Fund][unitary-fund-img]](http://unitary.fund)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/quicophy/mdopt/HEAD)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
