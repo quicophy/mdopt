@@ -21,11 +21,11 @@ def test_utils_svd():
         dim = np.random.randint(low=10, high=100, size=2)
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
 
-        u, s, v_h = svd(m)
+        u, s, v_h, _ = svd(m)
 
         m_trimmed = contract("ij, j, jk -> ik", u, s, v_h, optimize=[(0, 1), (0, 1)])
 
-        u, s, v_h = svd(m_trimmed)
+        u, s, v_h, _ = svd(m_trimmed)
 
         m_trimmed_new = contract(
             "ij, j, jk -> ik", u, s, v_h, optimize=[(0, 1), (0, 1)]
@@ -43,7 +43,7 @@ def test_utils_svd():
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
 
-        _, s, _ = svd(m, cut=1e-16, chi_max=num_sing_values, renormalise=True)
+        _, s, _, _ = svd(m, cut=1e-16, chi_max=num_sing_values, renormalise=True)
 
         assert len(s) == num_sing_values
 
