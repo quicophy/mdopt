@@ -1,6 +1,6 @@
 """This module contains miscellaneous utilities."""
 
-from typing import Tuple, List, cast
+from typing import Tuple, Optional, List, cast
 from itertools import chain
 import numpy as np
 import scipy
@@ -12,7 +12,8 @@ def svd(
     cut: np.float32 = np.float32(1e-12),
     chi_max: int = int(1e4),
     renormalise: bool = False,
-) -> Tuple[np.ndarray, list, np.ndarray]:
+    return_residual_spectrum: bool = False,
+) -> Tuple[np.ndarray, list, np.ndarray, Optional[List[float]]]:
     """
     Performs Singular Value Decomposition with different features.
 
@@ -26,6 +27,9 @@ def svd(
         Maximum number of singular values to keep.
     renormalise : bool
         Whether to renormalise the singular value spectrum after the cut.
+    return_residual_spectrum : bool
+        Whether to return the residual spectrum, i.e.,
+        the singular values we have thrown away.
 
     Returns
     -------
@@ -35,11 +39,8 @@ def svd(
         The singular values, sorted in non-increasing order.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
-
-    Raises
-    ------
-    ValueError
-        If the ``np.ndarray`` provided is not two-dimensional.
+    residual_spectrum : Optional[List[float]]
+        The discarded singular values. Only returned if `return_residual_spectrum` is True.
     """
 
     if len(mat.shape) != 2:
@@ -64,12 +65,22 @@ def svd(
     max_num = min(chi_max, np.sum(singular_values > cut))
     ind = np.argsort(singular_values)[::-1][:max_num]
 
+    residual_spectrum = singular_values[singular_values <= cut].tolist()
+
     u_l, singular_values, v_r = u_l[:, ind], singular_values[ind], v_r[ind, :]
 
     if renormalise:
         singular_values /= np.linalg.norm(singular_values)
 
-    return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r)
+    if return_residual_spectrum:
+        return (
+            np.asarray(u_l),
+            cast(list, singular_values),
+            np.asarray(v_r),
+            residual_spectrum,
+        )
+
+    return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r), None
 
 
 def kron_tensors(
@@ -209,7 +220,7 @@ def split_two_site_tensor(
     tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
-        u_l, singular_values, v_r = svd(
+        u_l, singular_values, v_r, _ = svd(
             tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
         )
         chi_v_cut = len(singular_values)
@@ -486,7 +497,7 @@ def mpo_from_matrix(
     mpo = []
     mps_dim = phys_dim**2
     matrix = matrix.reshape((-1, mps_dim))
-    matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
+    matrix, singular_values, v_r, _ = svd(matrix, chi_max=chi_max, renormalise=False)
     if not orthogonalise:
         v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
     mpo.append(np.expand_dims(v_r, -1))
@@ -496,7 +507,9 @@ def mpo_from_matrix(
         matrix = np.matmul(matrix, np.diag(singular_values))
         bond_dim = matrix.shape[-1]
         matrix = matrix.reshape((-1, mps_dim * bond_dim))
-        matrix, singular_values, v_r = svd(matrix, chi_max=chi_max, renormalise=False)
+        matrix, singular_values, v_r, _ = svd(
+            matrix, chi_max=chi_max, renormalise=False
+        )
         if not orthogonalise:
             v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
         v_r = v_r.reshape((-1, mps_dim, bond_dim))
