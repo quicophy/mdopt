@@ -230,8 +230,7 @@ class DephasingDMRG:
         self.mps = mps
         self.left_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
         self.right_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
-        mps_target = mps_target.right_canonical()
-        self.mps_target = mps_target
+        self.mps_target = mps_target.right_canonical()
         self.chi_max = chi_max
         self.cut = cut
         self.mode = mode
