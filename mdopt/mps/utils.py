@@ -303,7 +303,7 @@ def mps_from_dense(
 
     state_vector = state_vector.reshape((-1, phys_dim))
 
-    state_vector, singular_values_local, v_r = svd(
+    state_vector, singular_values_local, v_r, _ = svd(
         state_vector, chi_max=chi_max, renormalise=False
     )
 
@@ -315,7 +315,7 @@ def mps_from_dense(
 
         bond_dim = state_vector.shape[-1]
         state_vector = state_vector.reshape((-1, phys_dim * bond_dim))
-        state_vector, singular_values_local, v_r = svd(
+        state_vector, singular_values_local, v_r, _ = svd(
             state_vector, chi_max=chi_max, renormalise=False
         )
         v_r = v_r.reshape((-1, phys_dim, bond_dim))
