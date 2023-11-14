@@ -292,7 +292,7 @@ def mps_from_dense(
 
     if form not in ["Explicit", "Right-canonical", "Left-canonical", "Mixed-canonical"]:
         raise ValueError(
-            "Wrong value of the form option."
+            "Wrong value of the form option. "
             "Available options: Explicit, Right-canonical, Left-canonical, Mixed-canonical"
         )
 
