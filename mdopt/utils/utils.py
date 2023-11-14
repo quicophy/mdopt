@@ -168,6 +168,7 @@ def split_two_site_tensor(
     cut: np.float32 = np.float32(1e-12),
     renormalise: bool = False,
     strategy: str = "svd",
+    return_residual_spectrum: bool = False,
 ) -> Tuple:
     """
     Split a two-site MPS tensor according to the following diagram
@@ -191,6 +192,10 @@ def split_two_site_tensor(
     strategy : str
         Which strategy to use for the splitting.
         Available options: ``svd``, ``qr``, ``rq``.
+    return_residual_spectrum : bool
+        Whether to return the residual spectrum, i.e.,
+        the singular values we have thrown away.
+        Available only for the SVD decomposition option.
 
     Returns
     -------
@@ -200,6 +205,9 @@ def split_two_site_tensor(
         List of singular values.
     b_r : np.ndarray
         Right isometry ``(n, k, l)``.
+    residual_spectrum : Optional[List[float]]
+        The discarded singular values. Only returned if `return_residual_spectrum` is True
+        and the decomposition strategy is set to ``svd``.
 
     Raises
     ------
@@ -220,13 +228,24 @@ def split_two_site_tensor(
     tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
-        u_l, singular_values, v_r, _ = svd(
-            tensor, cut=cut, chi_max=chi_max, renormalise=renormalise
+        u_l, singular_values, v_r, residual_spectrum = svd(
+            tensor,
+            cut=cut,
+            chi_max=chi_max,
+            renormalise=renormalise,
+            return_residual_spectrum=return_residual_spectrum,
         )
         chi_v_cut = len(singular_values)
         u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
         v_r = v_r.reshape((chi_v_cut, phys_r, chi_v_r))
-        return u_l, singular_values, v_r  # pylint: disable=unbalanced-tuple-unpacking
+        if return_residual_spectrum:
+            return (
+                u_l,
+                singular_values,
+                v_r,
+                residual_spectrum,
+            )  # pylint: disable=unbalanced-tuple-unpacking
+        return u_l, singular_values, v_r
 
     if strategy == "qr":
         q_l, r_r = np.linalg.qr(tensor, mode="reduced")
