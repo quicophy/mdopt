@@ -147,8 +147,12 @@ def apply_two_site_unitary(
         "ijkl, jkmn -> imnl", two_site_tensor_wo_lambda_0, unitary, optimize=[(0, 1)]
     )
 
-    _, _, b_2_updated = split_two_site_tensor(
-        two_site_tensor_with_lambda_0, chi_max=chi_max, cut=cut, renormalise=False
+    _, _, b_2_updated, _ = split_two_site_tensor(
+        two_site_tensor_with_lambda_0,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=False,
+        return_residual_spectrum=True,
     )
     b_1_updated = contract(
         "ijkl, mkl -> ijm",
@@ -273,8 +277,12 @@ def mps_mpo_contract(
     )
 
     for i in range(len(mpo) - 2):
-        mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
-            two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, renormalise=renormalise
+        mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
+            two_site_mps_mpo_tensor,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            return_residual_spectrum=True,
         )
 
         orth_centre_index += 1
@@ -307,10 +315,13 @@ def mps_mpo_contract(
             )
         )
 
-    mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
-        two_site_mps_mpo_tensor, chi_max=chi_max, cut=cut, renormalise=renormalise
+    mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
+        two_site_mps_mpo_tensor,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        return_residual_spectrum=True,
     )
-
     mps.tensors[orth_centre_index + 1] = contract(
         "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
     )
