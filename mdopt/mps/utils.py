@@ -290,6 +290,12 @@ def mps_from_dense(
         If the vector's length does not correspond to the physical dimension.
     """
 
+    if form not in ["Explicit", "Right-canonical", "Left-canonical", "Mixed-canonical"]:
+        raise ValueError(
+            "Wrong value of the form option."
+            "Available options: Explicit, Right-canonical, Left-canonical, Mixed-canonical"
+        )
+
     state_vector = np.copy(state_vector)
 
     if state_vector.flatten().shape[0] % phys_dim != 0:
