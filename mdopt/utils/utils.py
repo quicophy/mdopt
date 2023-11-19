@@ -65,7 +65,8 @@ def svd(
     max_num = min(chi_max, np.sum(singular_values > cut))
     ind = np.argsort(singular_values)[::-1][:max_num]
 
-    residual_spectrum = singular_values[singular_values <= cut].tolist()
+    ind_res = np.argsort(singular_values)[::-1][max_num:]
+    residual_spectrum = singular_values[ind_res]
 
     u_l, singular_values, v_r = u_l[:, ind], singular_values[ind], v_r[ind, :]
 
