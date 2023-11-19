@@ -58,9 +58,11 @@ def test_utils_split_two_site_tensor():
             size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
         ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
 
-        u_l, singular_values, v_r = split_two_site_tensor(tensor, strategy="svd")
-        q_l, r_r = split_two_site_tensor(tensor, strategy="qr")
-        r_l, q_r = split_two_site_tensor(tensor, strategy="rq")
+        u_l, singular_values, v_r, _ = split_two_site_tensor(
+            tensor, strategy="svd", return_residual_spectrum=True
+        )
+        q_l, r_r, _, _ = split_two_site_tensor(tensor, strategy="qr")
+        r_l, q_r, _, _ = split_two_site_tensor(tensor, strategy="rq")
 
         should_be_t_0 = contract(
             "ijk, kl, lmn -> ijmn",
