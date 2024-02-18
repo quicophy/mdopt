@@ -209,6 +209,8 @@ def test_mps_utils_create_custom_product_state():
 
     assert np.isclose(mps_1.tensors, mps_tensors).all()
     assert np.isclose(mps_2.tensors, mps_tensors).all()
+    assert mps_1.orth_centre is None
+    assert mps_2.orth_centre is None
     with pytest.raises(ValueError):
         create_custom_product_state("0011++", form="Mixed-canonical")
 

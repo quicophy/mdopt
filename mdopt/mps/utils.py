@@ -413,9 +413,13 @@ def create_simple_product_state(
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
-        return ExplicitMPS(tensors, singular_values).right_canonical()
+        mps = ExplicitMPS(tensors, singular_values).right_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Left-canonical":
-        return ExplicitMPS(tensors, singular_values).left_canonical()
+        mps = ExplicitMPS(tensors, singular_values).left_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
