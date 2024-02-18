@@ -83,7 +83,7 @@ def svd(
             np.asarray(u_l),
             cast(list, singular_values),
             np.asarray(v_r),
-            truncation_error,
+            float(truncation_error),
         )
 
     return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r), None
@@ -91,7 +91,7 @@ def svd(
 
 def qr(
     mat: np.ndarray,
-    cut: float = 1e-12,
+    cut: np.float32 = np.float32(1e-12),
     chi_max: int = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
@@ -141,7 +141,7 @@ def qr(
     )
 
     abs_diag_r = np.absolute(np.diag(r_r))
-    effective_rank = min(chi_max, np.sum(abs_diag_r > cut))
+    effective_rank = min(chi_max, int(np.sum(abs_diag_r > cut)))
     truncation_indices = list(range(len(abs_diag_r)))[:effective_rank]
 
     permutation_matrix = np.eye(mat.shape[1])[:, pivots]
@@ -153,7 +153,7 @@ def qr(
 
     if return_truncation_error:
         truncation_error = np.linalg.norm(mat - np.dot(q_l, r_r))
-        return q_l, r_r, truncation_error
+        return q_l, r_r, float(truncation_error)
 
     return q_l, r_r, None
 
