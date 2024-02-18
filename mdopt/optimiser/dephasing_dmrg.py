@@ -20,7 +20,6 @@ The main idea is to find the main component of this object without
 performing the kronecker product explicitly.
 """
 
-
 from typing import Union, cast
 import numpy as np
 import scipy.sparse
