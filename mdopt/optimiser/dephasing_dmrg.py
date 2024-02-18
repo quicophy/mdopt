@@ -305,7 +305,7 @@ class DephasingDMRG:
             chi_max=self.chi_max,
             cut=self.cut,
             renormalise=True,
-            return_residual_spectrum=True,
+            return_truncation_error=True,
         )
 
         if isinstance(self.mps, CanonicalMPS):
