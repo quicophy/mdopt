@@ -185,6 +185,12 @@ def test_mps_utils_create_simple_product_state():
     assert np.isclose(mps_4.tensors, mps_4_tensors).all()
     assert np.isclose(mps_5.tensors, mps_5_tensors).all()
     assert np.isclose(mps_6.tensors, mps_6_tensors).all()
+    assert mps_1.orth_centre is None
+    assert mps_2.orth_centre is None
+    assert mps_3.orth_centre is None
+    assert mps_4.orth_centre is None
+    assert mps_5.orth_centre is None
+    assert mps_6.orth_centre is None
     with pytest.raises(ValueError):
         create_simple_product_state(4, "0", form="Mixed-canonical")
 
