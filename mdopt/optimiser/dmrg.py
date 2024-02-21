@@ -262,8 +262,12 @@ class DMRG:
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_hamiltonian.x_shape)
-        left_iso_i, singular_values_j, right_iso_j = split_two_site_tensor(
-            x, chi_max=self.chi_max, cut=self.cut, renormalise=True
+        left_iso_i, singular_values_j, right_iso_j, _ = split_two_site_tensor(
+            x,
+            chi_max=self.chi_max,
+            cut=self.cut,
+            renormalise=True,
+            return_truncation_error=True,
         )
 
         if isinstance(self.mps, CanonicalMPS):

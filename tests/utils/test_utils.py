@@ -1,6 +1,7 @@
 """Tests for the ``mdopt.utils.utils`` module."""
 
 import pytest
+import scipy
 import numpy as np
 from opt_einsum import contract
 
@@ -11,6 +12,7 @@ from mdopt.utils.utils import (
     mpo_to_matrix,
     split_two_site_tensor,
     svd,
+    qr,
 )
 
 
@@ -43,55 +45,206 @@ def test_utils_svd():
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
 
-        _, s, _, _ = svd(m, cut=1e-16, chi_max=num_sing_values, renormalise=True)
-
+        _, s, _, _ = svd(m, chi_max=num_sing_values, renormalise=True)
         assert len(s) == num_sing_values
+
+        _, s, _, _ = svd(m, cut=1, renormalise=False)
+        for value in s:
+            assert np.abs(value) > 1
+
+
+def test_utils_qr():
+    """Test for the `qr` function."""
+
+    for _ in range(10):
+        dim = np.random.randint(low=10, high=100, size=2)
+        mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        q, r, _ = qr(mat)
+        mat_reconstructed = np.dot(q, r)
+        assert np.allclose(mat, mat_reconstructed, atol=1e-10)
+
+        dim = np.random.randint(low=10, high=100, size=2)
+        mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        chi_max = np.random.randint(5, 30)
+        q, r, _ = qr(mat, chi_max=chi_max)
+        assert q.shape[1] <= chi_max
+        assert r.shape[0] <= chi_max
+
+        dim = np.random.randint(low=10, high=100, size=2)
+        mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        q, r, truncation_error = qr(mat, return_truncation_error=True)
+        assert np.isclose(truncation_error, 0)
+
+        dim = np.random.randint(low=10, high=100, size=2)
+        mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        mat /= np.linalg.norm(mat)
+        cut = 1e-1
+        q, r, _ = qr(mat, cut=cut)
+        _, _, pivots = scipy.linalg.qr(
+            mat, pivoting=True, mode="economic", check_finite=False
+        )
+        permutation_matrix = np.eye(mat.shape[1])[:, pivots]
+        r = r @ permutation_matrix
+        for element in np.absolute(np.diag(r)):
+            assert element > cut
+
+        dim = np.random.randint(low=10, high=100, size=2)
+        mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
+        q, r, _ = qr(mat, renormalise=True)
+        assert np.isclose(np.linalg.norm(np.diag(r)), 1, atol=1e-10)
+
+        with pytest.raises(ValueError):
+            dim_invalid = np.random.randint(low=1, high=4, size=1)
+            mat_invalid = np.random.uniform(size=dim_invalid)
+            qr(mat_invalid)
 
 
 def test_utils_split_two_site_tensor():
     """Test for the ``split_two_site_tensor`` function."""
 
-    for _ in range(10):
+    for _ in range(100):
         phys_dim = 2
         bond_dim = np.random.randint(2, 18, size=2)
         tensor = np.random.uniform(
             size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
         ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
 
-        u_l, singular_values, v_r = split_two_site_tensor(tensor, strategy="svd")
-        q_l, r_r = split_two_site_tensor(tensor, strategy="qr")
-        r_l, q_r = split_two_site_tensor(tensor, strategy="rq")
-
-        should_be_t_0 = contract(
+        u_l, singular_values, v_r, truncation_error = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=1e4,
+            cut=1e-12,
+            strategy="svd",
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        should_be_t = contract(
             "ijk, kl, lmn -> ijmn",
             u_l,
             np.diag(singular_values),
             v_r,
             optimize=[(0, 1), (0, 1)],
         )
+        assert np.isclose(truncation_error, 0)
+        assert tensor.shape == should_be_t.shape
+        assert np.isclose(np.linalg.norm(tensor - should_be_t), 0)
 
-        should_be_t_1 = contract(
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        chi_max = 2
+        u_l, singular_values, v_r, truncation_error = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=chi_max,
+            cut=1e-12,
+            strategy="svd",
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        assert truncation_error > 0
+        assert len(singular_values) == chi_max
+
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        tensor /= np.linalg.norm(tensor)
+        cut = 0.5
+        u_l, singular_values, v_r, truncation_error = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=1e4,
+            cut=cut,
+            strategy="svd",
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        assert truncation_error >= 0
+        for singular_value in singular_values:
+            assert singular_value > cut
+
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        tensor /= np.linalg.norm(tensor)
+        cut = 0.5
+        u_l, singular_values, v_r, truncation_error = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=1e4,
+            cut=cut,
+            strategy="svd",
+            renormalise=True,
+            return_truncation_error=True,
+        )
+        assert np.isclose(np.linalg.norm(singular_values), 1)
+        assert truncation_error >= 0
+
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        q_l, r_r, truncation_error, _ = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=1e4,
+            cut=1e-12,
+            strategy="qr",
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        should_be_t = contract(
             "ijk, klm -> ijlm",
             q_l,
             r_r,
             optimize=[(0, 1)],
         )
+        assert np.isclose(truncation_error, 0)
+        assert tensor.shape == should_be_t.shape
+        assert np.isclose(np.linalg.norm(tensor - should_be_t), 0)
 
-        should_be_t_2 = contract(
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        chi_max = 3
+        q_l, r_r, truncation_error, _ = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=chi_max,
+            cut=1e-12,
+            strategy="qr",
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        should_be_t = contract(
             "ijk, klm -> ijlm",
-            r_l,
-            q_r,
+            q_l,
+            r_r,
             optimize=[(0, 1)],
         )
+        assert truncation_error > 0
+        assert q_l.shape[2] == chi_max
+        assert r_r.shape[0] == chi_max
 
-        assert tensor.shape == should_be_t_0.shape
-        assert np.isclose(np.linalg.norm(tensor - should_be_t_0), 0)
-
-        assert tensor.shape == should_be_t_1.shape
-        assert np.isclose(np.linalg.norm(tensor - should_be_t_1), 0)
-
-        assert tensor.shape == should_be_t_2.shape
-        assert np.isclose(np.linalg.norm(tensor - should_be_t_2), 0)
+        bond_dim = np.random.randint(2, 18, size=2)
+        tensor = np.random.uniform(
+            size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1])
+        ) + 1j * np.random.uniform(size=(bond_dim[0], phys_dim, phys_dim, bond_dim[1]))
+        q_l, r_r, truncation_error, _ = split_two_site_tensor(
+            tensor=tensor,
+            chi_max=1e4,
+            cut=1e-12,
+            strategy="qr",
+            renormalise=True,
+            return_truncation_error=True,
+        )
+        should_be_t = contract(
+            "ijk, klm -> ijlm",
+            q_l,
+            r_r,
+            optimize=[(0, 1)],
+        )
+        assert truncation_error > 0
+        r_r = r_r.reshape((r_r.shape[0], r_r.shape[1] * r_r.shape[2]))
+        assert np.isclose(np.linalg.norm(np.diag(r_r)), 1)
 
         with pytest.raises(ValueError):
             tensor = np.random.uniform(

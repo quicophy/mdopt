@@ -83,7 +83,8 @@ def test_optimiser_utils_constraint_string():
         for tensor_string, tensor_test in zip(string.mpo(), mpo):
             assert (tensor_string == tensor_test).all()
         for i in range(4):
-            assert string[i] == (constraints_sites[i], tensors[i])
+            assert np.isclose(string[i][0], constraints_sites[i]).all()
+            assert np.isclose(string[i][1], tensors[i]).all()
         assert string.span() == xor_right_site - xor_left_site + 1
 
         with pytest.raises(ValueError):

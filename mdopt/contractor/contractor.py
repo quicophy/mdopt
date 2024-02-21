@@ -152,7 +152,7 @@ def apply_two_site_unitary(
         chi_max=chi_max,
         cut=cut,
         renormalise=False,
-        return_residual_spectrum=True,
+        return_truncation_error=True,
     )
     b_1_updated = contract(
         "ijkl, mkl -> ijm",
@@ -241,9 +241,7 @@ def mps_mpo_contract(
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = cast(
-            CanonicalMPS, mps.move_orth_centre(start_site, renormalise=renormalise)
-        )
+        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site, renormalise=False))
 
     for i, tensor in enumerate(mpo):
         if len(tensor.shape) != 4:
@@ -282,7 +280,7 @@ def mps_mpo_contract(
             chi_max=chi_max,
             cut=cut,
             renormalise=renormalise,
-            return_residual_spectrum=True,
+            return_truncation_error=True,
         )
 
         orth_centre_index += 1
@@ -320,7 +318,7 @@ def mps_mpo_contract(
         chi_max=chi_max,
         cut=cut,
         renormalise=renormalise,
-        return_residual_spectrum=True,
+        return_truncation_error=True,
     )
     mps.tensors[orth_centre_index + 1] = contract(
         "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
