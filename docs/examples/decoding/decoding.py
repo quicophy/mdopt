@@ -20,7 +20,7 @@ from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
 from mdopt.optimiser.utils import ConstraintString
 
 
-def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.ndarray:
+def bias_channel(p_bias: float = float(0.5), which: str = "0") -> np.ndarray:
     """
     Here, we define bias channel -- an operator which will bias us towards the initial message
     while decoding by ranking the bitstrings according to Hamming distance from the latter.
@@ -32,7 +32,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
 
     Parameters
     ----------
-    p_bias : np.float32
+    p_bias : float
         Probability of the channel.
     which : str
         "0" or "1", depending on which one-qubit basis state we are acting on.
@@ -79,7 +79,7 @@ def bias_channel(p_bias: np.float32 = np.float32(0.5), which: str = "0") -> np.n
 def apply_bias_channel(
     basis_mps: Union[ExplicitMPS, CanonicalMPS],
     basis_string: str,
-    prob_channel: np.float32 = np.float32(0.5),
+    prob_channel: float = float(0.5),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     The function which applies a bias channel to a computational-basis-state MPS.
@@ -90,7 +90,7 @@ def apply_bias_channel(
         The computational-basis-state MPS, e.g., ``|010010>``.
     basis_string : str
         The string of "0", "1" and "+" which corresponds to ``basis_mps``.
-    prob_channel : np.float32
+    prob_channel : float
         The bias channel probability.
 
 
@@ -433,7 +433,7 @@ def css_code_logicals_sites(code: qec.CssCode) -> Tuple[List[int]]:
 
 def linear_code_prepare_message(
     code: "qec.LinearCode",
-    prob_error: np.float32 = np.float32(0.5),
+    prob_error: float = float(0.5),
     error_model: "qec.noise_model" = qec.BinarySymmetricChannel,
     seed: Optional[int] = None,
 ) -> Tuple[str, str]:
@@ -445,7 +445,7 @@ def linear_code_prepare_message(
     ----------
     code : qec.LinearCode
         Linear code object.
-    prob_error : np.float32
+    prob_error : float
         Error probability of the error model.
     error_model : qec.noise_model
         The error model used to flip bits of a random codeword.
@@ -572,9 +572,9 @@ def decode(
     code: "qec.LinearCode",
     num_runs: int = int(1),
     chi_max_dmrg: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     silent: bool = False,
-) -> Tuple[DephasingDMRG, np.float32]:
+) -> Tuple[DephasingDMRG, float]:
     """
     This function performs actual decoding of a message given a code and
     the DMRG truncation parameters.
@@ -592,7 +592,7 @@ def decode(
         Number of DMRG sweeps.
     chi_max_dmrg : int
         Maximum bond dimension to keep in the DMRG algorithm.
-    cut : np.float32
+    cut : float
         The lower boundary of the spectrum in the DMRG algorithm.
         All the singular values smaller than that will be discarded.
 
@@ -600,7 +600,7 @@ def decode(
     -------
     engine : DephasingDMRG
         The container class for the Deohasing DMRG algorithm, see :class:`mdopt.optimiser.DMRG`.
-    overlap : np.float32
+    overlap : float
         The overlap between the decoded message and a given codeword,
         computed as the following inner product |<decoded_message|codeword>|.
     """
