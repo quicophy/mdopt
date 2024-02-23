@@ -9,7 +9,7 @@ from opt_einsum import contract
 
 def svd(
     mat: np.ndarray,
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     chi_max: int = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
@@ -21,7 +21,7 @@ def svd(
     ----------
     mat : np.ndarray
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
-    cut : np.float32
+    cut : float
         Singular values smaller than this will be discarded.
     chi_max : int
         Maximum number of singular values to keep.
@@ -91,7 +91,7 @@ def svd(
 
 def qr(
     mat: np.ndarray,
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     chi_max: int = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
@@ -240,7 +240,7 @@ def kron_tensors(
 def split_two_site_tensor(
     tensor: np.ndarray,
     chi_max: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     renormalise: bool = False,
     strategy: str = "svd",
     return_truncation_error: bool = False,
@@ -260,7 +260,7 @@ def split_two_site_tensor(
         Two-site tensor ``(i, j, k, l)``.
     chi_max : int
         Maximum number of singular/diagonal values to keep.
-    cut : np.float32
+    cut : float
         Discard any singular/diagonal values smaller than this.
     renormalise : bool
         Whether to renormalise the singular value spectrum or the R diagonal

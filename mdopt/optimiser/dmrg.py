@@ -152,7 +152,7 @@ class DMRG:
         and ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
     chi_max : int
         The highest bond dimension of an MPS allowed.
-    cut : np.float32
+    cut : float
         The lower boundary of the spectrum, i.e., all the
         singular values smaller than that will be discarded.
     mode : str
@@ -172,7 +172,7 @@ class DMRG:
         mps: Union[ExplicitMPS, CanonicalMPS],
         mpo: List[np.ndarray],
         chi_max: int = int(1e4),
-        cut: np.float32 = np.float32(1e-12),
+        cut: float = float(1e-12),
         mode: str = "SA",
         silent: bool = False,
         copy: bool = True,
@@ -196,8 +196,8 @@ class DMRG:
             self.mps = mps.copy()
         if isinstance(self.mps, CanonicalMPS):
             self.mps = self.mps.right_canonical()
-        self.left_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
-        self.right_environments = [np.zeros(shape=(1,), dtype=np.float32)] * len(mps)
+        self.left_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
+        self.right_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
         self.mpo = mpo
         self.chi_max = chi_max
         self.cut = cut
@@ -206,10 +206,10 @@ class DMRG:
 
         start_bond_dim = self.mpo[0].shape[0]
         chi = mps.tensors[0].shape[0]
-        left_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float32)
-        right_environment = np.zeros([chi, start_bond_dim, chi], dtype=np.float32)
-        left_environment[:, 0, :] = np.eye(chi, dtype=np.float32)
-        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=np.float32)
+        left_environment = np.zeros([chi, start_bond_dim, chi], dtype=float)
+        right_environment = np.zeros([chi, start_bond_dim, chi], dtype=float)
+        left_environment[:, 0, :] = np.eye(chi, dtype=float)
+        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=float)
         self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
         for i in reversed(range(1, len(mps))):
