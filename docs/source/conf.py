@@ -26,7 +26,7 @@ copyright = str(datetime.date.today().year)+", Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
-release = "0.3.0"
+release = "0.5.0"
 
 
 # -- General configuration ---------------------------------------------------
