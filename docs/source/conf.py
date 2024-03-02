@@ -12,6 +12,7 @@
 #
 import os
 import sys
+import datetime
 import sphinx_rtd_theme
 from sphinx.ext.autodoc import ClassDocumenter, _
 
@@ -21,7 +22,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information -----------------------------------------------------
 
 project = "mdopt"
-copyright = "2023, Aleksandr Berezutskii"
+copyright = str(datetime.date.today().year)+", Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
