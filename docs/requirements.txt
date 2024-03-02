@@ -4,4 +4,5 @@ sphinxcontrib-napoleon==0.7
 myst-parser==0.18.1
 ipykernel
 nbsphinx
+ipython=8.22.1
 mdopt
