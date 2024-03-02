@@ -11,9 +11,36 @@ if [ ! -d "$PACKAGE_DIR" ] || [ ! -d "$DOCS_DIR" ]; then
     exit 1
 fi
 
+# Convert README.md to README.rst
+echo "Converting README.md to README.rst..."
+pandoc "./README.md" -o "$SPHINX_SOURCE_DIR/README.rst"
+
+# Copy Jupyter Notebooks to the Sphinx source directory
+echo "Copying Jupyter Notebooks to Sphinx source directory..."
+cp -r examples/*/*.ipynb "$SPHINX_SOURCE_DIR/"
+
+# Create examples.rst with a list of all notebooks
+echo "Creating examples.rst..."
+echo "Examples" > "$SPHINX_SOURCE_DIR/examples.rst"
+echo "========" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo "" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo ".. toctree::" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo "   :maxdepth: 2" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo "   :caption: Notebook Examples:" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo "" >> "$SPHINX_SOURCE_DIR/examples.rst"
+
+# Dynamically list notebooks in examples.rst
+for notebook in "$SPHINX_SOURCE_DIR"/*.ipynb; do
+    notebook_name=$(basename "$notebook")
+    echo "   $notebook_name" >> "$SPHINX_SOURCE_DIR/examples.rst"
+done
+
 # Generate .rst files with sphinx-apidoc
 echo "Generating .rst files with sphinx-apidoc..."
 sphinx-apidoc -o "$SPHINX_SOURCE_DIR" "$PACKAGE_DIR" --force
+
+echo "Cleaning up previous builds..."
+rm -rf "$SPHINX_BUILD_DIR"
 
 # Build the Sphinx documentation
 echo "Building Sphinx documentation..."
