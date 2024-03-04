@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information -----------------------------------------------------
 
 project = "mdopt"
-copyright = str(datetime.date.today().year)+", Aleksandr Berezutskii"
+copyright = str(datetime.date.today().year) + ", Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
@@ -45,7 +45,7 @@ extensions = [
 ]
 
 # Do not execute notebooks during build time
-nbsphinx_execute = 'never'
+nbsphinx_execute = "never"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
