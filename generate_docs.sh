@@ -15,19 +15,32 @@ fi
 echo "Converting README.md to README.rst..."
 pandoc "./README.md" -o "$SPHINX_SOURCE_DIR/README.rst"
 
+# Delete existing Jupyter Notebooks in the Sphinx source directory
+echo "Deleting existing Jupyter Notebooks in Sphinx source directory..."
+find "$SPHINX_SOURCE_DIR" -name "*.ipynb" -exec rm {} +
+
 # Copy Jupyter Notebooks to the Sphinx source directory
 echo "Copying Jupyter Notebooks to Sphinx source directory..."
 cp -r examples/*/*.ipynb "$SPHINX_SOURCE_DIR/"
 
-# Create examples.rst with a list of all notebooks
+# Path to examples.rst
+EXAMPLES_RST="$SPHINX_SOURCE_DIR/examples.rst"
+
+# Check if examples.rst exists. If yes, delete it.
+if [ -f "$EXAMPLES_RST" ]; then
+    echo "examples.rst already exists. Deleting and recreating..."
+    rm "$EXAMPLES_RST"
+fi
+
+# Proceed to create (or recreate) examples.rst and fill it
 echo "Creating examples.rst..."
-echo "Examples" > "$SPHINX_SOURCE_DIR/examples.rst"
-echo "========" >> "$SPHINX_SOURCE_DIR/examples.rst"
-echo "" >> "$SPHINX_SOURCE_DIR/examples.rst"
-echo ".. toctree::" >> "$SPHINX_SOURCE_DIR/examples.rst"
-echo "   :maxdepth: 2" >> "$SPHINX_SOURCE_DIR/examples.rst"
-echo "   :caption: Notebook Examples:" >> "$SPHINX_SOURCE_DIR/examples.rst"
-echo "" >> "$SPHINX_SOURCE_DIR/examples.rst"
+echo "Examples" > "$EXAMPLES_RST"
+echo "========" >> "$EXAMPLES_RST"
+echo "" >> "$EXAMPLES_RST"
+echo ".. toctree::" >> "$EXAMPLES_RST"
+echo "   :maxdepth: 2" >> "$EXAMPLES_RST"
+echo "   :caption: Notebook Examples:" >> "$EXAMPLES_RST"
+echo "" >> "$EXAMPLES_RST"
 
 # Dynamically list notebooks in examples.rst
 for notebook in "$SPHINX_SOURCE_DIR"/*.ipynb; do
