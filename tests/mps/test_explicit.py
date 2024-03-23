@@ -360,9 +360,7 @@ def test_explicit_density_mpo():
 
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
-        density_matrix_mpo = density_matrix_mpo.reshape(
-            (2**num_sites, 2**num_sites)
-        )
+        density_matrix_mpo = density_matrix_mpo.reshape((2**num_sites, 2**num_sites))
 
         # Original density matrix.
         density_matrix = np.tensordot(psi, np.conjugate(psi), 0)
@@ -384,7 +382,7 @@ def test_explicit_entanglement_entropy():
 
     num_sites = 4
 
-    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float32)
+    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=float)
     psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
     mps_dimer = mps_from_dense(psi_many_body_dimer, form="Explicit", tolerance=1e-6)
@@ -425,9 +423,7 @@ def test_explicit_right_canonical():
                 optimize=[(0, 1)],
             )
 
-            identity_right = np.identity(
-                to_be_identity_right.shape[0], dtype=np.float32
-            )
+            identity_right = np.identity(to_be_identity_right.shape[0], dtype=float)
 
             assert np.isclose(np.linalg.norm(to_be_identity_right - identity_right), 0)
 
@@ -459,7 +455,7 @@ def test_explicit_left_canonical():
                 optimize=[(0, 1)],
             )
 
-            identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float32)
+            identity_left = np.identity(to_be_identity_left.shape[0], dtype=float)
 
             assert np.isclose(np.linalg.norm(to_be_identity_left - identity_left), 0)
 
@@ -498,7 +494,7 @@ def test_explicit_norm():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
-        assert isinstance(mps.norm(), np.float32)
+        assert isinstance(mps.norm(), float)
         assert np.isclose(abs(mps.norm() - abs(inner_product(mps, mps)) ** 2), 0)
 
 

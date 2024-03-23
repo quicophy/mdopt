@@ -68,7 +68,7 @@ def svd(
 
     max_num = min(chi_max, np.sum(singular_values > cut))
     residual_spectrum = singular_values[max_num:]
-    truncation_error = np.linalg.norm(residual_spectrum)
+    truncation_error = np.linalg.norm(residual_spectrum) ** 2
     u_l, singular_values, v_r = (
         u_l[:, :max_num],
         singular_values[:max_num],
