@@ -14,7 +14,9 @@ For "ghost" bonds at indices ``0``, ``L-1`` (i.e., bonds of dimension 1),
 where ``L`` is the length of the MPS,
 the corresponding singular value tensors at the boundaries
 would be the identities of the same dimension.
-We index sites with ``i`` from ``0`` to ``L-1``, with bond ``i`` being left of site ``i``.
+We index MPS tensors with ``i`` from ``0`` to ``L-1``,
+while the singular values matrices are indexed from the left of each tensor, i.e.,
+the singular values matrux with index ``i`` is to the left of site ``i``.
 Essentially, it corresponds to storing each ``Γ[i]`` and ``Λ[i]`` as shown in
 fig.4b in reference `[1]`_.
 """
@@ -24,7 +26,7 @@ from copy import deepcopy
 from typing import Literal, Iterable, List, Union, cast
 import numpy as np
 from opt_einsum import contract
-from scipy.special import xlogy
+from scipy.special import xlogy  # pylint: disable=E0611
 
 import mdopt
 from mdopt.mps.canonical import CanonicalMPS
@@ -43,7 +45,7 @@ class ExplicitMPS:
     singular_values : List[List]
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
         Each singular values list at each bond is normalised to 1.
-    tolerance : np.float32
+    tolerance : float
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
     num_sites : int
         Number of sites.
@@ -66,7 +68,7 @@ class ExplicitMPS:
         self,
         tensors: List[np.ndarray],
         singular_values: List[List],
-        tolerance: np.float32 = np.float32(1e-12),
+        tolerance: float = float(1e-12),
         chi_max: int = int(1e4),
     ) -> None:
         self.tensors = tensors
@@ -98,7 +100,7 @@ class ExplicitMPS:
             if abs(norm - 1) > tolerance:
                 raise ValueError(
                     "The norm of each singular values tensor must be 1, "
-                    f"instead the norm is {norm} at bond {i + 1}."
+                    f"instead the norm is {norm} at bond {i}."
                 )
 
     @property
@@ -337,15 +339,15 @@ class ExplicitMPS:
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
 
-        entropy = np.zeros(shape=(self.num_bonds,), dtype=np.float32)
+        entropy = np.zeros(shape=(self.num_bonds,), dtype=float)
 
         for bond in range(self.num_bonds):
             singular_values = self.singular_values[bond].copy()
             singular_values = np.array(singular_values)  # type: ignore
-            singular_values[singular_values < self.tolerance] = 0
+            singular_values[singular_values < self.tolerance] = 0  # type: ignore
             singular_values2 = [singular_value**2 for singular_value in singular_values]
             entropy[bond] = -1 * np.sum(
-                np.fromiter((xlogy(s, s) for s in singular_values2), dtype=np.float32)
+                np.fromiter((xlogy(s, s) for s in singular_values2), dtype=float)
             )
 
         return entropy
@@ -359,7 +361,7 @@ class ExplicitMPS:
 
         return CanonicalMPS(
             list(self.one_site_right_iso_iter()),
-            orth_centre=None,
+            orth_centre=0,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
@@ -373,7 +375,7 @@ class ExplicitMPS:
 
         return CanonicalMPS(
             list(self.one_site_left_iso_iter()),
-            orth_centre=None,
+            orth_centre=self.num_sites - 1,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
@@ -421,19 +423,19 @@ class ExplicitMPS:
             chi_max=self.chi_max,
         )
 
-    def norm(self) -> np.float32:
+    def norm(self) -> float:
         """
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
 
-        return np.float32(abs(mdopt.mps.utils.inner_product(self, self)) ** 2)  # type: ignore
+        return float(abs(mdopt.mps.utils.inner_product(self, self)))  # type: ignore
 
     def one_site_expectation_value(
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float32, np.complex128]:
+    ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary one-site operator
         (not necessarily unitary) on the given site.
@@ -487,7 +489,7 @@ class ExplicitMPS:
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float32, np.complex128]:
+    ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
         (not necessarily unitary) on the given site and its next neighbour.
