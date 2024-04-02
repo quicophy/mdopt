@@ -46,7 +46,7 @@ Cite
    :target: https://results.pre-commit.ci/latest/github/quicophy/mdopt/main
 .. |lint| image:: https://github.com/quicophy/mdopt/actions/workflows/lint.yml/badge.svg
    :target: https://github.com/quicophy/mdopt/actions/workflows/lint.yml
-.. |mypy| image:: https://github.com/quicophy/mdopt/actions/workflows/mypy.yml/badge.svg
+.. |mypy| image:: https://github.com/quicophy/mdopt/actions/workflows/mypy.yml/badge.svg?branch=main
    :target: https://github.com/quicophy/mdopt/actions/workflows/mypy.yml
 .. |Unitary Fund| image:: https://img.shields.io/badge/Supported%20By-Unitary%20Fund-brightgreen.svg?logo=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoAAAANSUhEUgAAACgAAAASCAYAAAApH5ymAAAAt0lEQVRIic2WUQ6AIAiGsXmC7n9Gr1Dzwcb%2BUAjN8b%2B0BNwXApbKRRcF1nGmN5y0Jon7WWO%2B6pgJLhtynzUHKTMNrNo4ZPPldikW10f7qYBEMoTmJ73z2NFHcJkAvbLUpVYmvwIigKeRsjdQEtagZ2%2F0DzsHG2h9iICrRwh2qObbGPIfMDPCMjHNQawpbc71bBZhsrpNYs3qqCFmO%2FgBjHTEqKm7eIdMg9p7PCvma%2Fz%2FwQAMfRHRDTlhQGoOLve1AAAAAElFTkSuQmCC
    :target: http://unitary.fund
