@@ -514,7 +514,7 @@ def create_custom_product_state(
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
-    return ExplicitMPS(tensors, singular_values)
+    return ExplicitMPS(tensors, singular_values, tolerance=tolerance)
 
 
 def marginalise(
