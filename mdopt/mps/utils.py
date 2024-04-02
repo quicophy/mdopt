@@ -358,6 +358,7 @@ def create_simple_product_state(
     which: str = "0",
     phys_dim: int = 2,
     form: str = "Explicit",
+    tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a simple product-state MPS.
@@ -379,6 +380,11 @@ def create_simple_product_state(
             | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+    tolerance : float
+        For the Explicit form:
+        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        For the Canonical form:
+        numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
     Returns
     -------
@@ -423,11 +429,14 @@ def create_simple_product_state(
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
-    return ExplicitMPS(tensors, singular_values)
+    return ExplicitMPS(tensors, singular_values, tolerance=tolerance)
 
 
 def create_custom_product_state(
-    string: str, phys_dim: int = 2, form: str = "Explicit"
+    string: str,
+    phys_dim: int = 2,
+    form: str = "Explicit",
+    tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a custom product-state MPS defined by the ``string`` argument.
@@ -444,6 +453,11 @@ def create_custom_product_state(
             | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+    tolerance : float
+        For the Explicit form:
+        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        For the Canonical form:
+        numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
     Returns
     -------
