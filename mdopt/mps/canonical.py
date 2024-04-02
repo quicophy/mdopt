@@ -730,7 +730,7 @@ class CanonicalMPS:
             The new compressed Matrix Product State.
         truncation_error : Optional[float]
             The truncation error.
-            Returned only if `return_truncation_error` is True.
+            Returned only if `return_truncation_error` is set to True.
 
         Raises
         ------
@@ -899,7 +899,7 @@ class CanonicalMPS:
             The new compressed Matrix Product State.
         truncation_errors : Optional[List[float]]
             The truncation errors.
-            Returned only if `return_truncation_errors` is True.
+            Returned only if `return_truncation_errors` is set to True.
 
         Raises
         ------
@@ -911,13 +911,13 @@ class CanonicalMPS:
             raise ValueError(f"Unsupported compression strategy: {strategy}")
 
         truncation_errors = []
-        mps_new, position = self.move_orth_centre_to_border(renormalise=False)
+        mps_compressed, position = self.move_orth_centre_to_border(renormalise=False)
 
         if position == "last":
-            mps_new = mps_new.reverse()
+            mps_compressed = mps_compressed.reverse()
 
         for bond in range(self.num_bonds):
-            mps_new, truncation_error = mps_new.compress_bond(
+            mps_compressed, truncation_error = mps_compressed.compress_bond(
                 bond=bond,
                 chi_max=chi_max,
                 cut=cut,
@@ -928,13 +928,13 @@ class CanonicalMPS:
             truncation_errors.append(truncation_error)
 
         if position == "last":
-            mps_new = mps_new.reverse()
+            mps_compressed = mps_compressed.reverse()
             truncation_errors = truncation_errors[::-1]
 
         if return_truncation_errors:
-            return mps_new, truncation_errors
+            return mps_compressed, truncation_errors
 
-        return mps_new, [None]
+        return mps_compressed, [None]
 
     def marginal(
         self, sites_to_marginalise: List[int], canonicalise: bool = False
