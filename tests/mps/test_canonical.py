@@ -553,6 +553,10 @@ def test_canonical_compress_bond():
                 assert inner_product(mps_compressed, mps_compressed) <= 1
                 if strategy == "svd":
                     assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+            with pytest.raises(ValueError):
+                mps.compress_bond(bond=100)
+            with pytest.raises(ValueError):
+                mps.compress_bond(bond=0, strategy="strategy")
 
         # Testing the spectrum cut control
         for strategy in ["svd", "svd_advanced"]:
