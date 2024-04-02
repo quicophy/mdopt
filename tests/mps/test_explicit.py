@@ -684,6 +684,7 @@ def test_explicit_compress():
             assert bond_dim <= chi_max
         for truncation_error in truncation_errors:
             assert truncation_error >= 0
+        assert np.sum(truncation_errors) <= mps.num_singval_mat
 
 
 def test_explicit_marginal():
