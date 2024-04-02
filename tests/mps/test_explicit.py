@@ -565,6 +565,127 @@ def test_explicit_two_site_expectation_value():
         assert np.isclose(abs(exp_value - exp_value_to_compare) ** 2, 0)
 
 
+def test_explicit_compress_bond():
+    """
+    Test for the ``compress_bond`` method of the :class:`ExplicitMPS` class.
+    """
+
+    num_sites = 10
+    phys_dim = 2
+    bond_to_compress = 4
+    for _ in range(10):
+        # Testing the maximum bond dimension control
+        chi_max = 7
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Explicit", tolerance=np.inf
+        )
+        mps_compressed, truncation_error = mps.compress_bond(
+            bond=bond_to_compress,
+            chi_max=chi_max,
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        assert mps_compressed.bond_dimensions[bond_to_compress] <= chi_max
+        assert truncation_error >= 0
+        assert inner_product(mps_compressed, mps_compressed) <= 1
+        assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+        with pytest.raises(ValueError):
+            mps.compress_bond(bond=100)
+
+        # Testing the spectrum cut control
+        cut = 1e-1
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Explicit", tolerance=np.inf
+        )
+        mps_compressed, truncation_error = mps.compress_bond(
+            bond=bond_to_compress,
+            cut=cut,
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        singular_values = mps.singular_values[bond_to_compress + 1]
+        for singular_value in singular_values:
+            assert singular_value >= cut
+        assert truncation_error >= 0
+        assert mps_compressed.norm() <= 1
+        assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+        assert inner_product(mps_compressed, mps_compressed) <= 1
+        assert inner_product(mps, mps_compressed) <= 1
+
+        # Testing the renormalisation option
+        cut = 1e-1
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Explicit", tolerance=np.inf
+        )
+        mps_compressed, truncation_error = mps.compress_bond(
+            bond=bond_to_compress,
+            cut=cut,
+            renormalise=True,
+            return_truncation_error=True,
+        )
+        singular_values = mps.singular_values[bond_to_compress + 1]
+        assert np.isclose(np.linalg.norm(singular_values) - 1, 0)
+        for singular_value in singular_values:
+            assert singular_value >= cut
+        assert truncation_error >= 0
+        assert np.isclose(mps_compressed.norm() - 1, 0)
+        assert np.isclose(inner_product(mps_compressed, mps_compressed) - 1, 0)
+        assert np.isclose(inner_product(mps, mps_compressed) - 1, 0)
+
+        # Testing that for no cut the mps stays the same
+        cut = 1e-12
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Explicit", tolerance=np.inf
+        )
+        mps_compressed, truncation_error = mps.compress_bond(
+            bond=bond_to_compress,
+            cut=cut,
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        singular_value = mps_compressed.singular_values[bond_to_compress + 1]
+        for singular_value in singular_values:
+            assert singular_value >= cut
+        assert np.isclose(truncation_error, 0)
+        assert np.isclose(mps_compressed.norm() - 1, 0)
+        assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+        assert np.isclose(inner_product(mps_compressed, mps_compressed) - 1, 0)
+        assert np.isclose(inner_product(mps, mps_compressed) - 1, 0)
+
+
+def test_explicit_compress():
+    """
+    Test for the ``compress`` method of the :class:`ExplicitMPS` class.
+    """
+
+    for _ in range(10):
+        renormalise = False
+        num_sites = 10
+        phys_dim = 2
+        chi_max = 3
+        cut = 1e-12
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Explicit", tolerance=np.inf
+        )
+        mps_compressed, truncation_errors = mps.compress(
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            return_truncation_errors=True,
+        )
+        assert inner_product(mps, mps_compressed) <= 1
+        assert mps_compressed.norm() <= 1
+        for bond_dim in mps_compressed.bond_dimensions:
+            assert bond_dim <= chi_max
+        for truncation_error in truncation_errors:
+            assert truncation_error >= 0
+
+
 def test_explicit_marginal():
     """
     Test for the ``marginal`` method of the :class:`ExplicitMPS` class.

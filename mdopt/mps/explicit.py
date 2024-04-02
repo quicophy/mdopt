@@ -23,7 +23,7 @@ fig.4b in reference `[1]`_.
 
 from functools import reduce
 from copy import deepcopy
-from typing import Literal, Iterable, List, Union, cast
+from typing import Literal, Iterable, List, Union, Optional, Tuple, cast
 import numpy as np
 from opt_einsum import contract
 from scipy.special import xlogy  # pylint: disable=E0611
@@ -544,6 +544,125 @@ class ExplicitMPS:
             np.conjugate(two_site_orthogonality_centre),
             optimize=[(0, 1), (0, 1)],
         )
+
+    def compress_bond(
+        self,
+        bond: int,
+        chi_max: int = int(1e4),
+        cut: float = float(1e-12),
+        renormalise: bool = False,
+        return_truncation_error: bool = False,
+    ) -> Tuple["ExplicitMPS", Optional[float]]:
+        """
+        Compresses the bond at a given site, i.e., reduces its bond dimension.
+        The compression is performed via trimming the singular values at the bond.
+
+        Parameters
+        ----------
+        bond : int
+            The index of the bond to compress.
+        chi_max : int
+            The maximum bond dimension to keep.
+        cut : float
+            Singular values smaller than this will be discarded.
+        renormalise: bool
+            Whether to renormalise the singular value spectrum after the cut.
+        return_truncation_error : bool
+            Whether to return the truncation error.
+
+        Returns
+        -------
+        compressed_mps: ExplicitMPS
+            The new compressed Matrix Product State.
+        truncation_error : Optional[float]
+            The truncation error.
+            Returned only if `return_truncation_error` is True.
+
+        Raises
+        ------
+        ValueError
+            If the bond index is out of range.
+
+        Notes
+        -----
+        The bonds are being enumerated from the right side of the tensors.
+        For example, the bond ``0`` is a bond to the right of tensor ``0``.
+        Note, the singular value matrices obey a different numbering.
+        """
+
+        if bond not in range(self.num_bonds):
+            raise ValueError(
+                f"Bond given {bond}, with the number of bonds in the MPS {self.num_bonds}."
+            )
+
+        tensor_left = self.tensors[bond]
+        singular_values = self.singular_values[bond + 1]
+        tensor_right = self.tensors[bond + 1]
+
+        max_num = min(chi_max, np.sum(singular_values > cut))  # type: ignore
+        singular_values_new = singular_values[:max_num]
+        residual_spectrum = singular_values[max_num:]
+        truncation_error = np.linalg.norm(residual_spectrum) ** 2
+
+        if renormalise:
+            singular_values_new /= np.linalg.norm(singular_values_new)
+
+        self.tensors[bond] = tensor_left[..., :max_num]
+        self.singular_values[bond + 1] = singular_values_new
+        self.tensors[bond + 1] = tensor_right[:max_num, ...]
+
+        if return_truncation_error:
+            return self, truncation_error
+
+        return self, None
+
+    def compress(
+        self,
+        chi_max: int = int(1e4),
+        cut: float = float(1e-12),
+        renormalise: bool = False,
+        return_truncation_errors: bool = False,
+    ) -> Tuple["ExplicitMPS", List[Optional[float]]]:
+        """
+        Compresses the MPS, i.e., runs the ``compress_bond`` method for each bond.
+
+        Parameters
+        ----------
+        chi_max : int
+            The maximum bond dimension to keep.
+        cut : float
+            Singular values smaller than this will be discarded.
+        renormalise: bool
+            Whether to renormalise the singular value spectrum after the cut.
+        return_truncation_errors : bool
+            Whether to return the list of truncation errors (for each bond).
+
+        Returns
+        -------
+        compressed_mps: CanonicalMPS
+            The new compressed Matrix Product State.
+        truncation_errors : Optional[List[float]]
+            The truncation errors.
+            Returned only if `return_truncation_errors` is set to True.
+        """
+
+        truncation_errors = []
+        mps_compressed = self.copy()
+
+        for bond in range(self.num_bonds):
+            mps_compressed, truncation_error = mps_compressed.compress_bond(
+                bond=bond,
+                chi_max=chi_max,
+                cut=cut,
+                renormalise=renormalise,
+                return_truncation_error=True,
+            )
+            truncation_errors.append(truncation_error)
+
+        if return_truncation_errors:
+            return mps_compressed, truncation_errors
+
+        return mps_compressed, [None]
 
     def marginal(
         self,
