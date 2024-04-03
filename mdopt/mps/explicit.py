@@ -605,14 +605,14 @@ class ExplicitMPS:
         truncation_error = np.linalg.norm(residual_spectrum) ** 2
 
         if renormalise:
-            singular_values_new /= np.linalg.norm(singular_values_new)
+            singular_values_new /= np.linalg.norm(singular_values_new)  # type: ignore
 
         self.tensors[bond] = tensor_left[..., :max_num]
         self.singular_values[bond + 1] = singular_values_new
         self.tensors[bond + 1] = tensor_right[:max_num, ...]
 
         if return_truncation_error:
-            return self, truncation_error
+            return self, float(truncation_error)
 
         return self, None
 
