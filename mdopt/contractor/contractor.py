@@ -67,7 +67,7 @@ def apply_two_site_unitary(
     b_2: np.ndarray,
     unitary: np.ndarray,
     chi_max: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Applies a two-site unitary operator to a right-canonical MPS as follows::
@@ -96,7 +96,7 @@ def apply_two_site_unitary(
         The second MPS right-isometric tensor to apply the unitary to.
     unitary : np.ndarray
         The unitary tensor we apply.
-    cut : np.float32
+    cut : float
         Singular values smaller than this will be discarded.
     chi_max : int
         Maximum number of singular values to keep.
@@ -152,7 +152,7 @@ def apply_two_site_unitary(
         chi_max=chi_max,
         cut=cut,
         renormalise=False,
-        return_residual_spectrum=True,
+        return_truncation_error=True,
     )
     b_1_updated = contract(
         "ijkl, mkl -> ijm",
@@ -170,7 +170,7 @@ def mps_mpo_contract(
     start_site: int = int(0),
     renormalise: bool = False,
     chi_max: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     inplace: bool = False,
     result_to_explicit: bool = False,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
@@ -213,7 +213,7 @@ def mps_mpo_contract(
         involving two neigbouring MPS sites.
     chi_max : int
         Maximum bond dimension to keep.
-    cut : np.float32
+    cut : float
         Cutoff for the singular values.
     inplace : bool
         Whether to modify the current MPS or create a new one.
@@ -241,9 +241,7 @@ def mps_mpo_contract(
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = cast(
-            CanonicalMPS, mps.move_orth_centre(start_site, renormalise=renormalise)
-        )
+        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site, renormalise=False))
 
     for i, tensor in enumerate(mpo):
         if len(tensor.shape) != 4:
@@ -282,7 +280,7 @@ def mps_mpo_contract(
             chi_max=chi_max,
             cut=cut,
             renormalise=renormalise,
-            return_residual_spectrum=True,
+            return_truncation_error=True,
         )
 
         orth_centre_index += 1
@@ -320,7 +318,7 @@ def mps_mpo_contract(
         chi_max=chi_max,
         cut=cut,
         renormalise=renormalise,
-        return_residual_spectrum=True,
+        return_truncation_error=True,
     )
     mps.tensors[orth_centre_index + 1] = contract(
         "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
