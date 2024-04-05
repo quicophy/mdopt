@@ -12,6 +12,7 @@
 #
 import os
 import sys
+import datetime
 import sphinx_rtd_theme
 from sphinx.ext.autodoc import ClassDocumenter, _
 
@@ -21,11 +22,11 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information -----------------------------------------------------
 
 project = "mdopt"
-copyright = "2023, Aleksandr Berezutskii"
+copyright = str(datetime.date.today().year) + ", Aleksandr Berezutskii"
 author = "Aleksandr Berezutskii"
 
 # The full version, including alpha/beta/rc tags
-release = "0.3.0"
+release = "0.5.0"
 
 
 # -- General configuration ---------------------------------------------------
@@ -40,7 +41,11 @@ extensions = [
     "myst_parser",
     "sphinx_rtd_theme",
     "nbsphinx",
+    "IPython.sphinxext.ipython_console_highlighting",
 ]
+
+# Do not execute notebooks during build time
+nbsphinx_execute = "never"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

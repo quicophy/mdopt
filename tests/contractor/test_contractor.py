@@ -181,10 +181,18 @@ def test_contractor_mps_mpo_contract():
         identities_r = [identity for _ in range(num_sites - mpo_length - start_site)]
         full_mpo = identities_l + mpo + identities_r
 
-        mps_fin = mps_mpo_contract(mps_init, mpo, start_site, renormalise=False)
-        mps_fin_1 = mps_mpo_contract(mps_init, mpo, start_site, renormalise=True)
+        mps_fin = mps_mpo_contract(
+            mps=mps_init, mpo=mpo, start_site=start_site, renormalise=False
+        )
+        mps_fin_1 = mps_mpo_contract(
+            mps=mps_init, mpo=mpo, start_site=start_site, renormalise=True
+        )
         mps_fin_2 = mps_mpo_contract(
-            mps_init, mpo, start_site, renormalise=True, result_to_explicit=True
+            mps=mps_init,
+            mpo=mpo,
+            start_site=start_site,
+            renormalise=True,
+            result_to_explicit=True,
         )
         orthogonality_centre = mps_fin_1.tensors[int(start_site + mpo_length - 1)]
 
@@ -226,4 +234,5 @@ def test_contractor_mps_mpo_contract():
         assert is_canonical(mps_fin)
         assert np.isclose(abs(np.linalg.norm(mps_fin.dense() - psi_fin)), 0, atol=1e-7)
         assert np.isclose(np.linalg.norm(orthogonality_centre), 1)
+        assert np.isclose(mps_fin_2.norm(), 1)
         assert isinstance(mps_fin_2, ExplicitMPS)

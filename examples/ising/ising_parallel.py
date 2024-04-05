@@ -15,7 +15,7 @@ from mdopt.optimiser.dmrg import DMRG as dmrg_optimiser
 NUM_SITES = 15
 
 
-def exact_simulation(magnetic_field: np.float32 = 0):
+def exact_simulation(magnetic_field: float = 0):
     """
     Exact simulation function.
     """
@@ -29,7 +29,7 @@ def exact_simulation(magnetic_field: np.float32 = 0):
     )
 
 
-def dmrg_simulation(magnetic_field: np.float32 = 0):
+def dmrg_simulation(magnetic_field: float = 0):
     """
     DMRG simulation function.
     """

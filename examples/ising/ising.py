@@ -15,7 +15,7 @@ class IsingExact:
     Class for exact representation of a transverse field Ising model in 1D.
     """
 
-    def __init__(self, num_sites: int = 2, h_magnetic: np.float32 = 0) -> None:
+    def __init__(self, num_sites: int = 2, h_magnetic: float = 0) -> None:
         """
         Initialises an instance to exactly simulate the Ising model in 1D.
 
@@ -23,7 +23,7 @@ class IsingExact:
         ----------
         num_sites : int
             The number of spins in the chain.
-        h_magnetic : np.float32
+        h_magnetic : float
             Value of the transverse magnetic field scaled by the ZZ-interaction.
         """
         self.num_sites = num_sites
@@ -60,13 +60,13 @@ class IsingExact:
 
         return self.hamiltonian_sparse().todense()
 
-    def energy(self, state: np.ndarray) -> np.float32:
+    def energy(self, state: np.ndarray) -> float:
         """
         Computes the energy corresponding to a quantum state ``state``.
         """
         return np.conjugate(state.T) @ self.hamiltonian_sparse @ state
 
-    def z_magnetisation(self, i: int, state: np.ndarray) -> np.float32:
+    def z_magnetisation(self, i: int, state: np.ndarray) -> float:
         """
         Computes the z-magnetisation value
         corresponding to a quantum state ``state``
@@ -92,7 +92,7 @@ class IsingExact:
             @ state
         )
 
-    def x_magnetisation(self, i: int, state: np.ndarray) -> np.float32:
+    def x_magnetisation(self, i: int, state: np.ndarray) -> float:
         """
         Computes the x-magnetisation value
         corresponding to a quantum state ``state``
@@ -118,7 +118,7 @@ class IsingExact:
             @ state
         )
 
-    def average_chain_z_magnetisation(self, state: np.ndarray) -> np.float32:
+    def average_chain_z_magnetisation(self, state: np.ndarray) -> float:
         """
         Computes the average z-magnetisation
         corresponding to a quantum state ``state``
@@ -129,7 +129,7 @@ class IsingExact:
             / self.num_sites
         )
 
-    def average_chain_x_magnetisation(self, state: np.ndarray) -> np.float32:
+    def average_chain_x_magnetisation(self, state: np.ndarray) -> float:
         """
         Computes the average x-magnetisation
         corresponding to a quantum state ``state``
@@ -147,9 +147,7 @@ class IsingMPO:
     a transverse field Ising model in 1D and computing relevant physical observables.
     """
 
-    def __init__(
-        self, num_sites: int = int(2), h_magnetic: np.float32 = np.float32(0)
-    ) -> None:
+    def __init__(self, num_sites: int = int(2), h_magnetic: float = float(0)) -> None:
         """
         Initialises an instance to simulate the Ising model in 1D using MPS.
 
@@ -157,7 +155,7 @@ class IsingMPO:
         ----------
         num_sites : int
             Number of spins in the chain.
-        h_magnetic : np.float32
+        h_magnetic : float
             Value of the transverse magnetic field scaled by the ZZ-interaction.
         """
         self.num_sites = num_sites
@@ -199,9 +197,7 @@ class IsingMPO:
 
         return mpo_list
 
-    def z_magnetisation(
-        self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]
-    ) -> np.float32:
+    def z_magnetisation(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
         """
         Computes the z-magnetisation value
         corresponding to a quantum state
@@ -209,9 +205,7 @@ class IsingMPO:
         """
         return mps.one_site_expectation_value(i, self.pauli_z)
 
-    def x_magnetisation(
-        self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]
-    ) -> np.float32:
+    def x_magnetisation(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
         """
         Computes the x-magnetisation value
         corresponding to a quantum state
@@ -221,7 +215,7 @@ class IsingMPO:
 
     def average_chain_z_magnetisation(
         self, mps: Union[ExplicitMPS, CanonicalMPS]
-    ) -> np.float32:
+    ) -> float:
         """
         Computes the average z-magnetisation
         corresponding to a quantum state
@@ -234,7 +228,7 @@ class IsingMPO:
 
     def average_chain_x_magnetisation(
         self, mps: Union[ExplicitMPS, CanonicalMPS]
-    ) -> np.float32:
+    ) -> float:
         """
         Computes the average x-magnetisation
         corresponding to a quantum state
