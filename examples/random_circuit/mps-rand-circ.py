@@ -7,15 +7,18 @@ import numpy as np
 from scipy.stats import unitary_group
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Append paths using environment variables or hardcoded fallbacks
 project_root = os.getenv(
-    'MDOPT_PATH', '/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt'
-    )
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
+)
 examples_path = os.getenv(
-    'MDOPT_EXAMPLES_PATH', '/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples'
-    )
+    "MDOPT_EXAMPLES_PATH",
+    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+)
 
 sys.path.append(project_root)
 sys.path.append(examples_path)
@@ -25,7 +28,9 @@ try:
     from mdopt.contractor.contractor import mps_mpo_contract
     from examples.random_circuit.random_circuit import create_mpo_from_layer
 except ImportError as e:
-    logging.error("Failed to import required modules. Ensure paths are correct.", exc_info=True)
+    logging.error(
+        "Failed to import required modules. Ensure paths are correct.", exc_info=True
+    )
     sys.exit(1)
 
 PHYS_DIM = 2
@@ -47,7 +52,9 @@ for NUM_QUBITS in num_qubits:
             )
 
             for k in range(NUM_LAYERS_CIRC):
-                layer = unitary_group.rvs(PHYS_DIM**2, size=NUM_QUBITS // PHYS_DIM - k % 2)
+                layer = unitary_group.rvs(
+                    PHYS_DIM**2, size=NUM_QUBITS // PHYS_DIM - k % 2
+                )
                 mpo = create_mpo_from_layer(layer)
                 state = mps_mpo_contract(
                     mps=state,
