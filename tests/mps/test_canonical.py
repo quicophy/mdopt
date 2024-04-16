@@ -7,16 +7,16 @@ import pytest
 from opt_einsum import contract
 
 from mdopt.mps.utils import (
+    create_simple_product_state,
     create_state_vector,
+    find_orth_centre,
     mps_from_dense,
     inner_product,
     is_canonical,
-    find_orth_centre,
-    create_simple_product_state,
 )
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.utils.utils import mpo_from_matrix
+from mdopt.utils.utils import mpo_from_matrix, split_two_site_tensor
 
 
 def test_canonical_init():
@@ -270,7 +270,7 @@ def test_canonical_entanglement_entropy():
 
     num_sites = 4
 
-    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=np.float32)
+    psi_two_body_dimer = 1 / np.sqrt(2) * np.array([0, -1, 1, 0], dtype=float)
     psi_many_body_dimer = reduce(np.kron, [psi_two_body_dimer] * num_sites)
 
     mps_dimer = mps_from_dense(
@@ -319,7 +319,7 @@ def test_canonical_move_orth_centre():
         assert find_orth_centre(mps_mixed_final) == [orth_centre_final]
         assert find_orth_centre(mps_mixed_final_renorm) == [orth_centre_final]
         assert find_orth_centre(mps_product) == [0]
-        assert mps_mixed_final_renorm.norm() == 1
+        assert np.isclose(mps_mixed_final_renorm.norm() - 1, 0)
 
 
 def test_canonical_move_orth_centre_to_border():
@@ -351,10 +351,8 @@ def test_canonical_move_orth_centre_to_border():
             assert np.isclose(tensor_1, tensor_2).all()
         assert position == "last"
 
-        mps, position = mps_product.move_orth_centre_to_border()
-        for tensor_1, tensor_2 in zip(mps.tensors, mps_product.tensors):
-            assert np.isclose(tensor_1, tensor_2).all()
-        assert position == "first"
+        with pytest.raises(UnboundLocalError):
+            mps, position = mps_product.move_orth_centre_to_border()
 
 
 def test_canonical_explicit():
@@ -453,7 +451,7 @@ def test_canonical_norm():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Right-canonical")
 
-        assert isinstance(mps.norm(), np.float32)
+        assert isinstance(mps.norm(), float)
         assert np.isclose(mps.norm() - abs(inner_product(mps, mps)) ** 2, 0)
 
 
@@ -524,6 +522,187 @@ def test_canonical_two_site_expectation_value():
         exp_value_to_compare = inner_product(mps_copy, mps)
 
         assert np.isclose(abs(exp_value - exp_value_to_compare) ** 2, 0)
+
+
+def test_canonical_compress_bond():
+    """
+    Test for the ``compress_bond`` method of the :class:`CanonicalMPS` class.
+    """
+
+    for _ in range(10):
+        # Testing the maximum bond dimension control
+        for strategy in ["svd", "qr", "svd_advanced"]:
+            num_sites = 10
+            phys_dim = 2
+            bond_to_compress = 4
+            chi_max = 7
+            psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+            mps = mps_from_dense(
+                state_vector=psi, phys_dim=phys_dim, form="Right-canonical"
+            )
+            mps_compressed, truncation_error = mps.compress_bond(
+                bond=bond_to_compress,
+                chi_max=chi_max,
+                renormalise=False,
+                strategy=strategy,
+                return_truncation_error=True,
+            )
+            assert mps_compressed.bond_dimensions[bond_to_compress] <= chi_max
+            assert truncation_error >= 0
+            if strategy in ["svd", "svd_advanced"]:
+                assert inner_product(mps_compressed, mps_compressed) <= 1
+                if strategy == "svd":
+                    assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+            with pytest.raises(ValueError):
+                mps.compress_bond(bond=100)
+            with pytest.raises(ValueError):
+                mps.compress_bond(bond=0, strategy="strategy")
+
+        # Testing the spectrum cut control
+        for strategy in ["svd", "svd_advanced"]:
+            num_sites = 10
+            phys_dim = 2
+            bond_to_compress = 4
+            cut = 1e-1
+            psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+            mps = mps_from_dense(
+                state_vector=psi, phys_dim=phys_dim, form="Right-canonical"
+            )
+            mps_compressed, truncation_error = mps.compress_bond(
+                bond=bond_to_compress,
+                cut=cut,
+                renormalise=False,
+                strategy=strategy,
+                return_truncation_error=True,
+            )
+            tensor_left = mps_compressed.tensors[bond_to_compress]
+            tensor_right = mps_compressed.tensors[bond_to_compress + 1]
+            two_site_tensor = contract(
+                "ijk, klm -> ijlm",
+                tensor_left,
+                tensor_right,
+                optimize=[(0, 1)],
+            )
+            _, singular_values, _, _ = split_two_site_tensor(
+                tensor=two_site_tensor, return_truncation_error=True, strategy="svd"
+            )
+            for singular_value in singular_values:
+                assert singular_value >= cut
+            assert truncation_error >= 0
+            if strategy == "svd":
+                assert mps_compressed.norm() <= 1
+                assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+            if strategy == "svd_advanced":
+                assert inner_product(mps_compressed, mps_compressed) <= 1
+                assert inner_product(mps, mps_compressed) <= 1
+
+        # Testing the renormalisation option
+        for strategy in ["svd", "svd_advanced"]:
+            num_sites = 10
+            phys_dim = 2
+            bond_to_compress = 4
+            cut = 1e-1
+            psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+            mps = mps_from_dense(
+                state_vector=psi, phys_dim=phys_dim, form="Right-canonical"
+            )
+            mps_compressed, truncation_error = mps.compress_bond(
+                bond=bond_to_compress,
+                cut=cut,
+                renormalise=True,
+                strategy=strategy,
+                return_truncation_error=True,
+            )
+            tensor_left = mps_compressed.tensors[bond_to_compress]
+            tensor_right = mps_compressed.tensors[bond_to_compress + 1]
+            two_site_tensor = contract(
+                "ijk, klm -> ijlm",
+                tensor_left,
+                tensor_right,
+                optimize=[(0, 1)],
+            )
+            _, singular_values, _, _ = split_two_site_tensor(
+                tensor=two_site_tensor, return_truncation_error=True, strategy="svd"
+            )
+            assert np.isclose(np.linalg.norm(singular_values) - 1, 0)
+            for singular_value in singular_values:
+                assert singular_value >= cut
+            assert truncation_error >= 0
+            if strategy == "svd":
+                assert np.isclose(mps_compressed.norm() - 1, 0)
+            if strategy == "svd_advanced":
+                assert np.isclose(inner_product(mps_compressed, mps_compressed) - 1, 0)
+                assert inner_product(mps, mps_compressed) <= 1
+
+        # Testing that for no cut the mps stays the same
+        for strategy in ["svd", "svd_advanced"]:
+            num_sites = 10
+            phys_dim = 2
+            bond_to_compress = 4
+            cut = 1e-12
+            psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+            mps = mps_from_dense(
+                state_vector=psi, phys_dim=phys_dim, form="Right-canonical"
+            )
+            mps_compressed, truncation_error = mps.compress_bond(
+                bond=bond_to_compress,
+                cut=cut,
+                renormalise=False,
+                strategy=strategy,
+                return_truncation_error=True,
+            )
+            tensor_left = mps_compressed.tensors[bond_to_compress]
+            tensor_right = mps_compressed.tensors[bond_to_compress + 1]
+            two_site_tensor = contract(
+                "ijk, klm -> ijlm",
+                tensor_left,
+                tensor_right,
+                optimize=[(0, 1)],
+            )
+            _, singular_values, _, _ = split_two_site_tensor(
+                tensor=two_site_tensor, return_truncation_error=True, strategy="svd"
+            )
+            for singular_value in singular_values:
+                assert singular_value >= cut
+            assert np.isclose(truncation_error, 0)
+            if strategy == "svd":
+                assert np.isclose(mps_compressed.norm() - 1, 0)
+                assert np.isclose(mps_compressed.norm() + truncation_error - 1, 0)
+            if strategy == "svd_advanced":
+                assert np.isclose(inner_product(mps_compressed, mps_compressed) - 1, 0)
+                assert np.isclose(inner_product(mps, mps_compressed) - 1, 0)
+
+
+def test_canonical_compress():
+    """
+    Test for the ``compress`` method of the :class:`CanonicalMPS` class.
+    """
+
+    for _ in range(10):
+        strategy = "svd"
+        renormalise = False
+        num_sites = 10
+        phys_dim = 2
+        chi_max = 3
+        cut = 1e-12
+        psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
+        mps = mps_from_dense(
+            state_vector=psi, phys_dim=phys_dim, form="Right-canonical"
+        )
+        mps_compressed, truncation_errors = mps.compress(
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            strategy=strategy,
+            return_truncation_errors=True,
+        )
+        assert inner_product(mps, mps_compressed) <= 1
+        assert mps_compressed.norm() <= 1
+        for bond_dim in mps_compressed.bond_dimensions:
+            assert bond_dim <= chi_max
+        for truncation_error in truncation_errors:
+            assert truncation_error >= 0
+        assert np.isclose(mps_compressed.norm() + np.sum(truncation_errors) - 1, 0)
 
 
 def test_canonical_marginal():

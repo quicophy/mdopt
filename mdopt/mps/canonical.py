@@ -63,7 +63,7 @@ class CanonicalMPS:
         Position of the orthogonality centre, does not support negative indexing.
         As a convention, this attribute is taken ``0`` for a right-canonical form,
         ``len(tensors) - 1`` for a left-canonical form, ``None`` for a product state.
-    tolerance : np.float32
+    tolerance : float
         Numerical tolerance to zero out the singular values in Singular Value Decomposition.
     chi_max : int
         The maximum bond dimension to keep in Singular Value Decompositions.
@@ -88,7 +88,7 @@ class CanonicalMPS:
         self,
         tensors: List[np.ndarray],
         orth_centre: Optional[int] = None,
-        tolerance: np.float32 = np.float32(1e-12),
+        tolerance: float = float(1e-12),
         chi_max: int = int(1e4),
     ) -> None:
         self.tensors = tensors
@@ -313,22 +313,20 @@ class CanonicalMPS:
 
         return list(mpo)
 
-    def entanglement_entropy(
-        self, tolerance: np.float32 = np.float32(1e-12)
-    ) -> np.ndarray:
+    def entanglement_entropy(self, tolerance: float = float(1e-12)) -> np.ndarray:
         """
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
         return self.explicit(tolerance=tolerance).entanglement_entropy()
 
-    def check_orth_centre(self) -> Optional[int]:
+    def check_orth_centre(self) -> Optional[Union[int, List[int]]]:
         """
         Checks the current position of the orthogonality centre by checking each tensor
         for the isometry conditions.
         Note, this method does not update the current instance's ``orth_centre`` attribute.
         """
 
-        _, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
+        orth_centres, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
             self, return_orth_flags=True
         )
 
@@ -349,7 +347,7 @@ class CanonicalMPS:
         if all(flags_left) and all(flags_right):
             return 0
 
-        return None
+        return orth_centres
 
     def move_orth_centre(
         self,
@@ -390,7 +388,7 @@ class CanonicalMPS:
         singular_values = []
 
         if self.orth_centre is None:
-            self.orth_centre = self.check_orth_centre()
+            self.orth_centre = self.check_orth_centre()  # type: ignore
 
         if self.orth_centre is None:
             raise ValueError("The orthogonality centre value is set to None.")
@@ -409,11 +407,12 @@ class CanonicalMPS:
 
         for i in range(begin, final):
             two_site_tensor = mps.two_site_tensor_next(i)
-            u_l, singular_values_bond, v_r = split_two_site_tensor(
+            u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,
                 chi_max=self.chi_max,
                 renormalise=renormalise,
                 strategy="svd",
+                return_truncation_error=True,
             )
             singular_values.append(singular_values_bond)
             mps.tensors[i] = u_l
@@ -442,13 +441,17 @@ class CanonicalMPS:
         renormalise : bool
             Whether to renormalise singular values during each SVD.
 
+        Notes
+        -----
         Returns a new version of the current :class:`CanonicalMPS` instance with
         the orthogonality centre moved to the closest (from the current position) border.
         """
         if self.orth_centre is None:
-            self.orth_centre = self.check_orth_centre()
+            self.orth_centre = self.check_orth_centre()  # type: ignore
+            if self.orth_centre is None:
+                raise ValueError("There is no orthogonality center present.")
 
-        if self.orth_centre == 0:
+        elif self.orth_centre == 0:
             return self.copy(), "first"
 
         elif self.orth_centre == self.num_sites - 1:
@@ -474,7 +477,7 @@ class CanonicalMPS:
         return cast("CanonicalMPS", mps), "last"
 
     def explicit(
-        self, tolerance: np.float32 = np.float32(1e-12), renormalise: bool = True
+        self, tolerance: float = float(1e-12), renormalise: bool = True
     ) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
@@ -483,7 +486,7 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        tolerance : np.float32
+        tolerance : float
             Numerical tolerance for the singular values.
         renormalise : bool
             Whether to renormalise singular values during each SVD.
@@ -528,7 +531,7 @@ class CanonicalMPS:
 
         return mdopt.mps.explicit.ExplicitMPS(  # type: ignore
             explicit_tensors,
-            singular_values,
+            singular_values,  # type: ignore
             tolerance=tolerance,
         )  # type: ignore
 
@@ -570,19 +573,27 @@ class CanonicalMPS:
             CanonicalMPS, self.move_orth_centre(orth_centre, renormalise=renormalise)
         )
 
-    def norm(self) -> np.float32:
+    def norm(self) -> float:
         """
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
 
-        return np.float32(abs(mdopt.mps.utils.inner_product(self, self)) ** 2)  # type: ignore
+        if self.orth_centre:
+            norm = contract(
+                "ijk, ijk",
+                np.conjugate(self.tensors[self.orth_centre]),
+                self.tensors[self.orth_centre],
+            )
+            return float(abs(norm))
+
+        return float(abs(mdopt.mps.utils.inner_product(self, self)))  # type: ignore
 
     def one_site_expectation_value(
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float32, np.complex128]:
+    ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary one-site operator
         (not necessarily unitary) on the given site.
@@ -630,7 +641,7 @@ class CanonicalMPS:
         self,
         site: int,
         operator: np.ndarray,
-    ) -> Union[np.float32, np.complex128]:
+    ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
         (not necessarily unitary) on the given site and its next neighbour.
@@ -684,6 +695,246 @@ class CanonicalMPS:
             np.conjugate(two_site_orthogonality_centre),
             optimize=[(0, 1), (0, 1)],
         )
+
+    def compress_bond(
+        self,
+        bond: int,
+        chi_max: int = int(1e4),
+        cut: float = float(1e-12),
+        renormalise: bool = False,
+        strategy: str = "svd",
+        return_truncation_error: bool = False,
+    ) -> Tuple["CanonicalMPS", Optional[float]]:
+        """
+        Compresses the bond at a given site, i.e., reduces its bond dimension.
+
+        Parameters
+        ----------
+        bond : int
+            The index of the bond to compress.
+        chi_max : int
+            The maximum bond dimension to keep.
+        cut : float
+            Singular values smaller than this will be discarded.
+        renormalise: bool
+            Whether to renormalise the singular value spectrum after the cut.
+        strategy : str
+            Which strategy to use for decomposition at the bond.
+            Available options: ``svd``, ``qr`` and ``svd_advanced``.
+        return_truncation_error : bool
+            Whether to return the truncation error.
+
+        Returns
+        -------
+        compressed_mps: CanonicalMPS
+            The new compressed Matrix Product State.
+        truncation_error : Optional[float]
+            The truncation error.
+            Returned only if `return_truncation_error` is set to True.
+
+        Raises
+        ------
+        ValueError
+            If the bond index is out of range.
+        ValueError
+            If the compression strategy is not supported.
+
+        Notes
+        -----
+        1) The bonds are being enumerated from the right side of the tensors.
+        For example, the bond ``0`` is a bond to the right of tensor ``0``.
+        2) The compression scheme ``svd_advanced`` follows
+        the scheme outlined in Fig.2 of https://arxiv.org/abs/1708.08932.
+        This strategy can give speed ups for large bond dimensions
+        by doing two SVDs on moderate-size matrices instead of one SVD on a large matrix.
+        """
+
+        if bond not in range(self.num_bonds):
+            raise ValueError(
+                f"Bond given {bond}, with the number of bonds in the MPS {self.num_bonds}."
+            )
+
+        if strategy not in ["svd", "qr", "svd_advanced"]:
+            raise ValueError(f"Unsupported compression strategy: {strategy}")
+
+        mps_compressed = self.move_orth_centre(
+            final_pos=bond, return_singular_values=False, renormalise=False
+        )
+        mps_compressed = cast("CanonicalMPS", mps_compressed)
+
+        tensor_left = mps_compressed.tensors[bond]  # the orthogonality centre
+        tensor_right = mps_compressed.tensors[bond + 1]
+
+        if strategy == "svd":
+            two_site_tensor = contract(
+                "ijk, klm -> ijlm", tensor_left, tensor_right, optimize=[(0, 1)]
+            )
+            u_l, singular_values, v_r, truncation_error = split_two_site_tensor(
+                tensor=two_site_tensor,
+                chi_max=chi_max,
+                cut=cut,
+                renormalise=renormalise,
+                strategy=strategy,
+                return_truncation_error=return_truncation_error,
+            )
+
+            mps_compressed.tensors[bond] = contract(
+                "ijk, kl -> ijl", u_l, np.diag(singular_values)
+            )
+            mps_compressed.tensors[bond + 1] = v_r
+
+            if return_truncation_error:
+                return mps_compressed, truncation_error
+
+        if strategy == "qr":
+            two_site_tensor = contract("ijk, klm -> ijlm", tensor_left, tensor_right)
+            q_l, r_r, truncation_error, _ = split_two_site_tensor(
+                tensor=two_site_tensor,
+                chi_max=chi_max,
+                cut=cut,
+                renormalise=renormalise,
+                strategy=strategy,
+                return_truncation_error=return_truncation_error,
+            )
+
+            mps_compressed.tensors[bond] = q_l
+            mps_compressed.tensors[bond + 1] = r_r
+
+            if return_truncation_error:
+                return mps_compressed, truncation_error
+
+        if strategy == "svd_advanced":
+            chi_left, phys_left, _ = tensor_left.shape
+            _, phys_right, chi_right = tensor_right.shape
+            tensor_left = tensor_left.reshape(chi_left * phys_left, -1)
+            tensor_right = tensor_right.reshape(-1, phys_right * chi_right)
+
+            iso_left_0, sing_vals_left, iso_left_1, _ = svd(
+                mat=tensor_left,
+                cut=cut,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                return_truncation_error=return_truncation_error,
+            )
+            iso_right_0, sing_vals_right, iso_right_1, _ = svd(
+                mat=tensor_right,
+                cut=cut,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                return_truncation_error=return_truncation_error,
+            )
+
+            two_site_tensor = contract(
+                "ij, jk, kl, lm -> im",
+                np.diag(sing_vals_left),
+                iso_left_1,
+                iso_right_0,
+                np.diag(sing_vals_right),
+                optimize=[(0, 1), (0, 1), (0, 1)],
+            )
+
+            iso_left_new, sing_vals_new, iso_right_new, truncation_error = svd(
+                mat=two_site_tensor,
+                cut=cut,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                return_truncation_error=return_truncation_error,
+            )
+
+            tensor_left_new = contract(
+                "ij, jk, kl -> il",
+                iso_left_0,
+                iso_left_new,
+                np.sqrt(np.diag(sing_vals_new)),
+                optimize=[(0, 1), (0, 1)],
+            )
+            tensor_right_new = contract(
+                "ij, jk, kl -> il",
+                np.sqrt(np.diag(sing_vals_new)),
+                iso_right_new,
+                iso_right_1,
+                optimize=[(0, 1), (0, 1)],
+            )
+
+            mps_compressed.tensors[bond] = tensor_left_new.reshape(
+                chi_left, phys_left, len(sing_vals_new)
+            )
+            mps_compressed.tensors[bond + 1] = tensor_right_new.reshape(
+                len(sing_vals_new), phys_right, chi_right
+            )
+
+            if return_truncation_error:
+                return mps_compressed, truncation_error
+
+        return mps_compressed, None
+
+    def compress(
+        self,
+        chi_max: int = int(1e4),
+        cut: float = float(1e-12),
+        renormalise: bool = False,
+        strategy: str = "svd",
+        return_truncation_errors: bool = False,
+    ) -> Tuple["CanonicalMPS", List[Optional[float]]]:
+        """
+        Compresses the MPS, i.e., runs the ``compress_bond`` method for each bond.
+
+        Parameters
+        ----------
+        chi_max : int
+            The maximum bond dimension to keep.
+        cut : float
+            Singular values smaller than this will be discarded.
+        renormalise: bool
+            Whether to renormalise the singular value spectrum after the cut.
+        strategy : str
+            Which strategy to use for decomposition at the bond.
+            Available options: ``svd``, ``qr`` and ``svd_advanced``.
+        return_truncation_errors : bool
+            Whether to return the list of truncation errors (for each bond).
+
+        Returns
+        -------
+        compressed_mps: CanonicalMPS
+            The new compressed Matrix Product State.
+        truncation_errors : Optional[List[float]]
+            The truncation errors.
+            Returned only if `return_truncation_errors` is set to True.
+
+        Raises
+        ------
+        ValueError
+            If the compression strategy is not supported.
+        """
+
+        if strategy not in ["svd", "qr", "svd_advanced"]:
+            raise ValueError(f"Unsupported compression strategy: {strategy}")
+
+        truncation_errors = []
+        mps_compressed, position = self.move_orth_centre_to_border(renormalise=False)
+
+        if position == "last":
+            mps_compressed = mps_compressed.reverse()
+
+        for bond in range(self.num_bonds):
+            mps_compressed, truncation_error = mps_compressed.compress_bond(
+                bond=bond,
+                chi_max=chi_max,
+                cut=cut,
+                renormalise=renormalise,
+                strategy=strategy,
+                return_truncation_error=True,
+            )
+            truncation_errors.append(truncation_error)
+
+        if position == "last":
+            mps_compressed = mps_compressed.reverse()
+            truncation_errors = truncation_errors[::-1]
+
+        if return_truncation_errors:
+            return mps_compressed, truncation_errors
+
+        return mps_compressed, [None]
 
     def marginal(
         self, sites_to_marginalise: List[int], canonicalise: bool = False
