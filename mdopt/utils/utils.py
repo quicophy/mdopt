@@ -9,11 +9,11 @@ from opt_einsum import contract
 
 def svd(
     mat: np.ndarray,
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     chi_max: int = int(1e4),
     renormalise: bool = False,
-    return_residual_spectrum: bool = False,
-) -> Tuple[np.ndarray, list, np.ndarray, Optional[List[float]]]:
+    return_truncation_error: bool = False,
+) -> Tuple[np.ndarray, list, np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
 
@@ -21,15 +21,14 @@ def svd(
     ----------
     mat : np.ndarray
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
-    cut : np.float32
+    cut : float
         Singular values smaller than this will be discarded.
     chi_max : int
         Maximum number of singular values to keep.
     renormalise : bool
         Whether to renormalise the singular value spectrum after the cut.
-    return_residual_spectrum : bool
-        Whether to return the residual spectrum, i.e.,
-        the singular values we have thrown away.
+    return_truncation_error : bool
+        Whether to return the truncation error.
 
     Returns
     -------
@@ -39,8 +38,13 @@ def svd(
         The singular values, sorted in non-increasing order.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
-    residual_spectrum : Optional[List[float]]
-        The discarded singular values. Only returned if `return_residual_spectrum` is True.
+    residual_spectrum : Optional[float]
+        The discarded singular values. Only returned if `return_truncation_error` is True.
+
+    Raises
+    ------
+    ValueError
+        If the input matrix does not have 2 dimensions.
     """
 
     if len(mat.shape) != 2:
@@ -63,25 +67,95 @@ def svd(
             )
 
     max_num = min(chi_max, np.sum(singular_values > cut))
-    ind = np.argsort(singular_values)[::-1][:max_num]
-
-    ind_res = np.argsort(singular_values)[::-1][max_num:]
-    residual_spectrum = singular_values[ind_res]
-
-    u_l, singular_values, v_r = u_l[:, ind], singular_values[ind], v_r[ind, :]
+    residual_spectrum = singular_values[max_num:]
+    truncation_error = np.linalg.norm(residual_spectrum) ** 2
+    u_l, singular_values, v_r = (
+        u_l[:, :max_num],
+        singular_values[:max_num],
+        v_r[:max_num, :],
+    )
 
     if renormalise:
         singular_values /= np.linalg.norm(singular_values)
 
-    if return_residual_spectrum:
+    if return_truncation_error:
         return (
             np.asarray(u_l),
             cast(list, singular_values),
             np.asarray(v_r),
-            residual_spectrum,
+            float(truncation_error),
         )
 
     return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r), None
+
+
+def qr(
+    mat: np.ndarray,
+    cut: float = float(1e-12),
+    chi_max: int = int(1e4),
+    renormalise: bool = False,
+    return_truncation_error: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, Optional[float]]:
+    """
+    Performs QR Decomposition with a possibility for truncation.
+
+    Parameters
+    ----------
+    mat : np.ndarray
+        Matrix provided as a ``np.ndarray`` with 2 dimensions.
+    cut : float
+        Threshold below which the diagonal values of R are discarded.
+    chi_max : int
+        Maximum number of columns/rows to keep after truncation.
+    renormalise : bool
+        Whether to renormalise the matrix after truncation.
+    return_truncation_error : bool
+        Whether to return the truncation error.
+
+    Returns
+    -------
+    Q : np.ndarray
+        The orthogonal matrix after truncation.
+    R : np.ndarray
+        The upper triangular matrix after truncation.
+    truncation_error : Optional[float]
+        The truncation error.
+        Returned only if `return_truncation_error` is True.
+
+    Raises
+    ------
+    ValueError
+        If the input matrix does not have 2 dimensions.
+
+    Notes
+    -----
+    The truncation is based on the magnitudes of the absolute values
+    of the diagonal elements of R.
+    """
+
+    if len(mat.shape) != 2:
+        raise ValueError(f"Input matrix must have 2 dimensions, got {len(mat.shape)}.")
+
+    q_l, r_r, pivots = scipy.linalg.qr(
+        mat, pivoting=True, mode="economic", check_finite=False
+    )
+
+    abs_diag_r = np.absolute(np.diag(r_r))
+    effective_rank = min(chi_max, int(np.sum(abs_diag_r > cut)))
+    truncation_indices = list(range(len(abs_diag_r)))[:effective_rank]
+
+    permutation_matrix = np.eye(mat.shape[1])[:, pivots]
+    r_r = r_r[truncation_indices, :] @ permutation_matrix.T
+    q_l = q_l[:, truncation_indices]
+
+    if renormalise:
+        r_r /= np.linalg.norm(np.diag(r_r))
+
+    if return_truncation_error:
+        truncation_error = np.linalg.norm(mat - np.dot(q_l, r_r))
+        return q_l, r_r, float(truncation_error)
+
+    return q_l, r_r, None
 
 
 def kron_tensors(
@@ -166,13 +240,13 @@ def kron_tensors(
 def split_two_site_tensor(
     tensor: np.ndarray,
     chi_max: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     renormalise: bool = False,
     strategy: str = "svd",
-    return_residual_spectrum: bool = False,
+    return_truncation_error: bool = False,
 ) -> Tuple:
     """
-    Split a two-site MPS tensor according to the following diagram
+    Split and truncate a two-site MPS tensor according to the following diagram
     (in case of the SVD strategy, similarly but without the singular vals for the others)::
 
                                              m         n
@@ -185,18 +259,17 @@ def split_two_site_tensor(
     tensor : np.ndarray
         Two-site tensor ``(i, j, k, l)``.
     chi_max : int
-        Maximum number of singular values to keep.
-    cut : np.float32
-        Discard any singular values smaller than eps.
+        Maximum number of singular/diagonal values to keep.
+    cut : float
+        Discard any singular/diagonal values smaller than this.
     renormalise : bool
-        Whether to renormalise the singular value spectrum after the cut.
+        Whether to renormalise the singular value spectrum or the R diagonal
+        after the cut.
     strategy : str
         Which strategy to use for the splitting.
-        Available options: ``svd``, ``qr``, ``rq``.
-    return_residual_spectrum : bool
-        Whether to return the residual spectrum, i.e.,
-        the singular values we have thrown away.
-        Available only for the SVD decomposition option.
+        Available options: ``svd`` and ``qr``.
+    return_truncation_error : bool
+        Whether to return the truncation error.
 
     Returns
     -------
@@ -204,16 +277,18 @@ def split_two_site_tensor(
         Left isometry ``(i, j, m)``.
     singular_values : np.ndarray
         List of singular values.
+        Only returned if the decomposition strategy is set to ``svd``.
     b_r : np.ndarray
         Right isometry ``(n, k, l)``.
-    residual_spectrum : Optional[List[float]]
-        The discarded singular values. Only returned if `return_residual_spectrum` is True
-        and the decomposition strategy is set to ``svd``.
+    truncation_error : Optional[float]
+        The truncation error.
 
     Raises
     ------
     ValueError
         If the tensor is not four-dimensional.
+    ValueError
+        If the strategy is not one of the available ones.
     """
 
     if len(tensor.shape) != 4:
@@ -222,43 +297,46 @@ def split_two_site_tensor(
             f"while the one given has {len(tensor.shape)}."
         )
 
-    if strategy not in ["svd", "qr", "rq"]:
-        raise ValueError("The strategy must be one of `svd`, `qr`, `rq`.")
+    if strategy not in ["svd", "qr"]:
+        raise ValueError("The strategy must be either `svd` or `qr`.")
 
     chi_v_l, phys_l, phys_r, chi_v_r = tensor.shape
     tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
-        u_l, singular_values, v_r, residual_spectrum = svd(
-            tensor,
+        u_l, singular_values, v_r, truncation_error = svd(
+            mat=tensor,
             cut=cut,
             chi_max=chi_max,
             renormalise=renormalise,
-            return_residual_spectrum=return_residual_spectrum,
+            return_truncation_error=return_truncation_error,
         )
         chi_v_cut = len(singular_values)
         u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
         v_r = v_r.reshape((chi_v_cut, phys_r, chi_v_r))
-        if return_residual_spectrum:
+        if return_truncation_error:
             return (
                 u_l,
                 singular_values,
                 v_r,
-                residual_spectrum,
+                truncation_error,
             )  # pylint: disable=unbalanced-tuple-unpacking
         return u_l, singular_values, v_r
 
     if strategy == "qr":
-        q_l, r_r = np.linalg.qr(tensor, mode="reduced")
-        q_l = q_l.reshape((chi_v_l, phys_l, -1))
-        r_r = r_r.reshape((-1, phys_r, chi_v_r))
-        return q_l, r_r  # pylint: disable=unbalanced-tuple-unpacking
-
-    if strategy == "rq":
-        r_l, q_r = scipy.linalg.rq(tensor, mode="economic")
-        r_l = r_l.reshape((chi_v_l, phys_l, -1))
-        q_r = q_r.reshape((-1, phys_r, chi_v_r))
-        return r_l, q_r  # pylint: disable=unbalanced-tuple-unpacking
+        q_l, r_r, truncation_error = qr(
+            mat=tensor,
+            cut=cut,
+            chi_max=chi_max,
+            renormalise=renormalise,
+            return_truncation_error=return_truncation_error,
+        )
+        chi_v_cut = min(chi_max, q_l.shape[1])
+        q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
+        r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
+        if return_truncation_error:
+            return q_l, r_r, truncation_error, None
+        return q_l, r_r, None, None
 
     return tuple()
 

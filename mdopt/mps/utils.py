@@ -132,7 +132,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
     ----------
     mps : CanonicalMPS
         The MPS to check the canonical form of.
-    tolerance : np.float32
+    tolerance : float
         Numerical tolerance for checking the isometry property.
 
     Returns
@@ -162,8 +162,8 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
             contract("ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
 
-        identity_left = np.identity(to_be_identity_left.shape[0], dtype=np.float32)
-        identity_right = np.identity(to_be_identity_right.shape[0], dtype=np.float32)
+        identity_left = np.identity(to_be_identity_left.shape[0], dtype=float)
+        identity_right = np.identity(to_be_identity_right.shape[0], dtype=float)
 
         flags_left.append(
             np.isclose(
@@ -187,7 +187,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
 
 def inner_product(
     mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
-) -> Union[np.float32, np.complex128]:
+) -> Union[float, np.complex128]:
     """
     Returns an inner product between 2 Matrix Product States.
 
@@ -200,7 +200,7 @@ def inner_product(
 
     Returns
     -------
-    product : Union[np.float32, np.complex128]
+    product : Union[float, np.complex128]
         The value of the inner product.
 
     Raises
@@ -243,7 +243,7 @@ def inner_product(
     product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)[0][0]
 
     if np.isclose(np.imag(product), 0):
-        return np.float32(np.real(product))
+        return float(np.real(product))
 
     return np.complex128(product)
 
@@ -252,7 +252,7 @@ def mps_from_dense(
     state_vector: np.ndarray,
     phys_dim: int = int(2),
     chi_max: int = int(1e4),
-    tolerance: np.float32 = np.float32(1e-12),
+    tolerance: float = float(1e-12),
     form: str = "Explicit",
     orth_centre: Optional[int] = None,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
@@ -268,7 +268,7 @@ def mps_from_dense(
         the dimension of each physical leg of the MPS.
     chi_max : int
         Maximum number of singular values to keep.
-    tolerance : np.float32
+    tolerance : float
         Absolute tolerance of the normalisation of the singular value spectrum at each bond.
     form : str
         The form of the MPS. Available options:
@@ -358,6 +358,7 @@ def create_simple_product_state(
     which: str = "0",
     phys_dim: int = 2,
     form: str = "Explicit",
+    tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a simple product-state MPS.
@@ -379,6 +380,11 @@ def create_simple_product_state(
             | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+    tolerance : float
+        For the Explicit form:
+        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        For the Canonical form:
+        numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
     Returns
     -------
@@ -413,17 +419,24 @@ def create_simple_product_state(
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
-        return ExplicitMPS(tensors, singular_values).right_canonical()
+        mps = ExplicitMPS(tensors, singular_values).right_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Left-canonical":
-        return ExplicitMPS(tensors, singular_values).left_canonical()
+        mps = ExplicitMPS(tensors, singular_values).left_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
-    return ExplicitMPS(tensors, singular_values)
+    return ExplicitMPS(tensors, singular_values, tolerance=tolerance)
 
 
 def create_custom_product_state(
-    string: str, phys_dim: int = 2, form: str = "Explicit"
+    string: str,
+    phys_dim: int = 2,
+    form: str = "Explicit",
+    tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
     Creates a custom product-state MPS defined by the ``string`` argument.
@@ -440,6 +453,11 @@ def create_custom_product_state(
             | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+    tolerance : float
+        For the Explicit form:
+        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        For the Canonical form:
+        numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
     Returns
     -------
@@ -486,20 +504,24 @@ def create_custom_product_state(
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
-        return ExplicitMPS(tensors, singular_values).right_canonical()
+        mps = ExplicitMPS(tensors, singular_values).right_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Left-canonical":
-        return ExplicitMPS(tensors, singular_values).left_canonical()
+        mps = ExplicitMPS(tensors, singular_values).left_canonical()
+        mps.orth_centre = None
+        return mps
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
 
-    return ExplicitMPS(tensors, singular_values)
+    return ExplicitMPS(tensors, singular_values, tolerance=tolerance)
 
 
 def marginalise(
     mps: Union[ExplicitMPS, CanonicalMPS],
     sites_to_marginalise: List[int],
     canonicalise: bool = False,
-) -> Union[CanonicalMPS, np.float32, np.complex128]:
+) -> Union[CanonicalMPS, float, np.complex128]:
     r"""
     Computes a marginal over a subset of sites of an MPS.
     This function was created to not act inplace.

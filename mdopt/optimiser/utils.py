@@ -76,7 +76,7 @@ class ConstraintString:
 
     def __init__(self, constraints: List[np.ndarray], sites: List[List[int]]) -> None:
         self.constraints = [
-            np.array(constraint, dtype=np.float32) for constraint in constraints
+            np.array(constraint, dtype=float) for constraint in constraints
         ]
         self.sites = sites
 
