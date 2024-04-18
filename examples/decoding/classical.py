@@ -9,15 +9,18 @@ import qecstruct as qec
 from scipy.stats import unitary_group
 
 # Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 # Append paths using environment variables or hardcoded fallbacks
 project_root = os.getenv(
-    'MDOPT_PATH', '/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt'
-    )
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
+)
 examples_path = os.getenv(
-    'MDOPT_EXAMPLES_PATH', '/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples'
-    )
+    "MDOPT_EXAMPLES_PATH",
+    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+)
 
 sys.path.append(project_root)
 sys.path.append(examples_path)
@@ -40,7 +43,9 @@ try:
         decode_linear,
     )
 except ImportError as e:
-    logging.error("Failed to import required modules. Ensure paths are correct.", exc_info=True)
+    logging.error(
+        "Failed to import required modules. Ensure paths are correct.", exc_info=True
+    )
     sys.exit(1)
 
 NUM_EXPERIMENTS = 100
@@ -61,7 +66,7 @@ for NUM_BITS in system_sizes:
         for PROB_ERROR in tqdm(error_rates):
             logging.info(
                 f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX_CONTRACTOR}, PROB_ERROR={PROB_ERROR}"
-                )
+            )
             failures = []
 
             for l in range(NUM_EXPERIMENTS):
@@ -129,6 +134,10 @@ for NUM_BITS in system_sizes:
                 failures.append(1 - success)
 
             failures_statistics[(NUM_BITS, CHI_MAX_CONTRACTOR, PROB_ERROR)] = failures
-            failures_key = f"numbits{NUM_BITS}_bonddim{CHI_MAX_CONTRACTOR}_errorprob{PROB_ERROR}"
+            failures_key = (
+                f"numbits{NUM_BITS}_bonddim{CHI_MAX_CONTRACTOR}_errorprob{PROB_ERROR}"
+            )
             np.save(f"data/{failures_key}.npy", failures)
-            logging.info(f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate.")
+            logging.info(
+                f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
+            )

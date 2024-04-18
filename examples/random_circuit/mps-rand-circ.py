@@ -78,7 +78,9 @@ for NUM_QUBITS in num_qubits:
                 fidels = [1 - error for error in errors]
                 tails_iter.append(np.prod(fidels))
 
-            tails_key = f"numqubits{NUM_QUBITS}_bonddim{BOND_DIM}_circlayers{NUM_LAYERS_CIRC}"
+            tails_key = (
+                f"numqubits{NUM_QUBITS}_bonddim{BOND_DIM}_circlayers{NUM_LAYERS_CIRC}"
+            )
             tails[tails_key] = tails_iter
 
             np.save(f"data/{tails_key}.npy", tails)
