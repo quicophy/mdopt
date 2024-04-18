@@ -16,9 +16,9 @@ pip install --no-index numpy scipy opt_einsum tqdm
 # Create a job submission script
 cat > submit-job.sh << 'EOS'
 #!/bin/bash
-#SBATCH --time=02:00:00            # Time limit (hh:mm:ss)
+#SBATCH --time=24:00:00            # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=8          # Number of CPU cores per task
-#SBATCH --mem=32000                # Memory per node
+#SBATCH --mem=256000               # Memory per node
 #SBATCH --job-name=random-circuit  # Descriptive job name
 #SBATCH --output=%x-%j.out         # Standard output and error log
 
