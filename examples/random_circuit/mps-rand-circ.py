@@ -34,7 +34,7 @@ except ImportError as e:
     sys.exit(1)
 
 PHYS_DIM = 2
-circ_depths = [4, 6, 8, 10, 12, 14, 16, 18, 20]
+circ_depths = [12, 14, 16, 18, 20]
 bond_dims = [8, 10, 12, 14, 16, 18, 20, 22, 24, 32, 64, 128, 256, 512, 1024]
 num_qubits = [243]
 
