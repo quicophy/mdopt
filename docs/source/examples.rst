@@ -11,6 +11,5 @@ Examples
    hypergraph_product.ipynb
    main_component.ipynb
    mps-rand-circ.ipynb
-   plotting.ipynb
    shor.ipynb
    toric.ipynb
