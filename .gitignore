@@ -142,3 +142,6 @@ data*/
 
 # files for plotting
 plotting*
+
+# scripts for jobs submitted to Compute Canada
+submit_job*
