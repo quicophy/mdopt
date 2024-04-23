@@ -50,7 +50,9 @@ except ImportError as e:
     sys.exit(1)
 
 # Setup argparse to handle command line arguments
-parser = argparse.ArgumentParser(description="Launch calculations on Compute Canada clusters.")
+parser = argparse.ArgumentParser(
+    description="Launch calculations on Compute Canada clusters."
+)
 parser.add_argument("system_size", type=int, help="System size as the number of bits.")
 args = parser.parse_args()
 

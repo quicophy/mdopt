@@ -30,7 +30,9 @@ try:
     from mdopt.contractor.contractor import mps_mpo_contract
     from examples.random_circuit.random_circuit import create_mpo_from_layer
 except ImportError as e:
-    logger.error("Failed to import required modules. Ensure paths are correct.", exc_info=True)
+    logger.error(
+        "Failed to import required modules. Ensure paths are correct.", exc_info=True
+    )
     sys.exit(1)
 
 PHYS_DIM = 2
@@ -43,7 +45,9 @@ for NUM_QUBITS in num_qubits:
     for BOND_DIM in bond_dims:
         for NUM_LAYERS_CIRC in circ_depths:
             tails_iter = []
-            logger.info(f"Starting simulation for {NUM_QUBITS} qubits, bond dimension {BOND_DIM}, and {NUM_LAYERS_CIRC} circuit layers.")
+            logger.info(
+                f"Starting simulation for {NUM_QUBITS} qubits, bond dimension {BOND_DIM}, and {NUM_LAYERS_CIRC} circuit layers."
+            )
             state = create_simple_product_state(
                 num_sites=NUM_QUBITS,
                 phys_dim=PHYS_DIM,
