@@ -360,9 +360,7 @@ def test_explicit_density_mpo():
 
         density_matrix_mpo = density_matrix_mpo.transpose(correct_order)
         # Reshaping to the matrix form.
-        density_matrix_mpo = density_matrix_mpo.reshape(
-            (2**num_sites, 2**num_sites)
-        )
+        density_matrix_mpo = density_matrix_mpo.reshape((2**num_sites, 2**num_sites))
 
         # Original density matrix.
         density_matrix = np.tensordot(psi, np.conjugate(psi), 0)
