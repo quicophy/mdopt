@@ -24,21 +24,21 @@ for system_size in "${system_sizes[@]}"; do
         # Create a job submission script for each combination
         cat > "submit-job-${system_size}-${bond_dim}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=12:00:00                     # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=8                   # Number of CPU cores per task
-#SBATCH --mem=64000                         # Memory per node
-#SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}  # Descriptive job name
+#SBATCH --time=24:00:00                                                     # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=1                                                   # Number of CPU cores per task
+#SBATCH --mem=32000                                                         # Memory per node
+#SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}       # Descriptive job name
 #SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-%j.out  # Standard output and error log
 
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
 # Run the Python script with the specified system size and bond dimension
-python classical.py \$system_size \$bond_dim
+python examples/decoding/classical.py $system_size $bond_dim
 EOS
 
         # Submit the job
-        echo "Submitting the job for system size ${system_size} and bond dimension ${bond_dim}..."
+        echo "Submitting the job for system size ${system_size} and bond dimension ${bond_dim}"
         sbatch "submit-job-${system_size}-${bond_dim}.sh" --export=system_size=$system_size,bond_dim=$bond_dim
     done
 done
