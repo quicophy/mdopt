@@ -345,9 +345,7 @@ class ExplicitMPS:
             singular_values = self.singular_values[bond].copy()
             singular_values = np.array(singular_values)  # type: ignore
             singular_values[singular_values < self.tolerance] = 0  # type: ignore
-            singular_values2 = [
-                singular_value**2 for singular_value in singular_values
-            ]
+            singular_values2 = [singular_value**2 for singular_value in singular_values]
             entropy[bond] = -1 * np.sum(
                 np.fromiter((xlogy(s, s) for s in singular_values2), dtype=float)
             )
