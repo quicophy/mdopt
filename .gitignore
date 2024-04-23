@@ -135,7 +135,7 @@ dmypy.json
 .DS_Store
 
 # Data folders
-data/
+data*/
 
 # .out files
 *.out
