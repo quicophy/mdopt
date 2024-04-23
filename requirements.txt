@@ -229,6 +229,9 @@ matplotlib==3.8.3 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:ef6c1025a570354297d6c15f7d0f296d95f88bd3850066b7f1e7b4f2f4c13a39 \
     --hash=sha256:f386cf162b059809ecfac3bcc491a9ea17da69fa35c8ded8ad154cd4b933d5ec \
     --hash=sha256:fa93695d5c08544f4a0dfd0965f378e7afc410d8672816aff1e81be1f45dbf2e
+matrex==0.0.1 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:48a3c9fc69ef893d1dfbd6248b3e156bdc7cf554096b0d3c2f9e2da07bbba899 \
+    --hash=sha256:7cf243fe0c726c928aaf5c30622292bb21189e5f91b8a3c79e5ce60e08fb0460
 more-itertools==10.2.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:686b06abe565edfab151cb8fd385a05651e1fdf8f0a14191e4439283421f8684 \
     --hash=sha256:8fccb480c43d3e99a00087634c06dd02b0d50fbf088b380de5a41a015ec239e1
