@@ -14,8 +14,8 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools
 
 # Define arrays of system sizes and bond dimensions
-system_sizes=(48 96 192 384)
-bond_dims=(8 16 32 64 128 256 512 1024)
+system_sizes=(96 192 384)
+bond_dims=(128 256 512 1024)
 
 # Create job submission scripts by iterating
 # over each combination of system_size and bond_dim and submitting them
@@ -24,9 +24,9 @@ for system_size in "${system_sizes[@]}"; do
         # Create a job submission script for each combination
         cat > "submit-job-${system_size}-${bond_dim}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=24:00:00                                                     # Time limit (hh:mm:ss)
+#SBATCH --time=48:00:00                                                     # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                   # Number of CPU cores per task
-#SBATCH --mem=32000                                                         # Memory per node
+#SBATCH --mem=64000                                                         # Memory per node
 #SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}       # Descriptive job name
 #SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-%j.out  # Standard output and error log
 
