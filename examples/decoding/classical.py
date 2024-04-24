@@ -53,7 +53,9 @@ except ImportError as e:
 parser = argparse.ArgumentParser(
     description="Launch calculations on Compute Canada clusters."
 )
-parser.add_argument("--system_size", type=int, help="System size as the number of bits.")
+parser.add_argument(
+    "--system_size", type=int, help="System size as the number of bits."
+)
 parser.add_argument(
     "--bond_dim", type=int, help="Maximum bond dimension to keep during contraction."
 )
