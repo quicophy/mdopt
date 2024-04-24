@@ -34,7 +34,7 @@ module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
 # Run the Python script with the specified system size and bond dimension
-python examples/decoding/classical.py $system_size $bond_dim
+python examples/decoding/classical.py --system_size $system_size --bond_dim $bond_dim
 EOS
 
         # Submit the job
