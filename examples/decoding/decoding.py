@@ -2,6 +2,8 @@
 Below, we define some decoding-specific functions over the MPS/MPO entities
 we encounter during the decoding process as well as the functions we use
 to generate and operate over both classical and quantum error correcting codes.
+Note, that this is auxiliary code which is not included into the library,
+thus not tested and provided as is.
 """
 
 from functools import reduce
@@ -9,9 +11,16 @@ from typing import cast, Union, Optional, List, Tuple
 
 import numpy as np
 from tqdm import tqdm
-import qecstruct as qec
+from matrex import msro
 from opt_einsum import contract
 from more_itertools import powerset
+from qecstruct import (
+    Rng,
+    BinarySymmetricChannel,
+    shor_code,
+    CssCode,
+    LinearCode,
+)  # pylint: disable=E0611
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
@@ -29,7 +38,7 @@ from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.utils import ConstraintString
 
 
-def bitflip_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
+def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     """
     This function returns a bitflip bias operator -- the operator which will bias us
     towards the initial input by ranking the bitstrings according to
@@ -37,7 +46,7 @@ def bitflip_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
 
     Parameters
     ----------
-    prob_bias : np.float32
+    prob_bias : float
         Probability of the operator.
 
     Returns
@@ -72,7 +81,7 @@ def bitflip_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
     return bias_operator
 
 
-def depolarising_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
+def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     """
     This function returns a depolarising bias operator -- the operator which will bias us
     towards the initial input by ranking the bitstrings according to
@@ -80,7 +89,7 @@ def depolarising_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
 
     Parameters
     ----------
-    prob_bias : np.float32
+    prob_bias : float
         Probability of the operator.
 
     Returns
@@ -103,7 +112,7 @@ def depolarising_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
     |11> -> √(p/3)|00> + √(p/3)|01> + √(p/3)|10> + √(1-p)|11>,
     Note, that this operation is not unitary, which means that it does not
     preserve the canonical form without enforcing renormalisation.
-    Following our convention, the operator has legs ``(pUL pUR, pDL pDR)``,
+    Following our convention, the operator has legs ``(pUL, pUR, pDL, pDR)``,
     where ``p`` stands for "physical", and
     ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
     """
@@ -123,12 +132,11 @@ def depolarising_bias(prob_bias: np.float32 = np.float32(0.5)) -> np.ndarray:
 def apply_bitflip_bias(
     mps: Union[ExplicitMPS, CanonicalMPS],
     sites_to_bias: Union[str, List[int]] = "All",
-    prob_bias_list: Union[np.float32, List[np.float32]] = 0.1,
+    prob_bias_list: Union[float, List[float]] = 0.1,
     renormalise: bool = True,
-    result_to_explicit: bool = False,
-) -> Union[ExplicitMPS, CanonicalMPS]:
+) -> CanonicalMPS:
     """
-    The function which applies a bitflip bias to a MPS.
+    The function which applies a bitflip bias to a given MPS.
 
     Parameters
     ----------
@@ -137,17 +145,15 @@ def apply_bitflip_bias(
     sites_to_bias : Union[str, List[int]]
         The list of sites to which the operators are applied.
         If set to "All", takes all sites of the MPS.
-    prob_bias_list : Union[np.float32, List[np.float32]]
+    prob_bias_list : Union[float, List[float]]
         The list of probabilities of each operator at each site.
         If set to a number, applies it to all of the sites.
     renormalise : bool
-        Whether to renormalise during contraction.
-    result_to_explicit : bool
-        Whether to transform the resulting MPS into the Explicit form.
+        Whether to renormalise spectra during contraction.
 
     Returns
     -------
-    biased_mps : Union[ExplicitMPS, CanonicalMPS]
+    biased_mps : CanonicalMPS
         The resulting MPS.
     """
 
@@ -176,12 +182,6 @@ def apply_bitflip_bias(
             operator=bitflip_bias(prob_bias),
         )
 
-    if isinstance(mps, CanonicalMPS):
-        mps.orth_centre = mps.num_sites - 1
-        mps = mps.move_orth_centre(final_pos=0, renormalise=renormalise)
-        if result_to_explicit:
-            return mps.explicit(renormalise=renormalise)
-
     if isinstance(mps, ExplicitMPS):
         mps = mps.mixed_canonical(orth_centre=mps.num_sites - 1)
         mps = mps.move_orth_centre(final_pos=0, renormalise=renormalise)
@@ -192,7 +192,7 @@ def apply_bitflip_bias(
 def apply_depolarising_bias(
     mps: Union[ExplicitMPS, CanonicalMPS],
     sites_to_bias: Union[str, List[int]] = "All",
-    prob_bias_list: Union[np.float32, List[np.float32]] = 0.1,
+    prob_bias_list: Union[float, List[float]] = 0.1,
     renormalise: bool = True,
     result_to_explicit: bool = False,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
@@ -208,11 +208,11 @@ def apply_depolarising_bias(
         If set to "All", takes all sites of the MPS.
         Note, each site in this list means the next site is also
         taken into account.
-    prob_bias_list : Union[np.float32, List[np.float32]]
+    prob_bias_list : Union[float, List[float]]
         The list of probabilities of each operator at each site.
         If set to a number, applies it to all of the sites.
     renormalise : bool
-        Whether to renormalise during contraction.
+        Whether to renormalise spectra during contraction.
     result_to_explicit : bool
         Whether to transform the resulting MPS into the Explicit form.
 
@@ -251,8 +251,10 @@ def apply_depolarising_bias(
             depolarising_bias(prob_bias=prob_bias),
             optimize=[(0, 1), (0, 1)],
         )
-        mps.tensors[site], singular_values, b_r = split_two_site_tensor(
-            two_site_tensor, renormalise=renormalise
+        mps.tensors[site], singular_values, b_r, _ = split_two_site_tensor(
+            two_site_tensor,
+            renormalise=renormalise,
+            return_truncation_error=True,
         )
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
@@ -328,7 +330,30 @@ def bin_vec_to_dense(vector: "qec.sparse.BinaryVector") -> np.ndarray:
     return array
 
 
-def linear_code_checks(code: "qec.LinearCode") -> List[List[int]]:
+def linear_code_parity_matrix_dense(code: LinearCode) -> np.ndarray:
+    """
+    Given a linear code, returns its parity check matrix in dense form.
+
+    Parameters
+    ----------
+    code : qec.LinearCode
+        Linear code object.
+
+    Returns
+    -------
+    parity_matrix : np.ndarray
+        The parity check matrix.
+    """
+
+    parity_matrix = code.par_mat()
+    array = np.zeros((parity_matrix.num_rows(), parity_matrix.num_columns()), dtype=int)
+    for row, cols in enumerate(parity_matrix.rows()):
+        for col in cols:
+            array[row, col] = 1
+    return array
+
+
+def linear_code_checks(code: LinearCode) -> List[List[int]]:
     """
     Given a linear code, returns a list of its checks, where each check
     is represented as a list of indices of the bits touched by it.
@@ -344,15 +369,11 @@ def linear_code_checks(code: "qec.LinearCode") -> List[List[int]]:
         List of checks.
     """
 
-    parity_matrix = code.par_mat()
-    array = np.zeros((parity_matrix.num_rows(), parity_matrix.num_columns()), dtype=int)
-    for row, cols in enumerate(parity_matrix.rows()):
-        for col in cols:
-            array[row, col] = 1
-    return [list(np.nonzero(row)[0]) for row in array]
+    parity_matrix_dense = linear_code_parity_matrix_dense(code)
+    return [list(np.nonzero(row)[0]) for row in parity_matrix_dense]
 
 
-def linear_code_constraint_sites(code: "qec.LinearCode") -> List[List[List[int]]]:
+def linear_code_constraint_sites(code: LinearCode) -> List[List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -389,7 +410,7 @@ def linear_code_constraint_sites(code: "qec.LinearCode") -> List[List[List[int]]
     return cast(List[List[List[int]]], constraints_strings)
 
 
-def linear_code_codewords(code: "qec.LinearCode") -> np.ndarray:
+def linear_code_codewords(code: LinearCode) -> np.ndarray:
     """
     Returns the list of codewords of a linear code. Codewords are returned
     as integers in most-significant-bit-first convention.
@@ -427,7 +448,7 @@ def linear_code_codewords(code: "qec.LinearCode") -> np.ndarray:
     return np.sort(np.array(codewords))
 
 
-def css_code_checks(code: qec.CssCode) -> Tuple[List[int]]:
+def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
     """
     Given a quantum CSS code, returns a list of its checks, where each check
     is represented as a list of indices of the bits adjacent to it.
@@ -474,7 +495,7 @@ def css_code_checks(code: qec.CssCode) -> Tuple[List[int]]:
     return checks_x, checks_z
 
 
-def css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
+def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -523,7 +544,7 @@ def css_code_constraint_sites(code: qec.CssCode) -> Tuple[List[int]]:
     return constraints_strings_x, constraints_strings_z
 
 
-def css_code_logicals(code: qec.CssCode):
+def css_code_logicals(code: CssCode):
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -564,7 +585,7 @@ def css_code_logicals(code: qec.CssCode):
     return z_logicals[0], x_logicals[0]
 
 
-def css_code_logicals_sites(code: qec.CssCode) -> Tuple[List[int]]:
+def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
     """
     Returns the list of MPS sites where the logical operators should be applied.
 
@@ -602,9 +623,9 @@ def css_code_logicals_sites(code: qec.CssCode) -> Tuple[List[int]]:
 
 
 def linear_code_prepare_message(
-    code: "qec.LinearCode",
-    prob_error: np.float32 = np.float32(0.5),
-    error_model: "qec.noise_model" = qec.BinarySymmetricChannel,
+    code: LinearCode,
+    prob_error: float = float(0.5),
+    error_model: "qec.noise_model" = BinarySymmetricChannel,
     seed: Optional[int] = None,
 ) -> Tuple[str, str]:
     """
@@ -615,7 +636,7 @@ def linear_code_prepare_message(
     ----------
     code : qec.LinearCode
         Linear code object.
-    prob_error : np.float32
+    prob_error : float
         Error probability of the error model.
     error_model : qec.noise_model
         The error model used to flip bits of a random codeword.
@@ -631,9 +652,9 @@ def linear_code_prepare_message(
     """
 
     num_bits = len(code)
-    initial_codeword = code.random_codeword(qec.Rng(seed))
+    initial_codeword = code.random_codeword(Rng(seed))
     perturbed_codeword = initial_codeword + error_model(prob_error).sample(
-        num_bits, qec.Rng(seed)
+        num_bits, Rng(seed)
     )
     initial_codeword = "".join(str(bit) for bit in bin_vec_to_dense(initial_codeword))
     perturbed_codeword = "".join(
@@ -655,6 +676,7 @@ def apply_constraints(
     result_to_explicit: bool = True,
     strategy: str = "Naive",
     silent: bool = False,
+    return_entropies_and_bond_dims: bool = False,
 ) -> Union[CanonicalMPS, ExplicitMPS]:
     """
     This function applies logical constraints to an MPS.
@@ -677,65 +699,91 @@ def apply_constraints(
         The contractor strategy.
     silent : bool
         Whether to show the progress bar or not.
+    return_entropies_and_bond_dims : bool
+        Whether to return the entanglement entropies and bond dimensions at each bond.
 
     Returns
     -------
     mps : Union[CanonicalMPS, ExplicitMPS]
         The resulting MPS.
+    entropies, bond_dims : List[float], List[int]
+        The list of entanglement entropies at each bond.
+        Returned only if ``return_entropies_and_bond_dims`` is set to ``True``.
     """
 
+    entropies = []
+    bond_dims = []
+
+    if strategy == "Optimized":
+        mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
+        for row_idx, sublist in enumerate(strings):
+            for subsublist in sublist:
+                for index in subsublist:
+                    mpo_location_matrix[row_idx][index] = 1
+
+        optimized_order = msro(mpo_location_matrix)
+        strings = [strings[index] for index in optimized_order]
+
     if strategy == "Naive":
-        for string in tqdm(strings, disable=silent):
-            # Preparing the MPO.
-            string = ConstraintString(logical_tensors, string)
-            mpo = string.mpo()
+        pass
 
-            # Finding the starting site for the MPS to perform contraction.
-            start_site = min(string.flat())
+    for string in tqdm(strings, disable=silent):
+        # Preparing the MPO.
+        string = ConstraintString(logical_tensors, string)
+        mpo = string.mpo()
 
-            # Preparing the MPS for contraction.
-            if isinstance(mps, ExplicitMPS):
-                mps = mps.mixed_canonical(orth_centre=start_site)
+        # Finding the starting site for the MPS to perform contraction.
+        start_site = min(string.flat())
 
-            if isinstance(mps, CanonicalMPS):
-                if mps.orth_centre is None:
-                    orth_centres, flags_left, flags_right = find_orth_centre(
-                        mps, return_orth_flags=True
-                    )
+        # Preparing the MPS for contraction.
+        if isinstance(mps, ExplicitMPS):
+            mps = mps.mixed_canonical(orth_centre=start_site)
 
-                    # Managing possible issues with multiple orthogonality centres
-                    # arising if we do not renormalise while contracting.
-                    if orth_centres and len(orth_centres) == 1:
-                        mps.orth_centre = orth_centres[0]
-                    # Convention.
-                    if all(flags_left) and all(flags_right):
-                        mps.orth_centre = 0
-                    elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
-                        if flags_right == [not flag for flag in flags_left]:
-                            mps.orth_centre = mps.num_sites - 1
-                    elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
-                        if flags_right == [not flag for flag in flags_left]:
-                            mps.orth_centre = 0
-                    elif all(flags_right):
-                        mps.orth_centre = 0
-                    elif all(flags_left):
-                        mps.orth_centre = mps.num_sites - 1
-
-                mps = cast(
-                    Union[ExplicitMPS, CanonicalMPS],
-                    mps.move_orth_centre(final_pos=start_site, renormalise=renormalise),
+        if isinstance(mps, CanonicalMPS):
+            if mps.orth_centre is None:
+                orth_centres, flags_left, flags_right = find_orth_centre(
+                    mps, return_orth_flags=True
                 )
 
-            # Doing the contraction.
-            mps = mps_mpo_contract(
-                mps,
-                mpo,
-                start_site,
-                renormalise=renormalise,
-                chi_max=chi_max,
-                inplace=False,
-                result_to_explicit=result_to_explicit,
+                # Managing possible issues with multiple orthogonality centres
+                # arising if we do not renormalise while contracting.
+                if orth_centres and len(orth_centres) == 1:
+                    mps.orth_centre = orth_centres[0]
+                # Convention.
+                if all(flags_left) and all(flags_right):
+                    mps.orth_centre = 0
+                elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
+                    if flags_right == [not flag for flag in flags_left]:
+                        mps.orth_centre = mps.num_sites - 1
+                elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
+                    if flags_right == [not flag for flag in flags_left]:
+                        mps.orth_centre = 0
+                elif all(flags_right):
+                    mps.orth_centre = 0
+                elif all(flags_left):
+                    mps.orth_centre = mps.num_sites - 1
+
+            mps = cast(
+                Union[ExplicitMPS, CanonicalMPS],
+                mps.move_orth_centre(final_pos=start_site, renormalise=True),
             )
+
+        mps = mps_mpo_contract(
+            mps,
+            mpo,
+            start_site,
+            renormalise=renormalise,
+            chi_max=chi_max,
+            inplace=False,
+            result_to_explicit=result_to_explicit,
+        )
+
+        if return_entropies_and_bond_dims:
+            entropies.append(mps.entanglement_entropy())
+            bond_dims.append(mps.bond_dimensions)
+
+    if return_entropies_and_bond_dims:
+        return cast(CanonicalMPS, mps), entropies, bond_dims
 
     return cast(CanonicalMPS, mps)
 
@@ -743,12 +791,12 @@ def apply_constraints(
 def decode_linear(
     message: Union[ExplicitMPS, CanonicalMPS],
     codeword: Union[ExplicitMPS, CanonicalMPS],
-    code: "qec.LinearCode",
+    code: LinearCode,
     num_runs: int = int(1),
     chi_max_dmrg: int = int(1e4),
-    cut: np.float32 = np.float32(1e-12),
+    cut: float = float(1e-12),
     silent: bool = False,
-) -> Tuple[DephasingDMRG, np.float32]:
+) -> Tuple[DephasingDMRG, float]:
     """
     This function performs actual decoding of a message given a code and
     the DMRG truncation parameters.
@@ -766,15 +814,16 @@ def decode_linear(
         Number of DMRG sweeps.
     chi_max_dmrg : int
         Maximum bond dimension to keep in the DMRG algorithm.
-    cut : np.float32
+    cut : float
         The lower boundary of the spectrum in the DMRG algorithm.
         All the singular values smaller than that will be discarded.
 
     Returns
     -------
     engine : DephasingDMRG
-        The container class for the Deohasing DMRG algorithm, see :class:`mdopt.optimiser.DMRG`.
-    overlap : np.float32
+        The container class for the Dephasing DMRG algorithm,
+        see :class:`mdopt.optimiser.DephasingDMRG`.
+    overlap : float
         The overlap between the decoded message and a given codeword,
         computed as the following inner product |<decoded_message|codeword>|.
     """
@@ -800,7 +849,6 @@ def decode_linear(
 def decode_shor(
     error: str,
     renormalise: bool = True,
-    result_to_explicit: bool = True,
     silent: bool = True,
 ):
     """
@@ -815,8 +863,6 @@ def decode_shor(
         "X_0 Z_0 X_1 Z_1 ..."
     renormalise : bool
         Whether to renormalise the singular values during contraction.
-    result_to_explicit : True
-        Whether to transform the resulting MPS into the Explicit form.
     silent : bool
         Whether to show the progress bars or not.
 
@@ -826,7 +872,7 @@ def decode_shor(
         If the error string length does not correspond to the code.
     """
 
-    code = qec.shor_code()
+    code = shor_code()
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
     assert num_sites == 20
@@ -847,10 +893,7 @@ def decode_shor(
     sites_to_bias = list(range(num_logicals, num_sites))
 
     error_mps = apply_bitflip_bias(
-        mps=error_mps,
-        sites_to_bias=sites_to_bias,
-        renormalise=renormalise,
-        result_to_explicit=result_to_explicit,
+        mps=error_mps, sites_to_bias=sites_to_bias, renormalise=renormalise
     )
 
     error_mps = apply_constraints(
@@ -858,7 +901,6 @@ def decode_shor(
         constraints_sites[0],
         constraints_tensors,
         renormalise=renormalise,
-        result_to_explicit=result_to_explicit,
         silent=silent,
     )
     error_mps = apply_constraints(
@@ -866,7 +908,6 @@ def decode_shor(
         constraints_sites[1],
         constraints_tensors,
         renormalise=renormalise,
-        result_to_explicit=result_to_explicit,
         silent=silent,
     )
     error_mps = apply_constraints(
@@ -874,7 +915,6 @@ def decode_shor(
         logicals_sites,
         logicals_tensors,
         renormalise=renormalise,
-        result_to_explicit=result_to_explicit,
         silent=silent,
     )
 
@@ -892,7 +932,3 @@ def decode_shor(
         return "Z", logical
     if np.argmax(logical) == 3:
         return "Y", logical
-
-
-def decode_hyperproduct():
-    raise NotImplementedError
