@@ -53,9 +53,9 @@ except ImportError as e:
 parser = argparse.ArgumentParser(
     description="Launch calculations on Compute Canada clusters."
 )
-parser.add_argument("system_size", type=int, help="System size as the number of bits.")
+parser.add_argument("--system_size", type=int, help="System size as the number of bits.")
 parser.add_argument(
-    "bond_dim", type=int, help="Maximum bond dimension to keep during contraction."
+    "--bond_dim", type=int, help="Maximum bond dimension to keep during contraction."
 )
 args = parser.parse_args()
 
@@ -125,7 +125,7 @@ for PROB_ERROR in error_rates:
                 chi_max=CHI_MAX_CONTRACTOR,
                 renormalise=True,
                 result_to_explicit=False,
-                strategy="Naive",
+                strategy="Optimized",
                 silent=True,
             )
             logging.info("Decoding the perturbed codeword state using DMRG.")
