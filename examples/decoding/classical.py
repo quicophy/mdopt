@@ -144,9 +144,6 @@ for PROB_ERROR in error_rates:
                 logging.info("Decoding successful.")
             else:
                 logging.info("Decoding failed.")
-            logging.info(
-                f"Finished one experiment for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX_CONTRACTOR}, PROB_ERROR={PROB_ERROR}"
-            )
         except Exception as e:
             logging.error(f"Failed in DMRG decoding: {str(e)}", exc_info=True)
             success = 0
