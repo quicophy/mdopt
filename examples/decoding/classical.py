@@ -152,6 +152,9 @@ for PROB_ERROR in error_rates:
             success = 0
 
         failures.append(1 - success)
+        logging.info(
+            f"Finished experiment {l} for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX_CONTRACTOR}, PROB_ERROR={PROB_ERROR}"
+        )
 
     failures_statistics[(NUM_BITS, CHI_MAX_CONTRACTOR, PROB_ERROR)] = failures
     failures_key = (
