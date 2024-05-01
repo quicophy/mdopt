@@ -11,8 +11,10 @@ from typing import cast, Union, Optional, List, Tuple
 
 import numpy as np
 from tqdm import tqdm
+from matrex import msro
 from opt_einsum import contract
 from more_itertools import powerset
+from scipy.sparse import eye, csc_matrix, hstack, kron, block_diag
 from qecstruct import (
     Rng,
     BinarySymmetricChannel,
@@ -329,6 +331,29 @@ def bin_vec_to_dense(vector: "qec.sparse.BinaryVector") -> np.ndarray:
     return array
 
 
+def linear_code_parity_matrix_dense(code: LinearCode) -> np.ndarray:
+    """
+    Given a linear code, returns its parity check matrix in dense form.
+
+    Parameters
+    ----------
+    code : qec.LinearCode
+        Linear code object.
+
+    Returns
+    -------
+    parity_matrix : np.ndarray
+        The parity check matrix.
+    """
+
+    parity_matrix = code.par_mat()
+    array = np.zeros((parity_matrix.num_rows(), parity_matrix.num_columns()), dtype=int)
+    for row, cols in enumerate(parity_matrix.rows()):
+        for col in cols:
+            array[row, col] = 1
+    return array
+
+
 def linear_code_checks(code: LinearCode) -> List[List[int]]:
     """
     Given a linear code, returns a list of its checks, where each check
@@ -345,12 +370,8 @@ def linear_code_checks(code: LinearCode) -> List[List[int]]:
         List of checks.
     """
 
-    parity_matrix = code.par_mat()
-    array = np.zeros((parity_matrix.num_rows(), parity_matrix.num_columns()), dtype=int)
-    for row, cols in enumerate(parity_matrix.rows()):
-        for col in cols:
-            array[row, col] = 1
-    return [list(np.nonzero(row)[0]) for row in array]
+    parity_matrix_dense = linear_code_parity_matrix_dense(code)
+    return [list(np.nonzero(row)[0]) for row in parity_matrix_dense]
 
 
 def linear_code_constraint_sites(code: LinearCode) -> List[List[List[int]]]:
@@ -693,61 +714,77 @@ def apply_constraints(
 
     entropies = []
     bond_dims = []
+
+    # Using matrix front minimization technique to optimize the order
+    # in which to apply the checks.
+    if strategy == "Optimized":
+        mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
+        for row_idx, sublist in enumerate(strings):
+            for subsublist in sublist:
+                for index in subsublist:
+                    mpo_location_matrix[row_idx][index] = 1
+
+        optimized_order = msro(mpo_location_matrix)
+        strings = [strings[index] for index in optimized_order]
+
+    # Do not optimize the order in which to apply the checks.
     if strategy == "Naive":
-        for string in tqdm(strings, disable=silent):
-            # Preparing the MPO.
-            string = ConstraintString(logical_tensors, string)
-            mpo = string.mpo()
+        pass
 
-            # Finding the starting site for the MPS to perform contraction.
-            start_site = min(string.flat())
+    for string in tqdm(strings, disable=silent):
+        # Preparing the MPO.
+        string = ConstraintString(logical_tensors, string)
+        mpo = string.mpo()
 
-            # Preparing the MPS for contraction.
-            if isinstance(mps, ExplicitMPS):
-                mps = mps.mixed_canonical(orth_centre=start_site)
+        # Finding the starting site for the MPS to perform contraction.
+        start_site = min(string.flat())
 
-            if isinstance(mps, CanonicalMPS):
-                if mps.orth_centre is None:
-                    orth_centres, flags_left, flags_right = find_orth_centre(
-                        mps, return_orth_flags=True
-                    )
+        # Preparing the MPS for contraction.
+        if isinstance(mps, ExplicitMPS):
+            mps = mps.mixed_canonical(orth_centre=start_site)
 
-                    # Managing possible issues with multiple orthogonality centres
-                    # arising if we do not renormalise while contracting.
-                    if orth_centres and len(orth_centres) == 1:
-                        mps.orth_centre = orth_centres[0]
-                    # Convention.
-                    if all(flags_left) and all(flags_right):
-                        mps.orth_centre = 0
-                    elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
-                        if flags_right == [not flag for flag in flags_left]:
-                            mps.orth_centre = mps.num_sites - 1
-                    elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
-                        if flags_right == [not flag for flag in flags_left]:
-                            mps.orth_centre = 0
-                    elif all(flags_right):
-                        mps.orth_centre = 0
-                    elif all(flags_left):
-                        mps.orth_centre = mps.num_sites - 1
-
-                mps = cast(
-                    Union[ExplicitMPS, CanonicalMPS],
-                    mps.move_orth_centre(final_pos=start_site, renormalise=True),
+        if isinstance(mps, CanonicalMPS):
+            if mps.orth_centre is None:
+                orth_centres, flags_left, flags_right = find_orth_centre(
+                    mps, return_orth_flags=True
                 )
 
-            mps = mps_mpo_contract(
-                mps,
-                mpo,
-                start_site,
-                renormalise=renormalise,
-                chi_max=chi_max,
-                inplace=False,
-                result_to_explicit=result_to_explicit,
+                # Managing possible issues with multiple orthogonality centres
+                # arising if we do not renormalise while contracting.
+                if orth_centres and len(orth_centres) == 1:
+                    mps.orth_centre = orth_centres[0]
+                # Convention.
+                if all(flags_left) and all(flags_right):
+                    mps.orth_centre = 0
+                elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
+                    if flags_right == [not flag for flag in flags_left]:
+                        mps.orth_centre = mps.num_sites - 1
+                elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
+                    if flags_right == [not flag for flag in flags_left]:
+                        mps.orth_centre = 0
+                elif all(flags_right):
+                    mps.orth_centre = 0
+                elif all(flags_left):
+                    mps.orth_centre = mps.num_sites - 1
+
+            mps = cast(
+                Union[ExplicitMPS, CanonicalMPS],
+                mps.move_orth_centre(final_pos=start_site, renormalise=True),
             )
 
-            if return_entropies_and_bond_dims:
-                entropies.append(mps.entanglement_entropy())
-                bond_dims.append(mps.bond_dimensions)
+        mps = mps_mpo_contract(
+            mps,
+            mpo,
+            start_site,
+            renormalise=renormalise,
+            chi_max=chi_max,
+            inplace=False,
+            result_to_explicit=result_to_explicit,
+        )
+
+        if return_entropies_and_bond_dims:
+            entropies.append(mps.entanglement_entropy())
+            bond_dims.append(mps.bond_dimensions)
 
     if return_entropies_and_bond_dims:
         return cast(CanonicalMPS, mps), entropies, bond_dims
@@ -899,3 +936,121 @@ def decode_shor(
         return "Z", logical
     if np.argmax(logical) == 3:
         return "Y", logical
+
+
+def repetition_code(num_sites: int) -> csc_matrix:
+    """
+    Generate the parity check matrix for a repetition code of length `num_sites`.
+
+    A repetition code is a simple error-correcting code in which the same data bit
+    is repeated multiple times to ensure error detection and correction. The parity
+    check matrix created by this function represents each data bit and its
+    immediate neighbor, allowing for the detection of single-bit errors in the
+    code.
+    This code is taken from PyMatching library.
+
+    Parameters
+    ----------
+    num_sites : int
+        The number of bits in the repetition code. This is also the length of the
+        code.
+
+    Returns
+    -------
+    scipy.sparse.csc_matrix
+        The parity check matrix of the repetition code. This matrix is returned
+        as a sparse matrix in compressed sparse column format, where each row
+        represents a parity check involving two bits (the current and the next,
+        with wrap-around).
+
+    Examples
+    --------
+    >>> from scipy.sparse import csc_matrix
+    >>> num_sites = 3
+    >>> matrix = repetition_code(num_sites)
+    >>> matrix.toarray()
+    array([[1, 1, 0],
+           [0, 1, 1],
+           [1, 0, 1]], dtype=uint8)
+    """
+
+    row_ind, col_ind = zip(
+        *((i, j) for i in range(num_sites) for j in (i, (i + 1) % num_sites))
+    )
+    data = np.ones(2 * num_sites, dtype=np.uint8)
+    return csc_matrix((data, (row_ind, col_ind)))
+
+
+def toric_code_x_checks(lattice_size: int) -> List[List[int]]:
+    """
+    Generate a sparse check matrix for the X stabilizers of a toric code.
+
+    The toric code is defined on a 2D lattice and this function generates the X stabilizers
+    based on the hypergraph product of two repetition codes, which is key to detecting
+    bit-flip errors in a quantum error correction setting.
+    This code is taken from PyMatching library.
+
+    Parameters
+    ----------
+    L : int
+        The lattice size, which determines the dimensions of the resulting check matrix.
+        This is also used to define the size of each repetition code.
+
+    Returns
+    -------
+    list of lists of int
+        A list of lists, where each inner list contains the indices of non-zero entries
+        (qubits involved) in each row of the check matrix, representing an X stabilizer.
+
+    Notes
+    -----
+    The function constructs the parity check matrix by creating two repetition codes and
+    taking the Kronecker product with identity matrices to align the checks correctly across
+    the 2D lattice, treating each row as an X stabilizer of the toric code.
+    """
+
+    Hr = repetition_code(lattice_size)
+    H = hstack(
+        [kron(Hr, eye(Hr.shape[1])), kron(eye(Hr.shape[0]), Hr.T)], dtype=np.uint8
+    )
+    H.data = H.data % 2
+    H.eliminate_zeros()
+    checks = csc_matrix(H).toarray()
+    return [list(np.nonzero(check)[0]) for check in checks]
+
+
+def toric_code_x_logicals(lattice_size: int) -> List[List[int]]:
+    """
+    Generate a sparse binary matrix representing the X logical operators for a toric code.
+
+    This function constructs logical operators based on the homology groups of the repetition
+    codes, using the Kunneth theorem. Each row of the resulting matrix represents an X logical
+    operator, which spans non-trivial loops around the torus in the toric code.
+    This code is taken from PyMatching library.
+
+    Parameters
+    ----------
+    L : int
+        The lattice size, which determines the dimensions of each repetition code used in the
+        construction of the logical operators.
+
+    Returns
+    -------
+    list of lists of int
+        A list of lists where each inner list contains the indices of non-zero entries
+        in each row of the logical operator matrix.
+
+    Notes
+    -----
+    The X logical operators are constructed by taking the Kronecker product of specific
+    sparse matrices representing minimal non-trivial cycles of the repetition codes,
+    reflecting the topological nature of the toric code.
+    """
+
+    H1 = csc_matrix(([1], ([0], [0])), shape=(1, lattice_size), dtype=np.uint8)
+    H0 = csc_matrix(np.ones((1, lattice_size), dtype=np.uint8))
+    x_logicals = block_diag([kron(H1, H0), kron(H0, H1)])
+    x_logicals.data = x_logicals.data % 2
+    x_logicals.eliminate_zeros()
+    logicals = csc_matrix(x_logicals).toarray()
+    return [list(np.nonzero(logical)[0]) for logical in logicals]

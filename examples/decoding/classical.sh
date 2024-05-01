@@ -1,4 +1,4 @@
-##!/bin/bash
+#!/bin/bash
 
 # Load the Python module
 module load python/3.11.5
@@ -11,25 +11,36 @@ source ~/envs/myenv/bin/activate
 
 # Install required Python packages if they are not already installed
 pip install --no-index --upgrade pip
-pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools
+pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Create a job submission script
-cat > submit-job.sh << 'EOS'
+# Define arrays of system sizes and bond dimensions
+system_sizes=(96 192 384)
+bond_dims=(128 256 512)
+
+# Create job submission scripts by iterating
+# over each combination of system_size and bond_dim and submitting them
+for system_size in "${system_sizes[@]}"; do
+    for bond_dim in "${bond_dims[@]}"; do
+        # Create a job submission script for each combination
+        cat > "submit-job-${system_size}-${bond_dim}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=12:00:00                     # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=16                  # Number of CPU cores per task
-#SBATCH --mem=256000                        # Memory per node
-#SBATCH --job-name=decoding-classical-ldpc  # Descriptive job name
-#SBATCH --output=%x-%j.out                  # Standard output and error log
+#SBATCH --time=120:00:00                                                    # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=1                                                   # Number of CPU cores per task
+#SBATCH --mem=16000                                                         # Memory per node
+#SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}       # Descriptive job name
+#SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-%j.out  # Standard output and error log
 
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-python classical.py
+# Run the Python script with the specified system size and bond dimension
+python examples/decoding/classical.py --system_size $system_size --bond_dim $bond_dim
 EOS
 
-# Submit the job
-echo "Submitting the job..."
-sbatch submit-job.sh
+        # Submit the job
+        echo "Submitting the job for system size ${system_size} and bond dimension ${bond_dim}"
+        sbatch "submit-job-${system_size}-${bond_dim}.sh" --export=system_size=$system_size,bond_dim=$bond_dim
+    done
+done
 
-echo "Job submission script has been created and the job is submitted. Check the queue with 'squeue -u \${USER}'"
+echo "All jobs have been submitted. Check the queue with 'squeue -u \${USER}'"
