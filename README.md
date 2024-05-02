@@ -129,7 +129,7 @@ for PROB_ERROR in error_rates:
                 message=perturbed_codeword_state,
                 codeword=initial_codeword_state,
                 code=code,
-                num_runs=NUM_DMRG_RUNS,
+                num_runs=1,
                 chi_max_dmrg=CHI_MAX,
                 silent=False,
             )
