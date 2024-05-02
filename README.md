@@ -155,8 +155,8 @@ for PROB_ERROR in error_rates:
     )
 ```
 
-For more examples, see the
-[mdopt examples](https://github.com/quicophy/mdopt/tree/main/examples).
+For more examples, see the mdopt
+[examples folder](https://github.com/quicophy/mdopt/tree/main/examples).
 
 ## Cite
 If you happen to find `mdopt` useful in your research, please consider supporting development by citing it.
