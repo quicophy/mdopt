@@ -38,11 +38,6 @@ from tqdm import tqdm
 import qecstruct as qec
 from scipy.stats import unitary_group
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
 from mdopt.mps.utils import create_custom_product_state
 from mdopt.optimiser.utils import (
     SWAP,
@@ -58,6 +53,10 @@ from examples.decoding.decoding import (
     apply_bitflip_bias,
     apply_constraints,
     decode_linear,
+)
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 NUM_BITS = 24
