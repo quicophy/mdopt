@@ -128,7 +128,7 @@ for PROB_ERROR in error_rates:
                 renormalise=True,
                 result_to_explicit=False,
                 strategy="Optimized",
-                silent=True,
+                silent=False,
             )
             logging.info("Decoding the perturbed codeword state using DMRG.")
             dmrg_container, success = decode_linear(
