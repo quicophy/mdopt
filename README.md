@@ -171,17 +171,18 @@ If you happen to find `mdopt` useful in your research, please consider supportin
 
 ## Contribution guidelines
 
-**If you want to contribute to mdopt, be sure to follow GitHub's contribution guidelines. This project adheres to our
-[code of conduct](CODE_OF_CONDUCT.md). By participating, you are expected to
-uphold this code.**
+If you want to contribute to mdopt, be sure to follow GitHub's contribution guidelines.
+This project adheres to our [code of conduct](CODE_OF_CONDUCT.md).
+By participating, you are expected to
+uphold this code.
 
-**We use [GitHub issues](https://github.com/quicophy/mdopt/issues) for
-tracking requests and bugs, please direct specific questions to the maintainers.**
+We use [GitHub issues](https://github.com/quicophy/mdopt/issues) for
+tracking requests and bugs, please direct specific questions to the maintainers.
 
 The mdopt project strives to abide by generally accepted best practices in
-open-source software development.
+open-source software development, such as:
 
-*   Apply the desired changes and resolve any code
-    conflicts.
-*   Run TQP tests and ensure they pass.
-*   Build the package from source.
+*   apply the desired changes and resolve any code
+    conflicts,
+*   run the tests and ensure they pass,
+*   build the package from source.
