@@ -1,5 +1,3 @@
-Welcome to mdopt's documentation!
-=================================
 
 .. include:: README.rst
 
