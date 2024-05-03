@@ -62,16 +62,14 @@ class ConstraintString:
         For example, [[3, 5], [2, 4, 6], ...] means applying
         `constraints[0]` to sites 3 and 5, `constraints[1]` to sites 2, 4, 6, etc.
 
-    Exceptions
-    ----------
+    Raises
+    ------
     ValueError
-        Empty list of constraints.
-    ValueError
-        Empty list of sites.
-    ValueError
-        The ``sites`` list is longer than the ``constraints`` list.
-    ValueError
-        Non-unique sites in the `sites` list.
+        - Empty list of constraints.
+        - Empty list of sites.
+        - The ``sites`` list is longer than the ``constraints`` list.
+        - Non-unique sites in the `sites` list.
+        - The list of sites has gaps, indicating breaks in the constraints string.
     """
 
     def __init__(self, constraints: List[np.ndarray], sites: List[List[int]]) -> None:

@@ -394,8 +394,7 @@ def create_simple_product_state(
     Raises
     ------
     ValueError
-        If the chosen form is mixed-canonical.
-        This form is not available for product states.
+        If the chosen form is mixed-canonical. (This form is not available for product states.)
 
     Notes
     -----
@@ -404,6 +403,9 @@ def create_simple_product_state(
         | :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
         | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
         | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
+
+    The returned state is normalised.
+
     """
 
     tensor = np.zeros((phys_dim,))
@@ -446,18 +448,17 @@ def create_custom_product_state(
     string : str
         The string defining the product-state MPS. Available characters: ``0``, ``1``, ``+``.
     phys_dim : int
-        Dimensionality of the local Hilbert space, i.e.,
-        the dimension of each physical leg of the MPS.
+        Dimensionality of the local Hilbert space, i.e., the dimension of each physical leg of the MPS.
     form : str
         The form of the MPS. Available options:
-            | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
-            | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
-            | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
+        | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
+        | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
+        | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
     tolerance : float
         For the Explicit form:
-        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        Absolute tolerance of the normalization of the singular value spectrum at each bond.
         For the Canonical form:
-        numerical tolerance to zero out the singular values in Singular Value Decomposition.
+        Numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
     Returns
     -------
@@ -467,19 +468,19 @@ def create_custom_product_state(
     Raises
     ------
     ValueError
-        If a symbol inside the ``string`` argument does not belong to the available set.
-    ValueError
-        If the chosen form is mixed-canonical.
-        This form is not available for product states.
+        A symbol inside the ``string`` argument does not belong to the available set
+        or the chosen form is mixed-canonical. (This form is not available for product states.)
 
     Notes
     -----
-    Produces a Matrix Product State consisting of tensors with bond dimenstions equal to 1.
+    Produces a Matrix Product State consisting of tensors with bond dimensions equal to 1.
     The tensors are defined as follows:
-        | :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
-        | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
-        | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
-    The state is renormalized at the end.
+        | :math:`|0\rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
+        | :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
+        | :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
+
+    The state is renormalised at the end.
+
     """
 
     num_sites = len(string)
