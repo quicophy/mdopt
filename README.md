@@ -23,7 +23,7 @@ pip install mdopt
 Otherwise, clone the repository and use [poetry](https://python-poetry.org/).
 
 ```bash
-$ poetry install
+poetry install
 ```
 
 ## mdopt at a glance

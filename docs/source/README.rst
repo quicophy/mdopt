@@ -24,7 +24,7 @@ Otherwise, clone the repository and use
 
 .. code:: bash
 
-   $ poetry install
+   poetry install
 
 mdopt at a glance
 -----------------
