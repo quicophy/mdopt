@@ -12,4 +12,4 @@ Examples
    main_component.ipynb
    mps-rand-circ.ipynb
    shor.ipynb
-   toric.ipynb
+   surface.ipynb
