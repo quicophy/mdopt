@@ -1,13 +1,11 @@
-mdopt — Discrete Optimization in the MPS-MPO Language
-=====================================================
+``mdopt`` — Discrete Optimization in the MPS-MPO Language
+=========================================================
 
 |codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|
 |mypy| |Unitary Fund| |MIT license|
 
-mdopt is a python package built on top of numpy for discrete
-optimisation in the tensor-network (specifically, MPS-MPO) language. The
-code is hosted on github, so please feel free to submit issues and pull
-requests.
+``mdopt`` is a python package built on top of numpy for discrete optimisation in the tensor-network (specifically, MPS-MPO) language.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Installation
 ------------
@@ -26,19 +24,15 @@ Otherwise, clone the repository and use
 
    poetry install
 
-mdopt at a glance
------------------
+``mdopt`` at a glance
+---------------------
 
 .. code:: python
 
-   import os
-   import sys
    import logging
-   import argparse
    import numpy as np
    from tqdm import tqdm
    import qecstruct as qec
-   from scipy.stats import unitary_group
 
    from mdopt.mps.utils import create_custom_product_state
    from mdopt.optimiser.utils import (
@@ -73,7 +67,7 @@ mdopt at a glance
 
    for PROB_ERROR in error_rates:
        logging.info(
-           f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX_CONTRACTOR}, PROB_ERROR={PROB_ERROR}"
+           f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, PROB_ERROR={PROB_ERROR}"
        )
        failures = []
 
@@ -177,7 +171,7 @@ supporting development by citing it.
 Contribution guidelines
 -----------------------
 
-If you want to contribute to mdopt, be sure to follow GitHub’s
+If you want to contribute to ``mdopt``, be sure to follow GitHub’s
 contribution guidelines. This project adheres to our `code of
 conduct <CODE_OF_CONDUCT.md>`__. By participating, you are expected to
 uphold this code.
@@ -186,8 +180,8 @@ We use `GitHub issues <https://github.com/quicophy/mdopt/issues>`__ for
 tracking requests and bugs, please direct specific questions to the
 maintainers.
 
-The mdopt project strives to abide by generally accepted best practices
-in open-source software development, such as:
+The ``mdopt`` project strives to abide by generally accepted best
+practices in open-source software development, such as:
 
 -  apply the desired changes and resolve any code conflicts,
 -  run the tests and ensure they pass,
