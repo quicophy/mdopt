@@ -1,6 +1,6 @@
 name: tests
 
-on: [push, pull_request, fork]
+on: [push, pull_request]
 
 jobs:
   tests:
