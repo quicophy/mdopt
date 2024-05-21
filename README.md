@@ -31,9 +31,7 @@ poetry install
 ```python
 import logging
 import numpy as np
-from tqdm import tqdm
 import qecstruct as qec
-
 from mdopt.mps.utils import create_custom_product_state
 from mdopt.optimiser.utils import (
     SWAP,
@@ -48,7 +46,7 @@ from examples.decoding.decoding import (
 from examples.decoding.decoding import (
     apply_bitflip_bias,
     apply_constraints,
-    decode_linear,
+    decode_message,
 )
 
 logging.basicConfig(
@@ -71,7 +69,7 @@ for PROB_ERROR in error_rates:
     )
     failures = []
 
-    for l in tqdm(range(NUM_EXPERIMENTS)):
+    for l in range(NUM_EXPERIMENTS):
         new_seed = seed_seq.spawn(1)[0]
         rng = np.random.default_rng(new_seed)
         random_integer = rng.integers(1, 10**8 + 1)
@@ -121,13 +119,10 @@ for PROB_ERROR in error_rates:
                 silent=False,
             )
             logging.info("Decoding the perturbed codeword state using DMRG.")
-            dmrg_container, success = decode_linear(
+            dmrg_container, success = decode_message(
                 message=perturbed_codeword_state,
                 codeword=initial_codeword_state,
-                code=code,
-                num_runs=1,
                 chi_max_dmrg=CHI_MAX,
-                silent=False,
             )
             if success == 1:
                 logging.info("Decoding successful.")
@@ -151,7 +146,7 @@ for PROB_ERROR in error_rates:
     )
 ```
 
-For more examples, see the mdopt
+For more examples, see the `mdopt`
 [examples folder](https://github.com/quicophy/mdopt/tree/main/examples).
 
 ## Cite
