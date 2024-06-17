@@ -14,13 +14,12 @@ from tqdm import tqdm
 from matrex import msro
 from opt_einsum import contract
 from more_itertools import powerset
-from scipy.sparse import eye, csc_matrix, hstack, kron, block_diag
 from qecstruct import (
-    Rng,
     BinarySymmetricChannel,
+    LinearCode,
     shor_code,
     CssCode,
-    LinearCode,
+    Rng,
 )  # pylint: disable=E0611
 
 from mdopt.mps.explicit import ExplicitMPS
@@ -309,7 +308,7 @@ def pauli_to_mps(pauli_string: str) -> str:
     return mps_string
 
 
-def bin_vec_to_dense(vector: "qec.sparse.BinaryVector") -> np.ndarray:
+def bin_vec_to_dense(vector: "qecstruct.sparse.BinaryVector") -> np.ndarray:
     """
     Given a vector (1D array) in the ``qecstruct.sparse.BinaryVector`` format
     (native to ``qecstruct``), returns its dense representation.
@@ -414,7 +413,7 @@ def linear_code_constraint_sites(code: LinearCode) -> List[List[List[int]]]:
 def linear_code_codewords(code: LinearCode) -> np.ndarray:
     """
     Returns the list of codewords of a linear code. Codewords are returned
-    as integers in most-significant-bit-first convention.
+    as integers in the big-endian (a.k.a. most-significant-bit-first) convention.
 
     Parameters
     ----------
@@ -792,19 +791,21 @@ def apply_constraints(
     return cast(CanonicalMPS, mps)
 
 
-def decode_linear(
+def decode_message(
     message: Union[ExplicitMPS, CanonicalMPS],
     codeword: Union[ExplicitMPS, CanonicalMPS],
-    code: LinearCode,
     num_runs: int = int(1),
     chi_max_dmrg: int = int(1e4),
     cut: float = float(1e-12),
     silent: bool = False,
 ) -> Tuple[DephasingDMRG, float]:
     """
-    This function performs actual decoding of a message given a code and
-    the DMRG truncation parameters.
+    This function performs decoding of a message given the message state, i.e.,
+    the message MPS after applying a bias channel and constraints as well as
+    the codeword to compare the decoding result against.
     Returns the overlap between the decoded message given the initial message.
+    This function is used independently of code generation and applying constraints.
+    It is in some sense code-agnostic.
 
     Parameters
     ----------
@@ -812,15 +813,15 @@ def decode_linear(
         The message MPS.
     codeword : Union[ExplicitMPS, CanonicalMPS]
         The codeword MPS.
-    code : qec.LinearCode
-        Linear code object.
     num_runs : int
         Number of DMRG sweeps.
     chi_max_dmrg : int
-        Maximum bond dimension to keep in the DMRG algorithm.
+        Maximum bond dimension to keep in the Dephasing DMRG algorithm.
     cut : float
-        The lower boundary of the spectrum in the DMRG algorithm.
+        The lower boundary of the spectrum in the Dephasing DMRG algorithm.
         All the singular values smaller than that will be discarded.
+    silent : bool
+        Whether to show the progress bar or not.
 
     Returns
     -------
@@ -833,8 +834,12 @@ def decode_linear(
     """
 
     # Creating an all-plus state to start the DMRG with.
-    num_bits = len(code)
+    num_bits = len(message)
     mps_dmrg_start = create_simple_product_state(num_bits, which="+")
+
+    # Running the Dephasing DMRG algorithm,
+    # which finds the closest basis product state to a given MPDO,
+    # which is formed from the message MPS.
     engine = DephasingDMRG(
         mps_dmrg_start,
         message,
@@ -845,30 +850,48 @@ def decode_linear(
     )
     engine.run(num_runs)
     mps_dmrg_final = engine.mps.right_canonical()
+
+    # Computing the overlap between the final MPS and the codeword.
     overlap = abs(inner_product(mps_dmrg_final, codeword))
 
     return engine, overlap
 
 
-def decode_shor(
+def decode_css(
+    code: CssCode,
     error: str,
+    num_runs: int = int(1),
+    chi_max: int = int(1e4),
+    bias_prob: float = float(0.1),
     renormalise: bool = True,
-    silent: bool = True,
+    silent: bool = False,
+    contraction_strategy: str = "Naive",
 ):
     """
-    This function does error-based decoding of Shor's code.
+    This function does error-based decoding of a CSS code via MPS marginalisation.
     It takes as input an error string and returns the most likely Pauli correction.
 
     Parameters
     ----------
+    code : qec.CssCode
+        The CSS code object.
     error : str
         The error in a string format.
         The way the decoder takes the error is as follows:
         "X_0 Z_0 X_1 Z_1 ..."
+    chi_max : int
+        Maximum bond dimension to keep during contractions
+        and in the Dephasing DMRG algorithm.
+    bias_prob : float
+        The probability of the depolarising bias applied before checks.
+    num_runs : int
+        Number of DMRG sweeps.
     renormalise : bool
         Whether to renormalise the singular values during contraction.
     silent : bool
         Whether to show the progress bars or not.
+    contraction_strategy : str
+        The contractor's strategy.
 
     Raises
     ------
@@ -876,11 +899,8 @@ def decode_shor(
         If the error string length does not correspond to the code.
     """
 
-    code = shor_code()
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
-    assert num_sites == 20
-    assert num_logicals == 2
 
     if len(error) != num_sites - num_logicals:
         raise ValueError(
@@ -890,167 +910,79 @@ def decode_shor(
     logicals_state = "+" * num_logicals
     state_string = logicals_state + error
     error_mps = create_custom_product_state(string=state_string)
+
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+
     constraints_sites = css_code_constraint_sites(code)
     logicals_sites = css_code_logicals_sites(code)
     sites_to_bias = list(range(num_logicals, num_sites))
 
+    # TODO depolarizing bias + add try/except here and in the decode_message
     error_mps = apply_bitflip_bias(
-        mps=error_mps, sites_to_bias=sites_to_bias, renormalise=renormalise
+        mps=error_mps,
+        sites_to_bias=sites_to_bias,
+        prob_bias_list=bias_prob,
+        renormalise=renormalise,
     )
 
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[0],
         constraints_tensors,
+        chi_max=chi_max,
         renormalise=renormalise,
         silent=silent,
+        strategy=contraction_strategy,
     )
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[1],
         constraints_tensors,
+        chi_max=chi_max,
         renormalise=renormalise,
         silent=silent,
+        strategy=contraction_strategy,
     )
     error_mps = apply_constraints(
         error_mps,
         logicals_sites,
         logicals_tensors,
+        chi_max=chi_max,
         renormalise=renormalise,
         silent=silent,
+        strategy=contraction_strategy,
     )
 
     sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
-    logical = marginalise(
+    logical_mps = marginalise(
         mps=error_mps,
         sites_to_marginalise=sites_to_marginalise,
-    ).dense(flatten=True, renormalise=True, norm=1)
-
-    if np.argmax(logical) == 0:
-        return "I", logical
-    if np.argmax(logical) == 1:
-        return "X", logical
-    if np.argmax(logical) == 2:
-        return "Z", logical
-    if np.argmax(logical) == 3:
-        return "Y", logical
-
-
-def repetition_code(num_sites: int) -> csc_matrix:
-    """
-    Generate the parity check matrix for a repetition code of length `num_sites`.
-
-    A repetition code is a simple error-correcting code in which the same data bit
-    is repeated multiple times to ensure error detection and correction. The parity
-    check matrix created by this function represents each data bit and its
-    immediate neighbor, allowing for the detection of single-bit errors in the
-    code.
-    This code is taken from PyMatching library.
-
-    Parameters
-    ----------
-    num_sites : int
-        The number of bits in the repetition code. This is also the length of the
-        code.
-
-    Returns
-    -------
-    scipy.sparse.csc_matrix
-        The parity check matrix of the repetition code. This matrix is returned
-        as a sparse matrix in compressed sparse column format, where each row
-        represents a parity check involving two bits (the current and the next,
-        with wrap-around).
-
-    Examples
-    --------
-    >>> from scipy.sparse import csc_matrix
-    >>> num_sites = 3
-    >>> matrix = repetition_code(num_sites)
-    >>> matrix.toarray()
-    array([[1, 1, 0],
-           [0, 1, 1],
-           [1, 0, 1]], dtype=uint8)
-    """
-
-    row_ind, col_ind = zip(
-        *((i, j) for i in range(num_sites) for j in (i, (i + 1) % num_sites))
     )
-    data = np.ones(2 * num_sites, dtype=np.uint8)
-    return csc_matrix((data, (row_ind, col_ind)))
+    num_logical_sites = len(logical_mps)
 
-
-def toric_code_x_checks(lattice_size: int) -> List[List[int]]:
-    """
-    Generate a sparse check matrix for the X stabilizers of a toric code.
-
-    The toric code is defined on a 2D lattice and this function generates the X stabilizers
-    based on the hypergraph product of two repetition codes, which is key to detecting
-    bit-flip errors in a quantum error correction setting.
-    This code is taken from PyMatching library.
-
-    Parameters
-    ----------
-    L : int
-        The lattice size, which determines the dimensions of the resulting check matrix.
-        This is also used to define the size of each repetition code.
-
-    Returns
-    -------
-    list of lists of int
-        A list of lists, where each inner list contains the indices of non-zero entries
-        (qubits involved) in each row of the check matrix, representing an X stabilizer.
-
-    Notes
-    -----
-    The function constructs the parity check matrix by creating two repetition codes and
-    taking the Kronecker product with identity matrices to align the checks correctly across
-    the 2D lattice, treating each row as an X stabilizer of the toric code.
-    """
-
-    Hr = repetition_code(lattice_size)
-    H = hstack(
-        [kron(Hr, eye(Hr.shape[1])), kron(eye(Hr.shape[0]), Hr.T)], dtype=np.uint8
-    )
-    H.data = H.data % 2
-    H.eliminate_zeros()
-    checks = csc_matrix(H).toarray()
-    return [list(np.nonzero(check)[0]) for check in checks]
-
-
-def toric_code_x_logicals(lattice_size: int) -> List[List[int]]:
-    """
-    Generate a sparse binary matrix representing the X logical operators for a toric code.
-
-    This function constructs logical operators based on the homology groups of the repetition
-    codes, using the Kunneth theorem. Each row of the resulting matrix represents an X logical
-    operator, which spans non-trivial loops around the torus in the toric code.
-    This code is taken from PyMatching library.
-
-    Parameters
-    ----------
-    L : int
-        The lattice size, which determines the dimensions of each repetition code used in the
-        construction of the logical operators.
-
-    Returns
-    -------
-    list of lists of int
-        A list of lists where each inner list contains the indices of non-zero entries
-        in each row of the logical operator matrix.
-
-    Notes
-    -----
-    The X logical operators are constructed by taking the Kronecker product of specific
-    sparse matrices representing minimal non-trivial cycles of the repetition codes,
-    reflecting the topological nature of the toric code.
-    """
-
-    H1 = csc_matrix(([1], ([0], [0])), shape=(1, lattice_size), dtype=np.uint8)
-    H0 = csc_matrix(np.ones((1, lattice_size), dtype=np.uint8))
-    x_logicals = block_diag([kron(H1, H0), kron(H0, H1)])
-    x_logicals.data = x_logicals.data % 2
-    x_logicals.eliminate_zeros()
-    logicals = csc_matrix(x_logicals).toarray()
-    return [list(np.nonzero(logical)[0]) for logical in logicals]
+    if num_logical_sites <= 10:
+        logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
+        return logical_dense, int(np.argmax(logical_dense) == 0)
+        # if np.argmax(logical_dense) == 0:
+        #    return "I", logical_dense
+        # if np.argmax(logical_dense) == 1:
+        #    return "X", logical_dense
+        # if np.argmax(logical_dense) == 2:
+        #    return "Z", logical_dense
+        # if np.argmax(logical_dense) == 3:
+        #    return "Y", logical_dense
+    else:
+        mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
+        mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
+        engine = DephasingDMRG(
+            mps=mps_dmrg_start,
+            mps_target=mps_dmrg_target,
+            chi_max=chi_max,
+            mode="LA",
+            silent=silent,
+        )
+        engine.run(num_iter=num_runs)
+        mps_dmrg_final = engine.mps
+        overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
+        return engine, overlap
