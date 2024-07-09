@@ -115,7 +115,7 @@ Otherwise, clone the repository and use
                    chi_max=CHI_MAX,
                    renormalise=True,
                    result_to_explicit=False,
-                   strategy="Optimized",
+                   strategy="Optimised",
                    silent=False,
                )
                logging.info("Decoding the perturbed codeword state using DMRG.")
