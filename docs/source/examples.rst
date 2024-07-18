@@ -11,5 +11,5 @@ Examples
    hypergraph_product.ipynb
    main_component.ipynb
    mps-rand-circ.ipynb
+   quantum_surface.ipynb
    shor.ipynb
-   surface.ipynb
