@@ -6,6 +6,7 @@ Note, that this is auxiliary code which is not included into the library,
 thus not tested and provided as is.
 """
 
+import logging
 from functools import reduce
 from typing import cast, Union, Optional, List, Tuple
 
@@ -16,8 +17,8 @@ from opt_einsum import contract
 from more_itertools import powerset
 from qecstruct import (
     BinarySymmetricChannel,
+    BinaryVector,
     LinearCode,
-    shor_code,
     CssCode,
     Rng,
 )  # pylint: disable=E0611
@@ -216,6 +217,13 @@ def apply_depolarising_bias(
     result_to_explicit : bool
         Whether to transform the resulting MPS into the Explicit form.
 
+    Raises
+    ------
+    ValueError
+        If the number of sites in the list is not even.
+        If the number of sites in the list is not equal to the number of probabilities.
+        If the channel parameter is not a probability.
+
     Returns
     -------
     biased_mps : Union[ExplicitMPS, CanonicalMPS]
@@ -227,6 +235,11 @@ def apply_depolarising_bias(
 
     if not isinstance(prob_bias_list, List):
         prob_bias_list = [prob_bias_list for _ in range(len(sites_to_bias))]
+
+    if len(sites_to_bias) % 2 != 0:
+        raise ValueError(
+            f"The number of sites in the list should be even, given {len(sites_to_bias)}."
+        )
 
     if len(sites_to_bias) != len(prob_bias_list):
         raise ValueError(
@@ -243,7 +256,7 @@ def apply_depolarising_bias(
 
     mps = mps.mixed_canonical(orth_centre=min(sites_to_bias))
 
-    for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+    for site, prob_bias in zip(sites_to_bias[:-1], prob_bias_list[:-1]):
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
@@ -308,14 +321,14 @@ def pauli_to_mps(pauli_string: str) -> str:
     return mps_string
 
 
-def bin_vec_to_dense(vector: "qecstruct.sparse.BinaryVector") -> np.ndarray:
+def bin_vec_to_dense(vector: BinaryVector) -> np.ndarray:
     """
-    Given a vector (1D array) in the ``qecstruct.sparse.BinaryVector`` format
+    Given a vector (1D array) in the BinaryVector format
     (native to ``qecstruct``), returns its dense representation.
 
     Parameters
     ----------
-    vector : qec.sparse.BinaryVector
+    vector : BinaryVector
         The vector we want to densify.
 
     Returns
@@ -664,7 +677,7 @@ def linear_code_prepare_message(
     return initial_codeword, perturbed_codeword
 
 
-# The functions below are used to apply constraints to a codeword MPS and perform actual decoding.
+# The functions below are used to apply constraints to a codeword MPS and do the decoding.
 
 
 def apply_constraints(
@@ -716,15 +729,15 @@ def apply_constraints(
 
     # Using matrix front minimization technique to optimize the order
     # in which to apply the checks.
-    if strategy == "Optimized":
+    if strategy == "Optimised":
         mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
         for row_idx, sublist in enumerate(strings):
             for subsublist in sublist:
                 for index in subsublist:
                     mpo_location_matrix[row_idx][index] = 1
 
-        optimized_order = msro(mpo_location_matrix)
-        strings = [strings[index] for index in optimized_order]
+        optimised_order = msro(mpo_location_matrix)
+        strings = [strings[index] for index in optimised_order]
 
     # Do not optimize the order in which to apply the checks.
     if strategy == "Naive":
@@ -857,18 +870,94 @@ def decode_message(
     return engine, overlap
 
 
+def generate_pauli_error_string(
+    num_qubits: int,
+    error_rate: float,
+    probabilities: Optional[List[float]] = None,
+    seed: Optional[int] = None,
+) -> str:
+    """
+    This function generates a random Pauli error string based on error rate.
+    At each qubit, the error is chosen to be X, Y, or Z with equal probability.
+
+    Parameters
+    ----------
+    num_qubits : int
+        Number of qubits in the surface code.
+    error_rate : float
+        Physical error rate for generating errors.
+    probabilities : Optional[List[float]]
+        Probabilities for X, Y, and Z errors. Defaults to [1/3, 1/3, 1/3].
+    seed : Optional[int]
+        Seed for the random number generator.
+
+    Raises
+    ------
+    ValueError
+        If the Pauli error probabilities do not sum up to 1.
+
+    Returns
+    -------
+    str
+        A string representing the Pauli errors in the format "XZYZI..."
+    """
+
+    if probabilities is None:
+        probabilities = [1 / 3, 1 / 3, 1 / 3]
+
+    if not np.isclose(sum(probabilities), 1):
+        raise ValueError(
+            f"The sum of the Pauli error probabilities should be 1, "
+            f"given {sum(probabilities)}."
+        )
+
+    np.random.seed(seed)
+    pauli_errors = ["I", "X", "Y", "Z"]
+    error_string = []
+
+    for _ in range(num_qubits):
+        # Choose a random Pauli error based on the error rate
+        if np.random.random() < error_rate:
+            error = np.random.choice(pauli_errors[1:], p=probabilities)
+        else:
+            error = "I"
+
+        error_string.append(f"{error}")
+
+    return "".join(error_string)
+
+
+# Configure logging to display in Jupyter Notebook
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Create a handler that writes log messages to the notebook's output cell
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+
+# Create a logging format
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+handler.setFormatter(formatter)
+
+# Add the handler to the logger
+if not logger.handlers:
+    logger.addHandler(handler)
+
+
 def decode_css(
     code: CssCode,
     error: str,
     num_runs: int = int(1),
     chi_max: int = int(1e4),
+    bias_type: str = "Depolarising",
     bias_prob: float = float(0.1),
     renormalise: bool = True,
     silent: bool = False,
     contraction_strategy: str = "Naive",
 ):
     """
-    This function does error-based decoding of a CSS code via MPS marginalisation.
+    This function does error-based decoding of a CSS code via MPS marginalisation and
+    subsequent reading out the main component via densifying or Dephasing DMRG.
     It takes as input an error string and returns the most likely Pauli correction.
 
     Parameters
@@ -882,6 +971,9 @@ def decode_css(
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
+    bias_type : str
+        The type of the bias applied before checks.
+        Available options: "Bitflip" and "Depolarising".
     bias_prob : float
         The probability of the depolarising bias applied before checks.
     num_runs : int
@@ -898,6 +990,9 @@ def decode_css(
     ValueError
         If the error string length does not correspond to the code.
     """
+
+    if not silent:
+        logging.info("Starting decode_css function.")  # TODO
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
@@ -918,14 +1013,27 @@ def decode_css(
     logicals_sites = css_code_logicals_sites(code)
     sites_to_bias = list(range(num_logicals, num_sites))
 
-    # TODO depolarizing bias + add try/except here and in the decode_message
-    error_mps = apply_bitflip_bias(
-        mps=error_mps,
-        sites_to_bias=sites_to_bias,
-        prob_bias_list=bias_prob,
-        renormalise=renormalise,
-    )
+    if bias_type == "Bitflip":
+        if not silent:
+            logging.info("Applying bitflip bias.")
+        error_mps = apply_bitflip_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
+    else:
+        if not silent:
+            logging.info("Applying depolarising bias.")
+        error_mps = apply_depolarising_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
 
+    if not silent:
+        logging.info("Applying constraints for the first time.")  # TODO
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[0],
@@ -934,7 +1042,11 @@ def decode_css(
         renormalise=renormalise,
         silent=silent,
         strategy=contraction_strategy,
+        result_to_explicit=False,
     )
+
+    if not silent:
+        logging.info("Applying constraints for the second time.")  # TODO
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[1],
@@ -943,7 +1055,11 @@ def decode_css(
         renormalise=renormalise,
         silent=silent,
         strategy=contraction_strategy,
+        result_to_explicit=False,
     )
+
+    if not silent:
+        logging.info("Applying logicals constraints.")
     error_mps = apply_constraints(
         error_mps,
         logicals_sites,
@@ -952,26 +1068,29 @@ def decode_css(
         renormalise=renormalise,
         silent=silent,
         strategy=contraction_strategy,
+        result_to_explicit=False,
     )
 
+    if not silent:
+        logging.info("Marginalising the error MPS.")
     sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
     logical_mps = marginalise(
         mps=error_mps,
         sites_to_marginalise=sites_to_marginalise,
     )
+
     num_logical_sites = len(logical_mps)
+
+    if not silent:
+        logging.info(f"Number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
         logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
-        return logical_dense, int(np.argmax(logical_dense) == 0)
-        # if np.argmax(logical_dense) == 0:
-        #    return "I", logical_dense
-        # if np.argmax(logical_dense) == 1:
-        #    return "X", logical_dense
-        # if np.argmax(logical_dense) == 2:
-        #    return "Z", logical_dense
-        # if np.argmax(logical_dense) == 3:
-        #    return "Y", logical_dense
+        result = logical_dense, int(np.argmax(logical_dense) == 0)
+        if not silent:
+            logging.info("Decoding completed with result: %s", result)
+        return result
+        # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
     else:
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
@@ -982,7 +1101,11 @@ def decode_css(
             mode="LA",
             silent=silent,
         )
+        if not silent:
+            logging.info("Running DMRG engine.")
         engine.run(num_iter=num_runs)
         mps_dmrg_final = engine.mps
         overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
+        if not silent:
+            logging.info("DMRG run completed with overlap: %f", overlap)
         return engine, overlap

@@ -13,7 +13,7 @@ source ~/envs/myenv/bin/activate
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of system sizes, bond dimensions and error probabilities
+# Define arrays of system sizes, bond dimensions, and error probabilities
 system_sizes=(96 192 384)
 bond_dims=(128 256 512 1024)
 
@@ -29,7 +29,7 @@ do
 done
 
 # Create job submission scripts by iterating
-# over each combination of system_size and bond_dim and submitting them
+# over each combination of system_size, bond_dim, and error_prob and submitting them
 for system_size in "${system_sizes[@]}"; do
     for bond_dim in "${bond_dims[@]}"; do
         for error_prob in "${error_probabilities[@]}"; do
@@ -45,15 +45,14 @@ for system_size in "${system_sizes[@]}"; do
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-# Run the Python script with the specified system size and bond dimension
-python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim $bond_dim --error_prob $error_prob
+# Run the Python script with the specified system size, bond dimension, and error probability
+python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim $bond_dim --error_prob $error_prob --num_experiments 100 --seed 42
 EOS
 
-            echo "Submitting the job for system size ${system_size}, bond dimension ${bond_dim} and probability error ${error_prob}"
-            sbatch "submit-job-${system_size}-${bond_dim}-${error_prob}.sh" --export=system_size=$system_size,bond_dim=$bond_dim,error_prob=$error_prob
+            echo "Submitting the job for system size ${system_size}, bond dimension ${bond_dim}, and error probability ${error_prob}"
+            sbatch "submit-job-${system_size}-${bond_dim}-${error_prob}.sh"
         done
     done
 done
 
 echo "All jobs have been submitted. Check the queue with 'squeue -u \${USER}'"
-
