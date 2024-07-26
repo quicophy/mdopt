@@ -46,7 +46,7 @@ module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
 # Run the Python script with the specified system size and bond dimension
-python examples/decoding/classical.py --system_size $system_size --bond_dim $bond_dim --error_prob $error_prob
+python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim $bond_dim --error_prob $error_prob
 EOS
 
             echo "Submitting the job for system size ${system_size}, bond dimension ${bond_dim} and probability error ${error_prob}"
