@@ -997,6 +997,8 @@ def decode_css(
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
 
+    if not silent:
+        logging.info(f"The total number of sites: {num_sites}.")
     if len(error) != num_sites - num_logicals:
         raise ValueError(
             f"The error length is {len(error)}, expected {num_sites - num_logicals}."
@@ -1082,7 +1084,7 @@ def decode_css(
     num_logical_sites = len(logical_mps)
 
     if not silent:
-        logging.info(f"Number of logical sites: {num_logical_sites}.")
+        logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
         logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
