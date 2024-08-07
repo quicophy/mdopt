@@ -6,10 +6,10 @@ Examples
    :caption: Notebook Examples:
 
    classical_ldpc.ipynb
-   csp_codes.ipynb
    ground_state.ipynb
-   hypergraph_product.ipynb
    main_component.ipynb
    mps-rand-circ.ipynb
+   quantum_csp.ipynb
+   quantum_hypergraph_product.ipynb
    quantum_surface.ipynb
    shor.ipynb
