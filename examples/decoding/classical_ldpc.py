@@ -77,7 +77,7 @@ def parse_arguments():
 
 def run_experiment(num_bits, chi_max_contractor, prob_error, num_experiments, seed):
     logging.info(
-        f"Starting experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max_contractor}, PROB_ERROR={prob_error}"
+        f"Starting {num_experiments} experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max_contractor}, PROB_ERROR={prob_error}, SEED={seed}"
     )
 
     seed_seq = np.random.SeedSequence(seed)
@@ -99,7 +99,7 @@ def run_experiment(num_bits, chi_max_contractor, prob_error, num_experiments, se
             failures.append(1)
 
         logging.info(
-            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max_contractor}, PROB_ERROR={prob_error}"
+            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max_contractor}, PROB_ERROR={prob_error}, SEED={seed}"
         )
 
     return failures
@@ -171,12 +171,10 @@ def run_single_experiment(num_bits, chi_max_contractor, prob_error, seed):
         return 1
 
 
-def save_failures_statistics(failures, num_bits, chi_max_contractor, prob_error):
+def save_failures_statistics(failures, num_bits, chi_max_contractor, prob_error, seed):
     failures_statistics = {}
     failures_statistics[(num_bits, chi_max_contractor, prob_error)] = failures
-    failures_key = (
-        f"numbits{num_bits}_bonddim{chi_max_contractor}_errorprob{prob_error}"
-    )
+    failures_key = f"numbits{num_bits}_bonddim{chi_max_contractor}_errorprob{prob_error}_seed{seed}"
     np.save(f"{failures_key}.npy", failures)
     logging.info(
         f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
@@ -192,7 +190,9 @@ def main():
         args.num_experiments,
         args.seed,
     )
-    save_failures_statistics(failures, args.system_size, args.bond_dim, args.error_prob)
+    save_failures_statistics(
+        failures, args.system_size, args.bond_dim, args.error_prob, args.seed
+    )
 
 
 if __name__ == "__main__":
