@@ -14,10 +14,10 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
 # Define arrays of system sizes, bond dimensions, and error probabilities
-system_sizes=(384 192 96)
-bond_dims=(1024 512)
-seeds=(123 124 125 126 127 128 129 130 131 132 133) # 20 random seeds from 123 to 143 -- CHANGE THIS
-num_experiments=5 # Per each random seed (to parallelize more)
+system_sizes=(192)
+bond_dims=(1024)
+seeds=(123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143) # 20 random seeds
+num_experiments=5 # Per each random seed
 
 error_probabilities=()
 start=0.1
@@ -39,7 +39,7 @@ for seed in "${seeds[@]}"; do
                 # Create a job submission script for each combination
                 cat > "submit-job-${system_size}-${bond_dim}-${error_prob}-${seed}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=96:00:00                                                                           # Time limit (hh:mm:ss)
+#SBATCH --time=168:00:00                                                                          # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                                         # Number of CPU cores per task
 #SBATCH --mem=16000                                                                               # Memory per node
 #SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_prob}-${seed}       # Descriptive job name
@@ -54,6 +54,7 @@ python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim
 EOS
             echo "Submitting the job for system size ${system_size}, bond dimension ${bond_dim}, error probability ${error_prob} and seed ${seed}."
             sbatch "submit-job-${system_size}-${bond_dim}-${error_prob}-${seed}.sh"
+            rm "submit-job-${system_size}-${bond_dim}-${error_prob}-${seed}.sh"
             done
         done
     done
