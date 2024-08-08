@@ -927,23 +927,6 @@ def generate_pauli_error_string(
     return "".join(error_string)
 
 
-# Configure logging to display in Jupyter Notebook
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-# Create a handler that writes log messages to the notebook's output cell
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
-
-# Create a logging format
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-
-# Add the handler to the logger
-if not logger.handlers:
-    logger.addHandler(handler)
-
-
 def decode_css(
     code: CssCode,
     error: str,

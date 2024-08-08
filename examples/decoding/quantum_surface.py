@@ -23,17 +23,9 @@ sys.path.append(project_root)
 sys.path.append(examples_path)
 
 try:
-    from mdopt.mps.utils import create_custom_product_state, marginalise
-    from mdopt.contractor.contractor import mps_mpo_contract
-    from mdopt.optimiser.utils import SWAP, COPY_LEFT, XOR_BULK, XOR_LEFT, XOR_RIGHT
-    from examples.decoding.decoding import apply_constraints, apply_bitflip_bias
     from examples.decoding.decoding import (
         decode_css,
         pauli_to_mps,
-        css_code_checks,
-        css_code_logicals,
-        css_code_logicals_sites,
-        css_code_constraint_sites,
         generate_pauli_error_string,
     )
 except ImportError as e:
@@ -44,7 +36,9 @@ except ImportError as e:
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Surface code decoding script.")
+    parser = argparse.ArgumentParser(
+        description="Launch quantum surface code calculations on Compute Canada clusters."
+    )
     parser.add_argument(
         "--lattice_size",
         type=int,
@@ -52,67 +46,65 @@ def parse_arguments():
         help="Lattice size for the surface code.",
     )
     parser.add_argument(
+        "--bond_dim",
+        type=int,
+        required=True,
+        help="Maximum bond dimension to keep during contraction.",
+    )
+    parser.add_argument(
+        "--error_prob", type=float, required=True, help="The error probability."
+    )
+    parser.add_argument(
         "--num_experiments",
         type=int,
         required=True,
-        help="Number of experiments to run.",
+        help="The number of experiments to run.",
     )
     parser.add_argument(
-        "--seed", type=int, required=True, help="Seed for the random number generator."
-    )
-    parser.add_argument(
-        "--max_bond_dims",
-        nargs="+",
+        "--seed",
         type=int,
         required=True,
-        help="List of maximum bond dimensions.",
-    )
-    parser.add_argument(
-        "--error_rates",
-        nargs="+",
-        type=float,
-        required=True,
-        help="List of error rates.",
+        help="The seed for the random number generator.",
     )
     return parser.parse_args()
 
 
-def run_experiment(lattice_size, num_experiments, seed, max_bond_dims, error_rates):
+def run_experiment(lattice_size, chi_max, prob_error, num_experiments, seed):
+    logging.info(
+        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+    )
+
     seed_seq = np.random.SeedSequence(seed)
-    failures_statistics = {}
+    failures = []
 
-    for chi_max in max_bond_dims:
-        logging.info(f"CHI_MAX = {chi_max}")
-        for error_rate in tqdm(error_rates):
-            failures = []
+    for l in tqdm(range(num_experiments)):
+        new_seed = seed_seq.spawn(1)[0]
+        rng = np.random.default_rng(new_seed)
+        random_integer = rng.integers(1, 10**8 + 1)
+        experiment_seed = random_integer
 
-            for _ in range(num_experiments):
-                new_seed = seed_seq.spawn(1)[0]
-                rng = np.random.default_rng(new_seed)
-                random_integer = rng.integers(1, 10**8 + 1)
-                experiment_seed = random_integer
+        try:
+            failure = run_single_experiment(
+                lattice_size, chi_max, prob_error, experiment_seed
+            )
+            failures.append(failure)
+        except Exception as e:
+            logging.error(f"Experiment {l} failed with error: {str(e)}", exc_info=True)
+            failures.append(1)
 
-                try:
-                    failure = run_single_experiment(
-                        lattice_size, chi_max, error_rate, experiment_seed
-                    )
-                    failures.append(failure)
-                except Exception as e:
-                    logging.error(
-                        f"Experiment failed with error: {str(e)}", exc_info=True
-                    )
-                    failures.append(1)
+        logging.info(
+            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+        )
 
-            failures_statistics[lattice_size, chi_max, error_rate] = failures
-
-    return failures_statistics
+    return failures
 
 
-def run_single_experiment(lattice_size, chi_max, error_rate, seed):
+def run_single_experiment(lattice_size, chi_max, prob_error, seed):
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
-    error = generate_pauli_error_string(len(surface_code), error_rate, seed=seed)
+    prob_bias = prob_error
+    error = generate_pauli_error_string(len(surface_code), prob_error, seed=seed)
     error_mps = pauli_to_mps(error)
 
     _, success = decode_css(
@@ -120,37 +112,44 @@ def run_single_experiment(lattice_size, chi_max, error_rate, seed):
         error=error_mps,
         chi_max=chi_max,
         bias_type="Depolarizing",
-        bias_prob=error_rate,
+        bias_prob=prob_bias,
         renormalise=True,
         silent=True,
         contraction_strategy="Optimised",
     )
 
-    return 1 - success
+    if success == 1:
+        logging.info("Decoding successful.")
+        return 0
+    else:
+        logging.info("Decoding failed.")
+        return 1
 
 
-def save_failures_statistics(failures_statistics):
-    for key, failures in failures_statistics.items():
-        lattice_size, chi_max, error_rate = key
-        failures_key = (
-            f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}"
-        )
-        np.save(f"{failures_key}.npy", failures)
-        logging.info(
-            f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
-        )
+def save_failures_statistics(failures, lattice_size, chi_max, prob_error, seed):
+    failures_statistics = {}
+    failures_statistics[(lattice_size, chi_max, prob_error)] = failures
+    failures_key = (
+        f"latticesize{lattice_size}_bonddim{chi_max}_errorprob{prob_error}_seed{seed}"
+    )
+    np.save(f"{failures_key}.npy", failures)
+    logging.info(
+        f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
+    )
 
 
 def main():
     args = parse_arguments()
-    failures_statistics = run_experiment(
+    failures = run_experiment(
         args.lattice_size,
+        args.bond_dim,
+        args.error_prob,
         args.num_experiments,
         args.seed,
-        args.max_bond_dims,
-        args.error_rates,
     )
-    save_failures_statistics(failures_statistics)
+    save_failures_statistics(
+        failures, args.lattice_size, args.bond_dim, args.error_prob, args.seed
+    )
 
 
 if __name__ == "__main__":
