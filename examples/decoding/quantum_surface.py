@@ -20,6 +20,7 @@ project_root_beluga = os.getenv(
 project_root_cedar = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
 )
+project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 
 examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
@@ -28,9 +29,10 @@ examples_path_cedar = os.getenv(
     "MDOPT_EXAMPLES_PATH",
     "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
 )
+examples_path_graham = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
-sys.path.append(project_root_cedar)
-sys.path.append(examples_path_cedar)
+sys.path.append(project_root_graham)
+sys.path.append(examples_path_graham)
 
 try:
     from examples.decoding.decoding import (

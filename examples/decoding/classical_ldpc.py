@@ -14,13 +14,25 @@ logging.basicConfig(
 )
 
 # Append paths using environment variables or hardcoded fallbacks
-project_root = os.getenv("MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt")
-examples_path = os.getenv(
+project_root_beluga = os.getenv(
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
+)
+project_root_cedar = os.getenv(
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
+)
+project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
+
+examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
+examples_path_cedar = os.getenv(
+    "MDOPT_EXAMPLES_PATH",
+    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+)
+examples_path_graham = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
-sys.path.append(project_root)
-sys.path.append(examples_path)
+sys.path.append(project_root_beluga)
+sys.path.append(examples_path_beluga)
 
 try:
     from mdopt.mps.utils import create_custom_product_state
