@@ -14,13 +14,23 @@ logging.basicConfig(
 )
 
 # Append paths using environment variables or hardcoded fallbacks
-project_root = os.getenv("MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt")
-examples_path = os.getenv(
-    "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
+project_root_beluga = os.getenv(
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
+)
+project_root_cedar = os.getenv(
+    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
 )
 
-sys.path.append(project_root)
-sys.path.append(examples_path)
+examples_path_beluga = os.getenv(
+    "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
+)
+examples_path_cedar = os.getenv(
+    "MDOPT_EXAMPLES_PATH",
+    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+)
+
+sys.path.append(project_root_cedar)
+sys.path.append(examples_path_cedar)
 
 try:
     from examples.decoding.decoding import (
