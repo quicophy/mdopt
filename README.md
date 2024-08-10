@@ -63,9 +63,9 @@ seed_seq = np.random.SeedSequence(SEED)
 error_rates = np.linspace(0.1, 0.3, 10)
 failures_statistics = {}
 
-for PROB_ERROR in error_rates:
+for ERROR_RATE in error_rates:
     logging.info(
-        f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, PROB_ERROR={PROB_ERROR}"
+        f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, ERROR_RATE={ERROR_RATE}"
     )
     failures = []
 
@@ -79,7 +79,7 @@ for PROB_ERROR in error_rates:
         NUM_CHECKS = int(BIT_DEGREE * NUM_BITS / CHECK_DEGREE)
         if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
             raise ValueError("The Tanner graph of the code must be bipartite.")
-        PROB_BIAS = PROB_ERROR
+        PROB_BIAS = ERROR_RATE
 
         code = qec.random_regular_code(
             NUM_BITS, NUM_CHECKS, BIT_DEGREE, CHECK_DEGREE, qec.Rng(SEED)
@@ -87,7 +87,7 @@ for PROB_ERROR in error_rates:
         code_constraint_sites = linear_code_constraint_sites(code)
 
         INITIAL_CODEWORD, PERTURBED_CODEWORD = linear_code_prepare_message(
-            code, PROB_ERROR, error_model=qec.BinarySymmetricChannel, seed=SEED
+            code, ERROR_RATE, error_model=qec.BinarySymmetricChannel, seed=SEED
         )
         tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
@@ -134,12 +134,12 @@ for PROB_ERROR in error_rates:
 
         failures.append(1 - success)
         logging.info(
-            f"Finished experiment {l} for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, PROB_ERROR={PROB_ERROR}"
+            f"Finished experiment {l} for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, ERROR_RATE={ERROR_RATE}"
         )
 
-    failures_statistics[(NUM_BITS, CHI_MAX, PROB_ERROR)] = failures
+    failures_statistics[(NUM_BITS, CHI_MAX, ERROR_RATE)] = failures
     failures_key = (
-        f"numbits{NUM_BITS}_bonddim{CHI_MAX}_errorprob{PROB_ERROR}"
+        f"numbits{NUM_BITS}_bonddim{CHI_MAX}_errorrate{ERROR_RATE}"
     )
     logging.info(
         f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
