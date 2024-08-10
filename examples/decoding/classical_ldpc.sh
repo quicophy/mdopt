@@ -13,7 +13,7 @@ source ~/envs/myenv/bin/activate
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of system sizes, bond dimensions, and error probabilities
+# Define arrays of system sizes, bond dimensions, and error rates
 system_sizes=(384)
 bond_dims=(1024)
 seeds=(
@@ -54,7 +54,7 @@ for seed in "${seeds[@]}"; do
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-# Run the Python script with the specified system size, bond dimension, and error probability
+# Run the Python script with the specified system size, bond dimension, and error rate
 python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim $bond_dim \
     --error_rate $error_rate --num_experiments $num_experiments --seed $seed
 EOS

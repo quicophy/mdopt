@@ -13,7 +13,7 @@ source ~/envs/myenv/bin/activate
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of system sizes, bond dimensions, and error probabilities
+# Define arrays of system sizes, bond dimensions, and error rates
 lattice_sizes=(3)
 bond_dims=(128)
 seeds=(123 124 125 126 127 128 129 130 131 132 133) # 10 random seeds
@@ -48,11 +48,11 @@ for seed in "${seeds[@]}"; do
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-# Run the Python script with the specified lattice size, bond dimension, and error probability
+# Run the Python script with the specified lattice size, bond dimension, and error rate
 python examples/decoding/quantum_surface.py --lattice_size $lattice_size --bond_dim $bond_dim \
     --error_rate $error_rate --num_experiments $num_experiments --seed $seed
 EOS
-            echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error probability ${error_rate} and seed ${seed}."
+            echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate} and seed ${seed}."
             sbatch "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
             rm "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
             done
