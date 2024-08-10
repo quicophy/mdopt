@@ -70,7 +70,7 @@ def parse_arguments():
         help="Maximum bond dimension to keep during contraction.",
     )
     parser.add_argument(
-        "--error_prob", type=float, required=True, help="The error probability."
+        "--error_rate", type=float, required=True, help="The error rate."
     )
     parser.add_argument(
         "--num_experiments",
@@ -87,9 +87,9 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def run_experiment(lattice_size, chi_max, prob_error, num_experiments, seed):
+def run_experiment(lattice_size, chi_max, error_rate, num_experiments, seed):
     logging.info(
-        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
     )
 
     seed_seq = np.random.SeedSequence(seed)
@@ -103,7 +103,7 @@ def run_experiment(lattice_size, chi_max, prob_error, num_experiments, seed):
 
         try:
             failure = run_single_experiment(
-                lattice_size, chi_max, prob_error, experiment_seed
+                lattice_size, chi_max, error_rate, experiment_seed
             )
             failures.append(failure)
         except Exception as e:
@@ -111,18 +111,18 @@ def run_experiment(lattice_size, chi_max, prob_error, num_experiments, seed):
             failures.append(1)
 
         logging.info(
-            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
         )
 
     return failures
 
 
-def run_single_experiment(lattice_size, chi_max, prob_error, seed):
+def run_single_experiment(lattice_size, chi_max, error_rate, seed):
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
-    prob_bias = prob_error
-    error = generate_pauli_error_string(len(surface_code), prob_error, seed=seed)
+    prob_bias = error_rate
+    error = generate_pauli_error_string(len(surface_code), error_rate, seed=seed)
     error_mps = pauli_to_mps(error)
 
     _, success = decode_css(
@@ -144,11 +144,11 @@ def run_single_experiment(lattice_size, chi_max, prob_error, seed):
         return 1
 
 
-def save_failures_statistics(failures, lattice_size, chi_max, prob_error, seed):
+def save_failures_statistics(failures, lattice_size, chi_max, error_rate, seed):
     failures_statistics = {}
-    failures_statistics[(lattice_size, chi_max, prob_error)] = failures
+    failures_statistics[(lattice_size, chi_max, error_rate)] = failures
     failures_key = (
-        f"latticesize{lattice_size}_bonddim{chi_max}_errorprob{prob_error}_seed{seed}"
+        f"latticesize{lattice_size}_bonddim{chi_max}_errorprob{error_rate}_seed{seed}"
     )
     np.save(f"{failures_key}.npy", failures)
     logging.info(
@@ -161,12 +161,12 @@ def main():
     failures = run_experiment(
         args.lattice_size,
         args.bond_dim,
-        args.error_prob,
+        args.error_rate,
         args.num_experiments,
         args.seed,
     )
     save_failures_statistics(
-        failures, args.lattice_size, args.bond_dim, args.error_prob, args.seed
+        failures, args.lattice_size, args.bond_dim, args.error_rate, args.seed
     )
 
 
