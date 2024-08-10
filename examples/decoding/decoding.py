@@ -637,7 +637,7 @@ def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
 
 def linear_code_prepare_message(
     code: LinearCode,
-    prob_error: float = float(0.5),
+    error_rate: float = float(0.5),
     error_model: "qec.noise_model" = BinarySymmetricChannel,
     seed: Optional[int] = None,
 ) -> Tuple[str, str]:
@@ -649,8 +649,8 @@ def linear_code_prepare_message(
     ----------
     code : qec.LinearCode
         Linear code object.
-    prob_error : float
-        Error probability of the error model.
+    error_rate : float
+        Error rate of the error model.
     error_model : qec.noise_model
         The error model used to flip bits of a random codeword.
     seed : Optional[int]
@@ -666,7 +666,7 @@ def linear_code_prepare_message(
 
     num_bits = len(code)
     initial_codeword = code.random_codeword(Rng(seed))
-    perturbed_codeword = initial_codeword + error_model(prob_error).sample(
+    perturbed_codeword = initial_codeword + error_model(error_rate).sample(
         num_bits, Rng(seed)
     )
     initial_codeword = "".join(str(bit) for bit in bin_vec_to_dense(initial_codeword))
