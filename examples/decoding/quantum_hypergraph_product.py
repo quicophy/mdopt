@@ -6,7 +6,7 @@ import logging
 import argparse
 import numpy as np
 from tqdm import tqdm
-import qecstruct as qec
+import qecstruct as qc
 
 # Setup logging
 logging.basicConfig(
@@ -41,16 +41,10 @@ sys.path.append(project_root_graham)
 sys.path.append(examples_path_graham)
 
 try:
-    from mdopt.mps.utils import create_custom_product_state
-    from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
     from examples.decoding.decoding import (
-        linear_code_constraint_sites,
-        linear_code_prepare_message,
-    )
-    from examples.decoding.decoding import (
-        apply_bitflip_bias,
-        apply_constraints,
         decode_css,
+        pauli_to_mps,
+        generate_pauli_error_string,
     )
 except ImportError as e:
     logging.error(
@@ -67,7 +61,7 @@ def parse_arguments():
         "--system_size",
         type=int,
         required=True,
-        help="System size as the number of bits.",
+        help="System size as the number of bits in the underlying classical code.",
     )
     parser.add_argument(
         "--bond_dim",
@@ -76,7 +70,7 @@ def parse_arguments():
         help="Maximum bond dimension to keep during contraction.",
     )
     parser.add_argument(
-        "--error_rate", type=float, required=True, help="The error probability."
+        "--error_rate", type=float, required=True, help="The error rate."
     )
     parser.add_argument(
         "--num_experiments",
@@ -95,7 +89,7 @@ def parse_arguments():
 
 def run_experiment(num_bits, chi_max, error_rate, num_experiments, seed):
     logging.info(
-        f"Starting {num_experiments} experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max}, error_rate={error_rate}, SEED={seed}"
+        f"Starting {num_experiments} experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
     )
 
     seed_seq = np.random.SeedSequence(seed)
@@ -117,39 +111,34 @@ def run_experiment(num_bits, chi_max, error_rate, num_experiments, seed):
             failures.append(1)
 
         logging.info(
-            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max}, error_rate={error_rate}, SEED={seed}"
+            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
         )
 
     return failures
 
 
-def run_single_experiment(num_bits, chi_max_contractor, error_rate, seed):
+def run_single_experiment(num_bits, chi_max, error_rate, seed):
     CHECK_DEGREE, BIT_DEGREE = 4, 3
     NUM_CHECKS = int(BIT_DEGREE * num_bits / CHECK_DEGREE)
     if num_bits / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The Tanner graph of the code must be bipartite.")
 
-    prob_bias = error_rate
-    chi_max_dmrg = chi_max_contractor
-    cut = 1e-16
-    num_dmrg_runs = 1
-
     regular_code = qc.random_regular_code(
-        NUM_BITS, NUM_CHECKS, BIT_DEGREE, CHECK_DEGREE, qc.Rng(SEED)
+        num_bits, NUM_CHECKS, BIT_DEGREE, CHECK_DEGREE, qc.Rng(seed)
     )
     hgp_code = qc.hypergraph_product(regular_code, regular_code)
 
     error = generate_pauli_error_string(
-        len(hgp_code), ERROR_RATE, seed=SEED, error_model="Depolarizing"
+        len(hgp_code), error_rate, seed=seed, error_model="Depolarizing"
     )
     error = pauli_to_mps(error)
 
     _, success = decode_css(
         code=hgp_code,
         error=error,
-        chi_max=CHI_MAX,
+        chi_max=chi_max,
         bias_type="Depolarizing",
-        bias_prob=ERROR_RATE,
+        bias_prob=error_rate,
         renormalise=True,
         silent=True,
         contraction_strategy="Optimised",
@@ -167,7 +156,7 @@ def save_failures_statistics(failures, num_bits, chi_max, error_rate, seed):
     failures_statistics = {}
     failures_statistics[(num_bits, chi_max, error_rate)] = failures
     failures_key = (
-        f"numbits{num_bits}_bonddim{chi_max}_errorprob{error_rate}_seed{seed}"
+        f"numbits{num_bits}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}"
     )
     np.save(f"{failures_key}.npy", failures)
     logging.info(
