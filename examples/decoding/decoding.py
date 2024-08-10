@@ -677,7 +677,60 @@ def linear_code_prepare_message(
     return initial_codeword, perturbed_codeword
 
 
-# The functions below are used to apply constraints to a codeword MPS and do the decoding.
+def generate_pauli_error_string(
+    num_qubits: int,
+    error_rate: float,
+    error_model: str = "Depolarizing",
+    seed: Optional[int] = None,
+) -> str:
+    """
+    This function generates a random Pauli error string based on a given noise model.
+
+    Parameters
+    ----------
+    num_qubits : int
+        Number of qubits in the surface code.
+    error_rate : float
+        Physical error rate for generating errors.
+    error_model : str
+        The noise model to use for generating Pauli errors.
+        Options are "Depolarizing", "Bit Flip", "Phase Flip", "Amplitude Damping".
+    seed : Optional[int]
+        Seed for the random number generator.
+
+    Returns
+    -------
+    str
+        A string representing the Pauli errors in the format "XZYZI..."
+    """
+
+    np.random.seed(seed)
+    error_string = []
+    pauli_errors = ["I", "X", "Y", "Z"]
+
+    for _ in range(num_qubits):
+        if np.random.random() < error_rate:
+            if error_model == "Depolarizing":
+                error = np.random.choice(pauli_errors[1:], p=[1 / 3, 1 / 3, 1 / 3])
+            elif error_model == "Bit Flip":
+                error = "X"
+            elif error_model == "Phase Flip":
+                error = "Z"
+            elif error_model == "Amplitude Damping":
+                error = np.random.choice(
+                    pauli_errors, p=[1 - error_rate, error_rate, 0, 0]
+                )
+            else:
+                raise ValueError(f"Unknown error model: {error_model}")
+        else:
+            error = "I"
+
+        error_string.append(f"{error}")
+
+    return "".join(error_string)
+
+
+# The functions below are used to apply constraints to a codeword/error MPS and do the decoding.
 
 
 def apply_constraints(
@@ -818,7 +871,7 @@ def decode_message(
     the codeword to compare the decoding result against.
     Returns the overlap between the decoded message given the initial message.
     This function is used independently of code generation and applying constraints.
-    It is in some sense code-agnostic.
+    It is thus agnostic to code type.
 
     Parameters
     ----------
@@ -870,63 +923,6 @@ def decode_message(
     return engine, overlap
 
 
-def generate_pauli_error_string(
-    num_qubits: int,
-    error_rate: float,
-    probabilities: Optional[List[float]] = None,
-    seed: Optional[int] = None,
-) -> str:
-    """
-    This function generates a random Pauli error string based on error rate.
-    At each qubit, the error is chosen to be X, Y, or Z with equal probability.
-
-    Parameters
-    ----------
-    num_qubits : int
-        Number of qubits in the surface code.
-    error_rate : float
-        Physical error rate for generating errors.
-    probabilities : Optional[List[float]]
-        Probabilities for X, Y, and Z errors. Defaults to [1/3, 1/3, 1/3].
-    seed : Optional[int]
-        Seed for the random number generator.
-
-    Raises
-    ------
-    ValueError
-        If the Pauli error probabilities do not sum up to 1.
-
-    Returns
-    -------
-    str
-        A string representing the Pauli errors in the format "XZYZI..."
-    """
-
-    if probabilities is None:
-        probabilities = [1 / 3, 1 / 3, 1 / 3]
-
-    if not np.isclose(sum(probabilities), 1):
-        raise ValueError(
-            f"The sum of the Pauli error probabilities should be 1, "
-            f"given {sum(probabilities)}."
-        )
-
-    np.random.seed(seed)
-    pauli_errors = ["I", "X", "Y", "Z"]
-    error_string = []
-
-    for _ in range(num_qubits):
-        # Choose a random Pauli error based on the error rate
-        if np.random.random() < error_rate:
-            error = np.random.choice(pauli_errors[1:], p=probabilities)
-        else:
-            error = "I"
-
-        error_string.append(f"{error}")
-
-    return "".join(error_string)
-
-
 def decode_css(
     code: CssCode,
     error: str,
@@ -937,9 +933,10 @@ def decode_css(
     renormalise: bool = True,
     silent: bool = False,
     contraction_strategy: str = "Naive",
+    optimiser: str = "Dephasing DMRG",
 ):
     """
-    This function does error-based decoding of a CSS code via MPS marginalisation and
+    This function performs error-based decoding of a CSS code via MPS marginalisation and
     subsequent reading out the main component via densifying or Dephasing DMRG.
     It takes as input an error string and returns the most likely Pauli correction.
 
@@ -967,6 +964,9 @@ def decode_css(
         Whether to show the progress bars or not.
     contraction_strategy : str
         The contractor's strategy.
+    optimiser : str
+        The optimiser used to find the closest basis product state to a given MPDO.
+        Available options: "Dephasing DMRG", "Dense", "Optima TT".
 
     Raises
     ------
@@ -975,7 +975,7 @@ def decode_css(
     """
 
     if not silent:
-        logging.info("Starting decode_css function.")  # TODO
+        logging.info("Starting decoding.")
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
@@ -1018,7 +1018,7 @@ def decode_css(
         )
 
     if not silent:
-        logging.info("Applying constraints for the first time.")  # TODO
+        logging.info("Applying the X constraints.")
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[0],
@@ -1031,7 +1031,7 @@ def decode_css(
     )
 
     if not silent:
-        logging.info("Applying constraints for the second time.")  # TODO
+        logging.info("Applying the Z constraints.")
     error_mps = apply_constraints(
         error_mps,
         constraints_sites[1],
@@ -1076,7 +1076,7 @@ def decode_css(
             logging.info("Decoding completed with result: %s", result)
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
-    else:
+    elif num_logical_sites > 10 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
@@ -1087,10 +1087,14 @@ def decode_css(
             silent=silent,
         )
         if not silent:
-            logging.info("Running DMRG engine.")
+            logging.info("Running the Dephasing DMRG engine.")
         engine.run(num_iter=num_runs)
         mps_dmrg_final = engine.mps
         overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
         if not silent:
-            logging.info("DMRG run completed with overlap: %f", overlap)
+            logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
         return engine, overlap
+    elif optimiser == "Optima TT":
+        raise NotImplementedError("Optima TT is not implemented yet.")
+    else:
+        raise ValueError("Invalid optimiser chosen.")
