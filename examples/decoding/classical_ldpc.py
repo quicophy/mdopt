@@ -61,7 +61,7 @@ except ImportError as e:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Launch classical LDPC code calculations on Compute Canada clusters."
+        description="Launch classical LDPC code decoding on Compute Canada clusters."
     )
     parser.add_argument(
         "--system_size",
@@ -76,7 +76,7 @@ def parse_arguments():
         help="Maximum bond dimension to keep during contraction.",
     )
     parser.add_argument(
-        "--error_prob", type=float, required=True, help="The error probability."
+        "--error_rate", type=float, required=True, help="The error rate."
     )
     parser.add_argument(
         "--num_experiments",
@@ -93,9 +93,9 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def run_experiment(num_bits, chi_max, prob_error, num_experiments, seed):
+def run_experiment(num_bits, chi_max, error_rate, num_experiments, seed):
     logging.info(
-        f"Starting {num_experiments} experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+        f"Starting {num_experiments} experiments for NUM_BITS={num_bits}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
     )
 
     seed_seq = np.random.SeedSequence(seed)
@@ -109,7 +109,7 @@ def run_experiment(num_bits, chi_max, prob_error, num_experiments, seed):
 
         try:
             failure = run_single_experiment(
-                num_bits, chi_max, prob_error, experiment_seed
+                num_bits, chi_max, error_rate, experiment_seed
             )
             failures.append(failure)
         except Exception as e:
@@ -117,19 +117,19 @@ def run_experiment(num_bits, chi_max, prob_error, num_experiments, seed):
             failures.append(1)
 
         logging.info(
-            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max}, PROB_ERROR={prob_error}, SEED={seed}"
+            f"Finished experiment {l} for NUM_BITS={num_bits}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
         )
 
     return failures
 
 
-def run_single_experiment(num_bits, chi_max_contractor, prob_error, seed):
+def run_single_experiment(num_bits, chi_max_contractor, error_rate, seed):
     CHECK_DEGREE, BIT_DEGREE = 4, 3
     NUM_CHECKS = int(BIT_DEGREE * num_bits / CHECK_DEGREE)
     if num_bits / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
         raise ValueError("The Tanner graph of the code must be bipartite.")
 
-    prob_bias = prob_error
+    prob_bias = error_rate
     chi_max_dmrg = chi_max_contractor
     cut = 1e-16
     num_dmrg_runs = 1
@@ -140,7 +140,7 @@ def run_single_experiment(num_bits, chi_max_contractor, prob_error, seed):
     code_constraint_sites = linear_code_constraint_sites(code)
 
     initial_codeword, perturbed_codeword = linear_code_prepare_message(
-        code, prob_error, error_model=qec.BinarySymmetricChannel, seed=seed
+        code, error_rate, error_model=qec.BinarySymmetricChannel, seed=seed
     )
     tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
@@ -189,11 +189,11 @@ def run_single_experiment(num_bits, chi_max_contractor, prob_error, seed):
         return 1
 
 
-def save_failures_statistics(failures, num_bits, chi_max, prob_error, seed):
+def save_failures_statistics(failures, num_bits, chi_max, error_rate, seed):
     failures_statistics = {}
-    failures_statistics[(num_bits, chi_max, prob_error)] = failures
+    failures_statistics[(num_bits, chi_max, error_rate)] = failures
     failures_key = (
-        f"numbits{num_bits}_bonddim{chi_max}_errorprob{prob_error}_seed{seed}"
+        f"numbits{num_bits}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}"
     )
     np.save(f"{failures_key}.npy", failures)
     logging.info(
@@ -206,12 +206,12 @@ def main():
     failures = run_experiment(
         args.system_size,
         args.bond_dim,
-        args.error_prob,
+        args.error_rate,
         args.num_experiments,
         args.seed,
     )
     save_failures_statistics(
-        failures, args.system_size, args.bond_dim, args.error_prob, args.seed
+        failures, args.system_size, args.bond_dim, args.error_rate, args.seed
     )
 
 
