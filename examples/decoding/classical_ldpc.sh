@@ -14,10 +14,16 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
 # Define arrays of system sizes, bond dimensions, and error probabilities
-system_sizes=(192)
+system_sizes=(384)
 bond_dims=(1024)
-seeds=(123 124 125 126 127 128 129 130 131 132 133 134 135 136 137 138 139 140 141 142 143) # 20 random seeds
-num_experiments=5 # Per each random seed
+seeds=(
+    123 124 125 126 127 128 129 130 131 132 133
+    134 135 136 137 138 139 140 141 142 143 144
+    145 146 147 148 149 150 151 152 153 154 155
+    156 157 158 159 160 161 162 163 164 165 166
+    167 168 169 170 171 172 173
+) # 50 random seeds
+num_experiments=2 # Per each random seed
 
 error_rates=()
 start=0.1
