@@ -762,7 +762,7 @@ def apply_constraints(
     result_to_explicit : bool
         Whether to transform the resulting MPS into the Explicit form.
     strategy : str
-        The contractor strategy.
+        The contractor strategy. Available options are "Optimised" and "Naive".
     silent : bool
         Whether to show the progress bar or not.
     return_entropies_and_bond_dims : bool
