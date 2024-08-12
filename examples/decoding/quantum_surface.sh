@@ -4,19 +4,19 @@
 module load python/3.11.5
 
 # Check if the virtual environment exists, if not, create and activate it
-if [ ! -d "~/envs/myenv" ]; then
-    virtualenv --no-download ~/envs/myenv
+if [ ! -d "$HOME/envs/myenv" ]; then
+    virtualenv --no-download "$HOME/envs/myenv"
 fi
-source ~/envs/myenv/bin/activate
+source "$HOME/envs/myenv/bin/activate"
 
 # Install required Python packages if they are not already installed
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of system sizes, bond dimensions, and error rates
-lattice_sizes=(3)
-bond_dims=(128)
-seeds=(123 124 125 126 127 128 129 130 131 132 133) # 10 random seeds
+# Define arrays of lattice sizes, bond dimensions, and error rates
+lattice_sizes=(4 5 6 7)
+bond_dims=(4 8 16 32 64 128)
+seeds=(123 124 125 126 127 128 129 130 131 132) # 10 random seeds
 num_experiments=10 # Per each random seed
 
 error_rates=()
@@ -39,22 +39,21 @@ for seed in "${seeds[@]}"; do
                 # Create a job submission script for each combination
                 cat > "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=24:00:00                                                                             # Time limit (hh:mm:ss)
+#SBATCH --time=10:00:00                                                                             # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                                           # Number of CPU cores per task
 #SBATCH --mem=16000                                                                                 # Memory per node
 #SBATCH --job-name=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
 #SBATCH --output=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
 
 module load python/3.11.5
-source ~/envs/myenv/bin/activate
+source "$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified lattice size, bond dimension, and error rate
-python examples/decoding/quantum_surface.py --lattice_size $lattice_size --bond_dim $bond_dim \
-    --error_rate $error_rate --num_experiments $num_experiments --seed $seed
+python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --seed ${seed}
 EOS
-            echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate} and seed ${seed}."
-            sbatch "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
-            rm "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
+                echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate}, and seed ${seed}."
+                sbatch "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
+                rm "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
             done
         done
     done
