@@ -148,7 +148,7 @@ def save_failures_statistics(failures, lattice_size, chi_max, error_rate, seed):
     failures_statistics = {}
     failures_statistics[(lattice_size, chi_max, error_rate)] = failures
     failures_key = (
-        f"latticesize{lattice_size}_bonddim{chi_max}_errorprob{error_rate}_seed{seed}"
+        f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}"
     )
     np.save(f"{failures_key}.npy", failures)
     logging.info(
