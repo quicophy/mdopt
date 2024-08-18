@@ -129,7 +129,7 @@ def run_single_experiment(num_bits, chi_max, error_rate, seed):
     hgp_code = qc.hypergraph_product(regular_code, regular_code)
 
     error = generate_pauli_error_string(
-        len(hgp_code), error_rate, seed=seed, error_model="Depolarizing"
+        len(hgp_code), error_rate, seed=seed, error_model="Depolarising"
     )
     error = pauli_to_mps(error)
 
@@ -137,7 +137,7 @@ def run_single_experiment(num_bits, chi_max, error_rate, seed):
         code=hgp_code,
         error=error,
         chi_max=chi_max,
-        bias_type="Depolarizing",
+        bias_type="Depolarising",
         bias_prob=error_rate,
         renormalise=True,
         silent=True,

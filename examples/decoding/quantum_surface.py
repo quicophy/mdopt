@@ -129,7 +129,7 @@ def run_single_experiment(lattice_size, chi_max, error_rate, seed):
         code=surface_code,
         error=error_mps,
         chi_max=chi_max,
-        bias_type="Depolarizing",
+        bias_type="Depolarising",
         bias_prob=prob_bias,
         renormalise=True,
         silent=True,

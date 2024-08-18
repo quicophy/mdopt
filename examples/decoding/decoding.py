@@ -680,7 +680,7 @@ def linear_code_prepare_message(
 def generate_pauli_error_string(
     num_qubits: int,
     error_rate: float,
-    error_model: str = "Depolarizing",
+    error_model: str = "Depolarising",
     seed: Optional[int] = None,
 ) -> str:
     """
@@ -694,7 +694,7 @@ def generate_pauli_error_string(
         Physical error rate for generating errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarizing", "Bit Flip", "Phase Flip", "Amplitude Damping".
+        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping".
     seed : Optional[int]
         Seed for the random number generator.
 
@@ -710,7 +710,7 @@ def generate_pauli_error_string(
 
     for _ in range(num_qubits):
         if np.random.random() < error_rate:
-            if error_model == "Depolarizing":
+            if error_model == "Depolarising":
                 error = np.random.choice(pauli_errors[1:], p=[1 / 3, 1 / 3, 1 / 3])
             elif error_model == "Bit Flip":
                 error = "X"
