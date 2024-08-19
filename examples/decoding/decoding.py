@@ -926,7 +926,7 @@ def decode_message(
 def decode_css(
     code: CssCode,
     error: str,
-    num_runs: int = int(1),
+    num_runs: int = int(50),
     chi_max: int = int(1e4),
     bias_type: str = "Depolarising",
     bias_prob: float = float(0.1),
@@ -1019,29 +1019,35 @@ def decode_css(
 
     if not silent:
         logging.info("Applying the X constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        constraints_sites[0],
-        constraints_tensors,
-        chi_max=chi_max,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-        result_to_explicit=False,
-    )
+    try:
+        error_mps = apply_constraints(
+            error_mps,
+            constraints_sites[0],
+            constraints_tensors,
+            chi_max=chi_max,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+            result_to_explicit=False,
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        return None, 0
 
     if not silent:
         logging.info("Applying the Z constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        constraints_sites[1],
-        constraints_tensors,
-        chi_max=chi_max,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-        result_to_explicit=False,
-    )
+    try:
+        error_mps = apply_constraints(
+            error_mps,
+            constraints_sites[1],
+            constraints_tensors,
+            chi_max=chi_max,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+            result_to_explicit=False,
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        return None, 0
 
     if not silent:
         logging.info("Applying logicals constraints.")
