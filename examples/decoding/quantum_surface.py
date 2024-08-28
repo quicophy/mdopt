@@ -37,8 +37,8 @@ examples_path_narval = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
 
-sys.path.append(project_root_graham)
-sys.path.append(examples_path_graham)
+sys.path.append(project_root_narval)
+sys.path.append(examples_path_narval)
 
 try:
     from examples.decoding.decoding import (
