@@ -3355,13 +3355,13 @@ typing = ["mypy (>=1.6,<2.0)", "traitlets (>=5.11.1)"]
 
 [[package]]
 name = "threadpoolctl"
-version = "3.3.0"
+version = "3.5.0"
 description = "threadpoolctl"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "threadpoolctl-3.3.0-py3-none-any.whl", hash = "sha256:6155be1f4a39f31a18ea70f94a77e0ccd57dced08122ea61109e7da89883781e"},
-    {file = "threadpoolctl-3.3.0.tar.gz", hash = "sha256:5dac632b4fa2d43f42130267929af3ba01399ef4bd1882918e92dbc30365d30c"},
+    {file = "threadpoolctl-3.5.0-py3-none-any.whl", hash = "sha256:56c1e26c150397e58c4926da8eeee87533b1e32bef131bd4bf6a2f45f3185467"},
+    {file = "threadpoolctl-3.5.0.tar.gz", hash = "sha256:082433502dd922bf738de0d8bcc4fdcbf0979ff44c42bd40f5af8a282f6fa107"},
 ]
 
 [[package]]
