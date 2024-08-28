@@ -55,7 +55,7 @@ except ImportError as e:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Launch quantum surface code calculations on Compute Canada clusters."
+        description="Launch quantum surface code decoding on Compute Canada clusters."
     )
     parser.add_argument(
         "--lattice_size",
