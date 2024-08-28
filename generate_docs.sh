@@ -20,8 +20,13 @@ echo "Deleting existing Jupyter Notebooks in Sphinx source directory..."
 find "$SPHINX_SOURCE_DIR" -name "*.ipynb" -exec rm {} +
 
 # Copy Jupyter Notebooks to the Sphinx source directory
-echo "Copying Jupyter Notebooks to Sphinx source directory..."
-cp -r examples/*/*.ipynb "$SPHINX_SOURCE_DIR/"
+# Skip the notebooks whose names start with "tmp" or "plotting"
+for notebook in examples/*/*.ipynb; do
+    notebook_name=$(basename "$notebook")
+    if [[ $notebook_name != tmp* && $notebook_name != plotting* ]]; then
+        cp "$notebook" "$SPHINX_SOURCE_DIR/"
+    fi
+done
 
 # Path to examples.rst
 EXAMPLES_RST="$SPHINX_SOURCE_DIR/examples.rst"
