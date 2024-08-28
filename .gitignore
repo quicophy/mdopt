@@ -145,3 +145,6 @@ plotting*
 
 # scripts for jobs submitted to Compute Canada
 submit-job*
+
+# tmp files
+tmp*
