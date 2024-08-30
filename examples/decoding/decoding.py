@@ -39,6 +39,12 @@ from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.utils import ConstraintString
 
 
+# Setting up logging.
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+
 def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     """
     This function returns a bitflip bias operator -- the operator which will bias us
@@ -1031,6 +1037,9 @@ def decode_css(
             result_to_explicit=False,
         )
     except (ValueError, np.linalg.LinAlgError):
+        logging.info(
+            "Decoding failed due to a linalg error while applying X constraints."
+        )
         return None, 0
 
     if not silent:
@@ -1047,6 +1056,9 @@ def decode_css(
             result_to_explicit=False,
         )
     except (ValueError, np.linalg.LinAlgError):
+        logging.info(
+            "Decoding failed due to a linalg error while applying Z constraints."
+        )
         return None, 0
 
     if not silent:
