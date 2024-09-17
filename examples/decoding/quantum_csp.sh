@@ -13,12 +13,12 @@ source "$HOME/envs/myenv/bin/activate"
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of qubit sizes, bond dimensions, error rates, and batches
-nums_qubits=(30 40 50 60 70 80 90 100)          # Number of qubits to scan
-bond_dims=(8 16 32)                             # Bond dimensions to scan
-seeds=(123 124 125 126 127 128 129 130 131 132) # 10 random seeds
-num_experiments=10                              # Per each random seed
-batches=(1 2 3 4 5 6 7 8 9 10 11 12 13 14)      # Batches from 1 to 14
+# Define arrays of numbers of qubits, bond dimensions, error rates, and batches
+nums_qubits=(30) # 40 50 60 70 80 90 100)     # The number of qubits
+bond_dims=(8 16 32 64 128 256 512 1024)       # Bond dimensions to scan
+seeds=(123 124 125 126)                       # 4 random seeds
+num_experiments=25                            # Per each random seed
+batches=(1 2 3 4 5) # 6 7 8 9 10 11 12 13 14) # Batches from 1 to 14
 
 error_rates=()
 start=0.01
@@ -41,7 +41,7 @@ for seed in "${seeds[@]}"; do
                     # Create a job submission script for each combination
                     cat > "submit-job-batch${batch}-qubits${num_qubits}-bond${bond_dim}-error${error_rate}-seed${seed}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=12:00:00                                                                                               # Time limit (hh:mm:ss)
+#SBATCH --time=24:00:00                                                                                               # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                                                             # Number of CPU cores per task
 #SBATCH --mem=16000                                                                                                   # Memory per node
 #SBATCH --job-name=decoding-csp-batch${batch}-qubits${num_qubits}-bond${bond_dim}-error${error_rate}-seed${seed}      # Descriptive job name
@@ -51,9 +51,9 @@ module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified parameters
-python quantum_csp.py --num_qubits ${num_qubits} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --seed ${seed} --batch ${batch}
+python examples/decoding/quantum_csp.py --num_qubits ${num_qubits} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --seed ${seed} --batch ${batch}
 EOS
-                    echo "Submitting the job for batch ${batch}, qubit size ${num_qubits}, bond dimension ${bond_dim}, error rate ${error_rate}, and seed ${seed}."
+                    echo "Submitting the job for batch ${batch}, number of qubits ${num_qubits}, bond dimension ${bond_dim}, error rate ${error_rate}, and seed ${seed}."
                     sbatch "submit-job-batch${batch}-qubits${num_qubits}-bond${bond_dim}-error${error_rate}-seed${seed}.sh"
                     rm "submit-job-batch${batch}-qubits${num_qubits}-bond${bond_dim}-error${error_rate}-seed${seed}.sh"
                 done
