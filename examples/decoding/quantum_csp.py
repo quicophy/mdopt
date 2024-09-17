@@ -170,7 +170,7 @@ def main():
     args = parse_arguments()
 
     for num_qubits in args.num_qubits:
-        code_path = f"data-csp-codes/batch_{args.batch}/codes/qubits_{num_qubits}"
+        code_path = f"/home/bereza/scratch/data-csp-codes/batch_{args.batch}/codes/qubits_{num_qubits}"
 
         for code in os.listdir(code_path):
             if code.endswith(".json"):
