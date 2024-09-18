@@ -11,4 +11,5 @@ Examples
    maxbonddim.ipynb
    mps-rand-circ.ipynb
    quantum_surface.ipynb
+   quantum_surface_playground.ipynb
    shor.ipynb
