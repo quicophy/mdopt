@@ -20,7 +20,6 @@ tqdm = "^4.64.1"
 qecstruct = "^0.2.9"
 qecsim = "^1.0b9"
 numpy = "1.23"
-pymatching = "^2.1.0"
 matrex = "^0.0.1"
 
 [tool.poetry.group.dev]
