@@ -1186,6 +1186,7 @@ def decode_css(
     bias_type: str = "Depolarising",
     bias_prob: float = float(0.1),
     renormalise: bool = True,
+    multiply_by_stabiliser: bool = True,
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
@@ -1203,6 +1204,8 @@ def decode_css(
         The error in a string format.
         The way the decoder takes the error is as follows:
         "X_0 Z_0 X_1 Z_1 ..."
+    num_runs : int
+        Number of DMRG sweeps.
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
@@ -1211,10 +1214,10 @@ def decode_css(
         Available options: "Bitflip" and "Depolarising".
     bias_prob : float
         The probability of the depolarising bias applied before checks.
-    num_runs : int
-        Number of DMRG sweeps.
     renormalise : bool
         Whether to renormalise the singular values during contraction.
+    multiply_by_stabiliser : bool
+        Whether to multiply the error by a random stabiliser before decoding.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -1231,6 +1234,13 @@ def decode_css(
 
     if not silent:
         logging.info("Starting decoding.")
+
+    if multiply_by_stabiliser:
+        stabilisers_x, stabilisers_z = css_code_stabilisers(code)
+        stabilisers = stabilisers_x + stabilisers_z
+        error = multiply_pauli_strings(error, np.random.choice(stabilisers))
+
+    error = pauli_to_mps(error)
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
@@ -1273,6 +1283,19 @@ def decode_css(
         )
 
     if not silent:
+        logging.info("Applying logicals' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites,
+        logicals_tensors,
+        chi_max=chi_max,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+        result_to_explicit=False,
+    )
+
+    if not silent:
         logging.info("Applying the X constraints.")
     try:
         error_mps = apply_constraints(
@@ -1309,19 +1332,6 @@ def decode_css(
             "Decoding failed due to a linalg error while applying Z constraints."
         )
         return None, 0
-
-    if not silent:
-        logging.info("Applying logicals constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        logicals_sites,
-        logicals_tensors,
-        chi_max=chi_max,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-        result_to_explicit=False,
-    )
 
     if not silent:
         logging.info("Marginalising the error MPS.")
