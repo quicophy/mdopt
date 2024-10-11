@@ -2,8 +2,7 @@
 Below, we define some decoding-specific functions over the MPS/MPO entities
 we encounter during the decoding process as well as the functions we use
 to generate and operate over both classical and quantum error correcting codes.
-Note, that this is auxiliary code which is not included into the library,
-thus not tested and provided as is.
+Note, this is auxiliary code which isn't included into the library and provided as is.
 """
 
 import logging
@@ -14,6 +13,7 @@ import numpy as np
 from tqdm import tqdm
 from matrex import msro
 from opt_einsum import contract
+import matplotlib.pyplot as plt
 from more_itertools import powerset
 from qecstruct import (
     BinarySymmetricChannel,
@@ -39,7 +39,7 @@ from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.utils import ConstraintString
 
 
-# Setting up logging.
+# Setting up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -734,6 +734,192 @@ def generate_pauli_error_string(
         error_string.append(f"{error}")
 
     return "".join(error_string)
+
+
+def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
+    """
+    Multiplies two Pauli strings of the same length without considering phase.
+
+    Parameters
+    ----------
+    pauli1 : str
+        The first Pauli string. Each character represents a Pauli operator ('I', 'X', 'Y', 'Z').
+    pauli2 : str
+        The second Pauli string. Each character represents a Pauli operator ('I', 'X', 'Y', 'Z').
+
+    Returns
+    -------
+    result : str
+        The resulting Pauli string after multiplying pauli1 by pauli2.
+
+    Raises
+    ------
+    ValueError
+        If the two Pauli strings have different lengths.
+    """
+
+    if len(pauli1) != len(pauli2):
+        raise ValueError(
+            f"The two Pauli strings must have the same length, but got {len(pauli1)} and {len(pauli2)}."
+        )
+
+    # Pauli multiplication table without phases
+    pauli_multiplication_table = {
+        ("I", "I"): "I",
+        ("I", "X"): "X",
+        ("I", "Y"): "Y",
+        ("I", "Z"): "Z",
+        ("X", "I"): "X",
+        ("X", "X"): "I",
+        ("X", "Y"): "Z",
+        ("X", "Z"): "Y",
+        ("Y", "I"): "Y",
+        ("Y", "X"): "Z",
+        ("Y", "Y"): "I",
+        ("Y", "Z"): "X",
+        ("Z", "I"): "Z",
+        ("Z", "X"): "Y",
+        ("Z", "Y"): "X",
+        ("Z", "Z"): "I",
+    }
+
+    result = []
+
+    for p1, p2 in zip(pauli1, pauli2):
+        result.append(pauli_multiplication_table[(p1, p2)])
+
+    return "".join(result)
+
+
+def plot_parity_check_mpo(code: CssCode, optimize_order=False, return_matrix=False):
+    """
+    Plots the parity check MPOs for a CSS code with optional order optimization.
+
+    Parameters
+    ----------
+    code : CssCode
+        The quantum CSS code object.
+    optimize_order : bool, optional
+        Whether to optimize the order of applying the constraints.
+    return_matrix : bool, optional
+        Whether to return the MPO location matrix.
+
+    Notes
+    -----
+    - The first sublist corresponds to specific tensor types:
+        - XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT (for stabiliser parity check sites)
+        - COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT (for logical parity check sites)
+    """
+
+    if not isinstance(code, CssCode):
+        raise ValueError("Unsupported code type. Only CssCode is supported.")
+
+    tensor_types = ["XOR_LEFT", "XOR_BULK", "XOR_RIGHT", "SWAP", "COPY_LEFT"]
+    tensor_colors = {tensor: i + 1 for i, tensor in enumerate(tensor_types)}
+
+    logicals_sites_x, logicals_sites_z = css_code_logicals_sites(code)
+    logicals_sites = logicals_sites_x + logicals_sites_z
+
+    constraint_sites_x, constraint_sites_z = css_code_constraint_sites(code)
+    constraint_sites = constraint_sites_x + constraint_sites_z
+
+    num_constraint_checks = code.num_x_stabs() + code.num_z_stabs()
+    num_logical_checks = code.num_x_logicals() + code.num_z_logicals()
+    num_sites = 2 * len(code) + num_logical_checks
+
+    mpo_location_matrix = np.zeros(
+        (num_constraint_checks + num_logical_checks, num_sites)
+    )
+
+    if optimize_order:
+        mpo_matrix = np.zeros((num_constraint_checks + num_logical_checks, num_sites))
+        for row_idx, sublist in enumerate(logicals_sites):
+            for sublist_indices in sublist:
+                for index in sublist_indices:
+                    mpo_matrix[row_idx][index] = 1
+        for row_idx, sublist in enumerate(constraint_sites):
+            for sublist_indices in sublist:
+                for index in sublist_indices:
+                    mpo_matrix[row_idx + num_logical_checks][index] = 1
+
+        optimised_order = msro(mpo_matrix)
+
+        logical_indices = list(range(num_logical_checks))
+        constraint_indices = list(range(num_logical_checks, num_logical_checks + num_constraint_checks))
+
+        logicals_order = [i for i in optimised_order if i in logical_indices]
+        constraints_order = [i for i in optimised_order if i in constraint_indices]
+
+        logicals_sites = [logicals_sites[i] for i in logicals_order]
+        constraint_sites = [constraint_sites[i - num_logical_checks] for i in constraints_order]
+
+    # Fill matrix for logical sites
+    for row_idx, site_group in enumerate(logicals_sites):
+        for tensor_idx, tensor_type in enumerate(
+            ["COPY_LEFT", "XOR_BULK", "SWAP", "XOR_RIGHT"]
+        ):
+            if tensor_idx < len(site_group):
+                indices = site_group[tensor_idx]
+                indices = (
+                    [indices] if isinstance(indices, (int, np.integer)) else indices
+                )
+                for index in indices:
+                    mpo_location_matrix[row_idx][index] = tensor_colors[tensor_type]
+
+    # Fill matrix for constraint sites
+    for row_idx, site_group in enumerate(constraint_sites):
+        for tensor_idx, tensor_type in enumerate(
+            ["XOR_LEFT", "XOR_BULK", "SWAP", "XOR_RIGHT"]
+        ):
+            if tensor_idx < len(site_group):
+                indices = site_group[tensor_idx]
+                indices = (
+                    [indices] if isinstance(indices, (int, np.integer)) else indices
+                )
+                for index in indices:
+                    mpo_location_matrix[num_logical_checks + row_idx][index] = (
+                        tensor_colors[tensor_type]
+                    )
+
+    _, ax = plt.subplots(figsize=(10, 4))
+    cmap = plt.colormaps["viridis"]
+
+    # Define grid coordinates for pcolormesh
+    x = np.arange(num_sites + 1)
+    y = np.arange(num_constraint_checks + num_logical_checks + 1)
+
+    # Use pcolormesh for plotting with gridlines
+    im = ax.pcolormesh(
+        x, y, mpo_location_matrix, cmap=cmap, edgecolors="k", linewidth=0.5
+    )
+
+    # Reverse the y-axis to mimic origin='upper'
+    ax.invert_yaxis()
+
+    # Set ticks and labels
+    ax.set_xticks(np.arange(0, num_sites, 4) + 0.5)
+    ax.set_yticks(np.arange(0, num_constraint_checks + num_logical_checks, 4) + 0.5)
+    ax.set_xticklabels(np.arange(0, num_sites, 4))
+    ax.set_yticklabels(np.arange(0, num_constraint_checks + num_logical_checks, 4))
+
+    cbar = plt.colorbar(im, ax=ax, ticks=np.arange(0, len(tensor_types) + 1))
+    cbar.ax.set_yticklabels(["None"] + tensor_types)
+
+    ax.set_xlabel("MPS Site Index")
+    ax.set_ylabel("Parity Check Index")
+    ax.set_title(
+        f"Parity Check MPO Structure ({'Optimized' if optimize_order else 'Unoptimized'})"
+    )
+
+    ax.xaxis.set_ticks_position("top")
+    ax.xaxis.set_label_position("top")
+
+    plt.show()
+
+    if return_matrix:
+        return np.vectorize({v: k for k, v in tensor_colors.items()}.get)(
+            mpo_location_matrix
+        )
 
 
 # The functions below are used to apply constraints to a codeword/error MPS and do the decoding.
