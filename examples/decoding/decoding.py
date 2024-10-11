@@ -623,37 +623,37 @@ def css_code_logicals(code: CssCode) -> Tuple[List[List[int]]]:
 
     Returns
     -------
-    logicals : Tuple[List[int]]
+    logicals : Tuple[List[List[int]]]
         List of logical operators, first X, then Z.
     """
 
-    log_matrix_x = code.z_logicals_binary()
+    log_matrix_x = code.x_logicals_binary()
     array_x = np.zeros((log_matrix_x.num_rows(), log_matrix_x.num_columns()), dtype=int)
     for row, cols in enumerate(log_matrix_x.rows()):
         for col in cols:
             array_x[row, col] = 1
 
-    log_matrix_z = code.x_logicals_binary()
+    log_matrix_z = code.z_logicals_binary()
     array_z = np.zeros((log_matrix_z.num_rows(), log_matrix_z.num_columns()), dtype=int)
     for row, cols in enumerate(log_matrix_z.rows()):
         for col in cols:
             array_z[row, col] = 1
 
     x_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
+        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
         for row in array_x
     ]
     x_logicals = [list(x_logical) for x_logical in x_logicals]
     z_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
+        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
         for row in array_z
     ]
     z_logicals = [list(z_logical) for z_logical in z_logicals]
 
-    return z_logicals[0], x_logicals[0]
+    return x_logicals, z_logicals
 
 
-def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
+def css_code_logicals_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical operators should be applied.
 
@@ -664,30 +664,40 @@ def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    strings : Tuple[List[int]]
+    strings : Tuple[List[List[List[int]]]]
         List of MPS sites.
     """
 
     sites_x, sites_z = css_code_logicals(code)
 
-    copy_site_x = [0]
-    copy_site_z = [1]
+    logical_sites_x = []
+    logical_sites_z = []
 
-    xor_right_site_x = [sites_x[-1]]
-    xor_right_site_z = [sites_z[-1]]
+    for index, x_logical in enumerate(sites_x):
+        copy_site_x = [index]
+        xor_bulk_sites_x = [x_logical[i] for i in range(len(x_logical) - 1)]
+        xor_right_site_x = [x_logical[-1]]
 
-    xor_bulk_sites_x = [sites_x[i] for i in range(len(sites_x) - 1)]
-    xor_bulk_sites_z = [sites_z[i] for i in range(len(sites_z) - 1)]
+        swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
+        swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
 
-    swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
-    swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
-    swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
-    swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+        logical_sites_x.append(
+            [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
+        )
 
-    string_x = [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
-    string_z = [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+    for index, z_logical in enumerate(sites_z):
+        copy_site_z = [len(sites_x) + index]
+        xor_bulk_sites_z = [z_logical[i] for i in range(len(z_logical) - 1)]
+        xor_right_site_z = [z_logical[-1]]
 
-    return string_x, string_z
+        swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
+        swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+
+        logical_sites_z.append(
+            [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+        )
+
+    return logical_sites_x, logical_sites_z
 
 
 def linear_code_prepare_message(
@@ -894,13 +904,17 @@ def plot_parity_check_mpo(code: CssCode, optimize_order=False, return_matrix=Fal
         optimised_order = msro(mpo_matrix)
 
         logical_indices = list(range(num_logical_checks))
-        constraint_indices = list(range(num_logical_checks, num_logical_checks + num_constraint_checks))
+        constraint_indices = list(
+            range(num_logical_checks, num_logical_checks + num_constraint_checks)
+        )
 
         logicals_order = [i for i in optimised_order if i in logical_indices]
         constraints_order = [i for i in optimised_order if i in constraint_indices]
 
         logicals_sites = [logicals_sites[i] for i in logicals_order]
-        constraint_sites = [constraint_sites[i - num_logical_checks] for i in constraints_order]
+        constraint_sites = [
+            constraint_sites[i - num_logical_checks] for i in constraints_order
+        ]
 
     # Fill matrix for logical sites
     for row_idx, site_group in enumerate(logicals_sites):
