@@ -467,6 +467,55 @@ def linear_code_codewords(code: LinearCode) -> np.ndarray:
     return np.sort(np.array(codewords))
 
 
+def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
+    """
+    Given a quantum CSS code, returns a list of its stabilisers as Pauli strings.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    -------
+    stabilisers : Tuple[List[str], List[str]]
+        A tuple of two lists, where the first one corresponds to X stabilisers and
+        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli string.
+    """
+
+    def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
+        """Helper function to convert a binary row to a Pauli string."""
+        pauli_string = []
+        for i in range(num_qubits):
+            if binary_row[i] == 1:
+                pauli_string.append(pauli)
+            else:
+                pauli_string.append("I")
+        return "".join(pauli_string)
+
+    num_qubits = len(code)
+
+    # X stabilisers
+    parity_matrix_x = code.x_stabs_binary()
+    stabilisers_x = []
+    for row in parity_matrix_x.rows():
+        binary_row = np.zeros(num_qubits, dtype=int)
+        for col in row:
+            binary_row[col] = 1
+        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
+
+    # Z stabilisers
+    parity_matrix_z = code.z_stabs_binary()
+    stabilisers_z = []
+    for row in parity_matrix_z.rows():
+        binary_row = np.zeros(num_qubits, dtype=int)
+        for col in row:
+            binary_row[col] = 1
+        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "X"))
+
+    return stabilisers_x, stabilisers_z
+
+
 def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
     """
     Given a quantum CSS code, returns a list of its checks, where each check
