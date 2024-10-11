@@ -563,7 +563,7 @@ def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
     return checks_x, checks_z
 
 
-def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
+def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -574,7 +574,7 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    strings : Tuple[List[int]]
+    strings : Tuple[List[List[List[int]]]]
         List of MPS sites.
     """
 
@@ -612,7 +612,7 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
     return constraints_strings_x, constraints_strings_z
 
 
-def css_code_logicals(code: CssCode):
+def css_code_logicals(code: CssCode) -> Tuple[List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
