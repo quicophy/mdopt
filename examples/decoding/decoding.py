@@ -1093,11 +1093,11 @@ def apply_constraints(
             )
 
         mps = mps_mpo_contract(
-            mps,
-            mpo,
-            start_site,
-            renormalise=renormalise,
+            mps=mps,
+            mpo=mpo,
+            start_site=start_site,
             chi_max=chi_max,
+            renormalise=renormalise,
             inplace=False,
             result_to_explicit=result_to_explicit,
         )
