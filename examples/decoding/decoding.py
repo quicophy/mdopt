@@ -819,7 +819,7 @@ def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
 
     if len(pauli1) != len(pauli2):
         raise ValueError(
-            f"The two Pauli strings must have the same length, but got {len(pauli1)} and {len(pauli2)}."
+            f"The Pauli strings must have the same length, but got {len(pauli1)} and {len(pauli2)}."
         )
 
     # Pauli multiplication table without phases
@@ -850,7 +850,9 @@ def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
     return "".join(result)
 
 
-def plot_parity_check_mpo(code: CssCode, optimize_order=False, return_matrix=False):
+def plot_parity_check_mpo(
+    code: CssCode, optimize_order=False, return_matrix=False, plot_type="both"
+):
     """
     Plots the parity check MPOs for a CSS code with optional order optimization.
 
@@ -862,6 +864,12 @@ def plot_parity_check_mpo(code: CssCode, optimize_order=False, return_matrix=Fal
         Whether to optimize the order of applying the constraints.
     return_matrix : bool, optional
         Whether to return the MPO location matrix.
+    plot_type : str, optional
+        Specifies which part of the code to plot.
+        Options: "both", "X", "Z".
+        - "both": Plots both X and Z parts of the code.
+        - "X": Plots only the X-part of the code.
+        - "Z": Plots only the Z-part of the code.
 
     Notes
     -----
