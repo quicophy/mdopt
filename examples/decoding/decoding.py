@@ -998,7 +998,8 @@ def plot_parity_check_mpo(
     ax.set_ylabel("Parity Check Index")
     plot_title_part = "X and Z parts" if plot_type == "both" else f"{plot_type}-part"
     ax.set_title(
-        f"Parity Check MPO Structure ({plot_title_part}, {'Optimized' if optimize_order else 'Unoptimized'})"
+        f"Parity Check MPO Structure ({plot_title_part}, "
+        f"{'Optimized' if optimize_order else 'Unoptimized'})"
     )
 
     ax.xaxis.set_ticks_position("top")
