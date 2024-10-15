@@ -885,14 +885,32 @@ def plot_parity_check_mpo(
     tensor_colors = {tensor: i + 1 for i, tensor in enumerate(tensor_types)}
 
     logicals_sites_x, logicals_sites_z = css_code_logicals_sites(code)
-    logicals_sites = logicals_sites_x + logicals_sites_z
+    logicals_sites = []
+    if plot_type in ["both", "X"]:
+        logicals_sites += logicals_sites_z
+    if plot_type in ["both", "Z"]:
+        logicals_sites += logicals_sites_x
 
     constraint_sites_x, constraint_sites_z = css_code_constraint_sites(code)
-    constraint_sites = constraint_sites_x + constraint_sites_z
+    constraint_sites = []
+    if plot_type in ["both", "X"]:
+        constraint_sites += constraint_sites_x
+    if plot_type in ["both", "Z"]:
+        constraint_sites += constraint_sites_z
 
-    num_constraint_checks = code.num_x_stabs() + code.num_z_stabs()
-    num_logical_checks = code.num_x_logicals() + code.num_z_logicals()
-    num_sites = 2 * len(code) + num_logical_checks
+    num_constraint_checks = sum(
+        [
+            code.num_x_stabs() if plot_type in ["both", "X"] else 0,
+            code.num_z_stabs() if plot_type in ["both", "Z"] else 0,
+        ]
+    )
+    num_logical_checks = sum(
+        [
+            code.num_z_logicals() if plot_type in ["both", "X"] else 0,
+            code.num_x_logicals() if plot_type in ["both", "Z"] else 0,
+        ]
+    )
+    num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
 
     mpo_location_matrix = np.zeros(
         (num_constraint_checks + num_logical_checks, num_sites)
@@ -978,8 +996,9 @@ def plot_parity_check_mpo(
 
     ax.set_xlabel("MPS Site Index")
     ax.set_ylabel("Parity Check Index")
+    plot_title_part = "X and Z parts" if plot_type == "both" else f"{plot_type}-part"
     ax.set_title(
-        f"Parity Check MPO Structure ({'Optimized' if optimize_order else 'Unoptimized'})"
+        f"Parity Check MPO Structure ({plot_title_part}, {'Optimized' if optimize_order else 'Unoptimized'})"
     )
 
     ax.xaxis.set_ticks_position("top")
@@ -1248,6 +1267,8 @@ def decode_css(
         stabilisers = stabilisers_x + stabilisers_z
         error = multiply_pauli_strings(error, np.random.choice(stabilisers))
 
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
     error = pauli_to_mps(error)
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
@@ -1303,43 +1324,45 @@ def decode_css(
         result_to_explicit=False,
     )
 
-    if not silent:
-        logging.info("Applying the X constraints.")
-    try:
-        error_mps = apply_constraints(
-            error_mps,
-            constraints_sites[0],
-            constraints_tensors,
-            chi_max=chi_max,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-            result_to_explicit=False,
-        )
-    except (ValueError, np.linalg.LinAlgError):
-        logging.info(
-            "Decoding failed due to a linalg error while applying X constraints."
-        )
-        return None, 0
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying the X constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraints_sites[0],
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X constraints."
+            )
+            return None, 0
 
-    if not silent:
-        logging.info("Applying the Z constraints.")
-    try:
-        error_mps = apply_constraints(
-            error_mps,
-            constraints_sites[1],
-            constraints_tensors,
-            chi_max=chi_max,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-            result_to_explicit=False,
-        )
-    except (ValueError, np.linalg.LinAlgError):
-        logging.info(
-            "Decoding failed due to a linalg error while applying Z constraints."
-        )
-        return None, 0
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying the Z constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraints_sites[1],
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying Z constraints."
+            )
+            return None, 0
 
     if not silent:
         logging.info("Marginalising the error MPS.")
