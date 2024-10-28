@@ -154,7 +154,7 @@ If you happen to find `mdopt` useful in your research, please consider supportin
 ```
 @software{mdopt2022,
   author = {Aleksandr Berezutskii},
-  title = {mdopt: Discrete optimization in the tensor-network (specifically, MPS-MPO) language.},
+  title = {mdopt: Discrete optimisation in the tensor-network (specifically, MPS-MPO) language.},
   url = {https://github.com/quicophy/mdopt},
   year = {2022},
 }
