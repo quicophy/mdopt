@@ -11,17 +11,17 @@ from examples.decoding.decoding import (
 
 
 def plot_parity_check_mpo(
-    code: CssCode, optimize_order=False, return_matrix=False, plot_type="both"
+    code: CssCode, optimise_order=False, return_matrix=False, plot_type="both"
 ):
     """
-    Plots the parity check MPOs for a CSS code with optional order optimization.
+    Plots the parity check MPOs for a CSS code with optional order optimisation.
 
     Parameters
     ----------
     code : CssCode
         The quantum CSS code object.
-    optimize_order : bool, optional
-        Whether to optimize the order of applying the constraints.
+    optimise_order : bool, optional
+        Whether to optimise the order of applying the constraints.
     return_matrix : bool, optional
         Whether to return the MPO location matrix.
     plot_type : str, optional
@@ -76,7 +76,7 @@ def plot_parity_check_mpo(
         (num_constraint_checks + num_logical_checks, num_sites)
     )
 
-    if optimize_order:
+    if optimise_order:
         mpo_matrix = np.zeros((num_constraint_checks + num_logical_checks, num_sites))
         for row_idx, sublist in enumerate(logicals_sites):
             for sublist_indices in sublist:
@@ -159,7 +159,7 @@ def plot_parity_check_mpo(
     plot_title_part = "X and Z parts" if plot_type == "both" else f"{plot_type}-part"
     ax.set_title(
         f"Parity Check MPO Structure ({plot_title_part}, "
-        f"{'Optimized' if optimize_order else 'Unoptimized'})"
+        f"{'optimised' if optimise_order else 'Unoptimised'})"
     )
 
     ax.xaxis.set_ticks_position("top")
