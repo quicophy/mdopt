@@ -453,7 +453,7 @@ def linear_code_codewords(code: LinearCode) -> np.ndarray:
     rows_dense = [bin_vec_to_dense(row_bin) for row_bin in rows_bin]
     rows_int = [row.dot(1 << np.arange(row.size)[::-1]) for row in rows_dense]
 
-    # Append the all-zeros codeword which is always a codeword.
+    # Append the all-zero codeword which is always a codeword.
     codewords.append(0)
 
     # Append the rows of the generator matrix.
