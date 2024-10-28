@@ -901,7 +901,7 @@ def apply_constraints(
     entropies = []
     bond_dims = []
 
-    # Using matrix front minimization technique to optimize the order
+    # Using matrix front minimization technique to optimise the order
     # in which to apply the checks.
     if strategy == "Optimised":
         mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
