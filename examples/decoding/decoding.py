@@ -913,7 +913,7 @@ def apply_constraints(
         optimised_order = msro(mpo_location_matrix)
         strings = [strings[index] for index in optimised_order]
 
-    # Do not optimize the order in which to apply the checks.
+    # Do not optimise the order in which to apply the checks.
     if strategy == "Naive":
         pass
 
