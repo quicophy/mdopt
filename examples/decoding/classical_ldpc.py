@@ -152,7 +152,7 @@ def run_single_experiment(
 
 
 def run_experiment(num_bits, chi_max, error_rate, num_experiments, seed):
-    """Run the experiment consisting of multiple experiments."""
+    """Run the experiment consisting of multiple single experiments."""
     seed_seq = np.random.SeedSequence(seed)
 
     initial_codewords = []
