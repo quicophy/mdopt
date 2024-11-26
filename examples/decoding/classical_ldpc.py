@@ -214,7 +214,9 @@ def run_experiment(num_bits, chi_max, error_rate, num_experiments, seed):
 
 def save_experiment_data(data, num_bits, chi_max, error_rate, seed):
     """Save the experiment data."""
-    file_key = f"numbits{num_bits}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}"
+    file_key = (
+        f"numbits{num_bits}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}.pkl"
+    )
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
