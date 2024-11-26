@@ -14,15 +14,15 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
 # Define arrays of lattice sizes, bond dimensions, and error rates
-lattice_sizes=(4 5 6 7)
-bond_dims=(4 8 16 32 64 128)
+lattice_sizes=(3 5 7 9 11)
+bond_dims=(4 8 16 32 64 128 256 512)
 seeds=(123 124 125 126 127 128 129 130 131 132) # 10 random seeds
 num_experiments=10 # Per each random seed
 
 error_rates=()
-start=0.0001
-end=0.1
-num_points=10
+start=0.05
+end=0.15
+num_points=11
 step=$(echo "($end - $start) / ($num_points - 1)" | bc -l)
 for ((i=0; i<$num_points; i++))
 do
