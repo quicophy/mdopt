@@ -13,11 +13,12 @@ source "$HOME/envs/myenv/bin/activate"
 pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
 
-# Define arrays of lattice sizes, bond dimensions, and error rates
+# Define arrays of lattice sizes, bond dimensions, error rates, and seeds
 lattice_sizes=(3 5 7 9 11)
 bond_dims=(4 8 16 32 64 128 256 512)
 seeds=(123 124 125 126 127 128 129 130 131 132) # 10 random seeds
 num_experiments=10 # Per each random seed
+error_model="Bit Flip" # Error model used in the experiments
 
 error_rates=()
 start=0.05
@@ -30,30 +31,28 @@ do
     error_rates+=($value)
 done
 
-# Create job submission scripts by iterating over
-# each combination of seed, lattice_size, bond_dim, and error_rate and submitting them
+# Create job submission scripts by iterating over combinations of the argments
 for seed in "${seeds[@]}"; do
     for lattice_size in "${lattice_sizes[@]}"; do
         for bond_dim in "${bond_dims[@]}"; do
             for error_rate in "${error_rates[@]}"; do
                 # Create a job submission script for each combination
-                cat > "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh" <<EOS
+                cat > "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=10:00:00                                                                             # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=1                                                                           # Number of CPU cores per task
-#SBATCH --mem=16000                                                                                 # Memory per node
-#SBATCH --job-name=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
-#SBATCH --output=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
+#SBATCH --time=10:00:00                                                                                           # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=1                                                                                         # Number of CPU cores per task
+#SBATCH --mem=16000                                                                                               # Memory per node
+#SBATCH --job-name=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${error_model}${seed}       # Descriptive job name
+#SBATCH --output=decoding-quantum-surface-${lattice_size}-${bond_dim}-${error_rate}-${error_model}${seed}-%j.out  # Standard output and error log
 
 module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
-# Run the Python script with the specified lattice size, bond dimension, and error rate
-python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --seed ${seed}
+# Run the Python script with the specified arguments
+python quantum_decoding.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --error_model ${error_model} --seed ${seed}
 EOS
-                echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate}, and seed ${seed}."
-                sbatch "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
-                rm "submit-job-${lattice_size}-${bond_dim}-${error_rate}-${seed}.sh"
+                echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
+                sbatch "$job_script"
             done
         done
     done
