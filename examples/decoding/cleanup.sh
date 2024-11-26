@@ -7,4 +7,4 @@ find . -type f -name "*.out" -exec rm -f {} \;
 mkdir -p data
 find . -type f -name "*_bonddim*" -exec mv {} data/ \;
 
-echo "All .out files deleted and files containing 'bonddim' moved to the 'data' folder."
+echo "All .out files deleted and files containing '_bonddim' moved to the 'data' folder."
