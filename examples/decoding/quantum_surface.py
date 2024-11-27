@@ -187,6 +187,7 @@ def run_experiment(
 
 def save_experiment_data(data, lattice_size, chi_max, error_rate, error_model, seed):
     """Save the experiment data."""
+    error_model = error_model.replace(" ", "")
     file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_seed{seed}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
