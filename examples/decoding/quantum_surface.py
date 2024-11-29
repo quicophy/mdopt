@@ -142,7 +142,7 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
 
 
 def run_experiment(
-    lattice_size, chi_max, error_rate, num_experiments, error_model, seed
+    lattice_size, chi_max, error_rate, num_experiments, error_model, seed, errors
 ):
     """Run the experiment consisting of multiple single experiments."""
     logging.info(
@@ -151,9 +151,6 @@ def run_experiment(
     )
 
     failures = []
-    errors = generate_errors(
-        lattice_size, error_rate, num_experiments, error_model, seed
-    )
 
     for l in tqdm(range(num_experiments)):
         try:
@@ -200,6 +197,13 @@ def save_experiment_data(data, lattice_size, chi_max, error_rate, error_model, s
 def main():
     """Main entry point."""
     args = parse_arguments()
+    errors = generate_errors(
+        args.lattice_size,
+        args.error_rate,
+        args.num_experiments,
+        args.error_model,
+        args.seed,
+    )
     experiment_data = run_experiment(
         args.lattice_size,
         args.bond_dim,
@@ -207,6 +211,7 @@ def main():
         args.num_experiments,
         args.error_model,
         args.seed,
+        errors,
     )
     save_experiment_data(
         experiment_data,
