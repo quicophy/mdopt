@@ -104,6 +104,7 @@ def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
         code=surface_code,
         error=error,
         chi_max=chi_max,
+        multiply_by_stabiliser=True,
         bias_type=error_model,
         bias_prob=bias_prob,
         renormalise=True,
