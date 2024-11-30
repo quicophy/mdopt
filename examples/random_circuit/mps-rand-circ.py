@@ -88,7 +88,7 @@ for NUM_QUBITS in num_qubits:
             )
             tails[tails_key] = tails_iter
 
-            np.save(f"data/{tails_key}.npy", tails)
+            np.save(f"{tails_key}.npy", tails)
             logger.info(f"Data for {tails_key} saved successfully.")
 
 logger.info("Calculation completed successfully.")
