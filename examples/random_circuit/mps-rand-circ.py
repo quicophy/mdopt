@@ -14,12 +14,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Append paths using environment variables or hardcoded fallbacks
-project_root = os.getenv(
-    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
-)
+project_root = os.getenv("MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt")
 examples_path = os.getenv(
     "MDOPT_EXAMPLES_PATH",
-    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+    "/home/bereza/projects/def-ko1/bereza/mdopt/examples",
 )
 
 sys.path.append(project_root)
