@@ -106,7 +106,7 @@ def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
         chi_max=chi_max,
         multiply_by_stabiliser=True,
         bias_type=error_model,
-        bias_prob=0.05,
+        bias_prob=bias_prob,
         renormalise=True,
         silent=True,
         contraction_strategy="Optimised",
@@ -159,7 +159,7 @@ def run_experiment(
                 lattice_size=lattice_size,
                 chi_max=chi_max,
                 error=errors[l],
-                bias_prob=error_rate,
+                bias_prob=0.05,
                 error_model=error_model,
             )
             failures.append(failure)
