@@ -25,6 +25,7 @@ project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 project_root_narval = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
 )
+project_root_iq = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 
 examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
@@ -37,6 +38,7 @@ examples_path_graham = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/exam
 examples_path_narval = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
+examples_path_iq = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
 sys.path.append(project_root_narval)
 sys.path.append(examples_path_narval)
