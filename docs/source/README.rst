@@ -178,9 +178,9 @@ maintainers.
 The ``mdopt`` project strives to abide by generally accepted best
 practices in open-source software development, such as:
 
--  apply the desired changes and resolve any code conflicts,
--  run the tests and ensure they pass,
--  build the package from source.
+- apply the desired changes and resolve any code conflicts,
+- run the tests and ensure they pass,
+- build the package from source.
 
 .. |codecov| image:: https://codecov.io/gh/quicophy/mdopt/branch/main/graph/badge.svg?token=4G7VWYX0S2
    :target: https://codecov.io/gh/quicophy/mdopt
