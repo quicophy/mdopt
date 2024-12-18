@@ -11,7 +11,8 @@ source "$HOME/envs/myenv/bin/activate"
 
 # Install required Python packages if they are not already installed
 pip install --no-index --upgrade pip
-pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx matrex@git+https://github.com/quicophy/matrex
+pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
+pip install git+ssh://git@github.com/quicophy/matrex.git
 
 # Define arrays of lattice sizes, bond dimensions, error rates, and seeds
 lattice_sizes=(13)
