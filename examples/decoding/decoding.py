@@ -575,45 +575,45 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
 
     Returns
     -------
-    strings : Tuple[List[List[List[int]]]]
+    sites : Tuple[List[List[List[int]]]]
         List of MPS sites.
     """
 
-    sites_x, sites_z = css_code_checks(code)
+    checks_x, checks_z = css_code_checks(code)
 
-    constraints_strings_x = []
-    constraints_strings_z = []
+    constraints_sites_x = []
+    constraints_sites_z = []
 
-    for sites in sites_x:
-        xor_left_sites_x = [sites[0]]
-        xor_bulk_sites_x = [sites[i] for i in range(1, len(sites) - 1)]
-        xor_right_sites_x = [sites[-1]]
+    for checks in checks_x:
+        xor_left_sites_x = [checks[0]]
+        xor_bulk_sites_x = [checks[i] for i in range(1, len(checks) - 1)]
+        xor_right_sites_x = [checks[-1]]
 
-        swap_sites_x = list(range(sites[0] + 1, sites[-1]))
-        for k in range(1, len(sites) - 1):
-            swap_sites_x.remove(sites[k])
+        swap_sites_x = list(range(checks[0] + 1, checks[-1]))
+        for k in range(1, len(checks) - 1):
+            swap_sites_x.remove(checks[k])
 
-        constraints_strings_x.append(
+        constraints_sites_x.append(
             [xor_left_sites_x, xor_bulk_sites_x, swap_sites_x, xor_right_sites_x]
         )
 
-    for sites in sites_z:
-        xor_left_sites_z = [sites[0]]
-        xor_bulk_sites_z = [sites[i] for i in range(1, len(sites) - 1)]
-        xor_right_sites_z = [sites[-1]]
+    for checks in checks_z:
+        xor_left_sites_z = [checks[0]]
+        xor_bulk_sites_z = [checks[i] for i in range(1, len(checks) - 1)]
+        xor_right_sites_z = [checks[-1]]
 
-        swap_sites_z = list(range(sites[0] + 1, sites[-1]))
-        for k in range(1, len(sites) - 1):
-            swap_sites_z.remove(sites[k])
+        swap_sites_z = list(range(checks[0] + 1, checks[-1]))
+        for k in range(1, len(checks) - 1):
+            swap_sites_z.remove(checks[k])
 
-        constraints_strings_z.append(
+        constraints_sites_z.append(
             [xor_left_sites_z, xor_bulk_sites_z, swap_sites_z, xor_right_sites_z]
         )
 
-    return constraints_strings_x, constraints_strings_z
+    return constraints_sites_x, constraints_sites_z
 
 
-def css_code_logicals(code: CssCode) -> Tuple[List[List[int]]]:
+def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -624,8 +624,9 @@ def css_code_logicals(code: CssCode) -> Tuple[List[List[int]]]:
 
     Returns
     -------
-    logicals : Tuple[List[List[int]]]
-        List of logical operators, first X, then Z.
+    logicals : Tuple[List[List[int]], List[List[int]]]
+        Two lists of logical operator sites: the first for X-type logicals,
+        and the second for Z-type logicals.
     """
 
     log_matrix_x = code.x_logicals_binary()
@@ -654,7 +655,9 @@ def css_code_logicals(code: CssCode) -> Tuple[List[List[int]]]:
     return x_logicals, z_logicals
 
 
-def css_code_logicals_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
+def css_code_logicals_sites(
+    code: CssCode,
+) -> Tuple[List[List[List[int]]], List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical operators should be applied.
 
@@ -665,7 +668,7 @@ def css_code_logicals_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
 
     Returns
     -------
-    strings : Tuple[List[List[List[int]]]]
+    strings : Tuple[List[List[List[int]]], List[List[List[int]]]]
         List of MPS sites.
     """
 
@@ -688,6 +691,174 @@ def css_code_logicals_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
 
     for index, z_logical in enumerate(sites_z):
         copy_site_z = [len(sites_x) + index]
+        xor_bulk_sites_z = [z_logical[i] for i in range(len(z_logical) - 1)]
+        xor_right_site_z = [z_logical[-1]]
+
+        swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
+        swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+
+        logical_sites_z.append(
+            [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+        )
+
+    return logical_sites_x, logical_sites_z
+
+
+def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
+    """
+    Given a list of stabilizers and logicals, returns a list of checks,
+    where each check is represented as a list of MPS sites affected by it.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    logicals : List[str]
+        List of logical operators as Pauli strings.
+
+    Returns
+    -------
+    checks : List[List[int]]
+        List of checks, each represented as a list of MPS site indices.
+    """
+    checks = []
+
+    for stabilizer in stabilizers:
+        bitstring = pauli_to_mps(stabilizer)
+        check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
+        checks.append(list(check))
+
+    return checks
+
+
+def custom_code_constraint_sites(
+    stabilizers: List[str], logicals: List[str]
+) -> List[List[List[int]]]:
+    """
+    Returns the list of MPS sites where the logical constraints should be applied
+    for a general quantum code.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    logicals : List[str]
+        List of logical operators as Pauli strings.
+
+    Returns
+    -------
+    constraint_sites : List[List[List[int]]]
+        List of MPS sites for constraints, where each constraint corresponds
+        to the locations of tensors such as XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT.
+    """
+    constraint_sites = []
+
+    checks = custom_code_checks(stabilizers, logicals)
+
+    for check in checks:
+        xor_left_site = [check[0]]
+        xor_bulk_sites = [check[i] for i in range(1, len(check) - 1)]
+        xor_right_site = [check[-1]]
+
+        # Identify SWAP tensor sites
+        swap_sites = list(range(check[0] + 1, check[-1]))
+        for bulk_site in xor_bulk_sites:
+            if bulk_site in swap_sites:
+                swap_sites.remove(bulk_site)
+
+        constraint_sites.append(
+            [xor_left_site, xor_bulk_sites, swap_sites, xor_right_site]
+        )
+
+    return constraint_sites
+
+
+def custom_code_logicals(
+    x_logicals: List[str], z_logicals: List[str]
+) -> Tuple[List[List[int]], List[List[int]]]:
+    """
+    Returns the list of MPS sites where the logical constraints should be applied.
+
+    Parameters
+    ----------
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+
+    Returns
+    -------
+    logicals : Tuple[List[List[int]], List[List[int]]]
+        Two lists of logical operator sites: the first for X-type logicals,
+        and the second for Z-type logicals.
+    """
+    logicals_x = []
+    logicals_z = []
+
+    # Transform X logical operators
+    for I, logical in enumerate(x_logicals):
+        bitstring = pauli_to_mps(logical)
+        # Find positions of non-zero entries
+        x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
+        # Offset for X logicals
+        x_sites += len(x_logicals) + len(z_logicals)
+        logicals_x.append(list(x_sites))
+
+    # Transform Z logical operators
+    for I, logical in enumerate(z_logicals):
+        bitstring = pauli_to_mps(logical)
+        # Find positions of non-zero entries
+        z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
+        # Offset for Z logicals
+        z_sites += len(x_logicals) + len(z_logicals)
+        logicals_z.append(list(z_sites))
+
+    return logicals_x, logicals_z
+
+
+def custom_code_logicals_sites(
+    x_logicals: List[str], z_logicals: List[str]
+) -> Tuple[List[List[List[int]]], List[List[List[int]]]]:
+    """
+    Returns the list of MPS sites where the logical operators should be applied
+    for a general quantum error-correcting code.
+
+    Parameters
+    ----------
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+
+    Returns
+    -------
+    logical_sites : Tuple[List[List[List[int]]], List[List[List[int]]]]
+        Two lists of MPS logical sites for X-type and Z-type logicals, where each list contains:
+        - COPY tensor site (first position of the logical operator)
+        - XOR_BULK tensor sites (middle positions of the logical operator)
+        - XOR_RIGHT tensor site (last position of the logical operator)
+        - SWAP tensor sites (all remaining positions).
+    """
+    # Generate sites for X and Z logicals
+    sites_x, sites_z = custom_code_logicals(x_logicals, z_logicals)
+
+    logical_sites_x = []
+    logical_sites_z = []
+
+    for index, x_logical in enumerate(sites_x):
+        copy_site_x = [index]
+        xor_bulk_sites_x = [x_logical[i] for i in range(len(x_logical) - 1)]
+        xor_right_site_x = [x_logical[-1]]
+
+        swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
+        swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
+
+        logical_sites_x.append(
+            [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
+        )
+
+    for index, z_logical in enumerate(sites_z):
+        copy_site_z = [len(x_logicals) + index]
         xor_bulk_sites_z = [z_logical[i] for i in range(len(z_logical) - 1)]
         xor_right_site_z = [z_logical[-1]]
 
