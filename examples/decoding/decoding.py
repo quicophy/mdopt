@@ -581,8 +581,8 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
 
     checks_x, checks_z = css_code_checks(code)
 
-    constraints_sites_x = []
-    constraints_sites_z = []
+    constraint_sites_x = []
+    constraint_sites_z = []
 
     for checks in checks_x:
         xor_left_sites_x = [checks[0]]
@@ -593,7 +593,7 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
         for k in range(1, len(checks) - 1):
             swap_sites_x.remove(checks[k])
 
-        constraints_sites_x.append(
+        constraint_sites_x.append(
             [xor_left_sites_x, xor_bulk_sites_x, swap_sites_x, xor_right_sites_x]
         )
 
@@ -606,11 +606,11 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
         for k in range(1, len(checks) - 1):
             swap_sites_z.remove(checks[k])
 
-        constraints_sites_z.append(
+        constraint_sites_z.append(
             [xor_left_sites_z, xor_bulk_sites_z, swap_sites_z, xor_right_sites_z]
         )
 
-    return constraints_sites_x, constraints_sites_z
+    return constraint_sites_x, constraint_sites_z
 
 
 def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
@@ -796,7 +796,7 @@ def custom_code_logicals(
     logicals_z = []
 
     # Transform X logical operators
-    for I, logical in enumerate(x_logicals):
+    for logical in x_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
         x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
@@ -805,7 +805,7 @@ def custom_code_logicals(
         logicals_x.append(list(x_sites))
 
     # Transform Z logical operators
-    for I, logical in enumerate(z_logicals):
+    for logical in z_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
         z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
@@ -1298,7 +1298,7 @@ def decode_css(
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
-    constraints_sites = css_code_constraint_sites(code)
+    constraint_sites = css_code_constraint_sites(code)
     logicals_sites = css_code_logicals_sites(code)
     sites_to_bias = list(range(num_logicals, num_sites))
 
@@ -1367,7 +1367,7 @@ def decode_css(
         try:
             error_mps = apply_constraints(
                 error_mps,
-                constraints_sites[0],
+                constraint_sites[0],
                 constraints_tensors,
                 chi_max=chi_max,
                 renormalise=renormalise,
@@ -1387,7 +1387,7 @@ def decode_css(
         try:
             error_mps = apply_constraints(
                 error_mps,
-                constraints_sites[1],
+                constraint_sites[1],
                 constraints_tensors,
                 chi_max=chi_max,
                 renormalise=renormalise,
