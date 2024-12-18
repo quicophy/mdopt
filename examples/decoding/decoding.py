@@ -919,6 +919,7 @@ def generate_pauli_error_string(
     error_rate: float,
     error_model: str = "Depolarising",
     seed: Optional[int] = None,
+    erasure_rate: Optional[float] = None,
 ) -> str:
     """
     This function generates a random Pauli error string based on a given noise model.
@@ -928,41 +929,51 @@ def generate_pauli_error_string(
     num_qubits : int
         Number of qubits in the surface code.
     error_rate : float
-        Physical error rate for generating errors.
+        Physical error rate for generating Pauli errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping".
+        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping", "Erasure".
     seed : Optional[int]
         Seed for the random number generator.
+    erasure_rate : Optional[float]
+        Probability of erasure for the erasure channel. Only used if `error_model` is "Erasure".
 
     Returns
     -------
     str
-        A string representing the Pauli errors in the format "XZYZI..."
+        A string representing the Pauli errors in the format "XZYEI...",
+        where "E" represents an erasure error.
     """
 
     np.random.seed(seed)
     error_string = []
-    pauli_errors = ["I", "X", "Y", "Z"]
+
+    if error_model == "Erasure" and erasure_rate is None:
+        raise ValueError("Erasure rate must be specified for the erasure channel.")
 
     for _ in range(num_qubits):
-        if np.random.random() < error_rate:
-            if error_model == "Depolarising":
-                error = np.random.choice(pauli_errors[1:], p=[1 / 3, 1 / 3, 1 / 3])
-            elif error_model == "Bit Flip":
-                error = "X"
-            elif error_model == "Phase Flip":
-                error = "Z"
-            elif error_model == "Amplitude Damping":
-                error = np.random.choice(
-                    pauli_errors, p=[1 - error_rate, error_rate, 0, 0]
-                )
+        if error_model == "Depolarising":
+            if np.random.random() < error_rate:
+                error = np.random.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
-                raise ValueError(f"Unknown error model: {error_model}")
+                error = "I"
+        elif error_model == "Bit Flip":
+            error = "X" if np.random.random() < error_rate else "I"
+        elif error_model == "Phase Flip":
+            error = "Z" if np.random.random() < error_rate else "I"
+        elif error_model == "Amplitude Damping":
+            error = np.random.choice(["I", "X"], p=[1 - error_rate, error_rate])
+        elif error_model == "Erasure":
+            if np.random.random() < erasure_rate:
+                error = "E"
+            elif np.random.random() < error_rate:
+                error = np.random.choice(["X", "Z"])
+            else:
+                error = "I"
         else:
-            error = "I"
+            raise ValueError(f"Unknown error model: {error_model}")
 
-        error_string.append(f"{error}")
+        error_string.append(error)
 
     return "".join(error_string)
 
@@ -1443,3 +1454,206 @@ def decode_css(
         raise NotImplementedError("Optima TT is not implemented yet.")
     else:
         raise ValueError("Invalid optimiser chosen.")
+
+
+def decode_custom(
+    stabilizers: List[str],
+    x_logicals: List[str],
+    z_logicals: List[str],
+    error: str,
+    num_runs: int = int(50),
+    chi_max: int = int(1e4),
+    bias_type: str = "Depolarising",
+    bias_prob: float = float(0.1),
+    renormalise: bool = True,
+    multiply_by_stabiliser: bool = True,
+    silent: bool = False,
+    contraction_strategy: str = "Naive",
+    optimiser: str = "Dephasing DMRG",
+):
+    """
+    This function performs error-based decoding for a custom quantum error-correcting code.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+    error : str
+        The error in a string format (e.g., "X_0 Z_1 X_2 ...").
+    num_runs : int
+        Number of DMRG sweeps.
+    chi_max : int
+        Maximum bond dimension to keep during contractions
+        and in the Dephasing DMRG algorithm.
+    bias_type : str
+        The type of the bias applied before checks.
+        Available options: "Bitflip" and "Depolarising".
+    bias_prob : float
+        The probability of the depolarising bias applied before checks.
+    renormalise : bool
+        Whether to renormalise the singular values during contraction.
+    multiply_by_stabiliser : bool
+        Whether to multiply the error by a random stabilizer before decoding.
+    silent : bool
+        Whether to show the progress bars or not.
+    contraction_strategy : str
+        The contractor's strategy.
+    optimiser : str
+        The optimiser used to find the closest basis product state to a given MPDO.
+        Available options: "Dephasing DMRG", "Dense", "Optima TT".
+
+    Returns
+    -------
+    result : Tuple
+        Decoding results, depending on the chosen optimiser.
+    """
+
+    if not silent:
+        logging.info("Starting custom decoding.")
+
+    if multiply_by_stabiliser:
+        error = multiply_pauli_strings(error, np.random.choice(stabilizers))
+
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
+    error = pauli_to_mps(error)
+
+    num_sites = len(stabilizers[0]) * 2 + len(x_logicals) + len(z_logicals)
+    num_logicals = len(x_logicals) + len(z_logicals)
+
+    if not silent:
+        logging.info(f"The total number of sites: {num_sites}.")
+    if len(error) != num_sites - num_logicals:
+        raise ValueError(
+            f"The error length is {len(error)}, expected {num_sites - num_logicals}."
+        )
+
+    logicals_state = "+" * num_logicals
+    state_string = logicals_state + error
+    error_mps = create_custom_product_state(string=state_string)
+
+    constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+
+    constraint_sites = custom_code_constraint_sites(
+        stabilizers, x_logicals + z_logicals
+    )
+    logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
+    sites_to_bias = list(range(num_logicals, num_sites))
+
+    if bias_type == "Bitflip":
+        if not silent:
+            logging.info("Applying bitflip bias.")
+        error_mps = apply_bitflip_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
+    else:
+        if not silent:
+            logging.info("Applying depolarising bias.")
+        error_mps = apply_depolarising_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
+
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying X logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[0],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X logical constraints."
+            )
+            return None, 0
+
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying Z logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[1],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying Z logical constraints."
+            )
+            return None, 0
+
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying the X constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraint_sites,
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X constraints."
+            )
+            return None, 0
+
+    if not silent:
+        logging.info("Marginalising the error MPS.")
+    sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
+    logical_mps = marginalise(
+        mps=error_mps,
+        sites_to_marginalise=sites_to_marginalise,
+    )
+
+    num_logical_sites = len(logical_mps)
+
+    if not silent:
+        logging.info(f"The number of logical sites: {num_logical_sites}.")
+
+    if num_logical_sites <= 10:
+        logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
+        result = logical_dense, int(np.argmax(logical_dense) == 0)
+        if not silent:
+            logging.info("Decoding completed with result: %s", result)
+        return result
+    elif optimiser == "Dephasing DMRG":
+        mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
+        engine = DephasingDMRG(
+            mps=mps_dmrg_start,
+            mps_target=logical_mps,
+            chi_max=chi_max,
+            mode="LA",
+            silent=silent,
+        )
+        engine.run(num_runs)
+        overlap = abs(inner_product(engine.mps, logical_mps))
+        return engine, overlap
+    else:
+        raise ValueError("Unsupported optimiser for decoding.")
