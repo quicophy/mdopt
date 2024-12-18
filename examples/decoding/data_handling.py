@@ -4,10 +4,17 @@ import os
 import re
 import pickle
 import numpy as np
+
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 
 from scipy.stats import sem
 from scipy.optimize import minimize
+
+
+plt.rcParams["text.usetex"] = True  # Enable LaTeX in matplotlib
+plt.rcParams["font.family"] = "serif"  # Optional: sets font family to serif
 
 
 def load_data(file_key: str):
@@ -205,7 +212,244 @@ def check_error_consistency(
     }
 
 
-def analyze_failure_statistics(
+def plot_failure_statistics(
+    error_rates_dict: dict,
+    failure_rates: dict,
+    error_bars: dict,
+    lattice_sizes: list[int],
+    max_bond_dims: list[int],
+    mode: str = "lattice_size",
+):
+    """
+    Plot failure rates with error bars for either varying bond dimensions at all lattice sizes,
+    or varying lattice sizes at all bond dimensions.
+
+    Parameters
+    ----------
+    error_rates_dict : dict
+        Dictionary mapping `(lattice_size, chi_max)` tuples to lists of error rates.
+    failure_rates : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to failure rates.
+    error_bars : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to error bars.
+    lattice_sizes : list of int
+        List of lattice sizes to consider.
+    max_bond_dims : list of int
+        List of bond dimensions to consider.
+    mode : str, optional
+        Plotting mode: "lattice_size" (varying bond dimensions for each lattice size)
+        or "bond_dim" (varying lattice sizes for each bond dimension). Default is "lattice_size".
+
+    Returns
+    -------
+    None
+        Generates and shows the plots.
+    """
+    if mode not in ["lattice_size", "bond_dim"]:
+        raise ValueError("Mode must be either 'lattice_size' or 'bond_dim'.")
+
+    # Setup colormap
+    cmap = matplotlib.colormaps["viridis_r"]
+
+    # Mode 1: Fixed lattice size, vary bond dimensions
+    if mode == "lattice_size":
+        for lattice_size in lattice_sizes:
+            plt.figure(figsize=(6, 5))
+            norm = Normalize(vmin=0, vmax=len(max_bond_dims) - 1)
+
+            for index, chi_max in enumerate(max_bond_dims):
+                key = (lattice_size, chi_max)
+                if key not in error_rates_dict:
+                    print(
+                        f"No data for lattice size {lattice_size}, bond dimension {chi_max}. Skipping."
+                    )
+                    continue
+
+                error_rates = error_rates_dict[key]
+                plt.errorbar(
+                    error_rates,
+                    [
+                        failure_rates[lattice_size, chi_max, error_rate]
+                        for error_rate in error_rates
+                    ],
+                    yerr=[
+                        error_bars[lattice_size, chi_max, error_rate]
+                        for error_rate in error_rates
+                    ],
+                    fmt="o--",
+                    label=f"Bond dim: {chi_max}",
+                    linewidth=3,
+                    color=cmap(norm(index)),
+                )
+
+            plt.title(f"Failure Rate vs Error Rate (Lattice size = {lattice_size})")
+            plt.xlabel("Error Rate")
+            plt.ylabel("Failure Rate")
+            plt.legend(fontsize=7)
+            plt.grid()
+            plt.show()
+
+    # Mode 2: Fixed bond dimension, vary lattice sizes
+    elif mode == "bond_dim":
+        for chi_max in max_bond_dims:
+            plt.figure(figsize=(6, 5))
+            norm = Normalize(vmin=0, vmax=len(lattice_sizes) - 1)
+
+            for index, lattice_size in enumerate(lattice_sizes):
+                key = (lattice_size, chi_max)
+                if key not in error_rates_dict:
+                    print(
+                        f"No data for lattice size {lattice_size}, bond dimension {chi_max}. Skipping."
+                    )
+                    continue
+
+                error_rates = error_rates_dict[key]
+                plt.errorbar(
+                    error_rates,
+                    [
+                        failure_rates[lattice_size, chi_max, error_rate]
+                        for error_rate in error_rates
+                    ],
+                    yerr=[
+                        error_bars[lattice_size, chi_max, error_rate]
+                        for error_rate in error_rates
+                    ],
+                    fmt="o--",
+                    label=f"Lattice size: {lattice_size}",
+                    linewidth=3,
+                    color=cmap(norm(index)),
+                )
+
+            plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
+            plt.xlabel("Error Rate")
+            plt.ylabel("Failure Rate")
+            plt.legend(fontsize=7)
+            plt.grid()
+            plt.show()
+
+
+def plot_failure_statistics_fixed_rates(
+    failure_rates: dict,
+    error_bars: dict,
+    lattice_sizes: list[int],
+    max_bond_dims: list[int],
+    error_rates: list[float],
+    mode: str = "lattice_size",
+):
+    """
+    Plot failure rates with error bars as a function of error rates, either varying bond dimensions
+    at all lattice sizes or varying lattice sizes at all bond dimensions.
+
+    Parameters
+    ----------
+    failure_rates : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to failure rates.
+    error_bars : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to error bars.
+    lattice_sizes : list of int
+        List of lattice sizes to consider.
+    max_bond_dims : list of int
+        List of bond dimensions to consider.
+    error_rates : list of float
+        List of error rates to use for the x-axis.
+    mode : str, optional
+        Plotting mode: "lattice_size" (varying bond dimensions for each lattice size)
+        or "bond_dim" (varying lattice sizes for each bond dimension). Default is "lattice_size".
+
+    Returns
+    -------
+    None
+        Generates and shows the plots.
+    """
+    # Validate mode
+    if mode not in ["lattice_size", "bond_dim"]:
+        raise ValueError("Mode must be either 'lattice_size' or 'bond_dim'.")
+
+    # Colormap setup
+    from matplotlib.colors import Normalize
+    import matplotlib.pyplot as plt
+    import matplotlib
+
+    cmap = matplotlib.colormaps["viridis_r"]
+
+    # Mode 1: Fixed lattice size, vary bond dimensions
+    if mode == "lattice_size":
+        for lattice_size in lattice_sizes:
+            plt.figure(figsize=(6, 5))
+            norm = Normalize(vmin=0, vmax=len(max_bond_dims) - 1)
+
+            for index, chi_max in enumerate(max_bond_dims):
+                failure_rate_values = []
+                error_bar_values = []
+
+                # Collect failure rates and error bars for the given error rates
+                for error_rate in error_rates:
+                    failure_rate_values.append(
+                        failure_rates.get((lattice_size, chi_max, error_rate), None)
+                    )
+                    error_bar_values.append(
+                        error_bars.get((lattice_size, chi_max, error_rate), 0)
+                    )
+
+                # Plot only if any failure rates exist
+                if any(failure_rate_values):
+                    plt.errorbar(
+                        error_rates,
+                        failure_rate_values,
+                        yerr=error_bar_values,
+                        fmt="o--",
+                        label=f"Bond dim: {chi_max}",
+                        linewidth=2,
+                        color=cmap(norm(index)),
+                    )
+
+            plt.title(f"Failure Rate vs Error Rate (Lattice size = {lattice_size})")
+            plt.xlabel("Error Rate")
+            plt.ylabel("Failure Rate")
+            plt.legend(fontsize=7)
+            plt.grid()
+            plt.show()
+
+    # Mode 2: Fixed bond dimension, vary lattice sizes
+    elif mode == "bond_dim":
+        for chi_max in max_bond_dims:
+            plt.figure(figsize=(6, 5))
+            norm = Normalize(vmin=0, vmax=len(lattice_sizes) - 1)
+
+            for index, lattice_size in enumerate(lattice_sizes):
+                failure_rate_values = []
+                error_bar_values = []
+
+                # Collect failure rates and error bars for the given error rates
+                for error_rate in error_rates:
+                    failure_rate_values.append(
+                        failure_rates.get((lattice_size, chi_max, error_rate), None)
+                    )
+                    error_bar_values.append(
+                        error_bars.get((lattice_size, chi_max, error_rate), 0)
+                    )
+
+                # Plot only if any failure rates exist
+                if any(failure_rate_values):
+                    plt.errorbar(
+                        error_rates,
+                        failure_rate_values,
+                        yerr=error_bar_values,
+                        fmt="o--",
+                        label=f"Lattice size: {lattice_size}",
+                        linewidth=2,
+                        color=cmap(norm(index)),
+                    )
+
+            plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
+            plt.xlabel("Error Rate")
+            plt.ylabel("Failure Rate")
+            plt.legend(fontsize=7)
+            plt.grid()
+            plt.show()
+
+
+def fit_failure_statistics(
     lattice_sizes: list[int],
     max_bond_dims: list[int],
     error_rates_dict: dict,
