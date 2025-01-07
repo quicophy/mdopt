@@ -25,7 +25,7 @@ cat > submit-job.sh << 'EOS'
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-python mps-rand-circ.py
+python examples/random_circuit/mps-rand-circ.py
 EOS
 
 # Submit the job

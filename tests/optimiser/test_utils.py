@@ -62,14 +62,14 @@ def test_optimiser_utils_constraint_string():
         xor_bulk_sites = list(set(xor_bulk_sites))
         swap_sites = [site for site in sites if site not in xor_bulk_sites]
 
-        constraints_sites = [
+        constraint_sites = [
             [xor_left_site],
             xor_bulk_sites,
             swap_sites,
             [xor_right_site],
         ]
 
-        string = ConstraintString(constraints=tensors, sites=constraints_sites)
+        string = ConstraintString(constraints=tensors, sites=constraint_sites)
 
         mpo = [None for _ in range(num_sites)]
         mpo[xor_left_site] = XOR_LEFT
@@ -83,35 +83,35 @@ def test_optimiser_utils_constraint_string():
         for tensor_string, tensor_test in zip(string.mpo(), mpo):
             assert (tensor_string == tensor_test).all()
         for i in range(4):
-            assert np.isclose(string[i][0], constraints_sites[i]).all()
+            assert np.isclose(string[i][0], constraint_sites[i]).all()
             assert np.isclose(string[i][1], tensors[i]).all()
         assert string.span() == xor_right_site - xor_left_site + 1
 
         with pytest.raises(ValueError):
-            ConstraintString(constraints=[], sites=constraints_sites)
+            ConstraintString(constraints=[], sites=constraint_sites)
 
         with pytest.raises(ValueError):
             ConstraintString(constraints=tensors, sites=[])
 
         with pytest.raises(ValueError):
             ConstraintString(
-                constraints=[XOR_LEFT, XOR_BULK, XOR_RIGHT], sites=constraints_sites
+                constraints=[XOR_LEFT, XOR_BULK, XOR_RIGHT], sites=constraint_sites
             )
 
         with pytest.raises(ValueError):
-            constraints_sites = [
+            constraint_sites = [
                 [0],
                 [1, 2, 3],
                 [3, 4, 5],
                 [6],
             ]
-            ConstraintString(constraints=tensors, sites=constraints_sites)
+            ConstraintString(constraints=tensors, sites=constraint_sites)
 
         with pytest.raises(ValueError):
-            constraints_sites = [
+            constraint_sites = [
                 [0],
                 [1],
                 [3, 4, 5],
                 [6],
             ]
-            ConstraintString(constraints=tensors, sites=constraints_sites)
+            ConstraintString(constraints=tensors, sites=constraint_sites)

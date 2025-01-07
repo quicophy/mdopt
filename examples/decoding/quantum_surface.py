@@ -2,6 +2,7 @@
 
 import os
 import sys
+import pickle
 import logging
 import argparse
 import numpy as np
@@ -24,6 +25,7 @@ project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 project_root_narval = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
 )
+project_root_iq = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 
 examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
@@ -36,6 +38,7 @@ examples_path_graham = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/exam
 examples_path_narval = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
+examples_path_iq = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
 sys.path.append(project_root_narval)
 sys.path.append(examples_path_narval)
@@ -54,6 +57,7 @@ except ImportError as e:
 
 
 def parse_arguments():
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(
         description="Launch quantum surface code decoding on Compute Canada clusters."
     )
@@ -79,6 +83,12 @@ def parse_arguments():
         help="The number of experiments to run.",
     )
     parser.add_argument(
+        "--error_model",
+        type=str,
+        required=True,
+        help="The error model to use.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         required=True,
@@ -87,50 +97,18 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def run_experiment(lattice_size, chi_max, error_rate, num_experiments, seed):
-    logging.info(
-        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
-    )
-
-    seed_seq = np.random.SeedSequence(seed)
-    failures = []
-
-    for l in tqdm(range(num_experiments)):
-        new_seed = seed_seq.spawn(1)[0]
-        rng = np.random.default_rng(new_seed)
-        random_integer = rng.integers(1, 10**8 + 1)
-        experiment_seed = random_integer
-
-        try:
-            failure = run_single_experiment(
-                lattice_size, chi_max, error_rate, experiment_seed
-            )
-            failures.append(failure)
-        except Exception as e:
-            logging.error(f"Experiment {l} failed with error: {str(e)}", exc_info=True)
-            failures.append(1)
-
-        logging.info(
-            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max}, ERROR_RATE={error_rate}, SEED={seed}"
-        )
-
-    return failures
-
-
-def run_single_experiment(lattice_size, chi_max, error_rate, seed):
+def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
+    """Run a single experiment."""
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
-    prob_bias = error_rate
-    error = generate_pauli_error_string(len(surface_code), error_rate, seed=seed)
-    error_mps = pauli_to_mps(error)
-
     _, success = decode_css(
         code=surface_code,
-        error=error_mps,
+        error=error,
         chi_max=chi_max,
-        bias_type="Depolarising",
-        bias_prob=prob_bias,
+        multiply_by_stabiliser=True,
+        bias_type=error_model,
+        bias_prob=bias_prob,
         renormalise=True,
         silent=True,
         contraction_strategy="Optimised",
@@ -144,29 +122,107 @@ def run_single_experiment(lattice_size, chi_max, error_rate, seed):
         return 1
 
 
-def save_failures_statistics(failures, lattice_size, chi_max, error_rate, seed):
-    failures_statistics = {}
-    failures_statistics[(lattice_size, chi_max, error_rate)] = failures
-    failures_key = (
-        f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_seed{seed}"
-    )
-    np.save(f"{failures_key}.npy", failures)
+def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed):
+    """Generate errors for the experiments."""
+    seed_seq = np.random.SeedSequence(seed)
+    errors = []
+
+    rep_code = qec.repetition_code(lattice_size)
+    surface_code = qec.hypergraph_product(rep_code, rep_code)
+
+    for _ in range(num_experiments):
+        rng = np.random.default_rng(seed_seq.spawn(1)[0])
+        random_seed = rng.integers(1, 10**8 + 1)
+        error = generate_pauli_error_string(
+            len(surface_code),
+            error_rate,
+            seed=random_seed,
+            error_model=error_model,
+        )
+        errors.append(error)
+
+    return errors
+
+
+def run_experiment(
+    lattice_size, chi_max, error_rate, num_experiments, error_model, seed, errors
+):
+    """Run the experiment consisting of multiple single experiments."""
     logging.info(
-        f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
+        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
+        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, ERROR_MODEL={error_model}, SEED={seed}"
+    )
+
+    failures = []
+
+    for l in tqdm(range(num_experiments)):
+        try:
+            failure = run_single_experiment(
+                lattice_size=lattice_size,
+                chi_max=chi_max,
+                error=errors[l],
+                bias_prob=0.05,
+                error_model=error_model,
+            )
+            failures.append(failure)
+        except Exception as e:
+            logging.error(f"Experiment {l} failed with error: {str(e)}", exc_info=True)
+            failures.append(1)
+
+        logging.info(
+            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max},"
+            f"ERROR_RATE={error_rate}, ERROR_MODEL={error_model}, SEED={seed}"
+        )
+
+    return {
+        "failures": failures,
+        "errors": errors,
+        "lattice_size": lattice_size,
+        "chi_max": chi_max,
+        "error_rate": error_rate,
+        "error_model": error_model,
+        "seed": seed,
+    }
+
+
+def save_experiment_data(data, lattice_size, chi_max, error_rate, error_model, seed):
+    """Save the experiment data."""
+    error_model = error_model.replace(" ", "")
+    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_seed{seed}.pkl"
+    with open(file_key, "wb") as pickle_file:
+        pickle.dump(data, pickle_file)
+    logging.info(
+        f"Saved experiment data for {file_key} with "
+        f"{np.mean(data['failures'])*100:.2f}% failure rate."
     )
 
 
 def main():
+    """Main entry point."""
     args = parse_arguments()
-    failures = run_experiment(
+    errors = generate_errors(
+        args.lattice_size,
+        args.error_rate,
+        args.num_experiments,
+        args.error_model,
+        args.seed,
+    )
+    experiment_data = run_experiment(
         args.lattice_size,
         args.bond_dim,
         args.error_rate,
         args.num_experiments,
+        args.error_model,
         args.seed,
+        errors,
     )
-    save_failures_statistics(
-        failures, args.lattice_size, args.bond_dim, args.error_rate, args.seed
+    save_experiment_data(
+        experiment_data,
+        args.lattice_size,
+        args.bond_dim,
+        args.error_rate,
+        args.error_model,
+        args.seed,
     )
 
 

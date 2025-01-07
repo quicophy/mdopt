@@ -26,9 +26,9 @@ seeds=(
 num_experiments=2 # Per each random seed
 
 error_rates=()
-start=0.1
-end=0.3
-num_points=10
+start=0.05
+end=0.45
+num_points=11
 step=$(echo "($end - $start) / ($num_points - 1)" | bc -l)
 for ((i=0; i<$num_points; i++))
 do
@@ -45,9 +45,9 @@ for seed in "${seeds[@]}"; do
                 # Create a job submission script for each combination
                 cat > "submit-job-${system_size}-${bond_dim}-${error_rate}-${seed}.sh" <<EOS
 #!/bin/bash
-#SBATCH --time=168:00:00                                                                          # Time limit (hh:mm:ss)
+#SBATCH --time=24:00:00                                                                           # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                                         # Number of CPU cores per task
-#SBATCH --mem=64000                                                                               # Memory per node
+#SBATCH --mem=32000                                                                               # Memory per node
 #SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
 #SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
 

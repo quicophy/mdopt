@@ -2,8 +2,7 @@
 Below, we define some decoding-specific functions over the MPS/MPO entities
 we encounter during the decoding process as well as the functions we use
 to generate and operate over both classical and quantum error correcting codes.
-Note, that this is auxiliary code which is not included into the library,
-thus not tested and provided as is.
+Note, this is auxiliary code which isn't included into the library and provided as is.
 """
 
 import logging
@@ -15,13 +14,15 @@ from tqdm import tqdm
 from matrex import msro
 from opt_einsum import contract
 from more_itertools import powerset
+
+# pylint: disable=E0611
 from qecstruct import (
     BinarySymmetricChannel,
     BinaryVector,
     LinearCode,
     CssCode,
     Rng,
-)  # pylint: disable=E0611
+)
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
@@ -39,7 +40,7 @@ from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.utils import ConstraintString
 
 
-# Setting up logging.
+# Setting up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -452,7 +453,7 @@ def linear_code_codewords(code: LinearCode) -> np.ndarray:
     rows_dense = [bin_vec_to_dense(row_bin) for row_bin in rows_bin]
     rows_int = [row.dot(1 << np.arange(row.size)[::-1]) for row in rows_dense]
 
-    # Append the all-zeros codeword which is always a codeword.
+    # Append the all-zero codeword which is always a codeword.
     codewords.append(0)
 
     # Append the rows of the generator matrix.
@@ -465,6 +466,55 @@ def linear_code_codewords(code: LinearCode) -> np.ndarray:
             codewords.append(reduce(np.bitwise_xor, generators))
 
     return np.sort(np.array(codewords))
+
+
+def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
+    """
+    Given a quantum CSS code, returns a list of its stabilisers as Pauli strings.
+
+    Parameters
+    ----------
+    code : qec.CssCode
+        The CSS code object.
+
+    Returns
+    -------
+    stabilisers : Tuple[List[str], List[str]]
+        A tuple of two lists, where the first one corresponds to X stabilisers and
+        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli string.
+    """
+
+    def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
+        """Helper function to convert a binary row to a Pauli string."""
+        pauli_string = []
+        for i in range(num_qubits):
+            if binary_row[i] == 1:
+                pauli_string.append(pauli)
+            else:
+                pauli_string.append("I")
+        return "".join(pauli_string)
+
+    num_qubits = len(code)
+
+    # X stabilisers
+    parity_matrix_x = code.x_stabs_binary()
+    stabilisers_x = []
+    for row in parity_matrix_x.rows():
+        binary_row = np.zeros(num_qubits, dtype=int)
+        for col in row:
+            binary_row[col] = 1
+        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
+
+    # Z stabilisers
+    parity_matrix_z = code.z_stabs_binary()
+    stabilisers_z = []
+    for row in parity_matrix_z.rows():
+        binary_row = np.zeros(num_qubits, dtype=int)
+        for col in row:
+            binary_row[col] = 1
+        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "X"))
+
+    return stabilisers_x, stabilisers_z
 
 
 def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
@@ -514,7 +564,7 @@ def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
     return checks_x, checks_z
 
 
-def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
+def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -525,45 +575,45 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    strings : Tuple[List[int]]
+    sites : Tuple[List[List[List[int]]]]
         List of MPS sites.
     """
 
-    sites_x, sites_z = css_code_checks(code)
+    checks_x, checks_z = css_code_checks(code)
 
-    constraints_strings_x = []
-    constraints_strings_z = []
+    constraint_sites_x = []
+    constraint_sites_z = []
 
-    for sites in sites_x:
-        xor_left_sites_x = [sites[0]]
-        xor_bulk_sites_x = [sites[i] for i in range(1, len(sites) - 1)]
-        xor_right_sites_x = [sites[-1]]
+    for checks in checks_x:
+        xor_left_sites_x = [checks[0]]
+        xor_bulk_sites_x = [checks[i] for i in range(1, len(checks) - 1)]
+        xor_right_sites_x = [checks[-1]]
 
-        swap_sites_x = list(range(sites[0] + 1, sites[-1]))
-        for k in range(1, len(sites) - 1):
-            swap_sites_x.remove(sites[k])
+        swap_sites_x = list(range(checks[0] + 1, checks[-1]))
+        for k in range(1, len(checks) - 1):
+            swap_sites_x.remove(checks[k])
 
-        constraints_strings_x.append(
+        constraint_sites_x.append(
             [xor_left_sites_x, xor_bulk_sites_x, swap_sites_x, xor_right_sites_x]
         )
 
-    for sites in sites_z:
-        xor_left_sites_z = [sites[0]]
-        xor_bulk_sites_z = [sites[i] for i in range(1, len(sites) - 1)]
-        xor_right_sites_z = [sites[-1]]
+    for checks in checks_z:
+        xor_left_sites_z = [checks[0]]
+        xor_bulk_sites_z = [checks[i] for i in range(1, len(checks) - 1)]
+        xor_right_sites_z = [checks[-1]]
 
-        swap_sites_z = list(range(sites[0] + 1, sites[-1]))
-        for k in range(1, len(sites) - 1):
-            swap_sites_z.remove(sites[k])
+        swap_sites_z = list(range(checks[0] + 1, checks[-1]))
+        for k in range(1, len(checks) - 1):
+            swap_sites_z.remove(checks[k])
 
-        constraints_strings_z.append(
+        constraint_sites_z.append(
             [xor_left_sites_z, xor_bulk_sites_z, swap_sites_z, xor_right_sites_z]
         )
 
-    return constraints_strings_x, constraints_strings_z
+    return constraint_sites_x, constraint_sites_z
 
 
-def css_code_logicals(code: CssCode):
+def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -574,37 +624,40 @@ def css_code_logicals(code: CssCode):
 
     Returns
     -------
-    logicals : Tuple[List[int]]
-        List of logical operators, first X, then Z.
+    logicals : Tuple[List[List[int]], List[List[int]]]
+        Two lists of logical operator sites: the first for X-type logicals,
+        and the second for Z-type logicals.
     """
 
-    log_matrix_x = code.z_logicals_binary()
+    log_matrix_x = code.x_logicals_binary()
     array_x = np.zeros((log_matrix_x.num_rows(), log_matrix_x.num_columns()), dtype=int)
     for row, cols in enumerate(log_matrix_x.rows()):
         for col in cols:
             array_x[row, col] = 1
 
-    log_matrix_z = code.x_logicals_binary()
+    log_matrix_z = code.z_logicals_binary()
     array_z = np.zeros((log_matrix_z.num_rows(), log_matrix_z.num_columns()), dtype=int)
     for row, cols in enumerate(log_matrix_z.rows()):
         for col in cols:
             array_z[row, col] = 1
 
     x_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
+        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
         for row in array_x
     ]
     x_logicals = [list(x_logical) for x_logical in x_logicals]
     z_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
+        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
         for row in array_z
     ]
     z_logicals = [list(z_logical) for z_logical in z_logicals]
 
-    return z_logicals[0], x_logicals[0]
+    return x_logicals, z_logicals
 
 
-def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
+def css_code_logicals_sites(
+    code: CssCode,
+) -> Tuple[List[List[List[int]]], List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical operators should be applied.
 
@@ -615,30 +668,208 @@ def css_code_logicals_sites(code: CssCode) -> Tuple[List[int]]:
 
     Returns
     -------
-    strings : Tuple[List[int]]
+    strings : Tuple[List[List[List[int]]], List[List[List[int]]]]
         List of MPS sites.
     """
 
     sites_x, sites_z = css_code_logicals(code)
 
-    copy_site_x = [0]
-    copy_site_z = [1]
+    logical_sites_x = []
+    logical_sites_z = []
 
-    xor_right_site_x = [sites_x[-1]]
-    xor_right_site_z = [sites_z[-1]]
+    for index, x_logical in enumerate(sites_x):
+        copy_site_x = [index]
+        xor_bulk_sites_x = [x_logical[i] for i in range(len(x_logical) - 1)]
+        xor_right_site_x = [x_logical[-1]]
 
-    xor_bulk_sites_x = [sites_x[i] for i in range(len(sites_x) - 1)]
-    xor_bulk_sites_z = [sites_z[i] for i in range(len(sites_z) - 1)]
+        swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
+        swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
 
-    swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
-    swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
-    swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
-    swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+        logical_sites_x.append(
+            [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
+        )
 
-    string_x = [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
-    string_z = [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+    for index, z_logical in enumerate(sites_z):
+        copy_site_z = [len(sites_x) + index]
+        xor_bulk_sites_z = [z_logical[i] for i in range(len(z_logical) - 1)]
+        xor_right_site_z = [z_logical[-1]]
 
-    return string_x, string_z
+        swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
+        swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+
+        logical_sites_z.append(
+            [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+        )
+
+    return logical_sites_x, logical_sites_z
+
+
+def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
+    """
+    Given a list of stabilizers and logicals, returns a list of checks,
+    where each check is represented as a list of MPS sites affected by it.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    logicals : List[str]
+        List of logical operators as Pauli strings.
+
+    Returns
+    -------
+    checks : List[List[int]]
+        List of checks, each represented as a list of MPS site indices.
+    """
+    checks = []
+
+    for stabilizer in stabilizers:
+        bitstring = pauli_to_mps(stabilizer)
+        check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
+        checks.append(list(check))
+
+    return checks
+
+
+def custom_code_constraint_sites(
+    stabilizers: List[str], logicals: List[str]
+) -> List[List[List[int]]]:
+    """
+    Returns the list of MPS sites where the logical constraints should be applied
+    for a general quantum code.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    logicals : List[str]
+        List of logical operators as Pauli strings.
+
+    Returns
+    -------
+    constraint_sites : List[List[List[int]]]
+        List of MPS sites for constraints, where each constraint corresponds
+        to the locations of tensors such as XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT.
+    """
+    constraint_sites = []
+
+    checks = custom_code_checks(stabilizers, logicals)
+
+    for check in checks:
+        xor_left_site = [check[0]]
+        xor_bulk_sites = [check[i] for i in range(1, len(check) - 1)]
+        xor_right_site = [check[-1]]
+
+        # Identify SWAP tensor sites
+        swap_sites = list(range(check[0] + 1, check[-1]))
+        for bulk_site in xor_bulk_sites:
+            if bulk_site in swap_sites:
+                swap_sites.remove(bulk_site)
+
+        constraint_sites.append(
+            [xor_left_site, xor_bulk_sites, swap_sites, xor_right_site]
+        )
+
+    return constraint_sites
+
+
+def custom_code_logicals(
+    x_logicals: List[str], z_logicals: List[str]
+) -> Tuple[List[List[int]], List[List[int]]]:
+    """
+    Returns the list of MPS sites where the logical constraints should be applied.
+
+    Parameters
+    ----------
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+
+    Returns
+    -------
+    logicals : Tuple[List[List[int]], List[List[int]]]
+        Two lists of logical operator sites: the first for X-type logicals,
+        and the second for Z-type logicals.
+    """
+    logicals_x = []
+    logicals_z = []
+
+    # Transform X logical operators
+    for logical in x_logicals:
+        bitstring = pauli_to_mps(logical)
+        # Find positions of non-zero entries
+        x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
+        # Offset for X logicals
+        x_sites += len(x_logicals) + len(z_logicals)
+        logicals_x.append(list(x_sites))
+
+    # Transform Z logical operators
+    for logical in z_logicals:
+        bitstring = pauli_to_mps(logical)
+        # Find positions of non-zero entries
+        z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
+        # Offset for Z logicals
+        z_sites += len(x_logicals) + len(z_logicals)
+        logicals_z.append(list(z_sites))
+
+    return logicals_x, logicals_z
+
+
+def custom_code_logicals_sites(
+    x_logicals: List[str], z_logicals: List[str]
+) -> Tuple[List[List[List[int]]], List[List[List[int]]]]:
+    """
+    Returns the list of MPS sites where the logical operators should be applied
+    for a general quantum error-correcting code.
+
+    Parameters
+    ----------
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+
+    Returns
+    -------
+    logical_sites : Tuple[List[List[List[int]]], List[List[List[int]]]]
+        Two lists of MPS logical sites for X-type and Z-type logicals, where each list contains:
+        - COPY tensor site (first position of the logical operator)
+        - XOR_BULK tensor sites (middle positions of the logical operator)
+        - XOR_RIGHT tensor site (last position of the logical operator)
+        - SWAP tensor sites (all remaining positions).
+    """
+    # Generate sites for X and Z logicals
+    sites_x, sites_z = custom_code_logicals(x_logicals, z_logicals)
+
+    logical_sites_x = []
+    logical_sites_z = []
+
+    for index, x_logical in enumerate(sites_x):
+        copy_site_x = [index]
+        xor_bulk_sites_x = [x_logical[i] for i in range(len(x_logical) - 1)]
+        xor_right_site_x = [x_logical[-1]]
+
+        swap_sites_x = list(range(copy_site_x[0] + 1, xor_right_site_x[0]))
+        swap_sites_x = [site for site in swap_sites_x if site not in xor_bulk_sites_x]
+
+        logical_sites_x.append(
+            [copy_site_x, xor_bulk_sites_x, swap_sites_x, xor_right_site_x]
+        )
+
+    for index, z_logical in enumerate(sites_z):
+        copy_site_z = [len(x_logicals) + index]
+        xor_bulk_sites_z = [z_logical[i] for i in range(len(z_logical) - 1)]
+        xor_right_site_z = [z_logical[-1]]
+
+        swap_sites_z = list(range(copy_site_z[0] + 1, xor_right_site_z[0]))
+        swap_sites_z = [site for site in swap_sites_z if site not in xor_bulk_sites_z]
+
+        logical_sites_z.append(
+            [copy_site_z, xor_bulk_sites_z, swap_sites_z, xor_right_site_z]
+        )
+
+    return logical_sites_x, logical_sites_z
 
 
 def linear_code_prepare_message(
@@ -688,6 +919,7 @@ def generate_pauli_error_string(
     error_rate: float,
     error_model: str = "Depolarising",
     seed: Optional[int] = None,
+    erasure_rate: Optional[float] = None,
 ) -> str:
     """
     This function generates a random Pauli error string based on a given noise model.
@@ -697,43 +929,108 @@ def generate_pauli_error_string(
     num_qubits : int
         Number of qubits in the surface code.
     error_rate : float
-        Physical error rate for generating errors.
+        Physical error rate for generating Pauli errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping".
+        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping", "Erasure".
     seed : Optional[int]
         Seed for the random number generator.
+    erasure_rate : Optional[float]
+        Probability of erasure for the erasure channel. Only used if `error_model` is "Erasure".
 
     Returns
     -------
     str
-        A string representing the Pauli errors in the format "XZYZI..."
+        A string representing the Pauli errors in the format "XZYEI...",
+        where "E" represents an erasure error.
     """
 
     np.random.seed(seed)
     error_string = []
-    pauli_errors = ["I", "X", "Y", "Z"]
+
+    if error_model == "Erasure" and erasure_rate is None:
+        raise ValueError("Erasure rate must be specified for the erasure channel.")
 
     for _ in range(num_qubits):
-        if np.random.random() < error_rate:
-            if error_model == "Depolarising":
-                error = np.random.choice(pauli_errors[1:], p=[1 / 3, 1 / 3, 1 / 3])
-            elif error_model == "Bit Flip":
-                error = "X"
-            elif error_model == "Phase Flip":
-                error = "Z"
-            elif error_model == "Amplitude Damping":
-                error = np.random.choice(
-                    pauli_errors, p=[1 - error_rate, error_rate, 0, 0]
-                )
+        if error_model == "Depolarising":
+            if np.random.random() < error_rate:
+                error = np.random.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
-                raise ValueError(f"Unknown error model: {error_model}")
+                error = "I"
+        elif error_model == "Bit Flip":
+            error = "X" if np.random.random() < error_rate else "I"
+        elif error_model == "Phase Flip":
+            error = "Z" if np.random.random() < error_rate else "I"
+        elif error_model == "Amplitude Damping":
+            error = np.random.choice(["I", "X"], p=[1 - error_rate, error_rate])
+        elif error_model == "Erasure":
+            if np.random.random() < erasure_rate:
+                error = "E"
+            elif np.random.random() < error_rate:
+                error = np.random.choice(["X", "Z"])
+            else:
+                error = "I"
         else:
-            error = "I"
+            raise ValueError(f"Unknown error model: {error_model}")
 
-        error_string.append(f"{error}")
+        error_string.append(error)
 
     return "".join(error_string)
+
+
+def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
+    """
+    Multiplies two Pauli strings of the same length without considering phase.
+
+    Parameters
+    ----------
+    pauli1 : str
+        The first Pauli string. Each character represents a Pauli operator ('I', 'X', 'Y', 'Z').
+    pauli2 : str
+        The second Pauli string. Each character represents a Pauli operator ('I', 'X', 'Y', 'Z').
+
+    Returns
+    -------
+    result : str
+        The resulting Pauli string after multiplying pauli1 by pauli2.
+
+    Raises
+    ------
+    ValueError
+        If the two Pauli strings have different lengths.
+    """
+
+    if len(pauli1) != len(pauli2):
+        raise ValueError(
+            f"The Pauli strings must have the same length, but got {len(pauli1)} and {len(pauli2)}."
+        )
+
+    # Pauli multiplication table without phases
+    pauli_multiplication_table = {
+        ("I", "I"): "I",
+        ("I", "X"): "X",
+        ("I", "Y"): "Y",
+        ("I", "Z"): "Z",
+        ("X", "I"): "X",
+        ("X", "X"): "I",
+        ("X", "Y"): "Z",
+        ("X", "Z"): "Y",
+        ("Y", "I"): "Y",
+        ("Y", "X"): "Z",
+        ("Y", "Y"): "I",
+        ("Y", "Z"): "X",
+        ("Z", "I"): "Z",
+        ("Z", "X"): "Y",
+        ("Z", "Y"): "X",
+        ("Z", "Z"): "I",
+    }
+
+    result = []
+
+    for p1, p2 in zip(pauli1, pauli2):
+        result.append(pauli_multiplication_table[(p1, p2)])
+
+    return "".join(result)
 
 
 # The functions below are used to apply constraints to a codeword/error MPS and do the decoding.
@@ -786,7 +1083,7 @@ def apply_constraints(
     entropies = []
     bond_dims = []
 
-    # Using matrix front minimization technique to optimize the order
+    # Using matrix front minimization technique to optimise the order
     # in which to apply the checks.
     if strategy == "Optimised":
         mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
@@ -798,7 +1095,7 @@ def apply_constraints(
         optimised_order = msro(mpo_location_matrix)
         strings = [strings[index] for index in optimised_order]
 
-    # Do not optimize the order in which to apply the checks.
+    # Do not optimise the order in which to apply the checks.
     if strategy == "Naive":
         pass
 
@@ -844,11 +1141,11 @@ def apply_constraints(
             )
 
         mps = mps_mpo_contract(
-            mps,
-            mpo,
-            start_site,
-            renormalise=renormalise,
+            mps=mps,
+            mpo=mpo,
+            start_site=start_site,
             chi_max=chi_max,
+            renormalise=renormalise,
             inplace=False,
             result_to_explicit=result_to_explicit,
         )
@@ -937,6 +1234,7 @@ def decode_css(
     bias_type: str = "Depolarising",
     bias_prob: float = float(0.1),
     renormalise: bool = True,
+    multiply_by_stabiliser: bool = True,
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
@@ -954,6 +1252,8 @@ def decode_css(
         The error in a string format.
         The way the decoder takes the error is as follows:
         "X_0 Z_0 X_1 Z_1 ..."
+    num_runs : int
+        Number of DMRG sweeps.
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
@@ -962,10 +1262,10 @@ def decode_css(
         Available options: "Bitflip" and "Depolarising".
     bias_prob : float
         The probability of the depolarising bias applied before checks.
-    num_runs : int
-        Number of DMRG sweeps.
     renormalise : bool
         Whether to renormalise the singular values during contraction.
+    multiply_by_stabiliser : bool
+        Whether to multiply the error by a random stabiliser before decoding.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -982,6 +1282,15 @@ def decode_css(
 
     if not silent:
         logging.info("Starting decoding.")
+
+    if multiply_by_stabiliser:
+        stabilisers_x, stabilisers_z = css_code_stabilisers(code)
+        stabilisers = stabilisers_x + stabilisers_z
+        error = multiply_pauli_strings(error, np.random.choice(stabilisers))
+
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
+    error = pauli_to_mps(error)
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
     num_logicals = code.num_x_logicals() + code.num_z_logicals()
@@ -1000,7 +1309,7 @@ def decode_css(
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
-    constraints_sites = css_code_constraint_sites(code)
+    constraint_sites = css_code_constraint_sites(code)
     logicals_sites = css_code_logicals_sites(code)
     sites_to_bias = list(range(num_logicals, num_sites))
 
@@ -1023,56 +1332,85 @@ def decode_css(
             renormalise=renormalise,
         )
 
-    if not silent:
-        logging.info("Applying the X constraints.")
-    try:
-        error_mps = apply_constraints(
-            error_mps,
-            constraints_sites[0],
-            constraints_tensors,
-            chi_max=chi_max,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-            result_to_explicit=False,
-        )
-    except (ValueError, np.linalg.LinAlgError):
-        logging.info(
-            "Decoding failed due to a linalg error while applying X constraints."
-        )
-        return None, 0
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying X logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[0],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X logical constraints."
+            )
+            return None, 0
 
-    if not silent:
-        logging.info("Applying the Z constraints.")
-    try:
-        error_mps = apply_constraints(
-            error_mps,
-            constraints_sites[1],
-            constraints_tensors,
-            chi_max=chi_max,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-            result_to_explicit=False,
-        )
-    except (ValueError, np.linalg.LinAlgError):
-        logging.info(
-            "Decoding failed due to a linalg error while applying Z constraints."
-        )
-        return None, 0
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying Z logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[1],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying Z logical constraints."
+            )
+            return None, 0
 
-    if not silent:
-        logging.info("Applying logicals constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        logicals_sites,
-        logicals_tensors,
-        chi_max=chi_max,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-        result_to_explicit=False,
-    )
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying the X constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraint_sites[0],
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X constraints."
+            )
+            return None, 0
+
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying the Z constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraint_sites[1],
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying Z constraints."
+            )
+            return None, 0
 
     if not silent:
         logging.info("Marginalising the error MPS.")
@@ -1116,3 +1454,206 @@ def decode_css(
         raise NotImplementedError("Optima TT is not implemented yet.")
     else:
         raise ValueError("Invalid optimiser chosen.")
+
+
+def decode_custom(
+    stabilizers: List[str],
+    x_logicals: List[str],
+    z_logicals: List[str],
+    error: str,
+    num_runs: int = int(50),
+    chi_max: int = int(1e4),
+    bias_type: str = "Depolarising",
+    bias_prob: float = float(0.1),
+    renormalise: bool = True,
+    multiply_by_stabiliser: bool = True,
+    silent: bool = False,
+    contraction_strategy: str = "Naive",
+    optimiser: str = "Dephasing DMRG",
+):
+    """
+    This function performs error-based decoding for a custom quantum error-correcting code.
+
+    Parameters
+    ----------
+    stabilizers : List[str]
+        List of stabilizer generators as Pauli strings.
+    x_logicals : List[str]
+        List of X logical operators as Pauli strings.
+    z_logicals : List[str]
+        List of Z logical operators as Pauli strings.
+    error : str
+        The error in a string format (e.g., "X_0 Z_1 X_2 ...").
+    num_runs : int
+        Number of DMRG sweeps.
+    chi_max : int
+        Maximum bond dimension to keep during contractions
+        and in the Dephasing DMRG algorithm.
+    bias_type : str
+        The type of the bias applied before checks.
+        Available options: "Bitflip" and "Depolarising".
+    bias_prob : float
+        The probability of the depolarising bias applied before checks.
+    renormalise : bool
+        Whether to renormalise the singular values during contraction.
+    multiply_by_stabiliser : bool
+        Whether to multiply the error by a random stabilizer before decoding.
+    silent : bool
+        Whether to show the progress bars or not.
+    contraction_strategy : str
+        The contractor's strategy.
+    optimiser : str
+        The optimiser used to find the closest basis product state to a given MPDO.
+        Available options: "Dephasing DMRG", "Dense", "Optima TT".
+
+    Returns
+    -------
+    result : Tuple
+        Decoding results, depending on the chosen optimiser.
+    """
+
+    if not silent:
+        logging.info("Starting custom decoding.")
+
+    if multiply_by_stabiliser:
+        error = multiply_pauli_strings(error, np.random.choice(stabilizers))
+
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
+    error = pauli_to_mps(error)
+
+    num_sites = len(stabilizers[0]) * 2 + len(x_logicals) + len(z_logicals)
+    num_logicals = len(x_logicals) + len(z_logicals)
+
+    if not silent:
+        logging.info(f"The total number of sites: {num_sites}.")
+    if len(error) != num_sites - num_logicals:
+        raise ValueError(
+            f"The error length is {len(error)}, expected {num_sites - num_logicals}."
+        )
+
+    logicals_state = "+" * num_logicals
+    state_string = logicals_state + error
+    error_mps = create_custom_product_state(string=state_string)
+
+    constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+
+    constraint_sites = custom_code_constraint_sites(
+        stabilizers, x_logicals + z_logicals
+    )
+    logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
+    sites_to_bias = list(range(num_logicals, num_sites))
+
+    if bias_type == "Bitflip":
+        if not silent:
+            logging.info("Applying bitflip bias.")
+        error_mps = apply_bitflip_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
+    else:
+        if not silent:
+            logging.info("Applying depolarising bias.")
+        error_mps = apply_depolarising_bias(
+            mps=error_mps,
+            sites_to_bias=sites_to_bias,
+            prob_bias_list=bias_prob,
+            renormalise=renormalise,
+        )
+
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying X logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[0],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X logical constraints."
+            )
+            return None, 0
+
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying Z logicals' constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                logicals_sites[1],
+                logicals_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying Z logical constraints."
+            )
+            return None, 0
+
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying the X constraints.")
+        try:
+            error_mps = apply_constraints(
+                error_mps,
+                constraint_sites,
+                constraints_tensors,
+                chi_max=chi_max,
+                renormalise=renormalise,
+                silent=silent,
+                strategy=contraction_strategy,
+                result_to_explicit=False,
+            )
+        except (ValueError, np.linalg.LinAlgError):
+            logging.info(
+                "Decoding failed due to a linalg error while applying X constraints."
+            )
+            return None, 0
+
+    if not silent:
+        logging.info("Marginalising the error MPS.")
+    sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
+    logical_mps = marginalise(
+        mps=error_mps,
+        sites_to_marginalise=sites_to_marginalise,
+    )
+
+    num_logical_sites = len(logical_mps)
+
+    if not silent:
+        logging.info(f"The number of logical sites: {num_logical_sites}.")
+
+    if num_logical_sites <= 10:
+        logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
+        result = logical_dense, int(np.argmax(logical_dense) == 0)
+        if not silent:
+            logging.info("Decoding completed with result: %s", result)
+        return result
+    elif optimiser == "Dephasing DMRG":
+        mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
+        engine = DephasingDMRG(
+            mps=mps_dmrg_start,
+            mps_target=logical_mps,
+            chi_max=chi_max,
+            mode="LA",
+            silent=silent,
+        )
+        engine.run(num_runs)
+        overlap = abs(inner_product(engine.mps, logical_mps))
+        return engine, overlap
+    else:
+        raise ValueError("Unsupported optimiser for decoding.")

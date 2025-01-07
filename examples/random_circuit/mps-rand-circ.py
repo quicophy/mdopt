@@ -14,12 +14,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Append paths using environment variables or hardcoded fallbacks
-project_root = os.getenv(
-    "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
-)
+project_root = os.getenv("MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt")
 examples_path = os.getenv(
     "MDOPT_EXAMPLES_PATH",
-    "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
+    "/home/bereza/projects/def-ko1/bereza/mdopt/examples",
 )
 
 sys.path.append(project_root)
@@ -88,7 +86,7 @@ for NUM_QUBITS in num_qubits:
             )
             tails[tails_key] = tails_iter
 
-            np.save(f"data/{tails_key}.npy", tails)
+            np.save(f"{tails_key}.npy", tails)
             logger.info(f"Data for {tails_key} saved successfully.")
 
 logger.info("Calculation completed successfully.")
