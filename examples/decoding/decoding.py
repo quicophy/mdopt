@@ -1232,7 +1232,7 @@ def decode_css(
     num_runs: int = int(50),
     chi_max: int = int(1e4),
     bias_type: str = "Depolarising",
-    bias_prob: float = float(0.1),
+    bias_prob: float = float(0.05),
     renormalise: bool = True,
     multiply_by_stabiliser: bool = True,
     silent: bool = False,
