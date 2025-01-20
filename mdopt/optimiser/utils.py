@@ -60,7 +60,7 @@ class ConstraintString:
         Each list inside corresponds to a constraint from the `constraints` list,
         and contains the sites to which each constraint is applied.
         For example, [[3, 5], [2, 4, 6], ...] means applying
-        `constraints[0]` to sites 3 and 5, `constraints[1]` to sites 2, 4, 6, etc.
+        `constraints[0]` to sites 3 and 5, `constraints[1]` to sites 2, 4, 6 etc.
 
     Raises
     ------
