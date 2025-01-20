@@ -271,7 +271,9 @@ class CanonicalMPS:
             dense = dense.flatten()
 
         if renormalise:
-            dense /= np.linalg.norm(dense, ord=norm)
+            norm = float(np.linalg.norm(dense, ord=norm))
+            if norm > 1e-12:
+                dense /= norm
 
         return dense
 
