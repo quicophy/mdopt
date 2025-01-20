@@ -219,6 +219,8 @@ def plot_failure_statistics(
     lattice_sizes: list[int],
     max_bond_dims: list[int],
     mode: str = "lattice_size",
+    xscale: str = "linear",
+    yscale: str = "linear",
 ):
     """
     Plot failure rates with error bars for either varying bond dimensions at all lattice sizes,
@@ -239,6 +241,10 @@ def plot_failure_statistics(
     mode : str, optional
         Plotting mode: "lattice_size" (varying bond dimensions for each lattice size)
         or "bond_dim" (varying lattice sizes for each bond dimension). Default is "lattice_size".
+    xscale : str, optional
+        Scale of the x-axis. Default is "linear".
+    yscale : str, optional
+        Scale of the y-axis. Default is "linear".
 
     Returns
     -------
@@ -287,6 +293,8 @@ def plot_failure_statistics(
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
             plt.grid()
+            plt.xscale(xscale)
+            plt.yscale(yscale)
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
@@ -325,6 +333,8 @@ def plot_failure_statistics(
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
             plt.grid()
+            plt.xscale(xscale)
+            plt.yscale(yscale)
             plt.show()
 
 
@@ -335,6 +345,8 @@ def plot_failure_statistics_fixed_rates(
     max_bond_dims: list[int],
     error_rates: list[float],
     mode: str = "lattice_size",
+    xscale: str = "linear",
+    yscale: str = "linear",
 ):
     """
     Plot failure rates with error bars as a function of error rates, either varying bond dimensions
@@ -355,6 +367,10 @@ def plot_failure_statistics_fixed_rates(
     mode : str, optional
         Plotting mode: "lattice_size" (varying bond dimensions for each lattice size)
         or "bond_dim" (varying lattice sizes for each bond dimension). Default is "lattice_size".
+    xscale : str, optional
+        Scale of the x-axis. Default is "linear".
+    yscale : str, optional
+        Scale of the y-axis. Default is "linear".
 
     Returns
     -------
@@ -408,6 +424,8 @@ def plot_failure_statistics_fixed_rates(
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
             plt.grid()
+            plt.xscale(xscale)
+            plt.yscale(yscale)
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
@@ -446,6 +464,8 @@ def plot_failure_statistics_fixed_rates(
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
             plt.grid()
+            plt.xscale(xscale)
+            plt.yscale(yscale)
             plt.show()
 
 
@@ -457,6 +477,8 @@ def fit_failure_statistics(
     error_bars: dict,
     lower_cutoff: float,
     upper_cutoff: float,
+    xscale: str = "linear",
+    yscale: str = "linear",
 ):
     """
     Analyze and fit failure rates for different lattice sizes and bond dimensions
@@ -478,6 +500,10 @@ def fit_failure_statistics(
         Lower cutoff value for the error rate. Only error rates above this value are considered.
     upper_cutoff : float
         Upper cutoff value for the error rate. Only error rates below this value are considered.
+    xscale : str, optional
+        Scale of the x-axis. Default is "linear".
+    yscale : str, optional
+        Scale of the y-axis. Default is "linear".
 
     Returns
     -------
@@ -622,4 +648,7 @@ def fit_failure_statistics(
         plt.xlabel("Physical Error Rate (p)")
         plt.ylabel("Logical Failure Rate (P_L)")
         plt.legend()
+        plt.grid()
+        plt.xscale(xscale)
+        plt.yscale(yscale)
         plt.show()
