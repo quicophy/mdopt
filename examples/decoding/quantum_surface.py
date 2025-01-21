@@ -5,8 +5,9 @@ import sys
 import pickle
 import logging
 import argparse
+from multiprocessing import Pool
+
 import numpy as np
-from tqdm import tqdm
 import qecstruct as qec
 
 # Setup logging
@@ -46,7 +47,6 @@ sys.path.append(examples_path_narval)
 try:
     from examples.decoding.decoding import (
         decode_css,
-        pauli_to_mps,
         generate_pauli_error_string,
     )
 except ImportError as e:
@@ -77,6 +77,9 @@ def parse_arguments():
         "--error_rate", type=float, required=True, help="The error rate."
     )
     parser.add_argument(
+        "--bias_prob", type=float, required=True, help="The decoder bias probability."
+    )
+    parser.add_argument(
         "--num_experiments",
         type=int,
         required=True,
@@ -94,32 +97,13 @@ def parse_arguments():
         required=True,
         help="The seed for the random number generator.",
     )
-    return parser.parse_args()
-
-
-def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
-    """Run a single experiment."""
-    rep_code = qec.repetition_code(lattice_size)
-    surface_code = qec.hypergraph_product(rep_code, rep_code)
-
-    _, success = decode_css(
-        code=surface_code,
-        error=error,
-        chi_max=chi_max,
-        multiply_by_stabiliser=True,
-        bias_type=error_model,
-        bias_prob=bias_prob,
-        renormalise=True,
-        silent=True,
-        contraction_strategy="Optimised",
+    parser.add_argument(
+        "--num_processes",
+        type=int,
+        required=True,
+        help="The number of processes to use in parallelisation.",
     )
-
-    if success == 1:
-        logging.info("Decoding successful.")
-        return 0
-    else:
-        logging.info("Decoding failed.")
-        return 1
+    return parser.parse_args()
 
 
 def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed):
@@ -144,42 +128,71 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
     return errors
 
 
-def run_experiment(
-    lattice_size, chi_max, error_rate, num_experiments, error_model, seed, errors
-):
-    """Run the experiment consisting of multiple single experiments."""
-    logging.info(
-        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
-        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, ERROR_MODEL={error_model}, SEED={seed}"
+def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
+    """Run a single experiment."""
+    rep_code = qec.repetition_code(lattice_size)
+    surface_code = qec.hypergraph_product(rep_code, rep_code)
+
+    logicals_distribution, success = decode_css(
+        code=surface_code,
+        error=error,
+        chi_max=chi_max,
+        multiply_by_stabiliser=False,
+        bias_type=error_model,
+        bias_prob=bias_prob,
+        renormalise=True,
+        silent=False,
+        contraction_strategy="Optimised",
     )
 
-    failures = []
+    if success == 1:
+        logging.info("Decoding successful.")
+        return logicals_distribution, 0
+    else:
+        logging.info("Decoding failed.")
+        return logicals_distribution, 1
 
-    for l in tqdm(range(num_experiments)):
-        try:
-            failure = run_single_experiment(
-                lattice_size=lattice_size,
-                chi_max=chi_max,
-                error=errors[l],
-                bias_prob=0.05,
-                error_model=error_model,
-            )
-            failures.append(failure)
-        except Exception as e:
-            logging.error(f"Experiment {l} failed with error: {str(e)}", exc_info=True)
-            failures.append(1)
 
-        logging.info(
-            f"Finished experiment {l} for LATTICE_SIZE={lattice_size}, CHI_MAX={chi_max},"
-            f"ERROR_RATE={error_rate}, ERROR_MODEL={error_model}, SEED={seed}"
-        )
+def run_experiment(
+    lattice_size,
+    chi_max,
+    error_rate,
+    bias_prob,
+    num_experiments,
+    error_model,
+    seed,
+    errors,
+    num_processes=1,
+):
+    """Run the experiment consisting of multiple single experiments in parallel."""
+    logging.info(
+        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
+        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
+        f"ERROR_MODEL={error_model}, SEED={seed}"
+    )
+
+    args = [
+        (lattice_size, chi_max, errors[i], bias_prob, error_model)
+        for i in range(num_experiments)
+    ]
+
+    with Pool(num_processes) as pool:
+        logicals_distribution, results = pool.starmap(run_single_experiment, args)
+
+    logging.info(
+        f"Finished {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
+        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
+        f"ERROR_MODEL={error_model}, SEED={seed}"
+    )
 
     return {
-        "failures": failures,
+        "logicals_distributions": logicals_distribution,
+        "failures": results,
         "errors": errors,
         "lattice_size": lattice_size,
         "chi_max": chi_max,
         "error_rate": error_rate,
+        "bias_prob": bias_prob,
         "error_model": error_model,
         "seed": seed,
     }
@@ -211,6 +224,7 @@ def main():
         args.lattice_size,
         args.bond_dim,
         args.error_rate,
+        args.bias_prob,
         args.num_experiments,
         args.error_model,
         args.seed,
