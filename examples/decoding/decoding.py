@@ -932,7 +932,7 @@ def generate_pauli_error_string(
         Physical error rate for generating Pauli errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarising", "Bit Flip", "Phase Flip", "Amplitude Damping", "Erasure".
+        Options are "Depolarising", "Bitflip", "Phaseflip", "Amplitudedamping", "Erasure".
     seed : Optional[int]
         Seed for the random number generator.
     erasure_rate : Optional[float]
@@ -957,9 +957,9 @@ def generate_pauli_error_string(
                 error = np.random.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
                 error = "I"
-        elif error_model == "Bit Flip":
+        elif error_model == "Bitflip":
             error = "X" if np.random.random() < error_rate else "I"
-        elif error_model == "Phase Flip":
+        elif error_model == "Phaseflip":
             error = "Z" if np.random.random() < error_rate else "I"
         elif error_model == "Amplitude Damping":
             error = np.random.choice(["I", "X"], p=[1 - error_rate, error_rate])
@@ -1426,8 +1426,10 @@ def decode_css(
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
-        result = logical_dense, int(np.argmax(logical_dense) == 0)
+        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=1))
+        result = logical_dense, int(
+            np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
+        )
         if not silent:
             logging.info("Decoding completed with result: %s", result)
         return result
@@ -1638,8 +1640,10 @@ def decode_custom(
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = logical_mps.dense(flatten=True, renormalise=True, norm=1)
-        result = logical_dense, int(np.argmax(logical_dense) == 0)
+        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=1))
+        result = logical_dense, int(
+            np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
+        )
         if not silent:
             logging.info("Decoding completed with result: %s", result)
         return result
