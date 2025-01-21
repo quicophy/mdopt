@@ -103,6 +103,12 @@ def parse_arguments():
         required=True,
         help="The number of processes to use in parallelisation.",
     )
+    parser.add_argument(
+        "--silent",
+        type=bool,
+        required=True,
+        help="Whether to silence the output.",
+    )
     return parser.parse_args()
 
 
@@ -128,7 +134,7 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
     return errors
 
 
-def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
+def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model, silent):
     """Run a single experiment."""
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
@@ -141,7 +147,7 @@ def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model):
         bias_type=error_model,
         bias_prob=bias_prob,
         renormalise=True,
-        silent=False,
+        silent=silent,
         contraction_strategy="Optimised",
     )
 
@@ -162,6 +168,7 @@ def run_experiment(
     error_model,
     seed,
     errors,
+    silent,
     num_processes=1,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
@@ -172,12 +179,12 @@ def run_experiment(
     )
 
     args = [
-        (lattice_size, chi_max, errors[i], bias_prob, error_model)
+        (lattice_size, chi_max, errors[i], bias_prob, error_model, silent)
         for i in range(num_experiments)
     ]
 
     with Pool(num_processes) as pool:
-        logicals_distribution, results = pool.starmap(run_single_experiment, args)
+        results = pool.starmap(run_single_experiment, args)
 
     logging.info(
         f"Finished {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
@@ -185,9 +192,12 @@ def run_experiment(
         f"ERROR_MODEL={error_model}, SEED={seed}"
     )
 
+    logicals_distributions = [result[0] for result in results]
+    failures = [result[1] for result in results]
+
     return {
-        "logicals_distributions": logicals_distribution,
-        "failures": results,
+        "logicals_distributions": logicals_distributions,
+        "failures": failures,
         "errors": errors,
         "lattice_size": lattice_size,
         "chi_max": chi_max,
@@ -229,6 +239,8 @@ def main():
         args.error_model,
         args.seed,
         errors,
+        args.silent,
+        args.num_processes,
     )
     save_experiment_data(
         experiment_data,

@@ -14,8 +14,6 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
-num_processes=4 # Number of processes to use in parallel
-
 # Define arrays of lattice sizes, bond dimensions, error rates, and seeds
 lattice_sizes=(13)
 bond_dims=(256)
@@ -29,6 +27,8 @@ seeds=(
 num_experiments=20 # Per each random seed
 error_model="Bitflip" # Error model used in the experiments
 bias_prob=0.001 # The decoder bias probability
+num_processes=8 # Number of processes to use in parallel
+silent=true # Whether to suppress the output of the Python script
 
 error_rates=()
 start=0.105
@@ -61,7 +61,7 @@ module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified arguments
-python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --bias_prob ${bias_prob} --num_experiments ${num_experiments} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes}
+python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --bias_prob ${bias_prob} --num_experiments ${num_experiments} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent}
 EOS
                 echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, bias probability ${bias_prob} and seed ${seed}."
                 sbatch "$job_script"
