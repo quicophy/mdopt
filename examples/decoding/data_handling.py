@@ -292,9 +292,9 @@ def plot_failure_statistics(
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
-            plt.grid()
             plt.xscale(xscale)
             plt.yscale(yscale)
+            plt.grid(True)
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
@@ -332,13 +332,13 @@ def plot_failure_statistics(
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
-            plt.grid()
             plt.xscale(xscale)
             plt.yscale(yscale)
+            plt.grid(True)
             plt.show()
 
 
-def plot_failure_statistics_fixed_rates(
+def plot_failure_statistics_fixed_error_rates(
     failure_rates: dict,
     error_bars: dict,
     lattice_sizes: list[int],
@@ -381,11 +381,7 @@ def plot_failure_statistics_fixed_rates(
     if mode not in ["lattice_size", "bond_dim"]:
         raise ValueError("Mode must be either 'lattice_size' or 'bond_dim'.")
 
-    # Colormap setup
-    from matplotlib.colors import Normalize
-    import matplotlib.pyplot as plt
-    import matplotlib
-
+    # Colormap
     cmap = matplotlib.colormaps["viridis_r"]
 
     # Mode 1: Fixed lattice size, vary bond dimensions
@@ -397,25 +393,25 @@ def plot_failure_statistics_fixed_rates(
             for index, chi_max in enumerate(max_bond_dims):
                 failure_rate_values = []
                 error_bar_values = []
+                valid_error_rates = []
 
-                # Collect failure rates and error bars for the given error rates
                 for error_rate in error_rates:
-                    failure_rate_values.append(
-                        failure_rates.get((lattice_size, chi_max, error_rate), None)
-                    )
+                    error_rate = round(error_rate, 3)
+                    rate = failure_rates.get((lattice_size, chi_max, error_rate))
+                    failure_rate_values.append(rate)
                     error_bar_values.append(
-                        error_bars.get((lattice_size, chi_max, error_rate), 0)
+                        error_bars.get((lattice_size, chi_max, error_rate))
                     )
+                    valid_error_rates.append(error_rate)
 
-                # Plot only if any failure rates exist
-                if any(failure_rate_values):
+                if failure_rate_values:
                     plt.errorbar(
-                        error_rates,
+                        valid_error_rates,
                         failure_rate_values,
                         yerr=error_bar_values,
                         fmt="o--",
                         label=f"Bond dim: {chi_max}",
-                        linewidth=2,
+                        linewidth=3,
                         color=cmap(norm(index)),
                     )
 
@@ -423,9 +419,10 @@ def plot_failure_statistics_fixed_rates(
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
-            plt.grid()
+            plt.legend()
             plt.xscale(xscale)
             plt.yscale(yscale)
+            plt.grid(True)
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
@@ -437,25 +434,25 @@ def plot_failure_statistics_fixed_rates(
             for index, lattice_size in enumerate(lattice_sizes):
                 failure_rate_values = []
                 error_bar_values = []
+                valid_error_rates = []
 
-                # Collect failure rates and error bars for the given error rates
                 for error_rate in error_rates:
-                    failure_rate_values.append(
-                        failure_rates.get((lattice_size, chi_max, error_rate), None)
-                    )
+                    error_rate = round(error_rate, 3)
+                    rate = failure_rates.get((lattice_size, chi_max, error_rate))
+                    failure_rate_values.append(rate)
                     error_bar_values.append(
-                        error_bars.get((lattice_size, chi_max, error_rate), 0)
+                        error_bars.get((lattice_size, chi_max, error_rate))
                     )
+                    valid_error_rates.append(error_rate)
 
-                # Plot only if any failure rates exist
-                if any(failure_rate_values):
+                if failure_rate_values:
                     plt.errorbar(
-                        error_rates,
+                        valid_error_rates,
                         failure_rate_values,
                         yerr=error_bar_values,
                         fmt="o--",
                         label=f"Lattice size: {lattice_size}",
-                        linewidth=2,
+                        linewidth=3,
                         color=cmap(norm(index)),
                     )
 
@@ -463,9 +460,10 @@ def plot_failure_statistics_fixed_rates(
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
             plt.legend(fontsize=7)
-            plt.grid()
+            plt.legend()
             plt.xscale(xscale)
             plt.yscale(yscale)
+            plt.grid(True)
             plt.show()
 
 
@@ -648,7 +646,7 @@ def fit_failure_statistics(
         plt.xlabel("Physical Error Rate (p)")
         plt.ylabel("Logical Failure Rate (P_L)")
         plt.legend()
-        plt.grid()
         plt.xscale(xscale)
         plt.yscale(yscale)
+        plt.grid(True)
         plt.show()
