@@ -141,9 +141,6 @@ data*/
 # .out files
 *.out
 
-# files for plotting
-plotting*
-
 # scripts for jobs submitted to Compute Canada
 submit-job*
 
