@@ -1283,6 +1283,10 @@ def decode_css(
     if not silent:
         logging.info("Starting decoding.")
 
+    if error == "I" * len(error):
+        logging.info("No error detected.")
+        return None, 1
+
     if multiply_by_stabiliser:
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
         stabilisers = stabilisers_x + stabilisers_z
