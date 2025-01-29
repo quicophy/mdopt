@@ -299,7 +299,8 @@ def pauli_to_mps(pauli_string: str) -> str:
     "X" -> "10"
     "Y" -> "11"
     "Z" -> "01"
-    Example: "IXYZ" -> "00101101".
+    "E" -> "++" (erasure)
+    Example: "IXYZE" -> "00101101++".
 
     Parameters
     ----------
@@ -322,6 +323,8 @@ def pauli_to_mps(pauli_string: str) -> str:
             mps_string += "11"
         elif pauli == "Z":
             mps_string += "01"
+        elif pauli == "E":
+            mps_string += "++"
         else:
             raise ValueError(f"Invalid Pauli encountered -- {pauli}.")
 
@@ -1249,9 +1252,7 @@ def decode_css(
     code : qec.CssCode
         The CSS code object.
     error : str
-        The error in a string format.
-        The way the decoder takes the error is as follows:
-        "X_0 Z_0 X_1 Z_1 ..."
+        The error in a string format (e.g., "XZXY...").
     num_runs : int
         Number of DMRG sweeps.
     chi_max : int
@@ -1287,7 +1288,13 @@ def decode_css(
         logging.info("No error detected.")
         return None, 1
 
-    if multiply_by_stabiliser:
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
+    erased_qubits = [
+        index for index, single_error in enumerate(error) if single_error == "E"
+    ]
+
+    if multiply_by_stabiliser and not erased_qubits:
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
         stabilisers = stabilisers_x + stabilisers_z
         error = multiply_pauli_strings(error, np.random.choice(stabilisers))
@@ -1416,9 +1423,19 @@ def decode_css(
             )
             return None, 0
 
+    if erased_qubits:
+        if not silent:
+            logging.info("Tracing out the erased qubits.")
+        error_mps = marginalise(
+            mps=error_mps,
+            sites_to_marginalise=erased_qubits,
+        )
+
     if not silent:
         logging.info("Marginalising the error MPS.")
-    sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
+    sites_to_marginalise = list(
+        range(num_logicals, len(error) + num_logicals - len(erased_qubits))
+    )
     logical_mps = marginalise(
         mps=error_mps,
         sites_to_marginalise=sites_to_marginalise,
@@ -1470,7 +1487,7 @@ def decode_custom(
     num_runs: int = int(50),
     chi_max: int = int(1e4),
     bias_type: str = "Depolarising",
-    bias_prob: float = float(0.1),
+    bias_prob: float = float(0.05),
     renormalise: bool = True,
     multiply_by_stabiliser: bool = True,
     silent: bool = False,
@@ -1489,17 +1506,17 @@ def decode_custom(
     z_logicals : List[str]
         List of Z logical operators as Pauli strings.
     error : str
-        The error in a string format (e.g., "X_0 Z_1 X_2 ...").
+        The error in a string format (e.g., "XZXY...").
     num_runs : int
         Number of DMRG sweeps.
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
     bias_type : str
-        The type of the bias applied before checks.
+        The type of the bias applied before the parity checks.
         Available options: "Bitflip" and "Depolarising".
     bias_prob : float
-        The probability of the depolarising bias applied before checks.
+        The probability of the depolarising bias applied before the parity checks.
     renormalise : bool
         Whether to renormalise the singular values during contraction.
     multiply_by_stabiliser : bool
@@ -1521,11 +1538,15 @@ def decode_custom(
     if not silent:
         logging.info("Starting custom decoding.")
 
-    if multiply_by_stabiliser:
-        error = multiply_pauli_strings(error, np.random.choice(stabilizers))
-
     error_contains_x = "X" in error
     error_contains_z = "Z" in error
+    erased_qubits = [
+        index for index, single_error in enumerate(error) if single_error == "E"
+    ]
+
+    if multiply_by_stabiliser and not erased_qubits:
+        error = multiply_pauli_strings(error, np.random.choice(stabilizers))
+
     error = pauli_to_mps(error)
 
     num_sites = len(stabilizers[0]) * 2 + len(x_logicals) + len(z_logicals)
@@ -1630,9 +1651,19 @@ def decode_custom(
             )
             return None, 0
 
+    if erased_qubits:
+        if not silent:
+            logging.info("Tracing out the erased qubits.")
+        error_mps = marginalise(
+            mps=error_mps,
+            sites_to_marginalise=erased_qubits,
+        )
+
     if not silent:
         logging.info("Marginalising the error MPS.")
-    sites_to_marginalise = list(range(num_logicals, len(error) + num_logicals))
+    sites_to_marginalise = list(
+        range(num_logicals, len(error) + num_logicals - len(erased_qubits))
+    )
     logical_mps = marginalise(
         mps=error_mps,
         sites_to_marginalise=sites_to_marginalise,
