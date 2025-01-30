@@ -1282,10 +1282,11 @@ def decode_css(
     """
 
     if not silent:
-        logging.info("Starting decoding.")
+        logging.info("Starting the decoding.")
 
     if error == "I" * len(error):
-        logging.info("No error detected.")
+        if not silent:
+            logging.info("No error detected.")
         return None, 1
 
     error_contains_x = "X" in error
@@ -1536,7 +1537,12 @@ def decode_custom(
     """
 
     if not silent:
-        logging.info("Starting custom decoding.")
+        logging.info("Starting the decoding.")
+
+    if error == "I" * len(error):
+        if not silent:
+            logging.info("No error detected.")
+        return None, 1
 
     error_contains_x = "X" in error
     error_contains_z = "Z" in error
