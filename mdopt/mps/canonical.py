@@ -272,7 +272,7 @@ class CanonicalMPS:
 
         if renormalise:
             norm = float(np.linalg.norm(dense, ord=norm))
-            if norm > 1e-12:
+            if norm > 1e-17:
                 dense /= norm
 
         return dense
@@ -315,7 +315,7 @@ class CanonicalMPS:
 
         return list(mpo)
 
-    def entanglement_entropy(self, tolerance: float = float(1e-12)) -> np.ndarray:
+    def entanglement_entropy(self, tolerance: float = float(1e-17)) -> np.ndarray:
         """
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
@@ -702,7 +702,7 @@ class CanonicalMPS:
         self,
         bond: int,
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         renormalise: bool = False,
         strategy: str = "svd",
         return_truncation_error: bool = False,
@@ -873,7 +873,7 @@ class CanonicalMPS:
     def compress(
         self,
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         renormalise: bool = False,
         strategy: str = "svd",
         return_truncation_errors: bool = False,

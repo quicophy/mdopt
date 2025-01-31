@@ -292,7 +292,7 @@ class ExplicitMPS:
 
         if renormalise:
             norm = float(np.linalg.norm(dense, ord=norm))
-            if norm > 1e-12:
+            if norm > 1e-17:
                 dense /= norm
 
         return dense
@@ -551,7 +551,7 @@ class ExplicitMPS:
         self,
         bond: int,
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         renormalise: bool = False,
         return_truncation_error: bool = False,
     ) -> Tuple["ExplicitMPS", Optional[float]]:
@@ -621,7 +621,7 @@ class ExplicitMPS:
     def compress(
         self,
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         renormalise: bool = False,
         return_truncation_errors: bool = False,
     ) -> Tuple["ExplicitMPS", List[Optional[float]]]:
