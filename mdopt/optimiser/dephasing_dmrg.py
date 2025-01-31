@@ -205,7 +205,7 @@ class DephasingDMRG:
         mps: Union[ExplicitMPS, CanonicalMPS],
         mps_target: Union[ExplicitMPS, CanonicalMPS],
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         mode: str = "SA",
         silent: bool = False,
         copy: bool = True,

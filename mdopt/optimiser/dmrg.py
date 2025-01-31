@@ -172,7 +172,7 @@ class DMRG:
         mps: Union[ExplicitMPS, CanonicalMPS],
         mpo: List[np.ndarray],
         chi_max: int = int(1e4),
-        cut: float = float(1e-12),
+        cut: float = float(1e-17),
         mode: str = "SA",
         silent: bool = False,
         copy: bool = True,
