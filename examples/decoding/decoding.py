@@ -1168,7 +1168,7 @@ def decode_message(
     codeword: Union[ExplicitMPS, CanonicalMPS],
     num_runs: int = int(1),
     chi_max_dmrg: int = int(1e4),
-    cut: float = float(1e-12),
+    cut: float = float(1e-17),
     silent: bool = False,
 ) -> Tuple[DephasingDMRG, float]:
     """
