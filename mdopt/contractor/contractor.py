@@ -67,7 +67,7 @@ def apply_two_site_unitary(
     b_2: np.ndarray,
     unitary: np.ndarray,
     chi_max: int = int(1e4),
-    cut: float = float(1e-12),
+    cut: float = float(1e-17),
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Applies a two-site unitary operator to a right-canonical MPS as follows::
@@ -170,7 +170,7 @@ def mps_mpo_contract(
     start_site: int = int(0),
     renormalise: bool = False,
     chi_max: int = int(1e4),
-    cut: float = float(1e-12),
+    cut: float = float(1e-17),
     inplace: bool = False,
     result_to_explicit: bool = False,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
