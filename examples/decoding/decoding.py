@@ -917,6 +917,18 @@ def linear_code_prepare_message(
     return initial_codeword, perturbed_codeword
 
 
+def map_distribution_to_pauli(distribution):
+    """Map a distribution of logicals to Pauli operators."""
+    mapping = {0: "I", 1: "X", 2: "Z", 3: "Y"}
+    result = []
+
+    for array in distribution:
+        max_index = np.argmax(array)
+        result.append(mapping[max_index])
+
+    return result
+
+
 def generate_pauli_error_string(
     num_qubits: int,
     error_rate: float,
@@ -1241,6 +1253,7 @@ def decode_css(
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
+    tolerance: float = float(1e-12),
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalisation and
@@ -1274,6 +1287,8 @@ def decode_css(
     optimiser : str
         The optimiser used to find the closest basis product state to a given MPDO.
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
+    tolerance : float
+        The tolerance for the Canonical MPS class.
 
     Raises
     ------
@@ -1316,7 +1331,7 @@ def decode_css(
 
     logicals_state = "+" * num_logicals
     state_string = logicals_state + error
-    error_mps = create_custom_product_state(string=state_string)
+    error_mps = create_custom_product_state(string=state_string, tolerance=tolerance)
 
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
