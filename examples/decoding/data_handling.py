@@ -25,7 +25,11 @@ def load_data(file_key: str):
 
 
 def process_failure_statistics(
-    lattice_sizes: list[int], max_bond_dims: list[int], error_model: str, directory: str
+    lattice_sizes: list[int],
+    max_bond_dims: list[int],
+    error_model: str,
+    directory: str,
+    precision: int = 5,
 ):
     """
     Processes failure statistics for a given set of lattice sizes, bond dimensions,
@@ -41,6 +45,8 @@ def process_failure_statistics(
         Name of the error model to filter files.
     directory : str
         Path to the directory containing data files.
+    precision : int, optional
+        Precision to round the error rates to. Default is 5.
 
     Returns
     -------
@@ -55,6 +61,10 @@ def process_failure_statistics(
         Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to lists of errors.
     sorted_unique_error_rates : list
         A sorted list of all unique error rates found across all lattice sizes and bond dimensions.
+    logicals_distributions_dict : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to logicals distributions.
+    failures_statistics : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to failure statistics.
 
     Notes
     -----
@@ -66,13 +76,18 @@ def process_failure_statistics(
     failure_rates = {}
     error_bars = {}
     errors_dict = {}
-    all_unique_error_rates = set()  # Set to store unique error rates
+    all_unique_error_rates = set()
+    logicals_distributions_dict = {}
+    failures_statistics_dict = {}
 
     for lattice_size in lattice_sizes:
         for chi_max in max_bond_dims:
             # Create a regex pattern to match the desired file format
             pattern = rf"^latticesize{lattice_size}_bonddim{chi_max}_errorrate[0-9\.]+_errormodel{error_model}_seed\d+\.pkl$"
 
+            all_logicals_distributions = (
+                {}
+            )  # Dictionary to store the logicals distributions
             all_failures_statistics = {}
             all_errors_statistics = {}  # Dictionary to store errors for each error rate
             error_rates = set()  # Use a set to avoid duplicates
@@ -81,9 +96,10 @@ def process_failure_statistics(
                 if re.match(pattern, file_name):
                     data = load_data(os.path.join(directory, file_name))
 
+                    logicals_distributions = data["logicals_distributions"]
                     failures_statistics = data["failures"]
                     file_errors = data["errors"]
-                    file_error_rate = round(data["error_rate"], 5)
+                    file_error_rate = round(data["error_rate"], precision)
 
                     if file_error_rate not in all_failures_statistics:
                         all_failures_statistics[file_error_rate] = []
@@ -92,6 +108,12 @@ def process_failure_statistics(
                     if file_error_rate not in all_errors_statistics:
                         all_errors_statistics[file_error_rate] = []
                     all_errors_statistics[file_error_rate].extend(file_errors)
+
+                    if file_error_rate not in all_logicals_distributions:
+                        all_logicals_distributions[file_error_rate] = []
+                    all_logicals_distributions[file_error_rate].extend(
+                        logicals_distributions
+                    )
 
                     # Add the error rate to the sets
                     error_rates.add(file_error_rate)
@@ -119,6 +141,16 @@ def process_failure_statistics(
 
                     # Store the errors
                     errors_dict[(lattice_size, chi_max, error_rate)] = errors_statistics
+
+                    # Store the logicals distributions
+                    logicals_distributions_dict[(lattice_size, chi_max, error_rate)] = (
+                        all_logicals_distributions[error_rate]
+                    )
+
+                    failures_statistics_dict[(lattice_size, chi_max, error_rate)] = (
+                        failures_statistics
+                    )
+
                 else:
                     print(
                         f"No data for lattice_size={lattice_size}, chi_max={chi_max}, error_rate={error_rate}"
@@ -130,6 +162,8 @@ def process_failure_statistics(
         error_bars,
         errors_dict,
         sorted(all_unique_error_rates),
+        logicals_distributions_dict,
+        failures_statistics_dict,
     )
 
 
