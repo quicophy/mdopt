@@ -1,9 +1,9 @@
-Examples
+examples
 ========
 
 .. toctree::
    :maxdepth: 2
-   :caption: Notebook Examples:
+   :caption: notebook examples:
 
    classical_ldpc.ipynb
    ground_state.ipynb
