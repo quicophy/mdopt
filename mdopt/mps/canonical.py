@@ -315,7 +315,7 @@ class CanonicalMPS:
 
         return list(mpo)
 
-    def entanglement_entropy(self, tolerance: float = float(1e-17)) -> np.ndarray:
+    def entanglement_entropy(self, tolerance: float = float(1e-12)) -> np.ndarray:
         """
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
