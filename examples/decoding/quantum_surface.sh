@@ -8,7 +8,7 @@ seeds=(
 ) # 10 random seeds
 num_experiments=100 # Per each random seed
 error_model="Bitflip" # Error model used in the experiments
-bias_prob=0.05 # The decoder bias probability
+bias_prob=0.01 # The decoder bias probability
 num_processes=16 # Number of processes to use in parallel
 silent=true # Whether to suppress the output of the Python script
 
