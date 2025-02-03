@@ -83,7 +83,7 @@ def process_failure_statistics(
     for lattice_size in lattice_sizes:
         for chi_max in max_bond_dims:
             # Create a regex pattern to match the desired file format
-            pattern = rf"^latticesize{lattice_size}_bonddim{chi_max}_errorrate[0-9\.]+_errormodel{error_model}_seed\d+\.pkl$"
+            pattern = rf"^latticesize{lattice_size}_bonddim{chi_max}_errorrate[0-9\.]+_errormodel{error_model}+_bias_prob[0-9\.]+_numexperiments[0-9]+_seed\d+\.pkl$"
 
             all_logicals_distributions = (
                 {}
