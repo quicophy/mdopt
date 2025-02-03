@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define arrays of lattice sizes, bond dimensions, error rates, and seeds
-lattice_sizes=(3 5 7 9 11)
+lattice_sizes=(3 5 7 9)
 bond_dims=(20)
 seeds=(
     123 124 125 126 127 128 129 130 131 132
@@ -15,7 +15,7 @@ silent=true # Whether to suppress the output of the Python script
 error_rates=()
 start=0.01
 end=0.21
-step=0.01
+step=0.02
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
 do
