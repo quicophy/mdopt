@@ -38,8 +38,8 @@ def svd(
         The singular values, sorted in non-increasing order.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
-    residual_spectrum : Optional[float]
-        The discarded singular values. Only returned if `return_truncation_error` is True.
+    truncation_error : Optional[float]
+        The truncation error. Only returned if `return_truncation_error` is True.
 
     Raises
     ------
