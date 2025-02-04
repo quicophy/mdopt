@@ -13,7 +13,7 @@ def svd(
     chi_max: int = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
-) -> Tuple[np.ndarray, list, np.ndarray, Optional[float]]:
+) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
 
