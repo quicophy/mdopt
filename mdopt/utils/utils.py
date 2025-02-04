@@ -13,7 +13,7 @@ def svd(
     chi_max: int = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
-) -> Tuple[np.ndarray, list, np.ndarray, Optional[float]]:
+) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
 
@@ -34,7 +34,7 @@ def svd(
     -------
     u_l : np.ndarray
         Unitary matrix having left singular vectors as columns.
-    singular_values : np.ndarray
+    singular_values : list
         The singular values, sorted in non-increasing order.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
@@ -47,9 +47,9 @@ def svd(
         If the input matrix does not have 2 dimensions.
     """
 
-    if len(mat.shape) != 2:
+    if mat.ndim != 2:
         raise ValueError(
-            f"A valid matrix must have 2 dimensions while the one given has {len(mat.shape)}."
+            f"A valid matrix must have 2 dimensions while the one given has {mat.ndim}."
         )
 
     try:
