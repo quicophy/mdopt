@@ -1162,6 +1162,7 @@ def apply_constraints(
             chi_max=chi_max,
             renormalise=renormalise,
             inplace=False,
+            cut=0,
             result_to_explicit=result_to_explicit,
         )
 
@@ -1288,7 +1289,7 @@ def decode_css(
         The optimiser used to find the closest basis product state to a given MPDO.
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
     tolerance : float
-        The tolerance for the Canonical MPS class.
+        The tolerance for the MPS classes.
 
     Raises
     ------
@@ -1509,6 +1510,7 @@ def decode_custom(
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
+    tolerance: float = float(1e-12),
 ):
     """
     This function performs error-based decoding for a custom quantum error-correcting code.
@@ -1544,6 +1546,8 @@ def decode_custom(
     optimiser : str
         The optimiser used to find the closest basis product state to a given MPDO.
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
+    tolerance : float
+        The tolerance for the MPS classes.
 
     Returns
     -------
@@ -1582,7 +1586,7 @@ def decode_custom(
 
     logicals_state = "+" * num_logicals
     state_string = logicals_state + error
-    error_mps = create_custom_product_state(string=state_string)
+    error_mps = create_custom_product_state(string=state_string, tolerance=tolerance)
 
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
