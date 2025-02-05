@@ -15,19 +15,16 @@ pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools netw
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
 # Define arrays of lattice sizes, bond dimensions, error rates, and seeds
-lattice_sizes=(13)
-bond_dims=(256)
+lattice_sizes=(3 5 7)
+bond_dims=(20)
 seeds=(
     123 124 125 126 127 128 129 130 131 132
-    133 134 135 136 137 138 139 140 141 142
-    143 144 145 146 147 148 149 150 151 152
-    153 154 155 156 157 158 159 160 161 162
-    163 164 165 166 167 168 169 170 171 172
-) # 50 random seeds
-num_experiments=20 # Per each random seed
+) # 10 random seeds
+num_experiments=100 # Per each random seed
 error_model="Bitflip" # Error model used in the experiments
-bias_prob=0.001 # The decoder bias probability
-num_processes=8 # Number of processes to use in parallel
+bias_prob=0.1 # The decoder bias probability
+tolerance=1e-6 # The numerical tolerance for the MPS within the decoder.
+num_processes=16 # Number of processes to use in parallel
 silent=true # Whether to suppress the output of the Python script
 
 error_rates=()
@@ -61,7 +58,7 @@ module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified arguments
-python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --bias_prob ${bias_prob} --num_experiments ${num_experiments} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent}
+python examples/decoding/quantum_surface.py --lattice_size ${lattice_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --bias_prob ${bias_prob} --num_experiments ${num_experiments} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance}
 EOS
                 echo "Submitting the job for lattice size ${lattice_size}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, bias probability ${bias_prob} and seed ${seed}."
                 sbatch "$job_script"

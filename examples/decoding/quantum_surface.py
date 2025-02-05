@@ -109,6 +109,12 @@ def parse_arguments():
         required=True,
         help="Whether to silence the output.",
     )
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        required=True,
+        help="The numerical tolerance for the MPS within the decoder.",
+    )
     return parser.parse_args()
 
 
@@ -134,7 +140,9 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
     return errors
 
 
-def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model, silent):
+def run_single_experiment(
+    lattice_size, chi_max, error, bias_prob, error_model, silent, tolerance
+):
     """Run a single experiment."""
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
@@ -149,6 +157,7 @@ def run_single_experiment(lattice_size, chi_max, error, bias_prob, error_model, 
         renormalise=True,
         silent=silent,
         contraction_strategy="Optimised",
+        tolerance=tolerance,
     )
 
     if success == 1:
@@ -170,6 +179,7 @@ def run_experiment(
     errors,
     silent,
     num_processes=1,
+    tolerance=1e-10,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
@@ -179,7 +189,7 @@ def run_experiment(
     )
 
     args = [
-        (lattice_size, chi_max, errors[i], bias_prob, error_model, silent)
+        (lattice_size, chi_max, errors[i], bias_prob, error_model, silent, tolerance)
         for i in range(num_experiments)
     ]
 
@@ -205,6 +215,7 @@ def run_experiment(
         "bias_prob": bias_prob,
         "error_model": error_model,
         "seed": seed,
+        "tolerance": tolerance,
     }
 
 
@@ -217,10 +228,11 @@ def save_experiment_data(
     bias_prob,
     num_experiments,
     seed,
+    tolerance,
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
-    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_seed{seed}.pkl"
+    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_seed{seed}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -250,6 +262,7 @@ def main():
         errors,
         args.silent,
         args.num_processes,
+        args.tolerance,
     )
     save_experiment_data(
         experiment_data,
@@ -260,6 +273,7 @@ def main():
         args.bias_prob,
         args.num_experiments,
         args.seed,
+        args.tolerance,
     )
 
 
