@@ -59,12 +59,25 @@ def svd(
     except np.linalg.LinAlgError:
         try:
             u_l, singular_values, v_r = scipy.linalg.svd(
-                mat, full_matrices=False, compute_uv=True, lapack_driver="gesvd"
+                mat,
+                full_matrices=False,
+                compute_uv=True,
+                check_finite=False,
+                lapack_driver="gesvd",
             )
         except np.linalg.LinAlgError:
             u_l, singular_values, v_r = scipy.linalg.svd(
-                mat, full_matrices=False, compute_uv=True, lapack_driver="gesdd"
+                mat,
+                full_matrices=False,
+                compute_uv=True,
+                check_finite=False,
+                lapack_driver="gesdd",
             )
+
+    # for i in range(u_l.shape[1]):  # Loop over all singular vectors
+    #    if u_l[0, i] < 0:  # Check if the leading element of the left singular vector is negative
+    #        u_l[:, i] *= -1  # Flip the entire column of u
+    #        v_r[i, :] *= -1  # Flip the corresponding row of v to maintain the decomposition
 
     max_num = min(chi_max, np.sum(singular_values > cut))
     residual_spectrum = singular_values[max_num:]
