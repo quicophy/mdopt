@@ -1056,6 +1056,7 @@ def apply_constraints(
     strings: List[List[int]],
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
+    cut: float = float(1e-17),
     renormalise: bool = False,
     result_to_explicit: bool = True,
     strategy: str = "Naive",
@@ -1075,6 +1076,9 @@ def apply_constraints(
         List of logical tensors for :class:`ConstraintString`.
     chi_max : int
         Maximum bond dimension to keep in the contractor.
+    cut : float
+        The lower boundary of the spectrum in the contractor.
+        All singular values below this value are truncated.
     renormalise : bool
         Whether to renormalise the singular values at each MPS bond involved in contraction.
     result_to_explicit : bool
@@ -1160,9 +1164,9 @@ def apply_constraints(
             mpo=mpo,
             start_site=start_site,
             chi_max=chi_max,
+            cut=cut,
             renormalise=renormalise,
             inplace=False,
-            cut=0,
             result_to_explicit=result_to_explicit,
         )
 
@@ -1247,6 +1251,7 @@ def decode_css(
     error: str,
     num_runs: int = int(50),
     chi_max: int = int(1e4),
+    cut: float = float(1e-17),
     bias_type: str = "Depolarising",
     bias_prob: float = float(0.05),
     renormalise: bool = True,
@@ -1272,6 +1277,8 @@ def decode_css(
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
+    cut : float
+        Singular value cut-off for the SVD.
     bias_type : str
         The type of the bias applied before checks.
         Available options: "Bitflip" and "Depolarising".
@@ -1369,6 +1376,7 @@ def decode_css(
                 logicals_sites[0],
                 logicals_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1389,6 +1397,7 @@ def decode_css(
                 logicals_sites[1],
                 logicals_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1409,6 +1418,7 @@ def decode_css(
                 constraint_sites[0],
                 constraints_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1429,6 +1439,7 @@ def decode_css(
                 constraint_sites[1],
                 constraints_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1472,6 +1483,7 @@ def decode_css(
             logging.info("Decoding completed with result: %s", result)
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
+
     elif num_logical_sites > 10 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
@@ -1479,6 +1491,7 @@ def decode_css(
             mps=mps_dmrg_start,
             mps_target=mps_dmrg_target,
             chi_max=chi_max,
+            cut=cut,
             mode="LA",
             silent=silent,
         )
@@ -1490,6 +1503,7 @@ def decode_css(
         if not silent:
             logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
         return engine, overlap
+
     elif optimiser == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
     else:
@@ -1503,6 +1517,7 @@ def decode_custom(
     error: str,
     num_runs: int = int(50),
     chi_max: int = int(1e4),
+    cut: float = float(1e-17),
     bias_type: str = "Depolarising",
     bias_prob: float = float(0.05),
     renormalise: bool = True,
@@ -1530,6 +1545,8 @@ def decode_custom(
     chi_max : int
         Maximum bond dimension to keep during contractions
         and in the Dephasing DMRG algorithm.
+    cut : float
+        Singular value cut-off for the SVD.
     bias_type : str
         The type of the bias applied before the parity checks.
         Available options: "Bitflip" and "Depolarising".
@@ -1561,7 +1578,7 @@ def decode_custom(
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
-        return None, 1
+        return [1.0, 0.0, 0.0, 0.0], 1
 
     error_contains_x = "X" in error
     error_contains_z = "Z" in error
@@ -1625,6 +1642,7 @@ def decode_custom(
                 logicals_sites[0],
                 logicals_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1645,6 +1663,7 @@ def decode_custom(
                 logicals_sites[1],
                 logicals_tensors,
                 chi_max=chi_max,
+                cut=cut,
                 renormalise=renormalise,
                 silent=silent,
                 strategy=contraction_strategy,
@@ -1656,25 +1675,25 @@ def decode_custom(
             )
             return None, 0
 
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying the X constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                constraint_sites,
-                constraints_tensors,
-                chi_max=chi_max,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying X constraints."
-            )
-            return None, 0
+    if not silent:
+        logging.info("Applying the X and Z constraints.")
+    try:
+        error_mps = apply_constraints(
+            error_mps,
+            constraint_sites,
+            constraints_tensors,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+            result_to_explicit=False,
+        )
+    except (ValueError, np.linalg.LinAlgError):
+        logging.info(
+            "Decoding failed due to a linalg error while applying the constraints."
+        )
+        return None, 0
 
     if erased_qubits:
         if not silent:
@@ -1713,6 +1732,7 @@ def decode_custom(
             mps=mps_dmrg_start,
             mps_target=logical_mps,
             chi_max=chi_max,
+            cut=cut,
             mode="LA",
             silent=silent,
         )

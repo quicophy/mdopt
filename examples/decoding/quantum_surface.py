@@ -115,6 +115,12 @@ def parse_arguments():
         required=True,
         help="The numerical tolerance for the MPS within the decoder.",
     )
+    parser.add_argument(
+        "--cut",
+        type=float,
+        required=True,
+        help="Singular values smaller than that will be discarded in the SVD.",
+    )
     return parser.parse_args()
 
 
@@ -141,7 +147,7 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
 
 
 def run_single_experiment(
-    lattice_size, chi_max, error, bias_prob, error_model, silent, tolerance
+    lattice_size, chi_max, error, bias_prob, error_model, silent, tolerance, cut
 ):
     """Run a single experiment."""
     rep_code = qec.repetition_code(lattice_size)
@@ -158,13 +164,16 @@ def run_single_experiment(
         silent=silent,
         contraction_strategy="Optimised",
         tolerance=tolerance,
+        cut=cut,
     )
 
     if success == 1:
-        logging.info("Decoding successful.")
+        if not silent:
+            logging.info("Decoding successful.")
         return logicals_distribution, 0
     else:
-        logging.info("Decoding failed.")
+        if not silent:
+            logging.info("Decoding failed.")
         return logicals_distribution, 1
 
 
@@ -180,16 +189,26 @@ def run_experiment(
     silent,
     num_processes=1,
     tolerance=1e-10,
+    cut=1e-12,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
         f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
-        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
-        f"ERROR_MODEL={error_model}, SEED={seed}"
+        f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
 
     args = [
-        (lattice_size, chi_max, errors[i], bias_prob, error_model, silent, tolerance)
+        (
+            lattice_size,
+            chi_max,
+            errors[i],
+            bias_prob,
+            error_model,
+            silent,
+            tolerance,
+            cut,
+        )
         for i in range(num_experiments)
     ]
 
@@ -197,9 +216,9 @@ def run_experiment(
         results = pool.starmap(run_single_experiment, args)
 
     logging.info(
-        f"Finished {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
-        f"CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
-        f"ERROR_MODEL={error_model}, SEED={seed}"
+        f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
+        f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
 
     logicals_distributions = [result[0] for result in results]
@@ -216,6 +235,7 @@ def run_experiment(
         "error_model": error_model,
         "seed": seed,
         "tolerance": tolerance,
+        "cut": cut,
     }
 
 
@@ -229,10 +249,11 @@ def save_experiment_data(
     num_experiments,
     seed,
     tolerance,
+    cut,
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
-    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_seed{seed}.pkl"
+    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_seed{seed}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -263,6 +284,7 @@ def main():
         args.silent,
         args.num_processes,
         args.tolerance,
+        args.cut,
     )
     save_experiment_data(
         experiment_data,
@@ -274,6 +296,7 @@ def main():
         args.num_experiments,
         args.seed,
         args.tolerance,
+        args.cut,
     )
 
 
