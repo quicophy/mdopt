@@ -74,11 +74,6 @@ def svd(
                 lapack_driver="gesdd",
             )
 
-    # for i in range(u_l.shape[1]):  # Loop over all singular vectors
-    #    if u_l[0, i] < 0:  # Check if the leading element of the left singular vector is negative
-    #        u_l[:, i] *= -1  # Flip the entire column of u
-    #        v_r[i, :] *= -1  # Flip the corresponding row of v to maintain the decomposition
-
     max_num = min(chi_max, np.sum(singular_values > cut))
     residual_spectrum = singular_values[max_num:]
     truncation_error = np.linalg.norm(residual_spectrum) ** 2
