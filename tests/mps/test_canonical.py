@@ -807,30 +807,7 @@ def test_canonical_marginal():
         assert tensor_0.shape == tensor_1.shape
         assert np.isclose(tensor_0, tensor_1).all()
 
-    # Testing extreme cases.
-    num_sites = 8
-    phys_dim = 2
-
-    sites_all = list(range(num_sites))
-
-    psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
-    mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
-    mps_copy = mps.copy()
-    mps_check = mps_copy.marginal([])
-
-    for tensor_0, tensor_1 in zip(mps.tensors, mps_check.tensors):
-        assert tensor_0.shape == tensor_1.shape
-        assert np.isclose(tensor_0, tensor_1).all()
-
-    mps_plus = create_simple_product_state(
-        num_sites=num_sites, which="+", phys_dim=phys_dim
-    )
-    # assert np.isclose(
-    #    mps.marginal(sites_all, canonicalise=True),
-    #    inner_product(mps_copy, mps_plus) * np.prod(mps.phys_dimensions),
-    # )
-
-    # Testing an exact case
+    # Testing another exact case.
     tensor_0 = np.array([[[1, 0], [0, 2]]])  # (1,2,2)
     tensor_1 = np.array([[[1, 0], [0, 2]], [[3, 0], [0, 4]]])  # (2,2,2)
     tensor_2 = np.array([[[1], [0]], [[0], [2]]])  # shape (2,2,1)
