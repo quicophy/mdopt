@@ -106,10 +106,10 @@ class CanonicalMPS:
             )
 
         for i, tensor in enumerate(tensors):
-            if len(tensor.shape) != 3:
+            if tensor.ndim != 3:
                 raise ValueError(
                     "A valid MPS tensor must have 3 legs "
-                    f"while the one at site {i} has {len(tensor.shape)}."
+                    f"while the one at site {i} has {tensor.ndim}."
                 )
 
     @property
@@ -117,7 +117,7 @@ class CanonicalMPS:
         """
         Returns the list of all bond dimensions of the MPS.
         """
-        return [self.tensors[i].shape[-1] for i in range(self.num_bonds)]
+        return [tensor.shape[-1] for tensor in self.tensors[:-1]]
 
     @property
     def phys_dimensions(self) -> List[int]:
@@ -939,175 +939,72 @@ class CanonicalMPS:
         return mps_compressed, [None]
 
     def marginal(
-        self, sites_to_marginalise: List[int], canonicalise: bool = False
-    ) -> "CanonicalMPS":  # type: ignore
+        self,
+        sites_to_marginalise: List[int],
+        canonicalise: bool = False,
+    ) -> "CanonicalMPS":
         r"""
         Computes a marginal over a subset of sites of an MPS.
-        Attention, this method acts inplace. For the non-inplace version,
-        take a look into the ``mps.utils`` module.
 
         Parameters
         ----------
         sites_to_marginalise : List[int]
             The sites to marginalise over.
         canonicalise : bool
-            Whether to put the result in the canonical form,
-            i.e., whether to sweep with SVDs over the left bonds.
+            Whether to put the resulting MPS in the canonical form,
+            i.e., whether to sweep with SVDs over the bonds that are left.
 
         Notes
         -----
-        The algorithm proceeds by starting from the bond possessing the
-        maximum dimension and contracting the marginalised tensors into
-        the tensors left untouched. The list of sites to marginalise is then
-        updated by removing the corresponding site from it. This subroutine
-        continues until the list of sites to marginalise is empty.
-        An example of marginalising is shown in the following diagram::
+        Marginalizes (traces out) selected sites from the MPS by first
+        contracting them with the trace tensor and then absorbing them.
+        Rule: if a traced tensor has a right neighbor, it is absorbed to the right.
+        (If it is the last tensor, it is merged with its left neighbor.)
 
-            ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
-                |     |     |     |     ->     |     |
-                |     |     |     |            |     |
-               (t)   (t)
-
-        Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's.
+        In the absorption step the physical leg is traced out:
+        (vL, i, vR) --> (vL, vR)
+        and then the traced tensor is contracted with the neighbor so that
+        new_tensor = tensordot(traced, neighbor, axes=([1],[0]))
+        yields the expected dimensions.
         """
-
-        sites_all = list(range(self.num_sites))
-
-        if sites_to_marginalise == []:
+        if not sites_to_marginalise:
             return self
 
-        if sites_to_marginalise == sites_all:
-            plus_state = mdopt.mps.utils.create_simple_product_state(  # type: ignore
-                num_sites=self.num_sites, which="+", phys_dim=self.phys_dimensions[0]
+        sites_all = list(range(self.num_sites))
+        if set(sites_to_marginalise) - set(sites_all):
+            raise ValueError(
+                "The list of sites to marginalise must be a subset of the list of all sites."
             )
-            result = mdopt.mps.utils.inner_product(self, plus_state)  # type: ignore
-            result *= np.prod(self.phys_dimensions)
-            return result  # type: ignore
 
-        for site in sites_to_marginalise:
-            if site not in sites_all:
-                raise ValueError(
-                    "The list of sites to marginalise must be a subset of the list of all sites."
+        # Process marginalized sites in descending order to avoid index shifts.
+        for site in sorted(sites_to_marginalise, reverse=True):
+            phys_dim = self.tensors[site].shape[1]
+            trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
+            # Trace out the physical legs
+            traced = np.tensordot(self.tensors[site], trace_tensor, axes=([1], [0]))
+
+            if site < self.num_sites - 1:
+                # Absorb into the right neighbor.
+                new_tensor = np.tensordot(
+                    traced, self.tensors[site + 1], axes=([1], [0])
                 )
-
-        # This subroutine will be used to update the list of sites to marginalise on the fly.
-        def _update_sites_routine(site_checked, site):
-            if site_checked < site:
-                return site_checked
-            if site_checked > site:
-                return site_checked - 1
-            return None
-
-        # This subroutine will be used to update the MPS attributes on the fly.
-        def _update_attributes_routine(
-            tensors, num_sites, bond_dims, sites_all, sites_to_marg, site
-        ):
-            del tensors[site]
-            try:
-                del bond_dims[site]
-            except IndexError:
-                pass
-            sites_to_marg = [
-                _update_sites_routine(site_checked, site)
-                for site_checked in sites_to_marg
-                if site_checked != site
-            ]
-            return tensors, num_sites - 1, bond_dims, sites_all[:-1], sites_to_marg
-
-        # Contracting in the "t" tensors.
-        for site in sites_to_marginalise:
-            phys_dim = self.phys_dimensions[site]
-            trace_tensor = np.ones((phys_dim,)) / np.sqrt(phys_dim)
-            self.tensors[site] = np.tensordot(self.tensors[site], trace_tensor, (1, 0))
-
-        bond_dims = self.bond_dimensions
-
-        while sites_to_marginalise:
-            try:
-                site = int(np.argmax(bond_dims))
-            except ValueError:
-                site = sites_to_marginalise[0]
-
-            # Checking all possible tensor layouts on a given bond.
-            try:
-                if self.tensors[site].ndim == 2 and self.tensors[site + 1].ndim == 3:
-                    self.tensors[site + 1] = np.tensordot(
-                        self.tensors[site], self.tensors[site + 1], (-1, 0)
-                    )
-                    (
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                    ) = _update_attributes_routine(
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                        site,
-                    )
-                elif self.tensors[site].ndim == 3 and self.tensors[site + 1].ndim == 2:
-                    self.tensors[site] = np.tensordot(
-                        self.tensors[site], self.tensors[site + 1], (-1, 0)
-                    )
-                    (
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                    ) = _update_attributes_routine(
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                        site + 1,
-                    )
-                elif self.tensors[site].ndim == 2 and self.tensors[site + 1].ndim == 2:
-                    self.tensors[site] = np.tensordot(
-                        self.tensors[site], self.tensors[site + 1], (-1, 0)
-                    )
-                    (
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                    ) = _update_attributes_routine(
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                        site + 1,
-                    )
-            except IndexError:
-                if self.tensors[site].ndim == 2 and self.tensors[site - 1].ndim == 3:
-                    self.tensors[site - 1] = np.tensordot(
-                        self.tensors[site - 1], self.tensors[site], (-1, 0)
-                    )
-                    (
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                    ) = _update_attributes_routine(
-                        self.tensors,
-                        self.num_sites,
-                        bond_dims,
-                        sites_all,
-                        sites_to_marginalise,
-                        site,
-                    )
+                # Remove the marginalized tensor and its right neighbor, insert the merged tensor.
+                del self.tensors[site + 1]
+                del self.tensors[site]
+                self.tensors.insert(site, new_tensor)
             else:
-                try:
-                    del bond_dims[site]
-                except IndexError:
-                    pass
+                # If the marginalized tensor is the last, merge with the left neighbor.
+                if site > 0:
+                    new_tensor = np.tensordot(
+                        self.tensors[site - 1], traced, axes=([-1], [0])
+                    )
+                    del self.tensors[site]
+                    self.tensors[site - 1] = new_tensor
+                else:
+                    # Only one tensor exists; reshape to have three legs.
+                    self.tensors[site] = traced.reshape(traced.shape + (1,))
+
+            self.num_sites = len(self.tensors)
 
         if canonicalise:
             return cast(
@@ -1120,12 +1017,4 @@ class CanonicalMPS:
                 ).move_orth_centre(0, renormalise=False),
             )
 
-        return cast(
-            CanonicalMPS,
-            CanonicalMPS(
-                tensors=self.tensors,
-                orth_centre=self.num_sites - 1,
-                tolerance=self.tolerance,
-                chi_max=self.chi_max,
-            ),
-        )
+        return self
