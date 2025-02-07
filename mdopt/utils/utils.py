@@ -299,10 +299,10 @@ def split_two_site_tensor(
         If the strategy is not one of the available ones.
     """
 
-    if len(tensor.shape) != 4:
+    if tensor.ndim != 4:
         raise ValueError(
             "A valid two-site tensor must have 4 legs"
-            f"while the one given has {len(tensor.shape)}."
+            f"while the one given has {tensor.ndim}."
         )
 
     if strategy not in ["svd", "qr"]:
@@ -473,9 +473,9 @@ def mpo_to_matrix(
     """
 
     for i, tensor in enumerate(mpo):
-        if len(tensor.shape) != 4:
+        if tensor.ndim != 4:
             raise ValueError(
-                f"A valid MPO tensor must have 4 legs while tensor {i} has {len(tensor.shape)}."
+                f"A valid MPO tensor must have 4 legs while tensor {i} has {tensor.ndim}."
             )
 
     phys_dim = mpo[0].shape[2]

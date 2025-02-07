@@ -45,9 +45,9 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
         If the operator tensor is not two-dimensional.
     """
 
-    if len(tensor.shape) != 3:
+    if tensor.ndim != 3:
         raise ValueError(
-            f"A valid MPS tensor must have 3 legs while the one given has {len(tensor.shape)}."
+            f"A valid MPS tensor must have 3 legs while the one given has {tensor.ndim}."
         )
 
     if len(operator.shape) != 2:
@@ -244,9 +244,9 @@ def mps_mpo_contract(
         mps = cast(CanonicalMPS, mps.move_orth_centre(start_site, renormalise=False))
 
     for i, tensor in enumerate(mpo):
-        if len(tensor.shape) != 4:
+        if tensor.ndim != 4:
             raise ValueError(
-                f"A valid MPO tensor must have 4 legs while tensor {i} has {len(tensor.shape)}."
+                f"A valid MPO tensor must have 4 legs while tensor {i} has {tensor.ndim}."
             )
 
     if start_site + len(mpo) > len(mps):

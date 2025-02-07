@@ -184,9 +184,9 @@ class DMRG:
                 "but the lengths should be equal."
             )
         for i, tensor in enumerate(mpo):
-            if len(tensor.shape) != 4:
+            if tensor.ndim != 4:
                 raise ValueError(
-                    f"A valid MPO tensor must have 4 legs while tensor {i} has {len(tensor.shape)}."
+                    f"A valid MPO tensor must have 4 legs while tensor {i} has {tensor.ndim}."
                 )
         if mode not in ["SA", "LA", "SM", "LM"]:
             raise ValueError("Invalid eigensolver mode given.")
