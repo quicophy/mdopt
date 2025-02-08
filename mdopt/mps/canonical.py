@@ -966,6 +966,16 @@ class CanonicalMPS:
         and then the traced tensor is contracted with the neighbor so that
         new_tensor = tensordot(traced, neighbor, axes=([1],[0]))
         yields the expected dimensions.
+
+        An example of marginalising is shown in the following diagram::
+
+            ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
+                |     |     |     |     ->     |     |
+                |     |     |     |            |     |
+               (t)   (t)
+
+        Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's
+        and normalised by the square root of the physical dimension.
         """
         if not sites_to_marginalise:
             return self
