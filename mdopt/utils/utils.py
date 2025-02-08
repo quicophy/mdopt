@@ -398,22 +398,22 @@ def create_random_mpo(
         for i in range(0, len(bond_dims) - 1, 2)
     ]
 
-    if which == "uniform":
+    if which == "randint":
         mpo = [
-            np.random.uniform(size=shapes[i]) + 1j * np.random.uniform(size=shapes[i])
+            np.random.randint(0, 2, size=shapes[i])
+            + 1j * np.random.randint(0, 2, size=shapes[i])
             for i in range(num_sites)
         ]
 
-    if which == "normal":
+    elif which == "normal":
         mpo = [
             np.random.normal(size=shapes[i]) + 1j * np.random.normal(size=shapes[i])
             for i in range(num_sites)
         ]
 
-    if which == "randint":
+    else:
         mpo = [
-            np.random.randint(0, 2, size=shapes[i])
-            + 1j * np.random.randint(0, 2, size=shapes[i])
+            np.random.uniform(size=shapes[i]) + 1j * np.random.uniform(size=shapes[i])
             for i in range(num_sites)
         ]
 
