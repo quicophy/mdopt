@@ -766,7 +766,11 @@ def test_canonical_marginal():
             mps.marginal([100, 200])
 
         if isinstance(mps_marginalised, CanonicalMPS):
-            assert mps_marginalised.num_sites == len(sites_left)
+            assert (
+                mps_marginalised.num_sites == len(sites_left)
+                if len(sites_left) > 0
+                else 1
+            )
             assert is_canonical(mps_marginalised_canonical)
         else:
             assert isinstance(mps_marginalised, np.complex128)
