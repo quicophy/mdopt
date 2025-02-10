@@ -14,6 +14,21 @@ from mdopt.optimiser.utils import (
 )
 
 
+def _contract_with_trivial_boundaries(tensor):
+    """
+    Helper function: contract a tensor with shape (vL, vR, pU, pD)
+    over its virtual indices using trivial boundary vectors (all ones).
+    """
+    vL, vR, pU, pD = tensor.shape
+    left_bound = np.ones(vL)
+    right_bound = np.ones(vR)
+    op = np.zeros((pU, pD))
+    for i in range(vL):
+        for j in range(vR):
+            op += left_bound[i] * tensor[i, j, :, :] * right_bound[j]
+    return op
+
+
 def test_optimiser_utils_tensors():
     """Test for the combinatorial optimisation operations."""
 
@@ -45,6 +60,45 @@ def test_optimiser_utils_tensors():
     assert (xor_bulk == XOR_BULK).all()
     assert (xor_left == XOR_LEFT).all()
     assert (xor_right == XOR_RIGHT).all()
+
+    # Testing using boundary contracting
+    op = _contract_with_trivial_boundaries(IDENTITY)
+    expected = np.eye(2)  # Since IDENTITY has shape (1,1,2,2)
+    assert np.allclose(op, expected)
+
+    op = _contract_with_trivial_boundaries(COPY_LEFT)
+    # According to the definition:
+    # For j = 0: COPY_LEFT[0,0,:,:] = np.eye(2)[0,:] = [[1, 0],[1, 0]] (constant in pU),
+    # and for j = 1: COPY_LEFT[0,1,:,:] = np.eye(2)[1,:] = [[0, 1],[0, 1]].
+    # Their sum gives:
+    expected = np.array([[1, 1], [1, 1]])
+    assert np.allclose(op, expected)
+
+    op = _contract_with_trivial_boundaries(XOR_BULK)
+    # Compute the expected operator by summing explicitly.
+    expected = np.zeros((2, 2))
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                for l in range(2):
+                    expected[k, l] += (i ^ j ^ k ^ 1) * (1 if k == l else 0)
+    assert np.allclose(op, expected)
+
+    op = _contract_with_trivial_boundaries(XOR_LEFT)
+    # Here, since XOR_LEFT has shape (1,2,2,2), we sum over the right virtual index:
+    expected = np.sum(XOR_LEFT[0, :, :, :], axis=0)
+    assert np.allclose(op, expected)
+
+    op = _contract_with_trivial_boundaries(XOR_RIGHT)
+    expected = np.sum(XOR_RIGHT[:, 0, :, :], axis=0)
+    assert np.allclose(op, expected)
+    print("XOR_RIGHT effective operator test passed.")
+
+    op = _contract_with_trivial_boundaries(SWAP)
+    # SWAP is defined so that only [0,0,:,:] and [1,1,:,:] are nonzero.
+    # Each equals np.eye(2). Therefore, op = np.eye(2) + np.eye(2) = 2I.
+    expected = np.eye(2) * 2
+    assert np.allclose(op, expected)
 
 
 def test_optimiser_utils_constraint_string():
