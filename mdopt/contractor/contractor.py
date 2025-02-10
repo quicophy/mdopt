@@ -324,6 +324,10 @@ def mps_mpo_contract(
         "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
     )
 
+    # Renormalising the orthogonality centre
+    if renormalise:
+        mps.tensors[orth_centre_index] /= np.linalg.norm(mps.tensors[orth_centre_index])
+
     if result_to_explicit and isinstance(mps, CanonicalMPS):
         return mps.explicit(tolerance=mps.tolerance, renormalise=renormalise)
 
