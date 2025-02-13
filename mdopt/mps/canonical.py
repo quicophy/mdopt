@@ -126,6 +126,13 @@ class CanonicalMPS:
         """
         return [self.tensors[i].shape[1] for i in range(self.num_sites)]
 
+    @property
+    def all_dimensions(self) -> List[int]:
+        """
+        Returns the list of all dimensions of the MPS.
+        """
+        return [self.tensors[i].shape for i in range(self.num_sites)]
+
     def __len__(self) -> int:
         """
         Returns the number of sites in the MPS.
