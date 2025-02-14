@@ -489,7 +489,7 @@ def test_utils_mpo_to_matrix():
             mpo[2],
             mpo[3],
             optimize=[(0, 1), (0, 1), (0, 1)],
-        ).reshape((16, 16))
+        ).reshape((2**num_sites, 2**num_sites))
         matrix_01 = contract(
             "abij, bckl, cdmn, deop -> ijklmnop",
             mpo[0],
