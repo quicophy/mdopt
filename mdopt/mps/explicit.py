@@ -118,7 +118,7 @@ class ExplicitMPS:
         return [self.tensors[i].shape[1] for i in range(self.num_sites)]
 
     @property
-    def all_dimensions(self) -> List[int]:
+    def all_dimensions(self) -> List[Tuple[int]]:
         """
         Returns the list of all dimensions of the MPS.
         """
