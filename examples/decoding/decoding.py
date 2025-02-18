@@ -27,7 +27,6 @@ from qecstruct import (
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import (
-    marginalise,
     inner_product,
     find_orth_centre,
     create_simple_product_state,
@@ -36,7 +35,7 @@ from mdopt.mps.utils import (
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
-from mdopt.utils.utils import split_two_site_tensor
+from mdopt.utils.utils import split_two_site_tensor, mpo_to_matrix
 from mdopt.optimiser.utils import ConstraintString
 
 
