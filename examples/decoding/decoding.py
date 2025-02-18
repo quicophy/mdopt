@@ -925,7 +925,7 @@ def generate_pauli_error_string(
     num_qubits: int,
     error_rate: float,
     error_model: str = "Depolarising",
-    seed: Optional[int] = None,
+    rng: Optional[np.random.Generator] = None,
     erasure_rate: Optional[float] = None,
 ) -> str:
     """
@@ -952,7 +952,8 @@ def generate_pauli_error_string(
         where "E" represents an erasure error.
     """
 
-    np.random.seed(seed)
+    if rng is None:
+        rng = np.random.default_rng()
     error_string = []
 
     if error_model == "Erasure" and erasure_rate is None:
@@ -960,21 +961,21 @@ def generate_pauli_error_string(
 
     for _ in range(num_qubits):
         if error_model == "Depolarising":
-            if np.random.random() < error_rate:
+            if rng.random() < error_rate:
                 error = np.random.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
                 error = "I"
         elif error_model == "Bitflip":
-            error = "X" if np.random.random() < error_rate else "I"
+            error = "X" if rng.random() < error_rate else "I"
         elif error_model == "Phaseflip":
-            error = "Z" if np.random.random() < error_rate else "I"
+            error = "Z" if rng.random() < error_rate else "I"
         elif error_model == "Amplitude Damping":
-            error = np.random.choice(["I", "X"], p=[1 - error_rate, error_rate])
+            error = rng.choice(["I", "X"], p=[1 - error_rate, error_rate])
         elif error_model == "Erasure":
-            if np.random.random() < erasure_rate:
+            if rng.random() < erasure_rate:
                 error = "E"
-            elif np.random.random() < error_rate:
-                error = np.random.choice(["X", "Z"])
+            elif rng.random() < error_rate:
+                error = rng.choice(["X", "Z"])
             else:
                 error = "I"
         else:
