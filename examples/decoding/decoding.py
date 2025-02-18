@@ -34,9 +34,9 @@ from mdopt.mps.utils import (
 )
 from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
 from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
+from mdopt.optimiser.utils import ConstraintString, IDENTITY
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
 from mdopt.utils.utils import split_two_site_tensor, mpo_to_matrix
-from mdopt.optimiser.utils import ConstraintString
 
 
 # Setting up logging
@@ -1041,23 +1041,23 @@ def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
 
 
 def apply_constraints(
-    mps: Union[ExplicitMPS, CanonicalMPS],
+    mps: CanonicalMPS,
     strings: List[List[int]],
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     renormalise: bool = False,
-    result_to_explicit: bool = True,
     strategy: str = "Naive",
     silent: bool = False,
+    dense: bool = False,
     return_entropies_and_bond_dims: bool = False,
-) -> Union[CanonicalMPS, ExplicitMPS]:
+) -> CanonicalMPS:
     """
     This function applies logical constraints to an MPS.
 
     Parameters
     ----------
-    mps : Union[ExplicitMPS, CanonicalMPS]
+    mps : CanonicalMPS
         The MPS to which the logical constraints are being applied.
     strings : List[List[int]]
         The list of arguments for :class:`ConstraintString`.
@@ -1078,10 +1078,13 @@ def apply_constraints(
         Whether to show the progress bar or not.
     return_entropies_and_bond_dims : bool
         Whether to return the entanglement entropies and bond dimensions at each bond.
+    dense : bool
+        Whether to perform the calculations in the dense form.
+        To be used only for small systems (<= 20 bits).
 
     Returns
     -------
-    mps : Union[CanonicalMPS, ExplicitMPS]
+    mps : CanonicalMPS
         The resulting MPS.
     entropies, bond_dims : List[float], List[int]
         The list of entanglement entropies at each bond.
@@ -1091,9 +1094,9 @@ def apply_constraints(
     entropies = []
     bond_dims = []
 
-    # Using matrix front minimization technique to optimise the order
-    # in which to apply the checks.
     if strategy == "Optimised":
+        # Using matrix front minimization technique to optimise the order
+        # in which to apply the checks.
         mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
         for row_idx, sublist in enumerate(strings):
             for subsublist in sublist:
@@ -1103,65 +1106,63 @@ def apply_constraints(
         optimised_order = msro(mpo_location_matrix)
         strings = [strings[index] for index in optimised_order]
 
-    # Do not optimise the order in which to apply the checks.
-    if strategy == "Naive":
-        pass
+    if dense:
+        mps_dense = mps.dense(flatten=True)
 
     for string in tqdm(strings, disable=silent):
-        # Preparing the MPO.
         string = ConstraintString(logical_tensors, string)
         mpo = string.mpo()
 
-        # Finding the starting site for the MPS to perform contraction.
         start_site = min(string.flat())
+        if dense:
+            identities_l = [IDENTITY for _ in range(start_site)]
+            identities_r = [IDENTITY for _ in range(len(mps) - len(mpo) - start_site)]
+            full_mpo = identities_l + mpo + identities_r
+            mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
+            mps_dense = mpo_dense @ mps_dense
 
-        # Preparing the MPS for contraction.
-        if isinstance(mps, ExplicitMPS):
-            mps = mps.mixed_canonical(orth_centre=start_site)
-
-        if isinstance(mps, CanonicalMPS):
-            if mps.orth_centre is None:
-                orth_centres, flags_left, flags_right = find_orth_centre(
-                    mps, return_orth_flags=True
-                )
-
-                # Managing possible issues with multiple orthogonality centres
-                # arising if we do not renormalise while contracting.
-                if orth_centres and len(orth_centres) == 1:
-                    mps.orth_centre = orth_centres[0]
-                # Convention.
-                if all(flags_left) and all(flags_right):
-                    mps.orth_centre = 0
-                elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
-                    if flags_right == [not flag for flag in flags_left]:
-                        mps.orth_centre = mps.num_sites - 1
-                elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
-                    if flags_right == [not flag for flag in flags_left]:
-                        mps.orth_centre = 0
-                elif all(flags_right):
-                    mps.orth_centre = 0
-                elif all(flags_left):
-                    mps.orth_centre = mps.num_sites - 1
-
-            mps = cast(
-                Union[ExplicitMPS, CanonicalMPS],
-                mps.move_orth_centre(final_pos=start_site, renormalise=True),
+        if mps.orth_centre is None:
+            orth_centres, flags_left, flags_right = find_orth_centre(
+                mps, return_orth_flags=True
             )
 
-        mps = mps_mpo_contract(
-            mps=mps,
-            mpo=mpo,
-            start_site=start_site,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            inplace=False,
-            result_to_explicit=result_to_explicit,
-        )
+            # Managing possible issues with multiple orthogonality centres
+            # arising if we do not renormalise while contracting.
+            if orth_centres and len(orth_centres) == 1:
+                mps.orth_centre = orth_centres[0]
+            # Convention.
+            if all(flags_left) and all(flags_right):
+                mps.orth_centre = 0
+            elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
+                if flags_right == [not flag for flag in flags_left]:
+                    mps.orth_centre = mps.num_sites - 1
+            elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
+                if flags_right == [not flag for flag in flags_left]:
+                    mps.orth_centre = 0
+            elif all(flags_right):
+                mps.orth_centre = 0
+            elif all(flags_left):
+                mps.orth_centre = mps.num_sites - 1
 
-        if return_entropies_and_bond_dims:
+            mps = mps.move_orth_centre(final_pos=start_site, renormalise=True)
+
+        if not dense:
+            mps = mps_mpo_contract(
+                mps=mps,
+                mpo=mpo,
+                start_site=start_site,
+                chi_max=chi_max,
+                cut=cut,
+                renormalise=renormalise,
+                inplace=False,
+            )
+
+        if return_entropies_and_bond_dims and not dense:
             entropies.append(mps.entanglement_entropy())
             bond_dims.append(mps.bond_dimensions)
+
+    if dense:
+        return mps_dense
 
     if return_entropies_and_bond_dims:
         return cast(CanonicalMPS, mps), entropies, bond_dims
