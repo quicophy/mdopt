@@ -137,7 +137,7 @@ def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
 
 
 def apply_bitflip_bias(
-    mps: Union[ExplicitMPS, CanonicalMPS],
+    mps: CanonicalMPS,
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
 ) -> CanonicalMPS:
@@ -146,7 +146,7 @@ def apply_bitflip_bias(
 
     Parameters
     ----------
-    mps : Union[ExplicitMPS, CanonicalMPS]
+    mps : CanonicalMPS
         The MPS to apply the operator to.
     sites_to_bias : Union[str, List[int]]
         The list of sites to which the operators are applied.
@@ -190,18 +190,17 @@ def apply_bitflip_bias(
 
 
 def apply_depolarising_bias(
-    mps: Union[ExplicitMPS, CanonicalMPS],
+    mps: CanonicalMPS,
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
     renormalise: bool = True,
-    result_to_explicit: bool = False,
-) -> Union[ExplicitMPS, CanonicalMPS]:
+) -> CanonicalMPS:
     """
-    The function which applies a depolarising bias to a MPS.
+    The function which applies a depolarising bias to a given MPS.
 
     Parameters
     ----------
-    mps : Union[ExplicitMPS, CanonicalMPS]
+    mps : CanonicalMPS
         The MPS to apply the operator to.
     sites_to_bias : Union[str, List[int]]
         The list of sites to which the operators are applied.
@@ -213,8 +212,6 @@ def apply_depolarising_bias(
         If set to a number, applies it to all of the sites.
     renormalise : bool
         Whether to renormalise spectra during contraction.
-    result_to_explicit : bool
-        Whether to transform the resulting MPS into the Explicit form.
 
     Raises
     ------
@@ -225,7 +222,7 @@ def apply_depolarising_bias(
 
     Returns
     -------
-    biased_mps : Union[ExplicitMPS, CanonicalMPS]
+    biased_mps : CanonicalMPS
         The resulting MPS.
     """
 
@@ -272,9 +269,8 @@ def apply_depolarising_bias(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
         )
         mps.orth_centre = site + 1
-
-    if result_to_explicit:
-        return mps.explicit(renormalise=renormalise)
+        if renormalise:
+            mps.tensors[mps.orth_centre] /= np.linalg.norm(mps.tensors[mps.orth_centre])
 
     return mps
 
