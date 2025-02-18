@@ -140,7 +140,6 @@ def apply_bitflip_bias(
     mps: Union[ExplicitMPS, CanonicalMPS],
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
-    renormalise: bool = True,
 ) -> CanonicalMPS:
     """
     The function which applies a bitflip bias to a given MPS.
@@ -155,8 +154,6 @@ def apply_bitflip_bias(
     prob_bias_list : Union[float, List[float]]
         The list of probabilities of each operator at each site.
         If set to a number, applies it to all of the sites.
-    renormalise : bool
-        Whether to renormalise spectra during contraction.
 
     Returns
     -------
@@ -188,10 +185,6 @@ def apply_bitflip_bias(
             tensor=mps.tensors[site],
             operator=bitflip_bias(prob_bias),
         )
-
-    if isinstance(mps, ExplicitMPS):
-        mps = mps.mixed_canonical(orth_centre=mps.num_sites - 1)
-        mps = mps.move_orth_centre(final_pos=0, renormalise=renormalise)
 
     return mps
 
@@ -318,10 +311,10 @@ def pauli_to_mps(pauli_string: str) -> str:
             mps_string += "00"
         elif pauli == "X":
             mps_string += "10"
-        elif pauli == "Y":
-            mps_string += "11"
         elif pauli == "Z":
             mps_string += "01"
+        elif pauli == "Y":
+            mps_string += "11"
         elif pauli == "E":
             mps_string += "++"
         else:
