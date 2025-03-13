@@ -357,7 +357,7 @@ def create_simple_product_state(
     num_sites: int,
     which: str = "0",
     phys_dim: int = 2,
-    form: str = "Explicit",
+    form: str = "Right-canonical",
     tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
@@ -437,7 +437,7 @@ def create_simple_product_state(
 def create_custom_product_state(
     string: str,
     phys_dim: int = 2,
-    form: str = "Explicit",
+    form: str = "Right-canonical",
     tolerance: float = float(1e-12),
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     r"""
