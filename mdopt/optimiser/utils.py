@@ -10,8 +10,17 @@ where v stands for "virtual", p -- for "physical",
 and L, R, U, D stand for "left", "right", "up", "down".
 """
 
-from typing import List
+from typing import List, cast
 import numpy as np
+from tqdm import tqdm
+from matrex import msro
+from numpy.random import Generator
+
+from mdopt.mps.canonical import CanonicalMPS
+from mdopt.mps.utils import find_orth_centre
+from mdopt.utils.utils import mpo_to_matrix
+from mdopt.contractor.contractor import mps_mpo_contract
+
 
 IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
 
@@ -44,6 +53,71 @@ SWAP = np.fromfunction(
     (2, 2, 2, 2),
     dtype=int,
 )
+
+
+def parity(bitstring: str, indices: list[int]) -> int:
+    """
+    Returns the parity of the bits at the given indices in the bitstring.
+    """
+    return sum(int(bitstring[i]) for i in indices) % 2
+
+
+def random_constraints(num_bits: int, constraint_size: int, rng: Generator) -> dict:
+    """
+    Generate random XOR and swap site constraints for a bitstring.
+
+    Parameters
+    ----------
+    num_bits : int
+        The total number of bits in the bitstring. Must be at least 3.
+    constraint_size : int
+        The maximum possible length of the constraint, i.e., the number of XOR sites.
+    rng : numpy.random.Generator
+        A NumPy random number generator instance for reproducibility.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the following keys:
+
+        - 'xor_left_sites': list of int
+            List with one index selected as the left XOR site.
+        - 'xor_bulk_sites': list of int
+            List of indices selected as bulk XOR sites, between left and right.
+        - 'xor_right_sites': list of int
+            List with one index selected as the right XOR site.
+        - 'swap_sites': list of int
+            List of indices between left and right XOR sites, excluding the bulk XOR sites.
+        - 'all_constrained_bits': list of int
+            Sorted list of all selected XOR site indices (left, bulk, right).
+
+    Raises
+    ------
+    ValueError
+        If `num_bits` is less than 3.
+    """
+    if num_bits < 3:
+        raise ValueError(
+            "Bitstring must have at least 3 bits for meaningful XOR and swap sites."
+        )
+
+    indices = sorted(rng.choice(num_bits, size=constraint_size, replace=False))
+
+    xor_left_sites = [indices[0]]
+    xor_right_sites = [indices[-1]]
+    xor_bulk_sites = indices[1:-1]
+
+    swap_sites = [
+        i for i in range(indices[0] + 1, indices[-1]) if i not in xor_bulk_sites
+    ]
+
+    return {
+        "xor_left_sites": xor_left_sites,
+        "xor_bulk_sites": xor_bulk_sites,
+        "xor_right_sites": xor_right_sites,
+        "swap_sites": swap_sites,
+        "all_constrained_bits": indices,
+    }
 
 
 class ConstraintString:
