@@ -97,7 +97,7 @@ def test_optimiser_main_component():
         main_component_exact = np.argmax(overlaps_exact)
 
         # Finding the main component of the MDPO using DMRG.
-        mps_start = create_simple_product_state(num_sites, which="+")
+        mps_start = create_simple_product_state(num_sites, which="+", form="Explicit")
         engine = dmrg(
             mps_start, mdpo, chi_max=1e4, cut=1e-12, mode="LA", copy=True, silent=True
         )
@@ -119,7 +119,7 @@ def test_optimiser_main_component():
         main_component_dmrg = np.argmax(overlaps_dmrg)
 
         # Finding the main component of the MDPO using dephasing DMRG.
-        mps_start = create_simple_product_state(num_sites, which="+")
+        mps_start = create_simple_product_state(num_sites, which="+", form="Explicit")
         dephasing_engine = deph_dmrg(
             mps_start,
             mps.right_canonical(),
