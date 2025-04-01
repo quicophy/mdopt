@@ -394,3 +394,69 @@ def test_optimiser_utils_swap_tensor():
         assert np.isclose(overlap, 0.0)
 
 
+def test_optimiser_utils_apply_constraints():
+    """Test the application of XOR constraints to an MPS via MPS-MPO contraction."""
+
+    for _ in range(100):
+        num_sites = 8
+        start_mps = create_simple_product_state(which="+", num_sites=num_sites)
+        start_dense = start_mps.dense(flatten=True)
+
+        constraint_size = 3
+        random_constraint = random_constraints(
+            num_sites, constraint_size, np.random.default_rng()
+        )
+        constraint_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+        constraint_sites = [
+            random_constraint["xor_left_sites"],
+            random_constraint["xor_bulk_sites"],
+            random_constraint["swap_sites"],
+            random_constraint["xor_right_sites"],
+        ]
+        tensors_dict = {
+            "xor_left_sites": XOR_LEFT,
+            "xor_bulk_sites": XOR_BULK,
+            "swap_sites": SWAP,
+            "xor_right_sites": XOR_RIGHT,
+        }
+
+        constraint_mpo = [IDENTITY for _ in range(num_sites)]
+        for name in [
+            "xor_left_sites",
+            "xor_right_sites",
+            "xor_bulk_sites",
+            "swap_sites",
+        ]:
+            for site in random_constraint[name]:
+                constraint_mpo[site] = tensors_dict[name]
+
+        constraint_matrix = mpo_to_matrix(
+            mpo=constraint_mpo, interlace=False, group=True
+        )
+
+        final_dense = constraint_matrix @ start_dense
+        final_dense /= np.linalg.norm(final_dense)
+        final_mps = apply_constraints(
+            mps=start_mps,
+            logical_tensors=constraint_tensors,
+            strings=[constraint_sites],
+            renormalise=True,
+        )
+
+        assert np.isclose(
+            np.abs(final_dense @ final_mps.dense(flatten=True, renormalise=True)), 1.0
+        )
+
+        for string in ["".join(f"{i:08b}") for i in range(2**num_sites)]:
+            if parity(string, random_constraint["all_constrained_bits"]) == 1:
+                assert np.isclose(
+                    inner_product(
+                        final_mps, create_custom_product_state(string=string)
+                    ),
+                    0,
+                )
+            else:
+                assert (
+                    inner_product(final_mps, create_custom_product_state(string=string))
+                    > 0
+                )
