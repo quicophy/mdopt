@@ -232,7 +232,7 @@ def apply_constraints(
     silent: bool = False,
     dense: bool = False,
     return_entropies_and_bond_dims: bool = False,
-) -> CanonicalMPS:
+) -> CanonicalMPS | np.ndarray:
     """
     This function applies logical constraints to an MPS.
 
