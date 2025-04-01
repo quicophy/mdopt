@@ -64,7 +64,7 @@ def parity(bitstring: str, indices: list[int]) -> int:
 
 def random_constraints(num_bits: int, constraint_size: int, rng: Generator) -> dict:
     """
-    Generate random XOR and swap site constraints for a bitstring.
+    Generate random XOR and SWAP site constraints for a bitstring.
 
     Parameters
     ----------
