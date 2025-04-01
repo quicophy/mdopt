@@ -27,7 +27,10 @@ def test_explicit_init():
         num_sites = np.random.randint(4, 9)
 
         product_mps = create_simple_product_state(
-            num_sites=num_sites, which="0", phys_dim=2
+            num_sites=num_sites,
+            which="0",
+            phys_dim=2,
+            form="Explicit",
         )
         product_tensor = np.array([1.0, 0.0]).reshape((1, 2, 1))
         product_tensors = [product_tensor for _ in range(num_sites)]
