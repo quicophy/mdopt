@@ -127,6 +127,7 @@ def test_optimiser_utils_parity():
 
 
 def test_random_constraints():
+    """Tests for the ``random_constraints`` function."""
     for i in range(10):
         num_bits = 30
         constraint_size = 5
@@ -234,3 +235,162 @@ def test_optimiser_utils_constraint_string():
                 [6],
             ]
             ConstraintString(constraints=tensors, sites=constraint_sites)
+
+
+def test_optimiser_utils_xor_projector():
+    """
+    Test that contracting XOR_LEFT and XOR_RIGHT produces an operator that
+    projects onto the even-parity subspace of two qubits.
+
+    The effective operator is defined (up to an overall scale) as:
+      P_even = |00><00| + |11><11|
+    i.e., it should annihilate states |01> and |10>.
+    """
+    # Contract XOR_LEFT and XOR_RIGHT along the shared virtual dimension
+    # XOR_LEFT has shape (1,2,2,2) and XOR_RIGHT has shape (2,1,2,2)
+    # We contract the second index of XOR_LEFT with the first index of XOR_RIGHT
+    effective = np.einsum("abij, bfkl -> ijkl", XOR_LEFT, XOR_RIGHT)
+    effective_mat = effective.reshape(4, 4)
+
+    basis = [np.array([1, 0]), np.array([0, 1])]
+
+    def _state_vector(i, j):
+        return np.kron(basis[i], basis[j])
+
+    # Test each basis state
+    for i, j in [(0, 0), (0, 1), (1, 0), (1, 1)]:
+        vec = _state_vector(i, j)
+        out = effective_mat @ vec
+        norm_out = np.linalg.norm(out)
+        if (i == 0 and j == 0) or (i == 1 and j == 1):
+            # Expect nonzero output for even parity
+            assert norm_out > 0
+        else:
+            # Expect zero output for odd parity
+            assert np.allclose(out, 0, atol=1e-12)
+
+
+def test_optimiser_utils_manual_xor_projector():
+    """Test that the XOR_LEFT, SWAP, XOR_RIGHT MPOs produce the correct projector."""
+    mpo = [XOR_LEFT, SWAP, XOR_RIGHT]
+    computed_dense = mpo_to_matrix(mpo, interlace=False, group=True)
+    assert computed_dense.shape == (8, 8)
+
+    # Manually build the expected projector
+    # For a virtual basis state |b0 b1 b2⟩ (with b from 0 to 7),
+    # the constraint is that b0 must equal b2
+    # In standard binary ordering (b0 as MSB), the passing states are:
+    #   000 (index 0), 010 (index 2), 101 (index 5), and 111 (index 7)
+    expected = np.zeros((8, 8), dtype=int)
+    for b in range(8):
+        bits = format(b, "03b")
+        if bits[0] == bits[2]:
+            expected[b, b] = 1
+    assert np.allclose(computed_dense, expected)
+
+
+def test_optimiser_utils_effective_dense_operator():
+    """Test the effective dense operators for different XOR constraints on 8 bits."""
+
+    mpo = [
+        IDENTITY,
+        IDENTITY,
+        XOR_LEFT,
+        XOR_RIGHT,
+        IDENTITY,
+        IDENTITY,
+        IDENTITY,
+        IDENTITY,
+    ]
+    dense_op = mpo_to_matrix(mpo, interlace=False, group=True)
+    assert dense_op.shape == (256, 256)
+    test_bitstrings = ["00000000", "00100000", "00110000", "01010101", "11111111"]
+    constraint_indices = [2, 3]
+    for bs in test_bitstrings:
+        vec = np.zeros(256)
+        idx = int(bs, 2)
+        vec[idx] = 1.0
+        result = dense_op @ vec
+        p_val = parity(bs, constraint_indices)
+        if p_val == 0:
+            assert abs(result[idx]) > 0
+        else:
+            assert np.allclose(
+                result,
+                np.zeros(256),
+                atol=1e-8,
+            )
+
+    mpo = [
+        IDENTITY,
+        IDENTITY,
+        XOR_LEFT,
+        XOR_BULK,
+        XOR_RIGHT,
+        IDENTITY,
+        IDENTITY,
+        IDENTITY,
+    ]
+    dense_op = mpo_to_matrix(mpo, interlace=False, group=True)
+    assert dense_op.shape == (256, 256)
+    test_bitstrings = ["00000000", "00100000", "00110000", "01010101", "11111111"]
+    constraint_indices = [2, 3, 4]
+    for bs in test_bitstrings:
+        vec = np.zeros(256)
+        idx = int(bs, 2)
+        vec[idx] = 1.0
+        result = dense_op @ vec
+        p_val = parity(bs, constraint_indices)
+        if p_val == 0:
+            assert abs(result[idx]) > 0
+        else:
+            assert np.allclose(
+                result,
+                np.zeros(256),
+                atol=1e-8,
+            )
+
+
+def test_optimiser_utils_swap_tensor():
+    """Test the SWAP tensor."""
+    mpo = [XOR_LEFT, SWAP, XOR_RIGHT]
+    passing = ["000", "010", "101", "111"]
+    failing = ["001", "011", "100", "110"]
+
+    for string in passing:
+        mps = create_custom_product_state(
+            string="+++", tolerance=1e-17, form="Left-canonical"
+        )
+        mps_out = mps_mpo_contract(
+            mps=mps,
+            mpo=mpo,
+            start_site=0,
+            chi_max=1e4,
+            cut=1e-17,
+            renormalise=False,
+            inplace=False,
+        )
+        overlap = inner_product(
+            mps_out, create_custom_product_state(string=string, tolerance=1e-17)
+        )
+        assert overlap > 0.0
+
+    for string in failing:
+        mps = create_custom_product_state(
+            string="+++", tolerance=1e-17, form="Left-canonical"
+        )
+        mps_out = mps_mpo_contract(
+            mps=mps,
+            mpo=mpo,
+            start_site=0,
+            chi_max=1e4,
+            cut=1e-17,
+            renormalise=False,
+            inplace=False,
+        )
+        overlap = inner_product(
+            mps_out, create_custom_product_state(string=string, tolerance=1e-17)
+        )
+        assert np.isclose(overlap, 0.0)
+
+
