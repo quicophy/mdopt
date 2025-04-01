@@ -3,7 +3,15 @@
 import pytest
 import numpy as np
 
+from mdopt.mps.utils import (
+    create_custom_product_state,
+    create_simple_product_state,
+    inner_product,
+)
+from mdopt.contractor.contractor import mps_mpo_contract
+from mdopt.utils.utils import mpo_to_matrix
 from mdopt.optimiser.utils import (
+    parity,
     SWAP,
     XOR_BULK,
     XOR_LEFT,
@@ -11,27 +19,13 @@ from mdopt.optimiser.utils import (
     COPY_LEFT,
     IDENTITY,
     ConstraintString,
+    apply_constraints,
+    random_constraints,
 )
-
-
-def _contract_with_trivial_boundaries(tensor):
-    """
-    Helper function: contract a tensor with shape (vL, vR, pU, pD)
-    over its virtual indices using trivial boundary vectors (all ones).
-    """
-    vL, vR, pU, pD = tensor.shape
-    left_bound = np.ones(vL)
-    right_bound = np.ones(vR)
-    op = np.zeros((pU, pD))
-    for i in range(vL):
-        for j in range(vR):
-            op += left_bound[i] * tensor[i, j, :, :] * right_bound[j]
-    return op
 
 
 def test_optimiser_utils_tensors():
     """Test for the combinatorial optimisation operations."""
-
     identity = np.eye(2).reshape((1, 1, 2, 2))
 
     copy_left = np.zeros(shape=(1, 2, 2, 2))
@@ -60,6 +54,20 @@ def test_optimiser_utils_tensors():
     assert (xor_bulk == XOR_BULK).all()
     assert (xor_left == XOR_LEFT).all()
     assert (xor_right == XOR_RIGHT).all()
+
+    def _contract_with_trivial_boundaries(tensor):
+        """
+        Helper function: contract a tensor with shape (vL, vR, pU, pD)
+        over its virtual indices using trivial boundary vectors (all ones).
+        """
+        vL, vR, pU, pD = tensor.shape
+        left_bound = np.ones(vL)
+        right_bound = np.ones(vR)
+        op = np.zeros((pU, pD))
+        for i in range(vL):
+            for j in range(vR):
+                op += left_bound[i] * tensor[i, j, :, :] * right_bound[j]
+        return op
 
     # Testing using boundary contracting
     op = _contract_with_trivial_boundaries(IDENTITY)
@@ -101,9 +109,66 @@ def test_optimiser_utils_tensors():
     assert np.allclose(op, expected)
 
 
+def test_optimiser_utils_parity():
+    """Tests for the ``parity`` function."""
+    bitstring = "000000"
+    assert parity(bitstring, [0, 1, 2]) == 0
+
+    bitstring = "111111"
+    assert parity(bitstring, [0, 1, 2]) == 1
+
+    bitstring = "101010"
+    assert parity(bitstring, [0, 2, 4]) == 1
+    assert parity(bitstring, [0, 1, 2]) == 0
+    assert parity(bitstring, []) == 0
+    assert parity(bitstring, [1]) == 0
+    assert parity(bitstring, [0]) == 1
+    assert parity(bitstring, list(np.arange(len(bitstring)))) == 1
+
+
+def test_random_constraints():
+    for i in range(10):
+        num_bits = 30
+        constraint_size = 5
+
+        result = random_constraints(num_bits, constraint_size, np.random.default_rng(i))
+
+        expected_keys = [
+            "xor_left_sites",
+            "xor_bulk_sites",
+            "xor_right_sites",
+            "swap_sites",
+            "all_constrained_bits",
+        ]
+        for key in expected_keys:
+            assert key in result
+            assert isinstance(result[key], list)
+
+        assert (
+            len(result["all_constrained_bits"]) <= constraint_size
+        ), f"Number of constrained bits exceeds the maximum constraint_size={constraint_size}"
+        assert len(result["xor_left_sites"]) == 1
+        assert len(result["xor_right_sites"]) == 1
+        assert result["xor_left_sites"][0] < result["xor_right_sites"][0]
+
+        all_constrained = (
+            result["xor_left_sites"]
+            + result["xor_bulk_sites"]
+            + result["xor_right_sites"]
+        )
+        assert sorted(all_constrained) == result["all_constrained_bits"]
+
+        for site in result["swap_sites"]:
+            assert result["xor_left_sites"][0] < site < result["xor_right_sites"][0]
+            assert site not in result["xor_bulk_sites"]
+
+        assert len(set(result["all_constrained_bits"])) == len(
+            result["all_constrained_bits"]
+        )
+
+
 def test_optimiser_utils_constraint_string():
     """Tests for the ``ConstraintString`` class."""
-
     tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     for _ in range(10):
         num_sites = 20
