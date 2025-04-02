@@ -1022,6 +1022,7 @@ class CanonicalMPS:
                     self.tensors[site] = traced.reshape(traced.shape + (1,))
 
             self.num_sites = len(self.tensors)
+            self.num_bonds = self.num_sites - 1
 
         if canonicalise:
             return cast(
