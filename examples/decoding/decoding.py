@@ -10,8 +10,6 @@ from functools import reduce
 from typing import cast, Union, Optional, List, Tuple
 
 import numpy as np
-from tqdm import tqdm
-from matrex import msro
 from opt_einsum import contract
 from more_itertools import powerset
 
@@ -32,11 +30,11 @@ from mdopt.mps.utils import (
     create_simple_product_state,
     create_custom_product_state,
 )
-from mdopt.contractor.contractor import apply_one_site_operator, mps_mpo_contract
-from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
-from mdopt.optimiser.utils import ConstraintString, IDENTITY
+from mdopt.optimiser.utils import apply_constraints
+from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
-from mdopt.utils.utils import split_two_site_tensor, mpo_to_matrix
+from mdopt.contractor.contractor import apply_one_site_operator
+from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 
 
 # Setting up logging
