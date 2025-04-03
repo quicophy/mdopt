@@ -26,7 +26,6 @@ from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import (
     inner_product,
-    find_orth_centre,
     create_simple_product_state,
     create_custom_product_state,
 )
@@ -1165,10 +1164,8 @@ def decode_css(
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
-        return None, 1
+        return [1.0, 0.0, 0.0, 0.0], 1
 
-    error_contains_x = "X" in error
-    error_contains_z = "Z" in error
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
     ]
@@ -1178,8 +1175,6 @@ def decode_css(
         stabilisers = stabilisers_x + stabilisers_z
         error = multiply_pauli_strings(error, np.random.choice(stabilisers))
 
-    error_contains_x = "X" in error
-    error_contains_z = "Z" in error
     error = pauli_to_mps(error)
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
@@ -1194,7 +1189,9 @@ def decode_css(
 
     logicals_state = "+" * num_logicals
     state_string = logicals_state + error
-    error_mps = create_custom_product_state(string=state_string, tolerance=tolerance)
+    error_mps = create_custom_product_state(
+        string=state_string, tolerance=tolerance, form="Right-canonical"
+    )
 
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
@@ -1210,7 +1207,6 @@ def decode_css(
             mps=error_mps,
             sites_to_bias=sites_to_bias,
             prob_bias_list=bias_prob,
-            renormalise=renormalise,
         )
     else:
         if not silent:
@@ -1222,110 +1218,79 @@ def decode_css(
             renormalise=renormalise,
         )
 
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying X logicals' constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                logicals_sites[0],
-                logicals_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying X logical constraints."
-            )
-            return None, 0
+    if not silent:
+        logging.info("Applying X logicals' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites[0],
+        logicals_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
 
-    if error_contains_z:
-        if not silent:
-            logging.info("Applying Z logicals' constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                logicals_sites[1],
-                logicals_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying Z logical constraints."
-            )
-            return None, 0
+    if not silent:
+        logging.info("Applying Z logicals' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites[1],
+        logicals_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
 
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying the X constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                constraint_sites[0],
-                constraints_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying X constraints."
-            )
-            return None, 0
+    if not silent:
+        logging.info("Applying the X checks' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        constraint_sites[0],
+        constraints_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
 
-    if error_contains_z:
-        if not silent:
-            logging.info("Applying the Z constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                constraint_sites[1],
-                constraints_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying Z constraints."
-            )
-            return None, 0
+    if not silent:
+        logging.info("Applying the Z checks' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        constraint_sites[1],
+        constraints_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
 
     if erased_qubits:
         if not silent:
             logging.info("Tracing out the erased qubits.")
-        error_mps = marginalise(
+        error_mps = error_mps.marginal(
             mps=error_mps,
             sites_to_marginalise=erased_qubits,
+            canonicalise=False,
         )
+        error_mps.orth_centre = 0
+        error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
     sites_to_marginalise = list(
         range(num_logicals, len(error) + num_logicals - len(erased_qubits))
     )
-    logical_mps = marginalise(
-        mps=error_mps,
+    logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise,
+        canonicalise=False,
     )
-
     num_logical_sites = len(logical_mps)
-
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
@@ -1339,7 +1304,7 @@ def decode_css(
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    elif num_logical_sites > 10 or optimiser == "Dephasing DMRG":
+    if num_logical_sites > 10 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
@@ -1359,10 +1324,9 @@ def decode_css(
             logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
         return engine, overlap
 
-    elif optimiser == "Optima TT":
+    if optimiser == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
-    else:
-        raise ValueError("Invalid optimiser chosen.")
+    raise ValueError("Invalid optimiser chosen.")
 
 
 def decode_custom(
@@ -1374,9 +1338,9 @@ def decode_custom(
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     bias_type: str = "Depolarising",
-    bias_prob: float = float(0.05),
+    bias_prob: float = float(0.01),
     renormalise: bool = True,
-    multiply_by_stabiliser: bool = True,
+    multiply_by_stabiliser: bool = False,
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
@@ -1426,7 +1390,6 @@ def decode_custom(
     result : Tuple
         Decoding results, depending on the chosen optimiser.
     """
-
     if not silent:
         logging.info("Starting the decoding.")
 
@@ -1435,14 +1398,13 @@ def decode_custom(
             logging.info("No error detected.")
         return [1.0, 0.0, 0.0, 0.0], 1
 
-    error_contains_x = "X" in error
-    error_contains_z = "Z" in error
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
     ]
 
     if multiply_by_stabiliser and not erased_qubits:
-        error = multiply_pauli_strings(error, np.random.choice(stabilizers))
+        chosen_stabiliser = np.random.choice(stabilizers)
+        error = multiply_pauli_strings(error, chosen_stabiliser)
 
     error = pauli_to_mps(error)
 
@@ -1458,7 +1420,10 @@ def decode_custom(
 
     logicals_state = "+" * num_logicals
     state_string = logicals_state + error
-    error_mps = create_custom_product_state(string=state_string, tolerance=tolerance)
+
+    error_mps = create_custom_product_state(
+        string=state_string, tolerance=tolerance, form="Left-canonical"
+    )
 
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
@@ -1476,7 +1441,6 @@ def decode_custom(
             mps=error_mps,
             sites_to_bias=sites_to_bias,
             prob_bias_list=bias_prob,
-            renormalise=renormalise,
         )
     else:
         if not silent:
@@ -1488,100 +1452,83 @@ def decode_custom(
             renormalise=renormalise,
         )
 
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying X logicals' constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                logicals_sites[0],
-                logicals_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying X logical constraints."
-            )
-            return None, 0
-
-    if error_contains_z:
-        if not silent:
-            logging.info("Applying Z logicals' constraints.")
-        try:
-            error_mps = apply_constraints(
-                error_mps,
-                logicals_sites[1],
-                logicals_tensors,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=renormalise,
-                silent=silent,
-                strategy=contraction_strategy,
-                result_to_explicit=False,
-            )
-        except (ValueError, np.linalg.LinAlgError):
-            logging.info(
-                "Decoding failed due to a linalg error while applying Z logical constraints."
-            )
-            return None, 0
+    error_mps.orth_centre = 0
+    error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
 
     if not silent:
-        logging.info("Applying the X and Z constraints.")
-    try:
-        error_mps = apply_constraints(
-            error_mps,
-            constraint_sites,
-            constraints_tensors,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-            result_to_explicit=False,
-        )
-    except (ValueError, np.linalg.LinAlgError):
-        logging.info(
-            "Decoding failed due to a linalg error while applying the constraints."
-        )
-        return None, 0
+        logging.info("Applying X logicals' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites[0],
+        logicals_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
+
+    if not silent:
+        logging.info("Applying Z logicals' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        logicals_sites[1],
+        logicals_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
+
+    if not silent:
+        logging.info("Applying the X and Z checks' constraints.")
+    error_mps = apply_constraints(
+        error_mps,
+        constraint_sites,
+        constraints_tensors,
+        chi_max=chi_max,
+        cut=cut,
+        renormalise=renormalise,
+        silent=silent,
+        strategy=contraction_strategy,
+    )
 
     if erased_qubits:
         if not silent:
             logging.info("Tracing out the erased qubits.")
-        error_mps = marginalise(
-            mps=error_mps,
+        error_mps = error_mps.marginal(
             sites_to_marginalise=erased_qubits,
+            canonicalise=False,
         )
+        error_mps.orth_centre = 0
+        error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
     sites_to_marginalise = list(
         range(num_logicals, len(error) + num_logicals - len(erased_qubits))
     )
-    logical_mps = marginalise(
-        mps=error_mps,
-        sites_to_marginalise=sites_to_marginalise,
+    error_mps = error_mps.move_orth_centre(
+        final_pos=num_logicals - 1, renormalise=False
     )
-
+    logical_mps = error_mps.marginal(
+        sites_to_marginalise=sites_to_marginalise,
+        canonicalise=False,
+    )
     num_logical_sites = len(logical_mps)
-
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=1))
+        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=2))
         result = logical_dense, int(
             np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
         )
         if not silent:
             logging.info("Decoding completed with result: %s", result)
         return result
-    elif optimiser == "Dephasing DMRG":
+    if optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         engine = DephasingDMRG(
             mps=mps_dmrg_start,
@@ -1591,8 +1538,14 @@ def decode_custom(
             mode="LA",
             silent=silent,
         )
+        if not silent:
+            logging.info("Running the Dephasing DMRG engine.")
         engine.run(num_runs)
-        overlap = abs(inner_product(engine.mps, logical_mps))
+        mps_dmrg_final = engine.mps
+        overlap = abs(inner_product(mps_dmrg_final, logical_mps))
+        if not silent:
+            logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
         return engine, overlap
-    else:
-        raise ValueError("Unsupported optimiser for decoding.")
+    if optimiser == "Optima TT":
+        raise NotImplementedError("Optima TT is not implemented yet.")
+    raise ValueError("Invalid optimiser chosen.")
