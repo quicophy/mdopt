@@ -134,11 +134,10 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
 
     for _ in range(num_experiments):
         rng = np.random.default_rng(seed_seq.spawn(1)[0])
-        random_seed = rng.integers(1, 10**8 + 1)
         error = generate_pauli_error_string(
             len(surface_code),
             error_rate,
-            seed=random_seed,
+            rng=rng,
             error_model=error_model,
         )
         errors.append(error)
