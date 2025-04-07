@@ -1,4 +1,4 @@
-``mdopt`` — discrete optimisation in the MPS-MPO language
+``mdopt`` — Discrete Optimisation in the MPS-MPO Language
 =========================================================
 
 |codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|

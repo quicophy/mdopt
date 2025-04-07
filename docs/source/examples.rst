@@ -1,9 +1,9 @@
-examples
+Examples
 ========
 
 .. toctree::
    :maxdepth: 2
-   :caption: notebook examples:
+   :caption: Notebook Examples:
 
    classical_ldpc.ipynb
    ground_state.ipynb
@@ -12,4 +12,5 @@ examples
    mps-rand-circ.ipynb
    quantum_five_qubit.ipynb
    quantum_surface.ipynb
+   quantum_three_qubit.ipynb
    shor.ipynb
