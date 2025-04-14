@@ -21,7 +21,7 @@ jobs:
 
       - name: Generate report
         run: |
-          poetry run pytest --cov=./ --cov-report=xml
+          poetry run pytest --cov=./ --cov-report=xml -W ignore::DeprecationWarning
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@v5
