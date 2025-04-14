@@ -309,7 +309,7 @@ class DephasingDMRG:
 
         if isinstance(self.mps, CanonicalMPS):
             self.mps.tensors[i] = np.tensordot(
-                left_iso_i, np.diag(singular_values_j), (1, 0)
+                left_iso_i, np.diag(singular_values_j), (2, 0)
             )
             self.mps.orth_centre = i
             self.mps.tensors[j] = right_iso_j
