@@ -1,4 +1,4 @@
-"""This script launches classical decoding on Compute Canada clusters."""
+"""This script launches decoding of classical LDPC codes on Compute Canada clusters."""
 
 import os
 import sys
