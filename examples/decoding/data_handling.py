@@ -420,7 +420,6 @@ def fit_failure_statistics(
 
                 if not (lower_cutoff <= rounded_error_rate <= upper_cutoff):
                     continue
-
                 failure_rate = failure_rates.get(
                     (lattice_size, chi_max, rounded_error_rate), None
                 )
@@ -432,7 +431,6 @@ def fit_failure_statistics(
                     filtered_error_rates.append(rounded_error_rate)
                     filtered_failure_rates.append(failure_rate)
 
-                    # 🛠️ FIXED: Ensure weights are added
                     if error_bar is None or error_bar == 0:
                         weights.append(1.0)
                     else:
@@ -512,7 +510,7 @@ def fit_failure_statistics(
         has_valid_data = False
 
         # Plot all raw data points first
-        for index, (error_rates, failure_rates, lattice_size) in enumerate(
+        for index, (error_rates, failurerates, lattice_size) in enumerate(
             all_data_points
         ):
             error_bars_plot = [
@@ -521,7 +519,7 @@ def fit_failure_statistics(
             ]
             plt.errorbar(
                 error_rates,
-                failure_rates,
+                failurerates,
                 yerr=error_bars_plot,
                 fmt="o--",
                 label=f"Lattice size: {lattice_size}",
