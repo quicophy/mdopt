@@ -188,7 +188,7 @@ def run_experiment(
     silent,
     num_processes=1,
     tolerance=1e-10,
-    cut=1e-12,
+    cut=1e-10,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
