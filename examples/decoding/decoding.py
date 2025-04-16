@@ -1103,7 +1103,7 @@ def decode_message(
 def decode_css(
     code: CssCode,
     error: str,
-    num_runs: int = int(50),
+    num_runs: int = int(1),
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     bias_type: str = "Depolarising",
@@ -1165,6 +1165,9 @@ def decode_css(
         if not silent:
             logging.info("No error detected.")
         return [1.0, 0.0, 0.0, 0.0], 1
+
+    error_contains_x = "X" in error
+    error_contains_z = "Z" in error
 
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
@@ -1244,31 +1247,33 @@ def decode_css(
         strategy=contraction_strategy,
     )
 
-    if not silent:
-        logging.info("Applying the X checks' constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        constraint_sites[0],
-        constraints_tensors,
-        chi_max=chi_max,
-        cut=cut,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-    )
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying the X checks' constraints.")
+        error_mps = apply_constraints(
+            error_mps,
+            constraint_sites[0],
+            constraints_tensors,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+        )
 
-    if not silent:
-        logging.info("Applying the Z checks' constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        constraint_sites[1],
-        constraints_tensors,
-        chi_max=chi_max,
-        cut=cut,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-    )
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying the Z checks' constraints.")
+        error_mps = apply_constraints(
+            error_mps,
+            constraint_sites[1],
+            constraints_tensors,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+        )
 
     if erased_qubits:
         if not silent:
@@ -1278,8 +1283,10 @@ def decode_css(
             sites_to_marginalise=erased_qubits,
             canonicalise=False,
         )
-        error_mps.orth_centre = 0
-        error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
+        if not silent and renormalise:
+            logging.info("Renormalising the error MPS.")
+            error_mps.orth_centre = 0
+            error_mps, _ = error_mps.compress(renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
@@ -1290,6 +1297,9 @@ def decode_css(
         sites_to_marginalise=sites_to_marginalise,
         canonicalise=False,
     )
+
+    logical_mps.orth_centre = 0
+    logical_mps, _ = logical_mps.compress(renormalise=True)
     num_logical_sites = len(logical_mps)
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
@@ -1309,7 +1319,7 @@ def decode_css(
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
             mps=mps_dmrg_start,
-            mps_target=mps_dmrg_target,
+            mps_target=logical_mps,
             chi_max=chi_max,
             cut=cut,
             mode="LA",
@@ -1334,7 +1344,7 @@ def decode_custom(
     x_logicals: List[str],
     z_logicals: List[str],
     error: str,
-    num_runs: int = int(50),
+    num_runs: int = int(1),
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     bias_type: str = "Depolarising",
@@ -1501,8 +1511,10 @@ def decode_custom(
             sites_to_marginalise=erased_qubits,
             canonicalise=False,
         )
-        error_mps.orth_centre = 0
-        error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
+        if not silent and renormalise:
+            logging.info("Renormalising the error MPS.")
+            error_mps.orth_centre = 0
+            error_mps, _ = error_mps.compress(renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
@@ -1516,6 +1528,9 @@ def decode_custom(
         sites_to_marginalise=sites_to_marginalise,
         canonicalise=False,
     )
+
+    logical_mps.orth_centre = 0
+    logical_mps, _ = logical_mps.compress(renormalise=True)
     num_logical_sites = len(logical_mps)
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
