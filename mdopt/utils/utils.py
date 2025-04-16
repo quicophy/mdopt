@@ -71,10 +71,9 @@ def svd(
             lapack_driver="gesvd",
         ),
         lambda: np.linalg.svd(
-            mat + 1e-6 * np.eye(*mat.shape),
+            mat + 1e-6 * np.eye(mat.shape[0], mat.shape[1]),
             full_matrices=False,
             compute_uv=True,
-            hermitian=False,
         ),
     ]
     last_exception: Optional[Exception] = None
