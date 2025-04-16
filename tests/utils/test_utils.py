@@ -52,6 +52,34 @@ def test_utils_svd():
         for value in s:
             assert np.abs(value) > 1
 
+    # Check return_truncation_error flag
+    dim = (30, 40)
+    m = np.random.rand(*dim)
+    u, s, v_h, trunc_err = svd(m, return_truncation_error=True)
+    assert isinstance(trunc_err, float)
+    assert trunc_err >= 0
+
+    # Check renormalisation with return_truncation_error
+    _, s, _, trunc_err = svd(m, renormalise=True, return_truncation_error=True)
+    assert np.isclose(np.linalg.norm(s), 1)
+
+    # Check that truncation works when cut > all singular values
+    small_mat = np.random.rand(5, 5) * 1e-10
+    u, s, v_h, err = svd(small_mat, cut=1.0, return_truncation_error=True)
+    assert len(s) == 0
+    assert err > 0  # should be equal to norm of original singular spectrum
+
+    # Force fallback SVD method by passing a pathological matrix
+    # This matrix will make `np.linalg.svd` fail due to NaNs
+    bad_matrix = np.full((10, 10), np.nan)
+    with pytest.raises(RuntimeError):
+        svd(bad_matrix)
+
+    # Force another fallback by using a near-singular matrix
+    near_singular = np.eye(20) * 1e-15
+    u, s, v_h, _ = svd(near_singular)
+    assert all(np.abs(s) > 0)
+
 
 def test_utils_qr():
     """Test for the `qr` function."""
