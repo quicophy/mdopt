@@ -52,27 +52,40 @@ def svd(
             f"A valid matrix must have 2 dimensions while the one given has {mat.ndim}."
         )
 
-    try:
-        u_l, singular_values, v_r = np.linalg.svd(
+    svd_methods = [
+        lambda: np.linalg.svd(
             mat, full_matrices=False, compute_uv=True, hermitian=False
-        )
-    except np.linalg.LinAlgError:
+        ),
+        lambda: scipy.linalg.svd(
+            mat,
+            full_matrices=False,
+            compute_uv=True,
+            check_finite=False,
+            lapack_driver="gesdd",
+        ),
+        lambda: scipy.linalg.svd(
+            mat,
+            full_matrices=False,
+            compute_uv=True,
+            check_finite=False,
+            lapack_driver="gesvd",
+        ),
+        lambda: np.linalg.svd(
+            mat + 1e-6 * np.eye(*mat.shape),
+            full_matrices=False,
+            compute_uv=True,
+            hermitian=False,
+        ),
+    ]
+    last_exception: Optional[Exception] = None
+    for method in svd_methods:
         try:
-            u_l, singular_values, v_r = scipy.linalg.svd(
-                mat,
-                full_matrices=False,
-                compute_uv=True,
-                check_finite=False,
-                lapack_driver="gesvd",
-            )
-        except np.linalg.LinAlgError:
-            u_l, singular_values, v_r = scipy.linalg.svd(
-                mat,
-                full_matrices=False,
-                compute_uv=True,
-                check_finite=False,
-                lapack_driver="gesdd",
-            )
+            u_l, singular_values, v_r = method()
+            break
+        except Exception as e:
+            last_exception = e
+    else:
+        raise RuntimeError(f"All SVD methods failed. Last error: {last_exception}")
 
     max_num = min(chi_max, np.sum(singular_values > cut))
     residual_spectrum = singular_values[max_num:]
