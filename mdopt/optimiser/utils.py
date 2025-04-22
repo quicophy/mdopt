@@ -227,7 +227,7 @@ def apply_constraints(
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-    renormalise: bool = False,
+    renormalise: bool = True,
     strategy: str = "Naive",
     silent: bool = False,
     dense: bool = False,
@@ -337,6 +337,12 @@ def apply_constraints(
                 renormalise=renormalise,
                 inplace=False,
             )
+
+        if not dense and renormalise:
+            norm = mps.norm()
+            if abs(norm - 1) > mps.tolerance:
+                mps.orth_centre = 0
+                mps, _ = mps.compress(renormalise=True)
 
         if return_entropies_and_bond_dims and not dense:
             entropies.append(mps.entanglement_entropy())
