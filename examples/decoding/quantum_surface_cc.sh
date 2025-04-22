@@ -14,10 +14,10 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
-lattice_sizes=(3 5 7)                           # Array of lattice sizes
-bond_dims=(20 30 40)                            # Array of bond dimensions
+lattice_sizes=(11)                              # Array of lattice sizes
+bond_dims=(60)                                  # Array of bond dimensions
 seeds=(123 124 125 126 127)                     # Array of (5) random seeds
-num_experiments=2000                            # Runs per each random seed
+num_experiments=1000                            # Runs per each random seed
 error_model="Bitflip"                           # The error model
 bias_probs=(1e-1)                               # Array of decoder bias probabilities
 tolerances=(1e-8)                               # Array of numerical tolerances for the MPS within the decoder
@@ -26,9 +26,9 @@ num_processes=16                                # The number of processes to use
 silent=false                                    # Whether to suppress the output of the Python script
 
 error_rates=()
-start=0.03
-end=0.17
-step=0.01
+start=0.005
+end=0.120
+step=0.005
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
 do
@@ -51,7 +51,7 @@ for seed in "${seeds[@]}"; do
 #!/bin/bash
 #SBATCH --time=09:00:00                                                                              # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=${num_processes}                                                             # Number of CPU cores per task
-#SBATCH --mem=16000                                                                                  # Memory per node
+#SBATCH --mem=4000                                                                                   # Memory per node
 #SBATCH --job-name=decoding-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}         # Descriptive job name
 #SBATCH --output=decoding-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out    # Standard output and error log
 
