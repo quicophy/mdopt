@@ -152,28 +152,51 @@ def run_single_experiment(
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
-    logicals_distribution, success = decode_css(
-        code=surface_code,
-        error=error,
-        chi_max=chi_max,
-        multiply_by_stabiliser=False,
-        bias_type=error_model,
-        bias_prob=bias_prob,
-        renormalise=True,
-        silent=silent,
-        contraction_strategy="Optimised",
-        tolerance=tolerance,
-        cut=cut,
-    )
+    try:
+        logicals_distribution, success = decode_css(
+            code=surface_code,
+            error=error,
+            chi_max=chi_max,
+            multiply_by_stabiliser=False,
+            bias_type=error_model,
+            bias_prob=bias_prob,
+            renormalise=True,
+            silent=silent,
+            contraction_strategy="Optimised",
+            tolerance=tolerance,
+            cut=cut,
+        )
+    except Exception as e:
+        logging.error(f"Error during decoding: {e}", exc_info=True)
+        try:
+            logicals_distribution, success = decode_css(
+                code=surface_code,
+                error=error,
+                chi_max=chi_max,
+                multiply_by_stabiliser=True,
+                bias_type=error_model,
+                bias_prob=bias_prob,
+                renormalise=True,
+                silent=silent,
+                contraction_strategy="Optimised",
+                tolerance=tolerance,
+                cut=cut,
+            )
+        except Exception as e:
+            logging.error(f"Decoding has not been completed due to: {e}", exc_info=True)
+            logicals_distribution, success = None, None
 
     if success == 1:
         if not silent:
             logging.info("Decoding successful.")
         return logicals_distribution, 0
-    else:
+    if success == 0:
         if not silent:
             logging.info("Decoding failed.")
         return logicals_distribution, 1
+    if not silent:
+        logging.info("Decoding has not been completed.")
+    return None, None
 
 
 def run_experiment(
@@ -187,8 +210,8 @@ def run_experiment(
     errors,
     silent,
     num_processes=1,
-    tolerance=1e-10,
-    cut=1e-10,
+    tolerance=1e-8,
+    cut=1e-8,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
