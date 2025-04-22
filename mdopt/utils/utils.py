@@ -60,20 +60,22 @@ def svd(
             mat,
             full_matrices=False,
             compute_uv=True,
-            check_finite=False,
+            check_finite=True,
             lapack_driver="gesdd",
         ),
         lambda: scipy.linalg.svd(
             mat,
             full_matrices=False,
             compute_uv=True,
-            check_finite=False,
+            check_finite=True,
             lapack_driver="gesvd",
         ),
-        lambda: np.linalg.svd(
-            mat + 1e-6 * np.eye(mat.shape[0], mat.shape[1]),
+        lambda: scipy.linalg.svd(
+            mat + np.eye(mat.shape[0], mat.shape[1]) * 1e-6,
             full_matrices=False,
             compute_uv=True,
+            check_finite=True,
+            lapack_driver="gesvd",
         ),
     ]
     last_exception: Optional[Exception] = None
