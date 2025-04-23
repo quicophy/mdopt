@@ -101,7 +101,7 @@ def parse_arguments():
         "--num_processes",
         type=int,
         required=True,
-        help="The number of processes to use in parallelisation.",
+        help="The number of processes to use in parallel.",
     )
     parser.add_argument(
         "--silent",
@@ -196,7 +196,7 @@ def run_single_experiment(
         return logicals_distribution, 1
     if not silent:
         logging.info("Decoding has not been completed.")
-    return None, None
+    return np.nan, np.nan
 
 
 def run_experiment(

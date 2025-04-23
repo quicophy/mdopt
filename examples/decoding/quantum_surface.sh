@@ -1,8 +1,8 @@
 #!/bin/bash
 
-lattice_sizes=(3 5 7)                           # Array of lattice sizes
-bond_dims=(30)                                  # Array of bond dimensions
-seeds=(123)                                     # Array of random seeds
+lattice_sizes=(3 5 7 9 11)                      # Array of lattice sizes
+bond_dims=(60)                                  # Array of bond dimensions
+seeds=(123 124 125 126 127)                     # Array of (5) random seeds
 num_experiments=1000                            # Runs per each random seed
 error_model="Bitflip"                           # The error model
 bias_probs=(1e-1)                               # Array of decoder bias probabilities
@@ -12,9 +12,9 @@ num_processes=16                                # The number of processes to use
 silent=false                                    # Whether to suppress the output of the Python script
 
 error_rates=()
-start=0.01
-end=0.21
-step=0.03
+start=0.005
+end=0.120
+step=0.005
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
 do
