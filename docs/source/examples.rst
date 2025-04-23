@@ -10,7 +10,10 @@ Examples
    main_component.ipynb
    maxbonddim.ipynb
    mps-rand-circ.ipynb
+   quantum_csp.ipynb
    quantum_five_qubit.ipynb
+   quantum_hypergraph_product.ipynb
+   quantum_hypergraph_tmp.ipynb
    quantum_surface.ipynb
    quantum_three_qubit.ipynb
    shor.ipynb
