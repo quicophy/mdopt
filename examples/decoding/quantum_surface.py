@@ -169,6 +169,7 @@ def run_single_experiment(
     except Exception as e:
         logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
+            logging.info("Trying to decode with multiply_by_stabiliser=True.")
             logicals_distribution, success = decode_css(
                 code=surface_code,
                 error=error,
@@ -182,21 +183,12 @@ def run_single_experiment(
                 tolerance=tolerance,
                 cut=cut,
             )
-        except Exception as e:
-            logging.error(f"Decoding has not been completed due to: {e}", exc_info=True)
-            logicals_distribution, success = None, None
-
-    if success == 1:
-        if not silent:
-            logging.info("Decoding successful.")
-        return logicals_distribution, 0
-    if success == 0:
-        if not silent:
-            logging.info("Decoding failed.")
-        return logicals_distribution, 1
-    if not silent:
-        logging.info("Decoding has not been completed.")
-    return np.nan, np.nan
+            logging.info("Decoding finished with multiply_by_stabiliser=True.")
+        except Exception as ex:
+            logging.error(
+                f"Decoding has not been completed due to: {ex}", exc_info=True
+            )
+            logicals_distribution, success = np.nan, np.nan
 
 
 def run_experiment(
