@@ -190,6 +190,18 @@ def run_single_experiment(
             )
             logicals_distribution, success = np.nan, np.nan
 
+    if success == 1:
+        if not silent:
+            logging.info("Decoding successful.")
+        return logicals_distribution, 0
+    if success == 0:
+        if not silent:
+            logging.info("Decoding failed.")
+        return logicals_distribution, 1
+    if not silent:
+        logging.info("Decoding has not been completed.")
+    return np.nan, np.nan
+
 
 def run_experiment(
     lattice_size,
@@ -234,7 +246,7 @@ def run_experiment(
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
-
+    print(results)
     for result in results:
         if result != np.nan and result is not None:
             logicals_distributions = result[0]

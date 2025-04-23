@@ -167,7 +167,7 @@ def run_single_experiment(
     qhgp_code = qec.hypergraph_product(classical_code, classical_code)
 
     try:
-        logicals_distribution, success = decode_css(
+        dmrg_engine, success = decode_css(
             code=qhgp_code,
             error=error,
             chi_max=chi_max,
@@ -184,7 +184,7 @@ def run_single_experiment(
         logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
             logging.info("Trying to decode with multiply_by_stabiliser=True.")
-            logicals_distribution, success = decode_css(
+            dmrg_engine, success = decode_css(
                 code=qhgp_code,
                 error=error,
                 chi_max=chi_max,
@@ -201,16 +201,16 @@ def run_single_experiment(
             logging.error(
                 f"Decoding has not been completed due to: {ex}", exc_info=True
             )
-            logicals_distribution, success = np.nan, np.nan
+            dmrg_engine, success = np.nan, np.nan
 
     if success == 1:
         if not silent:
             logging.info("Decoding successful.")
-        return logicals_distribution, 0
+        return dmrg_engine, 0
     if success == 0:
         if not silent:
             logging.info("Decoding failed.")
-        return logicals_distribution, 1
+        return dmrg_engine, 1
     if not silent:
         logging.info("Decoding has not been completed.")
     return np.nan, np.nan
