@@ -167,7 +167,7 @@ def run_single_experiment(
     qhgp_code = qec.hypergraph_product(classical_code, classical_code)
 
     try:
-        dmrg_engine, success = decode_css(
+        container, success = decode_css(
             code=qhgp_code,
             error=error,
             chi_max=chi_max,
@@ -184,7 +184,7 @@ def run_single_experiment(
         logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
             logging.info("Trying to decode with multiply_by_stabiliser=True.")
-            dmrg_engine, success = decode_css(
+            container, success = decode_css(
                 code=qhgp_code,
                 error=error,
                 chi_max=chi_max,
@@ -201,16 +201,16 @@ def run_single_experiment(
             logging.error(
                 f"Decoding has not been completed due to: {ex}", exc_info=True
             )
-            dmrg_engine, success = np.nan, np.nan
+            container, success = np.nan, np.nan
 
     if success == 1:
         if not silent:
             logging.info("Decoding successful.")
-        return dmrg_engine, 0
+        return container, 0
     if success == 0:
         if not silent:
             logging.info("Decoding failed.")
-        return dmrg_engine, 1
+        return container, 1
     if not silent:
         logging.info("Decoding has not been completed.")
     return np.nan, np.nan
@@ -274,16 +274,11 @@ def run_experiment(
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
 
-    for result in results:
-        if result != np.nan and result is not None:
-            logicals_distributions = result[0]
-            failures = result[1]
-        else:
-            logicals_distributions = np.nan
-            failures = np.nan
+    containers = [result[0] for result in results]
+    failures = [result[1] for result in results]
 
     return {
-        "logicals_distributions": logicals_distributions,
+        "containers": containers,
         "failures": failures,
         "errors": errors,
         "system_size": system_size,
