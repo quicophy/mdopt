@@ -71,7 +71,7 @@ def svd(
             lapack_driver="gesvd",
         ),
         lambda: scipy.linalg.svd(
-            mat + np.eye(mat.shape[0], mat.shape[1]) * 1e-6,
+            mat + np.eye(mat.shape[0], mat.shape[1]) * 1e-12,
             full_matrices=False,
             compute_uv=True,
             check_finite=True,
