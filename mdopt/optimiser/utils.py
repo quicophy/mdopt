@@ -261,7 +261,7 @@ def apply_constraints(
         Whether to return the entanglement entropies and bond dimensions at each bond.
     dense : bool
         Whether to perform the calculations in the dense form.
-        To be used only for small systems (<= 20 bits).
+        To be used only for small systems (<= 20 sites).
 
     Returns
     -------
@@ -338,15 +338,10 @@ def apply_constraints(
                 inplace=False,
             )
 
-        if not dense and renormalise:
-            norm = mps.norm()
-            if abs(norm - 1) > mps.tolerance:
-                mps.orth_centre = 0
-                mps, _ = mps.compress(renormalise=True)
-
         if return_entropies_and_bond_dims and not dense:
-            entropies.append(mps.entanglement_entropy())
-            bond_dims.append(mps.bond_dimensions)
+            mps_copy = mps.copy()
+            entropies.append(mps_copy.entanglement_entropy())
+            bond_dims.append(mps_copy.bond_dimensions)
 
     if dense:
         return mps_dense
