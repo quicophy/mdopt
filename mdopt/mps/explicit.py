@@ -676,7 +676,7 @@ class ExplicitMPS:
     def marginal(
         self,
         sites_to_marginalise: List[int],
-        canonicalise: bool = False,
+        renormalise: bool = False,
     ) -> Union["ExplicitMPS", "CanonicalMPS"]:  # type: ignore
         r"""
         Computes a marginal over a subset of sites of an MPS.
@@ -684,5 +684,5 @@ class ExplicitMPS:
         """
 
         return self.right_canonical().marginal(
-            sites_to_marginalise=sites_to_marginalise, canonicalise=canonicalise
+            sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
         )
