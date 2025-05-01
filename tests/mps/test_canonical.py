@@ -753,27 +753,24 @@ def test_canonical_marginal():
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
         mps_copy = mps.copy()
 
-        sites_all = list(range(num_sites))
+        sites_all = list(range(mps.num_sites))
         sites_to_marginalise = [site for site in sites_all if np.random.uniform() < 0.3]
         sites_left = [site for site in sites_all if site not in sites_to_marginalise]
 
-        mps_marginalised = mps_copy.marginal(sites_to_marginalise, canonicalise=False)
-        mps_marginalised_canonical = mps.marginal(
-            sites_to_marginalise, canonicalise=True
+        mps_marginalised_normalised = mps_copy.marginal(
+            sites_to_marginalise, renormalise=True
         )
 
         with pytest.raises(ValueError):
             mps.marginal([100, 200])
 
-        if isinstance(mps_marginalised, CanonicalMPS):
-            assert (
-                mps_marginalised.num_sites == len(sites_left)
-                if len(sites_left) > 0
-                else 1
-            )
-            assert is_canonical(mps_marginalised_canonical)
-        else:
-            assert isinstance(mps_marginalised, np.complex128)
+        assert (
+            mps_marginalised_normalised.num_sites == len(sites_left)
+            if len(sites_left) > 0
+            else 1
+        )
+        if len(sites_left) > 0:
+            assert np.isclose(mps_marginalised_normalised.norm(), 1)
 
     # Testing marginalisation on a particular random state.
     num_sites = 8
@@ -789,7 +786,7 @@ def test_canonical_marginal():
     mps_start = mps.copy()
     trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
 
-    mps_marginalised = mps.marginal(sites_to_marginalise, canonicalise=False)
+    mps_marginalised = mps.marginal(sites_to_marginalise, renormalise=False)
 
     mps_start.tensors[0] = np.tensordot(mps_start.tensors[0], trace_tensor, (1, 0))
     mps_start.tensors[1] = np.tensordot(mps_start.tensors[1], trace_tensor, (1, 0))
@@ -822,7 +819,7 @@ def test_canonical_marginal():
     expected_tensor_1 = np.tensordot(tensors[1], trace_tensor, axes=([1], [0]))
     expected_tensor_1 = np.einsum("ij, jkl", expected_tensor_1, tensor_2)
 
-    mps = mps.marginal([1], canonicalise=False)
+    mps = mps.marginal([1], renormalise=False)
 
     assert mps.tensors[1].shape == expected_tensor_1.shape
     assert np.allclose(mps.tensors[1], expected_tensor_1)
