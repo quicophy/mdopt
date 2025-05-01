@@ -513,7 +513,7 @@ class CanonicalMPS:
                     renormalise=renormalise,
                 ),
             )
-        elif border == "last":
+        else:
             self.orth_centre = self.num_sites - 1
             mps_canonical, singular_values = cast(
                 Tuple[CanonicalMPS, List[np.ndarray]],
@@ -948,24 +948,25 @@ class CanonicalMPS:
     def marginal(
         self,
         sites_to_marginalise: List[int],
-        canonicalise: bool = False,
+        renormalise: bool = False,
     ) -> "CanonicalMPS":
         r"""
         Computes a marginal over a subset of sites of an MPS.
+        Returns a new :class:`CanonicalMPS` instance.
 
         Parameters
         ----------
         sites_to_marginalise : List[int]
             The sites to marginalise over.
-        canonicalise : bool
-            Whether to put the resulting MPS in the canonical form,
-            i.e., whether to sweep with SVDs over the bonds that are left.
+        renormalise : bool
+            Whether to renormalise the resulting MPS.
 
         Notes
         -----
         Marginalizes (traces out) selected sites from the MPS by first
         contracting them with the trace tensor and then absorbing them.
-        Rule: if a traced tensor has a right neighbor, it is absorbed to the right.
+        The contraction is done in the following way:
+        if a traced tensor has a right neighbor, it is absorbed to the right.
         (If it is the last tensor, it is merged with its left neighbor.)
 
         In the absorption step the physical leg is traced out:
@@ -997,7 +998,7 @@ class CanonicalMPS:
         for site in sorted(sites_to_marginalise, reverse=True):
             phys_dim = self.tensors[site].shape[1]
             trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
-            # Trace out the physical legs
+            # Trace out the physical legs.
             traced = np.tensordot(self.tensors[site], trace_tensor, axes=([1], [0]))
 
             if site < self.num_sites - 1:
@@ -1023,16 +1024,10 @@ class CanonicalMPS:
 
             self.num_sites = len(self.tensors)
             self.num_bonds = self.num_sites - 1
+            self.orth_centre = self.num_sites - 1
 
-        if canonicalise:
-            return cast(
-                CanonicalMPS,
-                CanonicalMPS(
-                    tensors=self.tensors,
-                    orth_centre=self.num_sites - 1,
-                    tolerance=self.tolerance,
-                    chi_max=self.chi_max,
-                ).move_orth_centre(0, renormalise=False),
-            )
+            if renormalise:
+                orth_centre_norm = np.linalg.norm(self.tensors[self.orth_centre])
+                self.tensors[self.orth_centre] /= orth_centre_norm
 
         return self
