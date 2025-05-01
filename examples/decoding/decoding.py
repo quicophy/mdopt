@@ -1221,35 +1221,37 @@ def decode_css(
             renormalise=renormalise,
         )
 
-    if not silent:
-        logging.info("Applying X logicals' constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        logicals_sites[0],
-        logicals_tensors,
-        chi_max=chi_max,
-        cut=cut,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-    )
+    if error_contains_x:
+        if not silent:
+            logging.info("Applying X logicals' constraints.")
+        error_mps = apply_constraints(
+            error_mps,
+            logicals_sites[0],
+            logicals_tensors,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+        )
 
-    if not silent:
-        logging.info("Applying Z logicals' constraints.")
-    error_mps = apply_constraints(
-        error_mps,
-        logicals_sites[1],
-        logicals_tensors,
-        chi_max=chi_max,
-        cut=cut,
-        renormalise=renormalise,
-        silent=silent,
-        strategy=contraction_strategy,
-    )
+    if error_contains_z:
+        if not silent:
+            logging.info("Applying Z logicals' constraints.")
+        error_mps = apply_constraints(
+            error_mps,
+            logicals_sites[1],
+            logicals_tensors,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=renormalise,
+            silent=silent,
+            strategy=contraction_strategy,
+        )
 
     if error_contains_x:
         if not silent:
-            logging.info("Applying the X checks' constraints.")
+            logging.info("Applying X checks' constraints.")
         error_mps = apply_constraints(
             error_mps,
             constraint_sites[0],
@@ -1263,7 +1265,7 @@ def decode_css(
 
     if error_contains_z:
         if not silent:
-            logging.info("Applying the Z checks' constraints.")
+            logging.info("Applying Z checks' constraints.")
         error_mps = apply_constraints(
             error_mps,
             constraint_sites[1],
@@ -1285,8 +1287,8 @@ def decode_css(
         )
         if not silent and renormalise:
             logging.info("Renormalising the error MPS.")
-            error_mps.orth_centre = 0
-            error_mps, _ = error_mps.compress(renormalise=True)
+            error_mps.orth_centre = len(error_mps) - 1
+            error_mps, _ = error_mps.compress(chi_max=1e4, cut=0, renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
@@ -1298,8 +1300,6 @@ def decode_css(
         canonicalise=False,
     )
 
-    logical_mps.orth_centre = 0
-    logical_mps, _ = logical_mps.compress(renormalise=True)
     num_logical_sites = len(logical_mps)
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
@@ -1492,7 +1492,7 @@ def decode_custom(
     )
 
     if not silent:
-        logging.info("Applying the X and Z checks' constraints.")
+        logging.info("Applying X and Z checks' constraints.")
     error_mps = apply_constraints(
         error_mps,
         constraint_sites,
