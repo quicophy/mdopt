@@ -1283,7 +1283,7 @@ def decode_css(
         error_mps = error_mps.marginal(
             mps=error_mps,
             sites_to_marginalise=erased_qubits,
-            canonicalise=False,
+            renormalise=False,
         )
         if not silent and renormalise:
             logging.info("Renormalising the error MPS.")
@@ -1297,7 +1297,7 @@ def decode_css(
     )
     logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise,
-        canonicalise=False,
+        renormalise=renormalise,
     )
 
     num_logical_sites = len(logical_mps)
@@ -1509,7 +1509,7 @@ def decode_custom(
             logging.info("Tracing out the erased qubits.")
         error_mps = error_mps.marginal(
             sites_to_marginalise=erased_qubits,
-            canonicalise=False,
+            renormalise=False,
         )
         if not silent and renormalise:
             logging.info("Renormalising the error MPS.")
@@ -1526,7 +1526,7 @@ def decode_custom(
     )
     logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise,
-        canonicalise=False,
+        renormalise=renormalise,
     )
 
     logical_mps.orth_centre = 0
