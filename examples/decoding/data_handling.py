@@ -1,4 +1,4 @@
-"""Helper functions for handling decoding data."""
+"""Helper functions for handling the decoder data."""
 
 import os
 import re
@@ -129,14 +129,19 @@ def process_failure_statistics(
                 errors_statistics = all_errors_statistics[error_rate]
 
                 if failures_statistics:
-                    # Calculate mean failure rate
-                    failure_rates[(lattice_size, chi_max, error_rate)] = np.mean(
+                    # Calculate mean failure rate skipping the nans
+                    failures_statistics = np.array(failures_statistics, dtype=object)
+                    mask = (
+                        failures_statistics is None
+                    )  # True wherever the element is None
+                    failures_statistics[mask] = np.nan
+                    failure_rates[(lattice_size, chi_max, error_rate)] = np.nanmean(
                         failures_statistics
                     )
 
                     # Calculate standard error of the mean (error bar)
                     error_bars[(lattice_size, chi_max, error_rate)] = sem(
-                        failures_statistics
+                        failures_statistics, nan_policy="omit"
                     )
 
                     # Store the errors
