@@ -505,11 +505,15 @@ def create_custom_product_state(
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
-        mps = ExplicitMPS(tensors, singular_values).right_canonical()
+        mps = ExplicitMPS(
+            tensors, singular_values, tolerance=tolerance
+        ).right_canonical()
         mps.orth_centre = None
         return mps
     if form == "Left-canonical":
-        mps = ExplicitMPS(tensors, singular_values).left_canonical()
+        mps = ExplicitMPS(
+            tensors, singular_values, tolerance=tolerance
+        ).left_canonical()
         mps.orth_centre = None
         return mps
     if form == "Mixed-canonical":
