@@ -1139,7 +1139,7 @@ def decode_css(
     bias_prob : float
         The probability of the depolarising bias applied before checks.
     renormalise : bool
-        Whether to renormalise the singular values during contraction.
+        Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
         Whether to multiply the error by a random stabiliser before decoding.
     silent : bool
@@ -1230,7 +1230,7 @@ def decode_css(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalise=False,
             silent=silent,
             strategy=contraction_strategy,
         )
@@ -1244,11 +1244,15 @@ def decode_css(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalise=False,
             silent=silent,
             strategy=contraction_strategy,
         )
 
+    if renormalise:
+        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
+            error_mps.tensors[error_mps.orth_centre]
+        )
     if error_contains_x:
         if not silent:
             logging.info("Applying X checks' constraints.")
@@ -1258,11 +1262,14 @@ def decode_css(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalise=False,
             silent=silent,
             strategy=contraction_strategy,
         )
-
+    if renormalise:
+        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
+            error_mps.tensors[error_mps.orth_centre]
+        )
     if error_contains_z:
         if not silent:
             logging.info("Applying Z checks' constraints.")
@@ -1272,9 +1279,13 @@ def decode_css(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalise=False,
             silent=silent,
             strategy=contraction_strategy,
+        )
+    if renormalise:
+        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
+            error_mps.tensors[error_mps.orth_centre]
         )
 
     if erased_qubits:
@@ -1285,10 +1296,6 @@ def decode_css(
             sites_to_marginalise=erased_qubits,
             renormalise=False,
         )
-        if not silent and renormalise:
-            logging.info("Renormalising the error MPS.")
-            error_mps.orth_centre = len(error_mps) - 1
-            error_mps, _ = error_mps.compress(chi_max=1e4, cut=0, renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
@@ -1296,8 +1303,7 @@ def decode_css(
         range(num_logicals, len(error) + num_logicals - len(erased_qubits))
     )
     logical_mps = error_mps.marginal(
-        sites_to_marginalise=sites_to_marginalise,
-        renormalise=renormalise,
+        sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
     )
 
     num_logical_sites = len(logical_mps)
@@ -1305,7 +1311,7 @@ def decode_css(
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=1))
+        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=False, norm=2))
         result = logical_dense, int(
             np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
         )
