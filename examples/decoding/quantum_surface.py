@@ -9,6 +9,7 @@ from multiprocessing import Pool
 
 import numpy as np
 import qecstruct as qec
+from scipy.stats import sem
 
 # Setup logging
 logging.basicConfig(
@@ -284,7 +285,7 @@ def save_experiment_data(
         pickle.dump(data, pickle_file)
     logging.info(
         f"Saved data for {file_key} with "
-        f"{np.nanmean(data['failures'])*100:.2f}% failure rate."
+        f"{np.nanmean(data['failures'])*100:.2f}±{sem(data['failures'], nan_policy='omit')*100:.2f}% failure rate."
     )
 
 
