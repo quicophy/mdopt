@@ -250,7 +250,7 @@ def apply_constraints(
         The lower boundary of the spectrum in the contractor.
         All singular values below this value are truncated.
     renormalise : bool
-        Whether to renormalise the singular values at each MPS bond involved in contraction.
+        Whether to renormalise the orthogonality centre after each constraint application.
     result_to_explicit : bool
         Whether to transform the resulting MPS into the Explicit form.
     strategy : str
@@ -325,7 +325,7 @@ def apply_constraints(
             elif all(flags_left):
                 mps.orth_centre = mps.num_sites - 1
 
-            mps = mps.move_orth_centre(final_pos=start_site, renormalise=True)  # type: ignore
+            mps = mps.move_orth_centre(final_pos=start_site, renormalise=False)  # type: ignore
 
         if not dense:
             mps = mps_mpo_contract(  # type: ignore
@@ -334,9 +334,13 @@ def apply_constraints(
                 start_site=start_site,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalise=False,
                 inplace=False,
             )
+            if renormalise:
+                orth_centre_index = int(mps.orth_centre)  # type: ignore
+                norm = np.linalg.norm(mps.tensors[orth_centre_index])
+                mps.tensors[orth_centre_index] /= norm
 
         if return_entropies_and_bond_dims and not dense:
             mps_copy = mps.copy()
