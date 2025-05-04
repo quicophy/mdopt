@@ -140,9 +140,14 @@ def process_failure_statistics(
                     )
 
                     # Calculate standard error of the mean (error bar)
-                    error_bars[(lattice_size, chi_max, error_rate)] = sem(
-                        failures_statistics, nan_policy="omit"
-                    )
+                    try:
+                        error_bars[(lattice_size, chi_max, error_rate)] = sem(
+                            failures_statistics, nan_policy="omit"
+                        )
+                    except:
+                        error_bars[(lattice_size, chi_max, error_rate)] = sem(
+                            failures_statistics
+                        )
 
                     # Store the errors
                     errors_dict[(lattice_size, chi_max, error_rate)] = errors_statistics
