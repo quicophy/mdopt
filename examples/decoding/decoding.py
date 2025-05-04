@@ -1230,7 +1230,7 @@ def decode_css(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=False,
+            renormalise=renormalise,
             silent=silent,
             strategy=contraction_strategy,
         )
@@ -1244,15 +1244,11 @@ def decode_css(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=False,
+            renormalise=renormalise,
             silent=silent,
             strategy=contraction_strategy,
         )
 
-    if renormalise:
-        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
-            error_mps.tensors[error_mps.orth_centre]
-        )
     if error_contains_x:
         if not silent:
             logging.info("Applying X checks' constraints.")
@@ -1262,14 +1258,11 @@ def decode_css(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=False,
+            renormalise=renormalise,
             silent=silent,
             strategy=contraction_strategy,
         )
-    if renormalise:
-        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
-            error_mps.tensors[error_mps.orth_centre]
-        )
+
     if error_contains_z:
         if not silent:
             logging.info("Applying Z checks' constraints.")
@@ -1279,13 +1272,9 @@ def decode_css(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=False,
+            renormalise=renormalise,
             silent=silent,
             strategy=contraction_strategy,
-        )
-    if renormalise:
-        error_mps.tensors[error_mps.orth_centre] /= np.linalg.norm(
-            error_mps.tensors[error_mps.orth_centre]
         )
 
     if erased_qubits:
@@ -1294,7 +1283,7 @@ def decode_css(
         error_mps = error_mps.marginal(
             mps=error_mps,
             sites_to_marginalise=erased_qubits,
-            renormalise=False,
+            renormalise=renormalise,
         )
 
     if not silent:
@@ -1311,7 +1300,9 @@ def decode_css(
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=False, norm=2))
+        logical_dense = abs(
+            logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
+        )
         result = logical_dense, int(
             np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
         )
@@ -1388,7 +1379,7 @@ def decode_custom(
     bias_prob : float
         The probability of the depolarising bias applied before the parity checks.
     renormalise : bool
-        Whether to renormalise the singular values during contraction.
+        Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
         Whether to multiply the error by a random stabilizer before decoding.
     silent : bool
@@ -1468,9 +1459,6 @@ def decode_custom(
             renormalise=renormalise,
         )
 
-    error_mps.orth_centre = 0
-    error_mps, _ = error_mps.compress(chi_max=1e4, renormalise=True)
-
     if not silent:
         logging.info("Applying X logicals' constraints.")
     error_mps = apply_constraints(
@@ -1514,35 +1502,28 @@ def decode_custom(
         if not silent:
             logging.info("Tracing out the erased qubits.")
         error_mps = error_mps.marginal(
+            mps=error_mps,
             sites_to_marginalise=erased_qubits,
-            renormalise=False,
+            renormalise=renormalise,
         )
-        if not silent and renormalise:
-            logging.info("Renormalising the error MPS.")
-            error_mps.orth_centre = 0
-            error_mps, _ = error_mps.compress(renormalise=True)
 
     if not silent:
         logging.info("Marginalising the error MPS.")
     sites_to_marginalise = list(
         range(num_logicals, len(error) + num_logicals - len(erased_qubits))
     )
-    error_mps = error_mps.move_orth_centre(
-        final_pos=num_logicals - 1, renormalise=False
-    )
     logical_mps = error_mps.marginal(
-        sites_to_marginalise=sites_to_marginalise,
-        renormalise=renormalise,
+        sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
     )
 
-    logical_mps.orth_centre = 0
-    logical_mps, _ = logical_mps.compress(renormalise=True)
     num_logical_sites = len(logical_mps)
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= 10:
-        logical_dense = abs(logical_mps.dense(flatten=True, renormalise=True, norm=2))
+        logical_dense = abs(
+            logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
+        )
         result = logical_dense, int(
             np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
         )
