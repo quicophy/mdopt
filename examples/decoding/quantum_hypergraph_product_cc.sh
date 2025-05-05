@@ -14,21 +14,21 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
-system_sizes=(4)                                # Array of system sizes
+system_sizes=(16)                               # Array of system sizes
 bond_dims=(20)                                  # Array of bond dimensions
 seeds=(123 124 125 126 127 128 129 130 131 132) # Array of (10) random seeds
-num_experiments=500                             # Runs per each random seed
+num_experiments=50                              # Runs per each random seed
 error_model="Bitflip"                           # The error model
 bias_probs=(1e-1)                               # Array of decoder bias probabilities
-tolerances=(1e-6)                               # Array of numerical tolerances for the MPS within the decoder
-cuts=(1e-6)                                     # Array of SVD cut-offs for the MPS within the decoder
+tolerances=(0)                                  # Array of numerical tolerances for the MPS within the decoder
+cuts=(0)                                        # Array of SVD cut-offs for the MPS within the decoder
 num_processes=16                                # The number of processes to use in parallel
 silent=false                                    # Whether to suppress the output of the Python script
 
 error_rates=()
-start=0.005
-end=0.120
-step=0.005
+start=0.01
+end=0.09
+step=0.01
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
 do
