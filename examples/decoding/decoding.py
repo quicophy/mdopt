@@ -1530,8 +1530,9 @@ def decode_custom(
         if not silent:
             logging.info("Decoding completed with result: %s", result)
         return result
-    if optimiser == "Dephasing DMRG":
+    if num_logical_sites > 10 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
+        mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
             mps=mps_dmrg_start,
             mps_target=logical_mps,
@@ -1544,7 +1545,7 @@ def decode_custom(
             logging.info("Running the Dephasing DMRG engine.")
         engine.run(num_runs)
         mps_dmrg_final = engine.mps
-        overlap = abs(inner_product(mps_dmrg_final, logical_mps))
+        overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
         if not silent:
             logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
         return engine, overlap
