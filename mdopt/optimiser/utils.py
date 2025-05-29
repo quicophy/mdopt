@@ -325,7 +325,9 @@ def apply_constraints(
             elif all(flags_left):
                 mps.orth_centre = mps.num_sites - 1
 
-            mps = mps.move_orth_centre(final_pos=start_site, renormalise=False)  # type: ignore
+            mps = mps.move_orth_centre(
+                final_pos=start_site, renormalise=False, return_singular_values=False
+            )  # type: ignore
 
         if not dense:
             mps = mps_mpo_contract(  # type: ignore
