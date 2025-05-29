@@ -325,6 +325,9 @@ def apply_constraints(
             elif all(flags_left):
                 mps.orth_centre = mps.num_sites - 1
 
+            if isinstance(orth_centres, list) and len(orth_centres) > 1:
+                mps.orth_centre = orth_centres[0]
+
             mps = mps.move_orth_centre(
                 final_pos=start_site, renormalise=False, return_singular_values=False
             )  # type: ignore
