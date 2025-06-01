@@ -13,7 +13,6 @@ Examples
    quantum_csp.ipynb
    quantum_five_qubit.ipynb
    quantum_hypergraph_product.ipynb
-   quantum_surface copy.ipynb
    quantum_surface.ipynb
    quantum_three_qubit.ipynb
    shor.ipynb
