@@ -224,8 +224,6 @@ class DephasingDMRG:
             )
         if copy:
             self.mps = mps.copy()
-        if isinstance(self.mps, CanonicalMPS):
-            self.mps = self.mps.right_canonical()
         self.mps = mps
         self.left_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
         self.right_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
@@ -280,13 +278,13 @@ class DephasingDMRG:
             self.right_environments[j],
         )
 
-        if isinstance(self.mps, ExplicitMPS):
-            initial_guess = self.mps.two_site_right_iso(i).reshape(
-                effective_density_operator.shape[0]
-            )
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
+                effective_density_operator.shape[0]
+            )
+        else:
+            initial_guess = self.mps.two_site_right_iso(i).reshape(
                 effective_density_operator.shape[0]
             )
 
@@ -336,11 +334,11 @@ class DephasingDMRG:
 
         right_environment = self.right_environments[i]
 
-        if isinstance(self.mps, ExplicitMPS):
-            right_iso = self.mps.one_site_right_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
             right_iso = self.mps.one_site_tensor(i)
+        else:
+            right_iso = self.mps.one_site_right_iso(i)
 
         right_environment = contract(
             "ijkl, omi, pmj, qnk, rnl -> opqr",
@@ -361,11 +359,11 @@ class DephasingDMRG:
 
         left_environment = self.left_environments[i]
 
-        if isinstance(self.mps, ExplicitMPS):
-            left_iso = self.mps.one_site_left_iso(i)
         if isinstance(self.mps, CanonicalMPS):
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
             left_iso = self.mps.one_site_tensor(i)
+        else:
+            left_iso = self.mps.one_site_left_iso(i)
 
         left_environment = contract(
             "ijkl, imo, jmp, knq, lnr -> opqr",
