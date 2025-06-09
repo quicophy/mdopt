@@ -1,19 +1,19 @@
 #!/bin/bash
 
-lattice_sizes=(3 5 7)                        # Array of lattice sizes
-bond_dims=(30)                               # Array of bond dimensions
-seeds=(123 124 125 126 127)                  # Array of (5) random seeds
-num_experiments=300                          # Runs per each random seed
-error_model="Bitflip"                        # The error model
-bias_probs=(1e-1)                            # Array of decoder bias probabilities
-tolerances=(1e-12)                           # Array of numerical tolerances for the MPS within the decoder
-cuts=(1e-12)                                 # Array of SVD cut-offs for the MPS within the decoder
-num_processes=8                              # The number of processes to use in parallel
-silent=false                                 # Whether to suppress the output of the Python script
+lattice_sizes=(3 5 7 9)                         # Array of lattice sizes
+bond_dims=(10 20 30 40 50 60 70 80 90 100)      # Array of bond dimensions
+seeds=(111 112 113 114 115 116 117 118 119 120) # Array of random seeds
+num_experiments=500                             # Runs per each random seed
+error_model="Bitflip"                           # The error model
+bias_probs=(1e-1)                               # Array of decoder bias probabilities
+tolerances=(0)                                  # Array of numerical tolerances for the MPS within the decoder
+cuts=(0)                                        # Array of SVD cut-offs for the MPS within the decoder
+num_processes=16                                # The number of processes to use in parallel
+silent=false                                    # Whether to suppress the output of the Python script
 
 error_rates=()
-start=0.005
-end=0.125
+start=0.06
+end=0.06
 step=0.005
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
