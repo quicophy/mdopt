@@ -1107,9 +1107,9 @@ def decode_css(
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     bias_type: str = "Depolarising",
-    bias_prob: float = float(0.05),
+    bias_prob: float = float(0.1),
     renormalise: bool = True,
-    multiply_by_stabiliser: bool = True,
+    multiply_by_stabiliser: bool = False,
     silent: bool = False,
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
@@ -1345,7 +1345,7 @@ def decode_custom(
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     bias_type: str = "Depolarising",
-    bias_prob: float = float(0.01),
+    bias_prob: float = float(0.1),
     renormalise: bool = True,
     multiply_by_stabiliser: bool = False,
     silent: bool = False,
@@ -1429,7 +1429,7 @@ def decode_custom(
     state_string = logicals_state + error
 
     error_mps = create_custom_product_state(
-        string=state_string, tolerance=tolerance, form="Left-canonical"
+        string=state_string, tolerance=tolerance, form="Right-canonical"
     )
 
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
@@ -1513,7 +1513,7 @@ def decode_custom(
     )
     logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
-    )
+    ).reverse()
 
     num_logical_sites = len(logical_mps)
     if not silent:
@@ -1542,7 +1542,7 @@ def decode_custom(
         )
         if not silent:
             logging.info("Running the Dephasing DMRG engine.")
-        engine.run(num_runs)
+        engine.run(num_iter=num_runs)
         mps_dmrg_final = engine.mps
         overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
         if not silent:
