@@ -1281,7 +1281,6 @@ def decode_css(
         if not silent:
             logging.info("Tracing out the erased qubits.")
         error_mps = error_mps.marginal(
-            mps=error_mps,
             sites_to_marginalise=erased_qubits,
             renormalise=renormalise,
         )
