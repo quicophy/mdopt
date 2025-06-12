@@ -1,9 +1,9 @@
 #!/bin/bash
 
-lattice_sizes=(3 5 7 9)                         # Array of lattice sizes
-bond_dims=(10 20 30 40 50 60 70 80 90 100)      # Array of bond dimensions
-seeds=(111 112 113 114 115 116 117 118 119 120) # Array of random seeds
-num_experiments=500                             # Runs per each random seed
+lattice_sizes=(3)                               # Array of lattice sizes
+bond_dims=(5)                                   # Array of bond dimensions
+seeds=(100 101 102 103 104 105 106 107 108 109) # Array of random seeds
+num_experiments=1000                            # Runs per each random seed
 error_model="Bitflip"                           # The error model
 bias_probs=(1e-1)                               # Array of decoder bias probabilities
 tolerances=(0)                                  # Array of numerical tolerances for the MPS within the decoder
