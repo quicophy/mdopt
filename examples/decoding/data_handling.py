@@ -8,9 +8,12 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
+from matplotlib.ticker import MaxNLocator
 
 from scipy.stats import sem
 from scipy.optimize import minimize
+
+from numpy.polynomial.polynomial import polyfit, Polynomial
 
 
 plt.rcParams["text.usetex"] = True  # Enable LaTeX in matplotlib
@@ -301,7 +304,7 @@ def plot_failure_statistics(
     # Mode 1: Fixed lattice size, vary bond dimensions
     if mode == "lattice_size":
         for lattice_size in lattice_sizes:
-            plt.figure(figsize=(6, 5))
+            plt.figure(figsize=(6, 4))
             norm = Normalize(vmin=0, vmax=len(max_bond_dims) - 1)
 
             for index, chi_max in enumerate(max_bond_dims):
@@ -343,7 +346,7 @@ def plot_failure_statistics(
     # Mode 2: Fixed bond dimension, vary lattice sizes
     elif mode == "bond_dim":
         for chi_max in max_bond_dims:
-            plt.figure(figsize=(6, 5))
+            plt.figure(figsize=(6, 4))
             norm = Normalize(vmin=0, vmax=len(lattice_sizes) - 1)
 
             for index, lattice_size in enumerate(lattice_sizes):
@@ -516,7 +519,7 @@ def fit_failure_statistics(
             continue
 
         # Create the figure once, plot all data points and fits together
-        plt.figure(figsize=(7, 6))
+        plt.figure(figsize=(6, 4))
         has_valid_data = False
 
         # Plot all raw data points first
@@ -570,3 +573,67 @@ def fit_failure_statistics(
             plt.show()
         else:
             print(f"Skipping plot for chi_max={chi_max} due to no valid data.")
+
+
+def plot_bond_dimension_scaling(
+    failure_rates: dict,
+    target_error_rate: float,
+    threshold: float,
+):
+    """
+    Plot the minimum bond dimension required to achieve a target error rate
+    as a function of lattice size, with a linear fit.
+
+    Parameters
+    ----------
+    failure_rates : dict
+        Dictionary mapping `(lattice_size, bond_dimension, error_rate)` tuples
+        to logical failure rates.
+    target_error_rate : float
+        The target error rate to consider for the plot.
+    threshold : float
+        The threshold for logical failure rates to consider in the plot.
+    """
+    min_bond_dim = {}
+
+    for (lattice_size, bond_dimension, error_rate), fail_rate in failure_rates.items():
+        if error_rate == target_error_rate and fail_rate <= threshold:
+            if (
+                lattice_size not in min_bond_dim
+                or bond_dimension < min_bond_dim[lattice_size]
+            ):
+                min_bond_dim[lattice_size] = bond_dimension
+
+    if not min_bond_dim:
+        print("No data below threshold found.")
+        return
+
+    lattice_sizes = sorted(min_bond_dim.keys())
+    bond_dims = [min_bond_dim[lattice_size] for lattice_size in lattice_sizes]
+
+    coefs = polyfit(lattice_sizes, bond_dims, deg=2)
+    poly = Polynomial(coefs)
+    latticesize_fit = np.linspace(0, 50, 2000)
+    bondim_fit = poly(latticesize_fit)
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(lattice_sizes, bond_dims, "o", label="Minimum bond dim")
+    plt.plot(
+        latticesize_fit,
+        bondim_fit,
+        "--",
+        label=f"Fit: $\chi \\sim {coefs[2]:.3f}L^2 + {coefs[1]:.3f}L + {coefs[0]:.3f} $",
+        linewidth=3,
+    )
+    plt.xlabel("Lattice size $L$")
+    plt.ylabel("Bond dimension $\chi$")
+    plt.title(f"Bond dimension scaling at $p = {target_error_rate}$")
+    plt.legend(fontsize=7)
+    plt.grid(True)
+    plt.xlim(min(lattice_sizes) - 1, max(lattice_sizes) + 1)
+    plt.ylim(min(bond_dims) - 1, max(bond_dims) + 1)
+    ax = plt.gca()
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    plt.show()
