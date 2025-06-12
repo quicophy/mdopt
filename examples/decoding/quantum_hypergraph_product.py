@@ -1,4 +1,4 @@
-"""This script launches decoding of quantum hypergraph product codes on Compute Canada clusters."""
+"""This script launches decoding of quantum hypergraph product codes."""
 
 import os
 import sys

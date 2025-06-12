@@ -1,4 +1,4 @@
-"""This script launches decoding of quantum surface code on Compute Canada clusters."""
+"""This script launches decoding of quantum surface code."""
 
 import os
 import sys
