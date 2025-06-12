@@ -21,6 +21,7 @@ qecstruct = "^0.2.9"
 qecsim = "^1.0b9"
 matrex = "^0.0.1"
 numpy = "1.26.4"
+qldpc = "^0.1.2"
 
 [tool.poetry.group.dev]
 optional = true
