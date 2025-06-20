@@ -11,7 +11,6 @@ Examples
    maxbonddim.ipynb
    mps-rand-circ.ipynb
    quantum_five_qubit.ipynb
-   quantum_hypergraph_product.ipynb
    quantum_surface.ipynb
    quantum_three_qubit.ipynb
    shor.ipynb
