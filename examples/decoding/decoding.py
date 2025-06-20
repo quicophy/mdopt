@@ -16,11 +16,16 @@ from more_itertools import powerset
 # pylint: disable=E0611
 from qecstruct import (
     BinarySymmetricChannel,
+    BinaryMatrix,
     BinaryVector,
     LinearCode,
     CssCode,
     Rng,
 )
+
+import sympy as sp
+from sympy.abc import x, y
+from qldpc.codes import BBCode
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
@@ -690,6 +695,62 @@ def css_code_logicals_sites(
         )
 
     return logical_sites_x, logical_sites_z
+
+
+def create_bb_code(
+    order_x: int,
+    order_y: int,
+    poly_a: str,
+    poly_b: str,
+) -> CssCode:
+    """
+    Builds a bivariate-bicycle CSS code from given group orders and polynomials,
+    extracts its stabilizer and logical supports, and wraps it into a qecstruct.CssCode.
+
+    Parameters
+    ----------
+    order_x : int
+        Group order along x-axis.
+    order_y : int
+        Group order along y-axis.
+    poly_a : str
+        The polynomial A(x,y) as a string, e.g. "1 + x + y".
+    poly_b : str
+        The polynomial B(x,y) as a string, e.g. "1 + x**2 + y**2".
+
+    Returns
+    -------
+        A qecstruct CssCode instance for the constructed bivariate bicycle code.
+    """
+    # Build the orders dictionary from the two integer orders using Sympy symbols
+    orders = {x: order_x, y: order_y}
+
+    # Prepare local namespace for sympify
+    local_syms = {symbol.name: symbol for symbol in orders.keys()}
+    # Convert string polynomials into Sympy expressions
+    poly_a_expr = sp.sympify(poly_a, locals=local_syms)
+    poly_b_expr = sp.sympify(poly_b, locals=local_syms)
+
+    # Instantiate the BBCode with sympy polynomials
+    bb = BBCode(orders, poly_a_expr, poly_b_expr)
+
+    # Extract stabilizer supports as lists of qubit indices
+    x_parity_check_matrix = bb.code_x.matrix
+    z_parity_check_matrix = bb.code_z.matrix
+    x_stabs = [[i for i, b in enumerate(row) if b] for row in x_parity_check_matrix]
+    z_stabs = [[i for i, b in enumerate(row) if b] for row in z_parity_check_matrix]
+
+    # Extract logical operator supports (uncomment if need be)
+    # x_logical = bb.get_logical_ops(Pauli.X)
+    # z_logical = bb.get_logical_ops(Pauli.Z)
+    # x_logicals = [[i for i, b in enumerate(row) if b] for row in x_logical]
+    # z_logicals = [[i for i, b in enumerate(row) if b] for row in z_logical]
+
+    # Wrap into a qecstruct CssCode
+    n = bb.code_x.matrix.shape[1]
+    x_code = LinearCode(BinaryMatrix(num_columns=n, rows=x_stabs))
+    z_code = LinearCode(BinaryMatrix(num_columns=n, rows=z_stabs))
+    return CssCode(x_code=x_code, z_code=z_code)
 
 
 def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
