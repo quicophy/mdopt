@@ -133,24 +133,15 @@ def process_failure_statistics(
 
                 if failures_statistics:
                     # Calculate mean failure rate skipping the nans
-                    failures_statistics = np.array(failures_statistics, dtype=object)
-                    mask = (
-                        failures_statistics is None
-                    )  # True wherever the element is None
-                    failures_statistics[mask] = np.nan
+                    failures_statistics = np.array(failures_statistics)
                     failure_rates[(lattice_size, chi_max, error_rate)] = np.nanmean(
                         failures_statistics
                     )
 
                     # Calculate standard error of the mean (error bar)
-                    try:
-                        error_bars[(lattice_size, chi_max, error_rate)] = sem(
-                            failures_statistics, nan_policy="omit"
-                        )
-                    except:
-                        error_bars[(lattice_size, chi_max, error_rate)] = sem(
-                            failures_statistics
-                        )
+                    error_bars[(lattice_size, chi_max, error_rate)] = sem(
+                        failures_statistics, nan_policy="omit"
+                    )
 
                     # Store the errors
                     errors_dict[(lattice_size, chi_max, error_rate)] = errors_statistics
