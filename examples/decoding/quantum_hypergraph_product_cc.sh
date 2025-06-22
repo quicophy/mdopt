@@ -56,6 +56,7 @@ export OMP_NUM_THREADS=1
 #SBATCH --job-name=decoding-${system_size}-${bond_dim}-${error_rate}-${error_model}-${seed}         # Descriptive job name
 #SBATCH --output=decoding-${system_size}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out    # Standard output and error log
 
+export OMP_NUM_THREADS=1
 module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
