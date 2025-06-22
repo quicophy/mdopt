@@ -52,6 +52,7 @@ export OMP_NUM_THREADS=1
 #SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
 #SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
 
+export OMP_NUM_THREADS=1
 module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
