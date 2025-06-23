@@ -1,13 +1,16 @@
-"""This script launches quantum decoding on Compute Canada clusters."""
+"""This script launches decoding of quantum CSP code from JSON file."""
 
 import os
 import sys
 import json
+import pickle
 import logging
 import argparse
+from multiprocessing import Pool
+
 import numpy as np
-from tqdm import tqdm
-import qecstruct as qec
+from scipy.stats import sem
+from qecstruct import LinearCode, BinaryMatrix, CssCode
 
 # Setup logging
 logging.basicConfig(
@@ -25,6 +28,7 @@ project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 project_root_narval = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
 )
+project_root_iq = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
 
 examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
@@ -37,14 +41,14 @@ examples_path_graham = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/exam
 examples_path_narval = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
+examples_path_iq = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
-sys.path.append(project_root_graham)
-sys.path.append(examples_path_graham)
+sys.path.append(project_root_narval)
+sys.path.append(examples_path_narval)
 
 try:
     from examples.decoding.decoding import (
         decode_css,
-        pauli_to_mps,
         generate_pauli_error_string,
     )
 except ImportError as e:
@@ -55,15 +59,19 @@ except ImportError as e:
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Launch quantum CSP code decoding on Compute Canada clusters."
-    )
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Launch decoding of quantum CSP code.")
     parser.add_argument(
         "--num_qubits",
         type=int,
-        nargs="+",
         required=True,
-        help="The number of qubits in the code.",
+        help="Number of qubits for the code.",
+    )
+    parser.add_argument(
+        "--batch",
+        type=int,
+        required=True,
+        help="Code batch.",
     )
     parser.add_argument(
         "--bond_dim",
@@ -72,11 +80,10 @@ def parse_arguments():
         help="Maximum bond dimension to keep during contraction.",
     )
     parser.add_argument(
-        "--error_rate",
-        type=float,
-        nargs="+",
-        required=True,
-        help="The error rate.",
+        "--error_rate", type=float, required=True, help="The error rate."
+    )
+    parser.add_argument(
+        "--bias_prob", type=float, required=True, help="The decoder bias probability."
     )
     parser.add_argument(
         "--num_experiments",
@@ -85,107 +92,264 @@ def parse_arguments():
         help="The number of experiments to run.",
     )
     parser.add_argument(
+        "--error_model",
+        type=str,
+        required=True,
+        help="The error model to use.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         required=True,
         help="The seed for the random number generator.",
     )
     parser.add_argument(
-        "--batch",
+        "--num_processes",
         type=int,
         required=True,
-        help="The batch to process.",
+        help="The number of processes to use in parallel.",
+    )
+    parser.add_argument(
+        "--silent",
+        type=bool,
+        required=True,
+        help="Whether to silence the output.",
+    )
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        required=True,
+        help="The numerical tolerance for the MPS within the decoder.",
+    )
+    parser.add_argument(
+        "--cut",
+        type=float,
+        required=True,
+        help="Singular values smaller than that will be discarded in the SVD.",
     )
     return parser.parse_args()
 
 
-def run_experiment(
-    batch, num_qubits, code_file, bond_dim, error_rate, num_experiments, seed
-):
-    logging.info(
-        f"Starting experiments for Batch={batch}, Qubits={num_qubits}, Code={code_file}, BOND_DIM={bond_dim}, ERROR_RATE={error_rate}, SEED={seed}"
-    )
-
-    with open(code_file, "r") as code_json:
-        code_data = json.load(code_json)
-        x_code = qec.LinearCode(
-            qec.BinaryMatrix(
-                num_columns=code_data["num_qubits"], rows=code_data["x_stabs"]
+def get_csp_code(num_qubits: int, batch: int) -> CssCode:
+    """Load the first JSON CSP code found for (batch, num_qubits)."""
+    code_dir = f"data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
+    for fn in os.listdir(code_dir):
+        if fn.endswith(".json"):
+            with open(os.path.join(code_dir, fn), "r") as f:
+                d = json.load(f)
+            x_mat = BinaryMatrix(num_columns=d["num_qubits"], rows=d["x_stabs"])
+            z_mat = BinaryMatrix(num_columns=d["num_qubits"], rows=d["z_stabs"])
+            return CssCode(
+                x_code=LinearCode(x_mat),
+                z_code=LinearCode(z_mat),
             )
-        )
-        z_code = qec.LinearCode(
-            qec.BinaryMatrix(
-                num_columns=code_data["num_qubits"], rows=code_data["z_stabs"]
-            )
-        )
-        quantum_csp_code = qec.CssCode(x_code=x_code, z_code=z_code)
+    raise FileNotFoundError(f"No .json code in {code_dir}")
 
+
+def generate_errors(num_qubits, batch, error_rate, num_experiments, error_model, seed):
+    """Generate errors for the experiments."""
     seed_seq = np.random.SeedSequence(seed)
-    failures = []
+    errors = []
+    csp_code = get_csp_code(batch, num_qubits)
 
-    for l in tqdm(range(num_experiments)):
-        new_seed = seed_seq.spawn(1)[0]
-        rng = np.random.default_rng(new_seed)
-        random_integer = rng.integers(1, 10**8 + 1)
-        experiment_seed = random_integer
+    for _ in range(num_experiments):
+        rng = np.random.default_rng(seed_seq.spawn(1)[0])
+        error = generate_pauli_error_string(
+            len(csp_code),
+            error_rate,
+            rng=rng,
+            error_model=error_model,
+        )
+        errors.append(error)
 
+    return errors
+
+
+def run_single_experiment(
+    num_qubits, batch, chi_max, error, bias_prob, error_model, silent, tolerance, cut
+):
+    """Run a single experiment."""
+    csp_code = get_csp_code(batch, num_qubits)
+
+    try:
+        logicals_distribution, success = decode_css(
+            code=csp_code,
+            error=error,
+            chi_max=chi_max,
+            multiply_by_stabiliser=False,
+            bias_type=error_model,
+            bias_prob=bias_prob,
+            renormalise=True,
+            silent=silent,
+            contraction_strategy="Optimised",
+            tolerance=tolerance,
+            cut=cut,
+        )
+    except Exception as e:
+        logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
-            error = generate_pauli_error_string(
-                len(quantum_csp_code),
-                error_rate,
-                seed=experiment_seed,
-                error_model="Depolarising",
-            )
-            error = pauli_to_mps(error)
-
-            _, success = decode_css(
-                code=quantum_csp_code,
+            logging.info("Trying to decode with multiply_by_stabiliser=True.")
+            logicals_distribution, success = decode_css(
+                code=csp_code,
                 error=error,
-                chi_max=bond_dim,
-                bias_type="Depolarising",
-                bias_prob=error_rate,
+                chi_max=chi_max,
+                multiply_by_stabiliser=True,
+                bias_type=error_model,
+                bias_prob=bias_prob,
                 renormalise=True,
-                silent=True,
+                silent=silent,
                 contraction_strategy="Optimised",
+                tolerance=tolerance,
+                cut=cut,
             )
+            logging.info("Decoding finished with multiply_by_stabiliser=True.")
+        except Exception as ex:
+            logging.error(
+                f"Decoding has not been completed due to: {ex}", exc_info=True
+            )
+            logicals_distribution, success = np.nan, np.nan
 
-            failures.append(1 - success)
-        except Exception as e:
-            logging.error(f"Experiment {l} failed with error: {str(e)}", exc_info=True)
-            failures.append(1)
+    if success == 1:
+        if not silent:
+            logging.info("Decoding successful.")
+        return logicals_distribution, 0
+    if success == 0:
+        if not silent:
+            logging.info("Decoding failed.")
+        return logicals_distribution, 1
+    if not silent:
+        logging.info("Decoding has not been completed.")
+    return np.nan, np.nan
 
-    # Store results in a structured filename
-    result_filename = (
-        f"numqubits{num_qubits}_bonddim{bond_dim}_errorrate{error_rate:.12f}_"
-        f"seed{seed}_batch{batch}_{os.path.splitext(os.path.basename(code_file))[0]}.npy"
+
+def run_experiment(
+    num_qubits,
+    batch,
+    chi_max,
+    error_rate,
+    bias_prob,
+    num_experiments,
+    error_model,
+    seed,
+    errors,
+    silent,
+    num_processes=1,
+    tolerance=1e-8,
+    cut=1e-8,
+):
+    """Run the experiment consisting of multiple single experiments in parallel."""
+    logging.info(
+        f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
+        f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
-    np.save(result_filename, np.array(failures))
+
+    args = [
+        (
+            num_qubits,
+            batch,
+            chi_max,
+            errors[i],
+            bias_prob,
+            error_model,
+            silent,
+            tolerance,
+            cut,
+        )
+        for i in range(num_experiments)
+    ]
+
+    with Pool(num_processes) as pool:
+        results = pool.starmap(run_single_experiment, args)
 
     logging.info(
-        f"Completed experiments for {result_filename} with {np.mean(failures)*100:.2f}% failure rate."
+        f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
+        f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
+    )
+
+    logicals_distributions = [result[0] for result in results]
+    failures = [result[1] for result in results]
+
+    return {
+        "logicals_distributions": logicals_distributions,
+        "failures": failures,
+        "errors": errors,
+        "lattice_size": num_qubits,
+        "chi_max": chi_max,
+        "error_rate": error_rate,
+        "bias_prob": bias_prob,
+        "error_model": error_model,
+        "seed": seed,
+        "tolerance": tolerance,
+        "cut": cut,
+        "batch": batch,
+    }
+
+
+def save_experiment_data(
+    data,
+    num_qubits,
+    batch,
+    chi_max,
+    error_rate,
+    error_model,
+    bias_prob,
+    num_experiments,
+    seed,
+    tolerance,
+    cut,
+):
+    """Save the experiment data."""
+    error_model = error_model.replace(" ", "")
+    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_seed{seed}.pkl"
+    with open(file_key, "wb") as pickle_file:
+        pickle.dump(data, pickle_file)
+    logging.info(
+        f"Saved data for {file_key} with "
+        f"{np.nanmean(data['failures'])*100:.2f}±{sem(data['failures'], nan_policy='omit')*100:.2f}% failure rate."
     )
 
 
 def main():
+    """Main entry point."""
     args = parse_arguments()
-
-    for num_qubits in args.num_qubits:
-        code_path = f"/home/bereza/scratch/data-csp-codes/batch_{args.batch}/codes/qubits_{num_qubits}"
-
-        for code in os.listdir(code_path):
-            if code.endswith(".json"):
-                code_file = os.path.join(code_path, code)
-
-                for error_rate in args.error_rate:
-                    run_experiment(
-                        batch=args.batch,
-                        num_qubits=num_qubits,
-                        code_file=code_file,
-                        bond_dim=args.bond_dim,
-                        error_rate=error_rate,
-                        num_experiments=args.num_experiments,
-                        seed=args.seed,
-                    )
+    errors = generate_errors(
+        args.num_qubits,
+        args.batch,
+        args.error_rate,
+        args.num_experiments,
+        args.error_model,
+        args.seed,
+    )
+    experiment_data = run_experiment(
+        args.num_qubits,
+        args.batch,
+        args.bond_dim,
+        args.error_rate,
+        args.bias_prob,
+        args.num_experiments,
+        args.error_model,
+        args.seed,
+        errors,
+        args.silent,
+        args.num_processes,
+        args.tolerance,
+        args.cut,
+    )
+    save_experiment_data(
+        experiment_data,
+        args.num_qubits,
+        args.batch,
+        args.bond_dim,
+        args.error_rate,
+        args.error_model,
+        args.bias_prob,
+        args.num_experiments,
+        args.seed,
+        args.tolerance,
+        args.cut,
+    )
 
 
 if __name__ == "__main__":
