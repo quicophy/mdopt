@@ -74,6 +74,12 @@ def parse_arguments():
         help="Code batch.",
     )
     parser.add_argument(
+        "--code_id",
+        type=int,
+        required=True,
+        help="The particular code id.",
+    )
+    parser.add_argument(
         "--bond_dim",
         type=int,
         required=True,
@@ -130,33 +136,36 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_csp_code(num_qubits: int, batch: int) -> CssCode:
-    """Load the first JSON CSP code found for (batch, num_qubits)."""
+def get_csp_code(num_qubits: int, batch: int, code_id: int) -> CssCode:
+    """
+    Load the specified JSON CSP code for (num_qubits, batch, code_id).
+    """
     code_dir = (
         f"examples/decoding/data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
     )
+    filename = f"code_{code_id}.json"
+    path = os.path.join(code_dir, filename)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Could not find {filename} in {code_dir}")
+    with open(path, "r") as f:
+        data = json.load(f)
 
-    for fn in os.listdir(code_dir):
-        if fn.endswith(".json"):
-            with open(os.path.join(code_dir, fn), "r") as f:
-                data = json.load(f)
+    x_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["x_stabs"])
+    z_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["z_stabs"])
 
-            x_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["x_stabs"])
-            z_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["z_stabs"])
-
-            return CssCode(
-                x_code=LinearCode(x_mat),
-                z_code=LinearCode(z_mat),
-            )
-
-    raise FileNotFoundError(f"No such .json code in {code_dir}")
+    return CssCode(
+        x_code=LinearCode(x_mat),
+        z_code=LinearCode(z_mat),
+    )
 
 
-def generate_errors(num_qubits, batch, error_rate, num_experiments, error_model, seed):
+def generate_errors(
+    num_qubits, batch, code_id, error_rate, num_experiments, error_model, seed
+):
     """Generate errors for the experiments."""
     seed_seq = np.random.SeedSequence(seed)
     errors = []
-    csp_code = get_csp_code(num_qubits, batch)
+    csp_code = get_csp_code(num_qubits, batch, code_id)
 
     for _ in range(num_experiments):
         rng = np.random.default_rng(seed_seq.spawn(1)[0])
@@ -172,10 +181,19 @@ def generate_errors(num_qubits, batch, error_rate, num_experiments, error_model,
 
 
 def run_single_experiment(
-    num_qubits, batch, chi_max, error, bias_prob, error_model, silent, tolerance, cut
+    num_qubits,
+    batch,
+    code_id,
+    chi_max,
+    error,
+    bias_prob,
+    error_model,
+    silent,
+    tolerance,
+    cut,
 ):
     """Run a single experiment."""
-    csp_code = get_csp_code(num_qubits, batch)
+    csp_code = get_csp_code(num_qubits, batch, code_id)
 
     try:
         logicals_distribution, success = decode_css(
@@ -231,6 +249,7 @@ def run_single_experiment(
 def run_experiment(
     num_qubits,
     batch,
+    code_id,
     chi_max,
     error_rate,
     bias_prob,
@@ -247,13 +266,14 @@ def run_experiment(
     logging.info(
         f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
-        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )
 
     args = [
         (
             num_qubits,
             batch,
+            code_id,
             chi_max,
             errors[i],
             bias_prob,
@@ -271,7 +291,7 @@ def run_experiment(
     logging.info(
         f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
-        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )
 
     logicals_distributions = [result[0] for result in results]
@@ -290,6 +310,7 @@ def run_experiment(
         "tolerance": tolerance,
         "cut": cut,
         "batch": batch,
+        "code_id": code_id,
     }
 
 
@@ -297,6 +318,7 @@ def save_experiment_data(
     data,
     num_qubits,
     batch,
+    code_id,
     chi_max,
     error_rate,
     error_model,
@@ -308,7 +330,7 @@ def save_experiment_data(
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
-    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_seed{seed}.pkl"
+    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_codeid{code_id}_seed{seed}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -323,6 +345,7 @@ def main():
     errors = generate_errors(
         args.num_qubits,
         args.batch,
+        args.code_id,
         args.error_rate,
         args.num_experiments,
         args.error_model,
@@ -331,6 +354,7 @@ def main():
     experiment_data = run_experiment(
         args.num_qubits,
         args.batch,
+        args.code_id,
         args.bond_dim,
         args.error_rate,
         args.bias_prob,
@@ -347,6 +371,7 @@ def main():
         experiment_data,
         args.num_qubits,
         args.batch,
+        args.code_id,
         args.bond_dim,
         args.error_rate,
         args.error_model,

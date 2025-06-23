@@ -1,7 +1,8 @@
 #!/bin/bash
 
 nums_qubits=(30)                                # Array of numbers of qubits
-batches=(1)                                     # Array of batch id's
+batches=(1)                                     # Array of batches
+code_ids=(0 1 2 3 4 5)                          # Array of code IDs
 bond_dims=(10)                                  # Array of bond dimensions
 seeds=(100) # Array of (10) random seeds
 num_experiments=1                             # Runs per each random seed
@@ -27,15 +28,17 @@ done
 for seed in "${seeds[@]}"; do
     for num_qubits in "${nums_qubits[@]}"; do
         for batch in "${batches[@]}"; do
-            for bond_dim in "${bond_dims[@]}"; do
-                for error_rate in "${error_rates[@]}"; do
-                    for bias_prob in "${bias_probs[@]}"; do
-                        for tolerance in "${tolerances[@]}"; do
-                            for cut in "${cuts[@]}"; do
-                                # Print current configuration
-                                echo "Running for ${num_qubits} qubits, batch ${batch}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
-                                # Run the Python script
-                                poetry run python examples/decoding/quantum_csp.py --num_qubits ${num_qubits} --batch ${batch} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+            for code_id in "${code_ids[@]}"; do
+                for bond_dim in "${bond_dims[@]}"; do
+                    for error_rate in "${error_rates[@]}"; do
+                        for bias_prob in "${bias_probs[@]}"; do
+                            for tolerance in "${tolerances[@]}"; do
+                                for cut in "${cuts[@]}"; do
+                                    # Print current configuration
+                                    echo "Running for ${num_qubits} qubits, batch ${batch}, code id ${code_id}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
+                                    # Run the Python script
+                                    poetry run python examples/decoding/quantum_csp.py --num_qubits ${num_qubits} --batch ${batch} --code_id ${code_id} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+                                done
                             done
                         done
                     done
