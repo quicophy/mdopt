@@ -2,7 +2,7 @@
 
 nums_qubits=(30)                                # Array of numbers of qubits
 batches=(1)                                     # Array of batch id's
-bond_dims=(20)                                  # Array of bond dimensions
+bond_dims=(10)                                  # Array of bond dimensions
 seeds=(100) # Array of (10) random seeds
 num_experiments=1                             # Runs per each random seed
 error_model="Bitflip"                           # The error model
