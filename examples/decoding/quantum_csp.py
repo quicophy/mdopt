@@ -150,7 +150,7 @@ def get_csp_code(num_qubits: int, batch: int, code_id: int) -> CssCode:
             raise FileNotFoundError(f"Could not find {filename} in {code_dir}")
         with open(path, "r") as f:
             data = json.load(f)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         code_dir = f"data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
         filename = f"code_{code_id}.json"
         path = os.path.join(code_dir, filename)
