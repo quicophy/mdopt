@@ -140,15 +140,24 @@ def get_csp_code(num_qubits: int, batch: int, code_id: int) -> CssCode:
     """
     Load the specified JSON CSP code for (num_qubits, batch, code_id).
     """
-    code_dir = (
-        f"examples/decoding/data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
-    )
-    filename = f"code_{code_id}.json"
-    path = os.path.join(code_dir, filename)
-    if not os.path.isfile(path):
-        raise FileNotFoundError(f"Could not find {filename} in {code_dir}")
-    with open(path, "r") as f:
-        data = json.load(f)
+    try:
+        code_dir = (
+            f"examples/decoding/data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
+        )
+        filename = f"code_{code_id}.json"
+        path = os.path.join(code_dir, filename)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Could not find {filename} in {code_dir}")
+        with open(path, "r") as f:
+            data = json.load(f)
+    except FileNotFoundError as e:
+        code_dir = f"data-csp-codes/batch_{batch}/codes/qubits_{num_qubits}"
+        filename = f"code_{code_id}.json"
+        path = os.path.join(code_dir, filename)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Could not find {filename} in {code_dir}")
+        with open(path, "r") as f:
+            data = json.load(f)
 
     x_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["x_stabs"])
     z_mat = BinaryMatrix(num_columns=data["num_qubits"], rows=data["z_stabs"])
