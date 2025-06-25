@@ -79,4 +79,4 @@ EOS
     done
 done
 
-echo "All calculations are complete."
+echo "All jobs have been submitted. Check the queue with 'squeue -u \${USER}'"
