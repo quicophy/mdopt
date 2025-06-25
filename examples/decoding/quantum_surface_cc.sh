@@ -52,8 +52,8 @@ for seed in "${seeds[@]}"; do
 #SBATCH --time=09:00:00                                                                              # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=${num_processes}                                                             # Number of CPU cores per task
 #SBATCH --mem=4000                                                                                   # Memory per node
-#SBATCH --job-name=decoding-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}         # Descriptive job name
-#SBATCH --output=decoding-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out    # Standard output and error log
+#SBATCH --job-name=surface-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}         # Descriptive job name
+#SBATCH --output=surface-${lattice_size}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out    # Standard output and error log
 
 export OMP_NUM_THREADS=1
 module load python/3.11.5

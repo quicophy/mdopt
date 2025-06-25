@@ -49,8 +49,8 @@ export OMP_NUM_THREADS=1
 #SBATCH --time=24:00:00                                                                           # Time limit (hh:mm:ss)
 #SBATCH --cpus-per-task=1                                                                         # Number of CPU cores per task
 #SBATCH --mem=32000                                                                               # Memory per node
-#SBATCH --job-name=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
-#SBATCH --output=decoding-classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
+#SBATCH --job-name=classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}       # Descriptive job name
+#SBATCH --output=classical-ldpc-${system_size}-${bond_dim}-${error_rate}-${seed}-%j.out  # Standard output and error log
 
 export OMP_NUM_THREADS=1
 module load python/3.11.5
