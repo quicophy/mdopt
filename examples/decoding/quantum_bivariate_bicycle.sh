@@ -1,12 +1,12 @@
 #!/bin/bash
 
-order_x=15                                      # Orders for polynomials to create BB codes
-order_y=3
-poly_a="x**9 + y + y**2"                        # The polynomials used to create BB codes
-poly_b="1 + x**2 + x**7"
-bond_dims=(30)                                  # Array of bond dimensions
+order_x=6                                       # Orders for polynomials to create BB codes
+order_y=6
+poly_a="x**3 + y + y**2"                        # The polynomials used to create BB codes
+poly_b="y**3 + x + x**2"
+bond_dims=(30 50 70 90 100).                    # Array of bond dimensions
 seeds=(100 101 102 103 104 105 106 107 108 109) # (10) random seeds
-num_experiments=500                             # Runs per each random seed
+num_experiments=100                             # Runs per each random seed
 error_model="Bitflip"                           # The error model
 bias_probs=(1e-1)                               # Decoder bias probabilities
 tolerances=(0)                                  # Numerical tolerances for the MPS
@@ -32,7 +32,7 @@ for seed in "${seeds[@]}"; do
                 for tolerance in "${tolerances[@]}"; do
                     for cut in "${cuts[@]}"; do
                         # Print current configuration
-                        echo "Running for orders ${order_x}, ${order_y}, polynomials "${poly_a}", "${poly_b}", bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
+                        echo "Running ${num_experiments} experiments for orders ${order_x}, ${order_y}, polynomials "${poly_a}", "${poly_b}", bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
                         # Run the Python script with the specified arguments
                         poetry run python examples/decoding/quantum_bivariate_bicycle.py --order_x ${order_x} --order_y ${order_y} --poly_a "${poly_a}" --poly_b "${poly_b}" --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
                     done
