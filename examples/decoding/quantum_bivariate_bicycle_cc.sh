@@ -36,10 +36,10 @@ else
 fi
 
 # Create job submission scripts by iterating over combinations of the arguments
-order_x=15                                      # Orders for polynomials to create BB codes
-order_y=3
-poly_a="x**9 + y + y**2"                        # The polynomials used to create BB codes
-poly_b="1 + x**2 + x**7"
+order_x=6                                       # Orders for polynomials to create BB codes
+order_y=6
+poly_a="x**3 + y + y**2"                        # The polynomials used to create BB codes
+poly_b="y**3 + x + x**2"
 bond_dims=(30)                                  # Array of bond dimensions
 seeds=(100 101 102 103 104 105 106 107 108 109) # (10) random seeds
 num_experiments=500                             # Runs per each random seed
