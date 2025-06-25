@@ -14,18 +14,18 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
-nums_qubits=(30)                                # Array of numbers of qubits
-batches=(1)                                     # Array of batches
-code_ids=(0)                                    # Array of code IDs
-bond_dims=(20)                                  # Array of bond dimensions
-seeds=(100 101 102 103 104 105 106 107 108 109) # Array of (10) random seeds
-num_experiments=10                              # Runs per each random seed
-error_model="Bitflip"                           # The error model
-bias_probs=(1e-1)                               # Array of decoder bias probabilities
-tolerances=(0)                                  # Array of numerical tolerances for the MPS within the decoder
-cuts=(0)                                        # Array of SVD cut-offs for the MPS within the decoder
-num_processes=16                                # The number of processes to use in parallel
-silent=false                                    # Whether to suppress the output of the Python script
+nums_qubits=(30)                                 # Array of numbers of qubits
+batches=(1)                                      # Array of batches
+code_ids=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15) # Array of code IDs
+bond_dims=(90)                                   # Array of bond dimensions
+seeds=(100 101 102 103 104)                      # Array of (5) random seeds
+num_experiments=1000                             # Runs per each random seed
+error_model="Bitflip"                            # The error model
+bias_probs=(1e-1)                                # Array of decoder bias probabilities
+tolerances=(0)                                   # Array of numerical tolerances for the MPS within the decoder
+cuts=(0)                                         # Array of SVD cut-offs for the MPS within the decoder
+num_processes=16                                 # The number of processes to use in parallel
+silent=false                                     # Whether to suppress the output of the Python script
 
 error_rates=()
 start=0.01
