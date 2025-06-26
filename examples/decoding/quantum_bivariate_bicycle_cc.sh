@@ -72,9 +72,9 @@ for seed in "${seeds[@]}"; do
                         # Create the job submission script
                         cat > "$job_script" <<EOS
 #!/bin/bash
-#SBATCH --time=02:00:00                                                                                  # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=2                                                                                # Number of CPU cores per task
-#SBATCH --mem=2000                                                                                       # Memory per node
+#SBATCH --time=02:00:00                                                                            # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=${num_processes}                                                           # Number of CPU cores per task
+#SBATCH --mem=2000                                                                                 # Memory per node
 #SBATCH --job-name=bb-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}       # Descriptive job name
 #SBATCH --output=bb-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out  # Standard output and error log
 
