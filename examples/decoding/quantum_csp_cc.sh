@@ -54,7 +54,7 @@ for seed in "${seeds[@]}"; do
                                     cat > "$job_script" <<EOS
 #!/bin/bash
 #SBATCH --time=00:40:00                                                                                          # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=2                                                                                        # Number of CPU cores per task
+#SBATCH --cpus-per-task=${num_processes}                                                                         # Number of CPU cores per task
 #SBATCH --mem=2000                                                                                               # Memory per node
 #SBATCH --job-name=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}        # Descriptive job name
 #SBATCH --output=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}-%j.out   # Standard output and error log
