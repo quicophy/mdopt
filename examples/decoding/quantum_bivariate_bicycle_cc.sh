@@ -40,7 +40,7 @@ order_x=6                                       # Orders for polynomials to crea
 order_y=6
 poly_a="x**3 + y + y**2"                        # The polynomials used to create BB codes
 poly_b="y**3 + x + x**2"
-bond_dims=(30)                                  # Array of bond dimensions
+bond_dims=(90)                                  # Array of bond dimensions
 seeds=(100 101 102 103 104 105 106 107 108 109) # (10) random seeds
 num_experiments=500                             # Runs per each random seed
 error_model="Bitflip"                           # The error model
@@ -72,9 +72,9 @@ for seed in "${seeds[@]}"; do
                         # Create the job submission script
                         cat > "$job_script" <<EOS
 #!/bin/bash
-#SBATCH --time=04:00:00                                                                                  # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=${num_processes}                                                                 # Number of CPU cores per task
-#SBATCH --mem=4000                                                                                       # Memory per node
+#SBATCH --time=02:00:00                                                                                  # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=2                                                                                # Number of CPU cores per task
+#SBATCH --mem=2000                                                                                       # Memory per node
 #SBATCH --job-name=decoding-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}       # Descriptive job name
 #SBATCH --output=decoding-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out  # Standard output and error log
 
