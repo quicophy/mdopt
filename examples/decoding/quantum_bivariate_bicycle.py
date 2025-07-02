@@ -277,11 +277,9 @@ def run_experiment(
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
 
-    logicals_distributions = [result[0] for result in results]
     failures = [result[1] for result in results]
 
     return {
-        "logicals_distributions": logicals_distributions,
         "failures": failures,
         "errors": errors,
         "lattice_size": order_x,
