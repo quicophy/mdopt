@@ -307,7 +307,6 @@ def run_experiment(
     failures = [result[1] for result in results]
 
     return {
-        "logicals_distributions": logicals_distributions,
         "failures": failures,
         "errors": errors,
         "lattice_size": num_qubits,
