@@ -14,14 +14,14 @@ pip install --no-index --upgrade pip
 pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
+batches=({1..14})                                # Array of batches
 nums_qubits=(30)                                 # Array of numbers of qubits
-batches=(1)                                      # Array of batches
-code_ids=(0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15) # Array of code IDs
-bond_dims=(90)                                   # Array of bond dimensions
-seeds=(100 101 102 103 104)                      # Array of (5) random seeds
-num_experiments=1000                             # Runs per each random seed
+code_ids=({0..99})                               # Array of code IDs
+bond_dims=(150)                                  # Array of bond dimensions
+seeds=(123)                                      # Array of random seeds
+num_experiments=5000                             # Runs per each random seed
 error_model="Bitflip"                            # The error model
-bias_probs=(1e-1)                                # Array of decoder bias probabilities
+bias_probs=(1e-3)                                # Array of decoder bias probabilities
 tolerances=(0)                                   # Array of numerical tolerances for the MPS within the decoder
 cuts=(0)                                         # Array of SVD cut-offs for the MPS within the decoder
 num_processes=16                                 # The number of processes to use in parallel
@@ -37,7 +37,7 @@ do
     error_rates+=($current)
     current=$(echo "$current + $step" | bc -l)
 done
-
+error_rates=(0.0001 0.001 0.002 0.004 0.008 0.01)
 # Iterate over combinations of the arguments and run the Python script
 for seed in "${seeds[@]}"; do
     for num_qubits in "${nums_qubits[@]}"; do
@@ -53,11 +53,11 @@ for seed in "${seeds[@]}"; do
                                     # Create the job submission script
                                     cat > "$job_script" <<EOS
 #!/bin/bash
-#SBATCH --time=00:40:00                                                                                          # Time limit (hh:mm:ss)
-#SBATCH --cpus-per-task=${num_processes}                                                                         # Number of CPU cores per task
-#SBATCH --mem=2000                                                                                               # Memory per node
-#SBATCH --job-name=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}        # Descriptive job name
-#SBATCH --output=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}-%j.out   # Standard output and error log
+#SBATCH --time=12:00:00                                                                                         # Time limit (hh:mm:ss)
+#SBATCH --cpus-per-task=${num_processes}                                                                        # Number of CPU cores per task
+#SBATCH --mem=32000                                                                                             # Memory per node
+#SBATCH --job-name=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}       # Descriptive job name
+#SBATCH --output=csp-${num_qubits}-${bond_dim}-${error_rate}-${error_model}-${batch}-${code_id}-${seed}-%j.out  # Standard output and error log
 
 export OMP_NUM_THREADS=1
 module load python/3.11.5

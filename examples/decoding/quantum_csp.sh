@@ -1,29 +1,29 @@
 #!/bin/bash
 
-nums_qubits=(30)                                # Array of numbers of qubits
-batches=(1)                                     # Array of batches
-code_ids=(0 1 2 3 4 5)                          # Array of code IDs
-bond_dims=(10)                                  # Array of bond dimensions
-seeds=(100) # Array of (10) random seeds
-num_experiments=1                             # Runs per each random seed
-error_model="Bitflip"                           # The error model
-bias_probs=(1e-1)                               # Array of decoder bias probabilities
-tolerances=(0)                                  # Array of numerical tolerances for the MPS within the decoder
-cuts=(0)                                        # Array of SVD cut-offs for the MPS within the decoder
-num_processes=16                                # The number of processes to use in parallel
-silent=false                                    # Whether to suppress the output of the Python script
+batches=({1..14})                                # Array of batches
+nums_qubits=(30)                                 # Array of numbers of qubits
+code_ids=({0..99})                               # Array of code IDs
+bond_dims=(150)                                  # Array of bond dimensions
+seeds=(123)                                      # Array of random seeds
+num_experiments=5000                             # Runs per each random seed
+error_model="Bitflip"                            # The error model
+bias_probs=(1e-3)                                # Array of decoder bias probabilities
+tolerances=(0)                                   # Array of numerical tolerances for the MPS within the decoder
+cuts=(0)                                         # Array of SVD cut-offs for the MPS within the decoder
+num_processes=16                                 # The number of processes to use in parallel
+silent=false                                     # Whether to suppress the output of the Python script
 
 error_rates=()
-start=0.06
-end=0.06
-step=0.005
+start=0.01
+end=0.21
+step=0.02
 current=$start
 while (( $(echo "$current <= $end" | bc -l) ))
 do
     error_rates+=($current)
     current=$(echo "$current + $step" | bc -l)
 done
-
+error_rates=(0.0001 0.001 0.002 0.004 0.008 0.01)
 # Iterate over combinations of the arguments and run the Python script
 for seed in "${seeds[@]}"; do
     for num_qubits in "${nums_qubits[@]}"; do
