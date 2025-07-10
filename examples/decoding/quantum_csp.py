@@ -298,7 +298,7 @@ def run_experiment(
         results = pool.starmap(run_single_experiment, args)
 
     logging.info(
-        f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
+        f"Finished {num_experiments} experiments for NUM_QUBITS={num_qubits},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )

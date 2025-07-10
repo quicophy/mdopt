@@ -272,7 +272,7 @@ def run_experiment(
         results = pool.starmap(run_single_experiment, args)
 
     logging.info(
-        f"Starting {num_experiments} experiments for ORDERS={order_x, order_y},"
+        f"Finished {num_experiments} experiments for ORDERS={order_x, order_y},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
     )
