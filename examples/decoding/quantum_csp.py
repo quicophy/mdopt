@@ -303,12 +303,10 @@ def run_experiment(
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )
 
-    logicals_distributions = [result[0] for result in results]
     failures = [result[1] for result in results]
 
     return {
         "failures": failures,
-        "errors": errors,
         "lattice_size": num_qubits,
         "chi_max": chi_max,
         "error_rate": error_rate,

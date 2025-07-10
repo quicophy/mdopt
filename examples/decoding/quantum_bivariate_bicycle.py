@@ -281,7 +281,6 @@ def run_experiment(
 
     return {
         "failures": failures,
-        "errors": errors,
         "lattice_size": order_x,
         "order_x": order_x,
         "order_y": order_y,
