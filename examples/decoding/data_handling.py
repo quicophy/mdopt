@@ -4,6 +4,7 @@ import os
 import re
 import pickle
 import numpy as np
+import seaborn as sns
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -15,9 +16,10 @@ from scipy.optimize import minimize
 
 from numpy.polynomial.polynomial import polyfit, Polynomial
 
-
-plt.rcParams["text.usetex"] = True  # Enable LaTeX in matplotlib
-plt.rcParams["font.family"] = "serif"  # Optional: sets font family to serif
+sns.set_style("whitegrid")
+sns.set_palette("colorblind")
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
 
 
 def load_data(file_key: str):
@@ -60,8 +62,6 @@ def process_failure_statistics(
     error_bars : dict
         Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to
         error bars (standard error of the mean).
-    errors_dict : dict
-        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to lists of errors.
     sorted_unique_error_rates : list
         A sorted list of all unique error rates found across all lattice sizes and bond dimensions.
     logicals_distributions_dict : dict
@@ -78,7 +78,6 @@ def process_failure_statistics(
     error_rates_dict = {}
     failure_rates = {}
     error_bars = {}
-    errors_dict = {}
     all_unique_error_rates = set()
     logicals_distributions_dict = {}
     failures_statistics_dict = {}
@@ -88,35 +87,23 @@ def process_failure_statistics(
             # Create a regex pattern to match the desired file format
             pattern = rf"^latticesize{lattice_size}_bonddim{chi_max}_errorrate[0-9\.]+(?:e[+-]?[0-9]+)?_errormodel{error_model}+_bias_prob[0-9\.]+(?:e[+-]?[0-9]+)?_numexperiments[0-9]+_tolerance[0-9\.]+(?:e[+-]?[0-9]+)?_cut[0-9\.]+(?:e[+-]?[0-9]+)?_seed\d+\.pkl$"
 
-            all_logicals_distributions = (
-                {}
-            )  # Dictionary to store the logicals distributions
             all_failures_statistics = {}
-            all_errors_statistics = {}  # Dictionary to store errors for each error rate
             error_rates = set()  # Use a set to avoid duplicates
 
             for file_name in os.listdir(directory):
                 if re.match(pattern, file_name):
-                    data = load_data(os.path.join(directory, file_name))
+                    try:
+                        data = load_data(os.path.join(directory, file_name))
+                    except Exception as exc:
+                        print(f"Error unpickling {file_name}: {exc}")
+                        raise exc
 
-                    logicals_distributions = data["logicals_distributions"]
                     failures_statistics = data["failures"]
-                    file_errors = data["errors"]
                     file_error_rate = round(data["error_rate"], precision)
 
                     if file_error_rate not in all_failures_statistics:
                         all_failures_statistics[file_error_rate] = []
                     all_failures_statistics[file_error_rate].extend(failures_statistics)
-
-                    if file_error_rate not in all_errors_statistics:
-                        all_errors_statistics[file_error_rate] = []
-                    all_errors_statistics[file_error_rate].extend(file_errors)
-
-                    if file_error_rate not in all_logicals_distributions:
-                        all_logicals_distributions[file_error_rate] = []
-                    all_logicals_distributions[file_error_rate].extend(
-                        logicals_distributions
-                    )
 
                     # Add the error rate to the sets
                     error_rates.add(file_error_rate)
@@ -129,7 +116,6 @@ def process_failure_statistics(
             # Calculate mean failure rates, error bars, and store errors
             for error_rate in sorted_error_rates:
                 failures_statistics = all_failures_statistics[error_rate]
-                errors_statistics = all_errors_statistics[error_rate]
 
                 if failures_statistics:
                     # Calculate mean failure rate skipping the nans
@@ -141,14 +127,6 @@ def process_failure_statistics(
                     # Calculate standard error of the mean (error bar)
                     error_bars[(lattice_size, chi_max, error_rate)] = sem(
                         failures_statistics, nan_policy="omit"
-                    )
-
-                    # Store the errors
-                    errors_dict[(lattice_size, chi_max, error_rate)] = errors_statistics
-
-                    # Store the logicals distributions
-                    logicals_distributions_dict[(lattice_size, chi_max, error_rate)] = (
-                        all_logicals_distributions[error_rate]
                     )
 
                     failures_statistics_dict[(lattice_size, chi_max, error_rate)] = (
@@ -164,7 +142,138 @@ def process_failure_statistics(
         error_rates_dict,
         failure_rates,
         error_bars,
-        errors_dict,
+        sorted(all_unique_error_rates),
+        logicals_distributions_dict,
+        failures_statistics_dict,
+    )
+
+
+def process_failure_statistics_csp(
+    lattice_sizes: list[int],
+    max_bond_dims: list[int],
+    error_model: str,
+    directory: str,
+    precision: int = 5,
+):
+    """
+    Processing of failure statistics: exactly the same as
+    process_failure_statistics, but always averages over batches and code_ids
+    (i.e. one mean per file) rather than pooling every single experiment.
+
+    Parameters
+    ----------
+    lattice_sizes : list of int
+        List of lattice sizes to process.
+    max_bond_dims : list of int
+        List of maximum bond dimensions to consider.
+    error_model : str
+        Name of the error model to filter files.
+    directory : str
+        Path to the directory containing data files.
+    precision : int, optional
+        Precision to round the error rates to. Default is 5.
+
+    Returns
+    -------
+    error_rates_dict : dict
+        Dictionary mapping `(lattice_size, chi_max)` tuples to sorted lists of error rates.
+    failure_rates : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to mean failure rates.
+    error_bars : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to
+        error bars (standard error of the mean of file-means).
+    sorted_unique_error_rates : list
+        A sorted list of all unique error rates found across all lattice sizes and bond dimensions.
+    logicals_distributions_dict : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to logicals distributions.
+    failures_statistics_dict : dict
+        Dictionary mapping `(lattice_size, chi_max, error_rate)` tuples to arrays of file-level mean failures.
+    """
+    error_rates_dict = {}
+    failure_rates = {}
+    error_bars = {}
+    all_unique_error_rates = set()
+    logicals_distributions_dict = {}
+    failures_statistics_dict = {}
+
+    for lattice_size in lattice_sizes:
+        for chi_max in max_bond_dims:
+            # match files including batch and codeid
+            pattern = (
+                rf"^latticesize{lattice_size}_bonddim{chi_max}_"
+                r"errorrate[0-9\.]+(?:e[+-]?[0-9]+)?_"
+                rf"errormodel{error_model}+_"
+                r"bias_prob[0-9\.]+(?:e[+-]?[0-9]+)?_"
+                r"numexperiments[0-9]+_"
+                r"tolerance[0-9\.]+(?:e[+-]?[0-9]+)?_"
+                r"cut[0-9\.]+(?:e[+-]?[0-9]+)?_"
+                r"batch\d+_codeid\d+_seed\d+\.pkl$"
+            )
+
+            # per‐file grouping of failures
+            per_file_failures = {}  # error_rate -> {(batch,codeid): [failures]}
+            all_logicals_distributions = {}  # error_rate -> [logicals...]
+            error_rates = set()
+
+            for fname in os.listdir(directory):
+                m = re.match(pattern, fname)
+                if not m:
+                    continue
+
+                try:
+                    data = load_data(os.path.join(directory, fname))
+                except Exception as exc:
+                    print(f"Error unpickling {fname}: {exc}")
+                    raise exc
+
+                failures = data["failures"]
+                erate = round(data["error_rate"], precision)
+
+                # extract batch & codeid
+                batch = int(re.search(r"_batch(\d+)_codeid", fname).group(1))
+                codeid = int(re.search(r"_codeid(\d+)_seed", fname).group(1))
+
+                # accumulate per‐file lists
+                per_file_failures.setdefault(erate, {}).setdefault(
+                    (batch, codeid), []
+                ).extend(failures)
+
+                error_rates.add(erate)
+                all_unique_error_rates.add(erate)
+
+            # record sorted error‐rates for this (L, χ)
+            sorted_errs = sorted(error_rates)
+            error_rates_dict[(lattice_size, chi_max)] = sorted_errs
+
+            # compute failure rates & SEM over file‐means
+            for er in sorted_errs:
+                file_dict = per_file_failures.get(er, {})
+                if not file_dict:
+                    print(
+                        f"No data for lattice_size={lattice_size}, "
+                        f"chi_max={chi_max}, error_rate={er}"
+                    )
+                    continue
+
+                # one mean per file:
+                file_means = np.array(
+                    [np.nanmean(flist) for flist in file_dict.values()]
+                )
+
+                failure_rates[(lattice_size, chi_max, er)] = np.nanmean(file_means)
+                error_bars[(lattice_size, chi_max, er)] = sem(
+                    file_means, nan_policy="omit"
+                )
+
+                logicals_distributions_dict[(lattice_size, chi_max, er)] = (
+                    all_logicals_distributions.get(er, [])
+                )
+                failures_statistics_dict[(lattice_size, chi_max, er)] = file_means
+
+    return (
+        error_rates_dict,
+        failure_rates,
+        error_bars,
         sorted(all_unique_error_rates),
         logicals_distributions_dict,
         failures_statistics_dict,
@@ -254,6 +363,7 @@ def plot_failure_statistics(
     xlim: tuple = None,
     xscale: str = "linear",
     yscale: str = "linear",
+    bb: bool = False,
 ):
     """
     Plot failure rates with error bars for either varying bond dimensions at all lattice sizes,
@@ -280,6 +390,9 @@ def plot_failure_statistics(
         Scale of the x-axis. Default is "linear".
     yscale : str, optional
         Scale of the y-axis. Default is "linear".
+    bb : bool, optional
+        If True, displays the BB code parameters based on "lattice_size".
+        Ref: https://arxiv.org/pdf/2308.07915
 
     Returns
     -------
@@ -291,6 +404,11 @@ def plot_failure_statistics(
 
     # Setup colormap
     cmap = matplotlib.colormaps["viridis_r"]
+
+    bb_code_params = {
+        36: "[[72, 12, 6]]",
+        45: "[[90, 8, 10]]",
+    }
 
     # Mode 1: Fixed lattice size, vary bond dimensions
     if mode == "lattice_size":
@@ -337,7 +455,9 @@ def plot_failure_statistics(
     # Mode 2: Fixed bond dimension, vary lattice sizes
     elif mode == "bond_dim":
         for chi_max in max_bond_dims:
-            plt.figure(figsize=(6, 4))
+            plt.figure(
+                figsize=(6.5, 4)
+            )  # this is double-column, use 5x3 for single-column
             norm = Normalize(vmin=0, vmax=len(lattice_sizes) - 1)
 
             for index, lattice_size in enumerate(lattice_sizes):
@@ -360,11 +480,20 @@ def plot_failure_statistics(
                         for error_rate in error_rates
                     ],
                     fmt="o--",
-                    label=f"Lattice size: {lattice_size}",
+                    label=(
+                        f"Lattice size: {lattice_size}"
+                        if not bb
+                        else f"{bb_code_params.get(lattice_size, '')}"
+                    ),
                     linewidth=3,
                     color=cmap(norm(index)),
                 )
-
+            plt.plot(
+                error_rates,
+                list(map(lambda x: x, error_rates)),
+                "x--",
+                label="Pseudo-threshold equation",
+            )
             plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
@@ -374,7 +503,73 @@ def plot_failure_statistics(
             plt.xscale(xscale)
             plt.yscale(yscale)
             plt.grid(True)
+            plt.savefig("bb_logical_error_rate.pdf", dpi=300)
             plt.show()
+
+
+def plot_bond_dimension_scaling(
+    failure_rates: dict,
+    target_error_rate: float,
+    threshold: float,
+):
+    """
+    Plot the minimum bond dimension required to achieve a target error rate
+    as a function of lattice size, with a linear fit.
+
+    Parameters
+    ----------
+    failure_rates : dict
+        Dictionary mapping `(lattice_size, bond_dimension, error_rate)` tuples
+        to logical failure rates.
+    target_error_rate : float
+        The target error rate to consider for the plot.
+    threshold : float
+        The threshold for logical failure rates to consider in the plot.
+    """
+    min_bond_dim = {}
+
+    for (lattice_size, bond_dimension, error_rate), fail_rate in failure_rates.items():
+        if error_rate == target_error_rate and fail_rate <= threshold:
+            if (
+                lattice_size not in min_bond_dim
+                or bond_dimension < min_bond_dim[lattice_size]
+            ):
+                min_bond_dim[lattice_size] = bond_dimension
+
+    if not min_bond_dim:
+        print("No data below threshold found.")
+        return
+
+    lattice_sizes = sorted(min_bond_dim.keys())
+    bond_dims = [min_bond_dim[lattice_size] for lattice_size in lattice_sizes]
+
+    coefs = polyfit(lattice_sizes, bond_dims, deg=2)
+    poly = Polynomial(coefs)
+    latticesize_fit = np.linspace(0, 50, 2000)
+    bondim_fit = poly(latticesize_fit)
+
+    plt.figure(figsize=(5, 3))  # this is single-column, use 6.5x4 for double-column
+    plt.plot(lattice_sizes, bond_dims, "o", label="Minimum bond dim")
+    plt.plot(
+        latticesize_fit,
+        bondim_fit,
+        "--",
+        label=f"Fit: $\chi \\sim {coefs[2]:.3f}L^2 + {coefs[1]:.3f}L + {coefs[0]:.3f} $",
+        linewidth=3,
+    )
+    plt.xlabel("Lattice size $L$")
+    plt.ylabel("Bond dimension $\chi$")
+    plt.title(f"Bond dimension scaling at $p = {target_error_rate}$")
+    plt.legend(fontsize=7)
+    plt.grid(True)
+    plt.xlim(min(lattice_sizes) - 1, max(lattice_sizes) + 1)
+    plt.ylim(min(bond_dims) - 1, max(bond_dims) + 1)
+    ax = plt.gca()
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+
+    plt.tight_layout()
+    plt.savefig("surface_bond_dimension_scaling.pdf", dpi=300)
+    plt.show()
 
 
 def fit_failure_statistics(
@@ -564,67 +759,3 @@ def fit_failure_statistics(
             plt.show()
         else:
             print(f"Skipping plot for chi_max={chi_max} due to no valid data.")
-
-
-def plot_bond_dimension_scaling(
-    failure_rates: dict,
-    target_error_rate: float,
-    threshold: float,
-):
-    """
-    Plot the minimum bond dimension required to achieve a target error rate
-    as a function of lattice size, with a linear fit.
-
-    Parameters
-    ----------
-    failure_rates : dict
-        Dictionary mapping `(lattice_size, bond_dimension, error_rate)` tuples
-        to logical failure rates.
-    target_error_rate : float
-        The target error rate to consider for the plot.
-    threshold : float
-        The threshold for logical failure rates to consider in the plot.
-    """
-    min_bond_dim = {}
-
-    for (lattice_size, bond_dimension, error_rate), fail_rate in failure_rates.items():
-        if error_rate == target_error_rate and fail_rate <= threshold:
-            if (
-                lattice_size not in min_bond_dim
-                or bond_dimension < min_bond_dim[lattice_size]
-            ):
-                min_bond_dim[lattice_size] = bond_dimension
-
-    if not min_bond_dim:
-        print("No data below threshold found.")
-        return
-
-    lattice_sizes = sorted(min_bond_dim.keys())
-    bond_dims = [min_bond_dim[lattice_size] for lattice_size in lattice_sizes]
-
-    coefs = polyfit(lattice_sizes, bond_dims, deg=2)
-    poly = Polynomial(coefs)
-    latticesize_fit = np.linspace(0, 50, 2000)
-    bondim_fit = poly(latticesize_fit)
-
-    plt.figure(figsize=(6, 4))
-    plt.plot(lattice_sizes, bond_dims, "o", label="Minimum bond dim")
-    plt.plot(
-        latticesize_fit,
-        bondim_fit,
-        "--",
-        label=f"Fit: $\chi \\sim {coefs[2]:.3f}L^2 + {coefs[1]:.3f}L + {coefs[0]:.3f} $",
-        linewidth=3,
-    )
-    plt.xlabel("Lattice size $L$")
-    plt.ylabel("Bond dimension $\chi$")
-    plt.title(f"Bond dimension scaling at $p = {target_error_rate}$")
-    plt.legend(fontsize=7)
-    plt.grid(True)
-    plt.xlim(min(lattice_sizes) - 1, max(lattice_sizes) + 1)
-    plt.ylim(min(bond_dims) - 1, max(bond_dims) + 1)
-    ax = plt.gca()
-    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-
-    plt.tight_layout()
-    plt.show()
