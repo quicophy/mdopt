@@ -408,6 +408,8 @@ def plot_failure_statistics(
     bb_code_params = {
         36: "[[72, 12, 6]]",
         45: "[[90, 8, 10]]",
+        54: "[[108, 8, 10]]",
+        72: "[[144, 12, 12]]",
     }
 
     # Mode 1: Fixed lattice size, vary bond dimensions
