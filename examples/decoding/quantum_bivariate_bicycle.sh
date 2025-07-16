@@ -4,11 +4,11 @@ order_x=6                                       # Orders for polynomials to crea
 order_y=6
 poly_a="x**3 + y + y**2"                        # The polynomials used to create BB codes
 poly_b="y**3 + x + x**2"
-bond_dims=(30 50 70 90 100).                    # Array of bond dimensions
-seeds=(100 101 102 103 104 105 106 107 108 109) # (10) random seeds
-num_experiments=100                             # Runs per each random seed
+bond_dims=(150)                                 # Array of bond dimensions
+seeds=(777)                                     # Array of random seeds
+num_experiments=100000                          # Runs per each random seed
 error_model="Bitflip"                           # The error model
-bias_probs=(1e-1)                               # Decoder bias probabilities
+bias_probs=(1e-4)                               # Decoder bias probabilities
 tolerances=(0)                                  # Numerical tolerances for the MPS
 cuts=(0)                                        # SVD cut-offs for the MPS
 num_processes=16                                # Parallel processes
@@ -23,7 +23,7 @@ while (( $(echo "$current <= $end" | bc -l) )); do
     error_rates+=($current)
     current=$(echo "$current + $step" | bc -l)
 done
-
+error_rates=(0.001)
 # Create job submission scripts by iterating over combinations of the arguments
 for seed in "${seeds[@]}"; do
     for bond_dim in "${bond_dims[@]}"; do
