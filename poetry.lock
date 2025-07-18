@@ -3476,15 +3476,15 @@ files = [
 
 [[package]]
 name = "qldpc"
-version = "0.1.2"
+version = "0.1.3"
 description = "Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 markers = "python_version <= \"3.11\" or python_version >= \"3.12\""
 files = [
-    {file = "qldpc-0.1.2-py3-none-any.whl", hash = "sha256:6aa3d111ca1f01a555237c6f6aca8b493c5cd7159dd0fb69fb13d3d2be571ca3"},
-    {file = "qldpc-0.1.2.tar.gz", hash = "sha256:44c9708b4b35ffe1d02d9c88db2372ca9c95d52e31f5a55ab29709c3812204e0"},
+    {file = "qldpc-0.1.3-py3-none-any.whl", hash = "sha256:72094c4e5d574ca4c86417d52faa7aa041f838f46fa4df843af115a94ccb0570"},
+    {file = "qldpc-0.1.3.tar.gz", hash = "sha256:418ab571549178c2a11340a137330bb7b073c57cc50d57e2d60a7f25b1f27806"},
 ]
 
 [package.dependencies]
@@ -3501,7 +3501,7 @@ stim = ">=1.14.0"
 sympy = ">=1.12"
 
 [package.extras]
-dev = ["checks-superstaq (>=0.5.34)", "poetry (>=2.1.3)"]
+dev = ["checks-superstaq (>=0.5.45)", "poetry (>=2.1.3)"]
 gurobi = ["gurobipy (>=10.0.0)"]
 
 [[package]]
