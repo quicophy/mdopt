@@ -505,7 +505,7 @@ def plot_failure_statistics(
             plt.xscale(xscale)
             plt.yscale(yscale)
             plt.grid(True)
-            plt.savefig("bb_logical_error_rate.pdf", dpi=300)
+            plt.savefig("plot.pdf", dpi=300)
             plt.show()
 
 
