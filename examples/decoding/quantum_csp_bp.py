@@ -84,7 +84,7 @@ def main():
 
             # Build the logical-error-rate function for this specific code
             ler_func = code.get_logical_error_rate_func(
-                num_samples=10000,
+                num_samples=50000,
                 max_error_rate=0.1,
                 pauli_bias=[1, 0, 0],  # Bit-flip channel (the probs are for X,Y,Z)
             )
