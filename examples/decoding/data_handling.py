@@ -499,12 +499,13 @@ def plot_failure_statistics(
             plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
             plt.xlabel("Error Rate")
             plt.ylabel("Failure Rate")
-            plt.legend(fontsize=7)
+            plt.legend(fontsize="small")
             if xlim:
                 plt.xlim(xlim)
             plt.xscale(xscale)
             plt.yscale(yscale)
-            plt.grid(True)
+            plt.grid(True, which="both", ls=":")
+            plt.tight_layout()
             plt.savefig("plot.pdf", dpi=300)
             plt.show()
 
