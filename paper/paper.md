@@ -10,12 +10,10 @@ authors:
   - name: Aleksandr Berezutskii
     orcid: 0009-0002-8149-135X
     affiliation: 1
-  - name: Stefanos Kourtis
-    affiliation: 1
 affiliations:
  - name: Institut Quantique & Département de Physique, Université de Sherbrooke, Sherbrooke, QC J1K 2R1, Canada
    index: 1
-date: 15 September 2025
+date: 23 September 2025
 bibliography: paper.bib
 ---
 
