@@ -69,3 +69,5 @@ logicals, success = decode_css(
 # Acknowledgements
 
 This work was supported by the Ministère de l’Économie, de l’Innovation et de l’Énergie du Québec through its Research Chair in Quantum Computing, an NSERC Discovery grant, and the Canada First Research Excellence Fund. This work made use of the compute infrastructure of Calcul Québec and the Digital Research Alliance of Canada.
+
+# References
