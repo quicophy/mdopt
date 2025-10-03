@@ -10,7 +10,7 @@
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 
 
-### `mdopt` is a python package built on top of `numpy` for discrete optimisation (mainly for classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional condensed-matter applications.
+### `mdopt` is a python package built on top of `numpy` for discrete optimisation (mainly for classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
 
 ## Installation
 
