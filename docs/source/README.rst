@@ -4,8 +4,8 @@
 |codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|
 |mypy| |Unitary Fund| |MIT license|
 
-``mdopt`` is a python package built on top of numpy for discrete optimisation in the tensor-network (specifically, MPS-MPO) language.
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``mdopt`` is a python package built on top of ``numpy`` for discrete optimisation (mainly for classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Installation
 ------------
@@ -24,129 +24,51 @@ Otherwise, clone the repository and use
 
    poetry install
 
-``mdopt`` at a glance
----------------------
+Minimal example
+---------------
 
 .. code:: python
 
-   import logging
    import numpy as np
    import qecstruct as qec
-   from mdopt.mps.utils import create_custom_product_state
-   from mdopt.optimiser.utils import (
-       SWAP,
-       XOR_BULK,
-       XOR_LEFT,
-       XOR_RIGHT,
-   )
-   from examples.decoding.decoding import (
-       linear_code_constraint_sites,
-       linear_code_prepare_message,
-   )
-   from examples.decoding.decoding import (
-       apply_bitflip_bias,
-       apply_constraints,
-       decode_message,
+   from examples.decoding.decoding import decode_css
+
+   # Define a small instance of the surface code
+   LATTICE_SIZE = 3
+   surface_code = qec.hypergraph_product(
+       qec.repetition_code(LATTICE_SIZE),
+       qec.repetition_code(LATTICE_SIZE),
    )
 
-   logging.basicConfig(
-       level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+   # Input an error and choose decoder controls
+   logicals, success = decode_css(
+       code=surface_code,
+       error="IIXIIIIIIIIII",
+       bias_prob=0.1,
+       bias_type="Bitflip",
+       chi_max=64,
+       renormalise=True,
+       contraction_strategy="Optimised",
+       tolerance=0,
+       silent=False,
    )
 
-   NUM_BITS = 24
-   CHI_MAX = 256
-   NUM_EXPERIMENTS = 10
+Examples
+--------
 
-   SEED = 123
-   seed_seq = np.random.SeedSequence(SEED)
+The `examples <https://github.com/quicophy/mdopt/tree/main/examples>`__
+folder contains full workflows that demonstrate typical use cases:
 
-   error_rates = np.linspace(0.1, 0.3, 10)
-   failures_statistics = {}
+- **Classical / quantum LDPC code decoding**: tensor-network decoder for
+  classical and quantum LDPC codes under various noise models.
+- **Ising model**: optimisation of spin Hamiltonians using MPS
+  ground-state search.
+- **Random circuits**: contraction of random tensor networks for
+  benchmarking.
 
-   for ERROR_RATE in error_rates:
-       logging.info(
-           f"Starting experiments for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, ERROR_RATE={ERROR_RATE}"
-       )
-       failures = []
-
-       for l in range(NUM_EXPERIMENTS):
-           new_seed = seed_seq.spawn(1)[0]
-           rng = np.random.default_rng(new_seed)
-           random_integer = rng.integers(1, 10**8 + 1)
-           SEED = random_integer
-
-           CHECK_DEGREE, BIT_DEGREE = 4, 3
-           NUM_CHECKS = int(BIT_DEGREE * NUM_BITS / CHECK_DEGREE)
-           if NUM_BITS / NUM_CHECKS != CHECK_DEGREE / BIT_DEGREE:
-               raise ValueError("The Tanner graph of the code must be bipartite.")
-           PROB_BIAS = ERROR_RATE
-
-           code = qec.random_regular_code(
-               NUM_BITS, NUM_CHECKS, BIT_DEGREE, CHECK_DEGREE, qec.Rng(SEED)
-           )
-           code_constraint_sites = linear_code_constraint_sites(code)
-
-           INITIAL_CODEWORD, PERTURBED_CODEWORD = linear_code_prepare_message(
-               code, ERROR_RATE, error_model=qec.BinarySymmetricChannel, seed=SEED
-           )
-           tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
-
-           initial_codeword_state = create_custom_product_state(
-               INITIAL_CODEWORD, form="Right-canonical"
-           )
-           perturbed_codeword_state = create_custom_product_state(
-               PERTURBED_CODEWORD, form="Right-canonical"
-           )
-
-           logging.info("Applying bitflip bias to the perturbed codeword state.")
-           perturbed_codeword_state = apply_bitflip_bias(
-               mps=perturbed_codeword_state,
-               sites_to_bias="All",
-               prob_bias_list=PROB_BIAS,
-               renormalise=True,
-           )
-
-           try:
-               logging.info("Applying constraints to the perturbed codeword state.")
-               perturbed_codeword_state = apply_constraints(
-                   perturbed_codeword_state,
-                   code_constraint_sites,
-                   tensors,
-                   chi_max=CHI_MAX,
-                   renormalise=True,
-                   result_to_explicit=False,
-                   strategy="Optimised",
-                   silent=False,
-               )
-               logging.info("Decoding the perturbed codeword state using DMRG.")
-               dmrg_container, success = decode_message(
-                   message=perturbed_codeword_state,
-                   codeword=initial_codeword_state,
-                   chi_max_dmrg=CHI_MAX,
-               )
-               if success == 1:
-                   logging.info("Decoding successful.")
-               else:
-                   logging.info("Decoding failed.")
-           except Exception as e:
-               logging.error(f"Failed in DMRG decoding: {str(e)}", exc_info=True)
-               success = 0
-
-           failures.append(1 - success)
-           logging.info(
-               f"Finished experiment {l} for NUM_BITS={NUM_BITS}, CHI_MAX={CHI_MAX}, ERROR_RATE={ERROR_RATE}"
-           )
-
-       failures_statistics[(NUM_BITS, CHI_MAX, ERROR_RATE)] = failures
-       failures_key = (
-           f"numbits{NUM_BITS}_bonddim{CHI_MAX}_errorrate{ERROR_RATE}"
-       )
-       logging.info(
-           f"Completed experiments for {failures_key} with {np.mean(failures)*100:.2f}% failure rate."
-       )
-
-For more examples, see the ``mdopt`` `examples
-folder <https://github.com/quicophy/mdopt/tree/main/examples>`__.
+Each example is fully documented and serves as a starting point for
+building your own experiments. The package has been tested on macOS and
+Linux (Compute Canada clusters) and does not currently support Windows.
 
 Cite
 ----
@@ -181,6 +103,49 @@ practices in open-source software development, such as:
 - apply the desired changes and resolve any code conflicts,
 - run the tests and ensure they pass,
 - build the package from source.
+
+Developers may find the following guidelines useful:
+
+- **Running tests** Tests are executed using
+  `pytest <https://docs.pytest.org/>`__
+
+  .. code:: bash
+
+     pytest tests
+
+- **Building documentation** Documentation is built with
+  `Sphinx <https://www.sphinx-doc.org/>`__. A convenience script is
+  provided:
+
+  .. code:: bash
+
+     ./generate_docs.sh
+
+- **Coding style** The project follows the
+  `Black <https://black.readthedocs.io/en/stable/>`__ code style. Please
+  run Black before submitting a pull request:
+
+  .. code:: bash
+
+     black .
+
+- **Pre-commit hooks** Pre-commit hooks are configured to enforce
+  consistent style automatically. To enable them:
+
+  .. code:: bash
+
+     pre-commit install
+
+License
+-------
+
+This project is licensed under the `MIT License <LICENSE.md>`__.
+
+Documentation
+-------------
+
+Full documentation is available at
+`mdopt.readthedocs.io <https://mdopt.readthedocs.io/en/latest/>`__.
 
 .. |codecov| image:: https://codecov.io/gh/quicophy/mdopt/branch/main/graph/badge.svg?token=4G7VWYX0S2
    :target: https://codecov.io/gh/quicophy/mdopt
