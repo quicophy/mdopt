@@ -96,10 +96,10 @@ open-source software development, such as:
 Developers may find the following guidelines useful:
 
 - **Running tests**
-  Tests are executed using [pytest](https://docs.pytest.org/).
+  Tests are executed using [pytest](https://docs.pytest.org/)
   ```bash
   pytest tests
-```
+  ```
 
 - **Building documentation**
   Documentation is built with [Sphinx](https://www.sphinx-doc.org/).
@@ -107,7 +107,7 @@ Developers may find the following guidelines useful:
 
   ```bash
   ./generate_docs.sh
-```
+  ```
 
 - **Coding style**
   The project follows the [Black](https://black.readthedocs.io/en/stable/) code style.
@@ -115,15 +115,15 @@ Developers may find the following guidelines useful:
 
   ```bash
   black .
-```
+  ```
 
-* **Pre-commit hooks**
+- **Pre-commit hooks**
   Pre-commit hooks are configured to enforce consistent style automatically.
   To enable them:
 
   ```bash
   pre-commit install
-```
+  ```
 
 ## License
 
