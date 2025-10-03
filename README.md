@@ -101,21 +101,21 @@ Developers may find the following guidelines useful:
   pytest tests
 ```
 
-* **Building documentation**
+- **Building documentation**
   Documentation is built with [Sphinx](https://www.sphinx-doc.org/).
   A convenience script is provided:
 
   ```bash
   ./generate_docs.sh
-  ```
+```
 
-* **Coding style**
+- **Coding style**
   The project follows the [Black](https://black.readthedocs.io/en/stable/) code style.
   Please run Black before submitting a pull request:
 
   ```bash
   black .
-  ```
+```
 
 * **Pre-commit hooks**
   Pre-commit hooks are configured to enforce consistent style automatically.
@@ -123,7 +123,7 @@ Developers may find the following guidelines useful:
 
   ```bash
   pre-commit install
-  ```
+```
 
 ## License
 
