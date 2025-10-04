@@ -56,13 +56,7 @@ logicals, success = decode_css(
 
 ## Examples
 
-The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder contains full workflows that demonstrate typical use cases:
-
-- **Classical / quantum LDPC code decoding**: tensor-network decoder for classical and quantum LDPC codes under various noise models.
-- **Ising model**: optimisation of spin Hamiltonians using MPS ground-state search.
-- **Random circuits**: contraction of random tensor networks for benchmarking.
-
-Each example is fully documented and serves as a starting point for building your own experiments.
+The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder contains full workflows that demonstrate typical use cases, such as quantum / classical LDPC code decoding, ground state search for the quantum Ising model and random quantum curcuit simulation. Each example is fully documented and serves as a starting point for building your own experiments.
 The package has been tested on macOS and Linux (Compute Canada clusters) and does not currently support Windows.
 
 ## Cite
