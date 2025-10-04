@@ -118,7 +118,7 @@ Developers may find the following guidelines useful:
   ```
 
 - **Pre-commit hooks**
-  Pre-commit hooks are configured to enforce consistent style automatically.
+  [Pre-commit](https://pre-commit.com/) hooks are configured to enforce consistent style automatically.
   To enable them:
 
   ```bash
