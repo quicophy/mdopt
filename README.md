@@ -60,7 +60,7 @@ The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder cont
 The package has been tested on macOS and Linux (Compute Canada clusters) and does not currently support Windows.
 
 ## Cite
-If you happen to find `mdopt` useful in your research, please consider supporting development by citing it.
+If you happen to find `mdopt` useful in your work, please consider supporting development by citing it.
 ```
 @software{mdopt2022,
   author = {Aleksandr Berezutskii},
@@ -73,7 +73,7 @@ If you happen to find `mdopt` useful in your research, please consider supportin
 ## Contribution guidelines
 
 If you want to contribute to `mdopt`, be sure to follow GitHub's contribution guidelines.
-This project adheres to our [code of conduct](CODE_OF_CONDUCT.md).
+This project adheres to our [code of conduct](https://github.com/quicophy/mdopt/blob/main/CODE_OF_CONDUCT.md).
 By participating, you are expected to uphold this code.
 
 We use [GitHub issues](https://github.com/quicophy/mdopt/issues) for
@@ -121,7 +121,7 @@ Developers may find the following guidelines useful:
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE.md).
+This project is licensed under the [MIT License](https://github.com/quicophy/mdopt/blob/main/LICENSE.md).
 
 ## Documentation
 
