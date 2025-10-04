@@ -67,7 +67,7 @@ Canada clusters) and does not currently support Windows.
 Cite
 ----
 
-If you happen to find ``mdopt`` useful in your research, please consider
+If you happen to find ``mdopt`` useful in your work, please consider
 supporting development by citing it.
 
 ::
@@ -84,8 +84,8 @@ Contribution guidelines
 
 If you want to contribute to ``mdopt``, be sure to follow GitHub’s
 contribution guidelines. This project adheres to our `code of
-conduct <CODE_OF_CONDUCT.md>`__. By participating, you are expected to
-uphold this code.
+conduct <https://github.com/quicophy/mdopt/blob/main/CODE_OF_CONDUCT.md>`__.
+By participating, you are expected to uphold this code.
 
 We use `GitHub issues <https://github.com/quicophy/mdopt/issues>`__ for
 tracking requests and bugs, please direct specific questions to the
@@ -134,7 +134,8 @@ Developers may find the following guidelines useful:
 License
 -------
 
-This project is licensed under the `MIT License <LICENSE.md>`__.
+This project is licensed under the `MIT
+License <https://github.com/quicophy/mdopt/blob/main/LICENSE.md>`__.
 
 Documentation
 -------------
