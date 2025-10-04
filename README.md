@@ -20,7 +20,7 @@ To install the current release, use the package manager [pip](https://pip.pypa.i
 pip install mdopt
 ```
 
-Otherwise, clone the repository and use [poetry](https://python-poetry.org/).
+Otherwise, you can clone the repository and use [poetry](https://python-poetry.org/).
 
 ```bash
 poetry install
