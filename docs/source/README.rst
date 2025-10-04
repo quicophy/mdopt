@@ -100,14 +100,14 @@ practices in open-source software development, such as:
 
 Developers may find the following guidelines useful:
 
-- **Running tests:** Tests are executed using
+- **Running tests.** Tests are executed using
   `pytest <https://docs.pytest.org/>`__:
 
   .. code:: bash
 
      pytest tests
 
-- **Building documentation:** Documentation is built with
+- **Building documentation.** Documentation is built with
   `Sphinx <https://www.sphinx-doc.org/>`__. A convenience script is
   provided:
 
@@ -115,7 +115,7 @@ Developers may find the following guidelines useful:
 
      ./generate_docs.sh
 
-- **Coding style:** The project follows the
+- **Coding style.** The project follows the
   `Black <https://black.readthedocs.io/en/stable/>`__ code style. Please
   run Black before submitting a pull request:
 
@@ -123,7 +123,7 @@ Developers may find the following guidelines useful:
 
      black .
 
-- **Pre-commit hooks:** `Pre-commit <https://pre-commit.com/>`__ hooks
+- **Pre-commit hooks.** `Pre-commit <https://pre-commit.com/>`__ hooks
   are configured to enforce consistent style automatically. To enable
   them:
 
