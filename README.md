@@ -44,12 +44,12 @@ surface_code = qec.hypergraph_product(
 logicals, success = decode_css(
     code=surface_code,
     error="IIXIIIIIIIIII",
-    bias_prob=0.1,
+    bias_prob=0.01,
     bias_type="Bitflip",
     chi_max=64,
     renormalise=True,
     contraction_strategy="Optimised",
-    tolerance=0,
+    tolerance=1e-12,
     silent=False,
 )
 ```
