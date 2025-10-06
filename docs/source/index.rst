@@ -1,12 +1,20 @@
-
 .. include:: README.rst
 
+.. contents::
+   :local:
+   :depth: 2
+
 .. toctree::
-   :maxdepth: 4
-   :caption: Contents:
+   :maxdepth: 2
+   :caption: Tutorials and Notebooks
+
+   examples
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API Reference
 
    modules
-   examples
 
 Indices and tables
 ==================
