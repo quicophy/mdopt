@@ -6,13 +6,13 @@
 
 .. toctree::
    :maxdepth: 2
-   :caption: Tutorials and Notebooks
+   :caption: Tutorials and notebooks
 
    examples
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Reference
+   :caption: API reference
 
    modules
 
