@@ -1,12 +1,10 @@
 Examples
 ========
 
-Decoding
---------
 
 .. toctree::
    :maxdepth: 1
-   :caption: Decoding examples
+   :caption: Decoding
 
    classical_ldpc.ipynb
    quantum_three_qubit.ipynb
@@ -24,12 +22,10 @@ Decoding
 
 - :doc:`quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
 
-Miscellaneous
--------------
 
 .. toctree::
    :maxdepth: 1
-   :caption: Miscellaneous examples
+   :caption: Miscellaneous
 
    ground_state.ipynb
    mps-rand-circ.ipynb
