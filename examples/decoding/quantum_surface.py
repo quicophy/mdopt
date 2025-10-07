@@ -239,8 +239,11 @@ def run_experiment(
         for i in range(num_experiments)
     ]
 
-    with Pool(num_processes) as pool:
-        results = pool.starmap(run_single_experiment, args)
+    if num_processes == 1:
+        results = [run_single_experiment(*arg) for arg in args]
+    else:
+        with Pool(num_processes) as pool:
+            results = pool.starmap(run_single_experiment, args)
 
     logging.info(
         f"Finished {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
