@@ -1,4 +1,4 @@
-"""Helper functions for handling the decoder data."""
+"""Helper functions for handling the decoding data."""
 
 import os
 import re
@@ -451,7 +451,7 @@ def plot_failure_statistics(
                 plt.xlim(xlim)
             plt.xscale(xscale)
             plt.yscale(yscale)
-            plt.grid(True)
+            plt.grid(True, which="both", ls=":")
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
@@ -483,7 +483,7 @@ def plot_failure_statistics(
                     ],
                     fmt="o--",
                     label=(
-                        f"Lattice size: {lattice_size}"
+                        f"Number of qubits: {lattice_size}"
                         if not bb
                         else f"{bb_code_params.get(lattice_size, '')}"
                     ),
@@ -493,7 +493,8 @@ def plot_failure_statistics(
             plt.plot(
                 error_rates,
                 list(map(lambda x: x, error_rates)),
-                "x--",
+                "--",
+                marker=None,
                 label="Pseudo-threshold equation",
             )
             plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
@@ -564,7 +565,7 @@ def plot_bond_dimension_scaling(
     plt.ylabel("Bond dimension $\chi$")
     plt.title(f"Bond dimension scaling at $p = {target_error_rate}$")
     plt.legend(fontsize=7)
-    plt.grid(True)
+    plt.grid(True, which="both", ls=":")
     plt.xlim(min(lattice_sizes) - 1, max(lattice_sizes) + 1)
     plt.ylim(min(bond_dims) - 1, max(bond_dims) + 1)
     ax = plt.gca()
@@ -758,7 +759,7 @@ def fit_failure_statistics(
             plt.legend(fontsize=7)
             plt.xscale(xscale)
             plt.yscale(yscale)
-            plt.grid(True)
+            plt.grid(True, which="both", ls=":")
             plt.show()
         else:
             print(f"Skipping plot for chi_max={chi_max} due to no valid data.")
