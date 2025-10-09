@@ -6,11 +6,11 @@ Examples
    :maxdepth: 1
    :caption: Decoding
 
-   classical_ldpc.ipynb
-   quantum_three_qubit.ipynb
-   quantum_five_qubit.ipynb
-   shor.ipynb
-   quantum_surface.ipynb
+   notebooks/classical_ldpc.ipynb
+   notebooks/quantum_three_qubit.ipynb
+   notebooks/quantum_five_qubit.ipynb
+   notebooks/shor.ipynb
+   notebooks/quantum_surface.ipynb
 
 - :doc:`notebooks/classical_ldpc` — Builds an MPS that encodes the superposition of all codewords of a random-regular Gallager (3,4) classical LDPC code and translates parity checks into MPO (XOR) constraints. Demonstrates “dephasing DMRG” to solve the main-component (max-likelihood) decoding problem and validates the end-to-end pipeline.
 
@@ -27,10 +27,10 @@ Examples
    :maxdepth: 1
    :caption: Miscellaneous
 
-   ground_state.ipynb
-   mps-rand-circ.ipynb
-   maxbonddim.ipynb
-   main_component.ipynb
+   notebooks/ground_state.ipynb
+   notebooks/mps-rand-circ.ipynb
+   notebooks/maxbonddim.ipynb
+   notebooks/main_component.ipynb
 
 - :doc:`notebooks/ground_state` — Solve a simple 1D quantum Ising chain using an MPS ground-state search. Compares observables and magnetisation curves from exact diagonalisation and DMRG to confirm correctness. A gentle introduction to MPS/MPO mechanics outside of decoding.
 
