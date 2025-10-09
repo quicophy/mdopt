@@ -15,9 +15,8 @@ For a curated overview of notebooks, see :doc:`tutorials`.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Tutorials & examples
+   :caption: Examples
 
-   tutorials
    examples
 
 .. toctree::
