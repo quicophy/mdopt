@@ -1,5 +1,11 @@
 Documentation
-===================
+=============
+
+.. image:: logo.png
+   :alt: logo
+   :width: 1100px
+   :align: center
+   :target: https://github.com/quicophy/mdopt
 
 ``mdopt`` is a Python package for discrete optimisation in the tensor-network
 language (MPS/MPO/DMRG). It targets problems such as quantum error-correction decoding with a code-agnostic workflow and is intended to be easily extensible to other applications.
