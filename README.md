@@ -1,5 +1,9 @@
 # `mdopt` — Discrete Optimisation in the MPS-MPO Language
 
+<p align="center">
+  <img src="docs/source/logo.png" alt="logo" width="220">
+</p>
+
 [![codecov](https://codecov.io/gh/quicophy/mdopt/branch/main/graph/badge.svg?token=4G7VWYX0S2)](https://codecov.io/gh/quicophy/mdopt)
 [![tests](https://github.com/quicophy/mdopt/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/quicophy/mdopt/actions/workflows/tests.yml)
 [![Documentation Status](https://readthedocs.org/projects/mdopt/badge/?version=latest)](https://mdopt.readthedocs.io/en/latest/?badge=latest)

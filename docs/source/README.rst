@@ -1,6 +1,14 @@
 ``mdopt`` — Discrete Optimisation in the MPS-MPO Language
 =========================================================
 
+.. raw:: html
+
+   <p align="center">
+
+.. raw:: html
+
+   </p>
+
 |codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|
 |mypy| |Unitary Fund| |MIT license|
 

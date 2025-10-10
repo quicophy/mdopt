@@ -4,13 +4,13 @@ Getting started
 Installation
 ------------
 
-Install from PyPI:
+You can install the package from PyPI:
 
 .. code-block:: bash
 
    pip install mdopt
 
-Or from source using Poetry:
+Or, alternatively, from source using Poetry:
 
 .. code-block:: bash
 
@@ -21,7 +21,7 @@ Or from source using Poetry:
 Minimal example
 ---------------------
 
-Run this quick check to verify your setup:
+Run this quick decoding example to verify your setup:
 
 .. code-block:: python
 
@@ -52,11 +52,11 @@ Run this quick check to verify your setup:
 Workflow at a glance
 --------------------
 
-1. **Formulate** your optimisation problem in the TN language (MPS state, MPO constraints/operators).
-2. **Apply** constraints/operations with a chosen contraction strategy and bond-dimension limit.
-3. **Optimise** (e.g., DMRG-like decoding) and **evaluate** success metrics.
+1. Formulate your optimisation problem in the MPS-MPO formalism (MPS state, MPO constraints/operators).
+2. Apply constraints/operations with a chosen contraction and truncation strategies.
+3. Optimise (e.g., DMRG-like decoding) and evaluate success metrics.
 
 Platforms
 ---------
 
-Tested on macOS and Linux (Compute Canada clusters). Windows is currently not supported.
+The package has been tested on macOS and Linux (within Compute Canada clusters). Windows is currently not supported.

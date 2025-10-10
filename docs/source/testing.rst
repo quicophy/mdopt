@@ -1,5 +1,5 @@
-Testing & validation
-====================
+Testing
+=======
 
 We use ``pytest`` for tests. From the project root:
 

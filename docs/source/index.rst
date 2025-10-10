@@ -1,11 +1,11 @@
 Documentation
 ===================
 
-``mdopt`` is a Python package for discrete optimisation in the tensor-network
-language (MPS/MPO). It targets problems such as quantum error-correction decoding with a code-agnostic workflow and is intended to be easily extensible to other applications.
+mdopt is a Python package for discrete optimisation in the tensor-network
+language (MPS/MPO/DMRG). It targets problems such as quantum error-correction decoding with a code-agnostic workflow and is intended to be easily extensible to other applications.
 
 For installation and a minimal working example, see :doc:`getting_started`.
-For a curated overview of notebooks, see :doc:`tutorials`.
+For a curated overview of notebooks, see :doc:`examples`.
 
 .. toctree::
    :maxdepth: 2

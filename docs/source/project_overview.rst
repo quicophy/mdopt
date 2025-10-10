@@ -1,4 +1,4 @@
-Project Overview & References
+Project overview & references
 =============================
 
 Motivation

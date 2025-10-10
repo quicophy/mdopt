@@ -20,7 +20,7 @@ Examples
 
 - :doc:`notebooks/shor` — Demonstrates the 9-qubit Shor code with separated X/Z error handling in the TN framework. Serves as a bridge between toy codes and LDPC-like examples.
 
-- :doc:`notebooks/quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
+- :doc:`notebooks/quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Visualise the underlying tensor network structure. Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
 
 
 .. toctree::
