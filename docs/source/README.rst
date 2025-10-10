@@ -1,13 +1,11 @@
 ``mdopt`` — Discrete Optimisation in the MPS-MPO Language
 =========================================================
 
-.. raw:: html
-
-   <p align="center">
-
-.. raw:: html
-
-   </p>
+.. image:: mdopt-logo.png
+   :alt: mdopt logo
+   :width: 220px
+   :align: center
+   :target: https://github.com/quicophy/mdopt
 
 |codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|
 |mypy| |Unitary Fund| |MIT license|
