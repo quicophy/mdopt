@@ -49,7 +49,7 @@ For a curated overview of notebooks, see :doc:`examples`.
    :caption: Project overview & references
 
    project_overview
-   README
+   README <README>
 
 Indices and tables
 ------------------
