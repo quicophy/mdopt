@@ -19,5 +19,5 @@ References & related resources
 ------------------------------
 
 - Project repository: https://github.com/quicophy/mdopt
-- Documentation (this site): https://mdopt.readthedocs.io/en/latest/
-- Citation details: see the README or project metadata
+- Documentation: https://mdopt.readthedocs.io/en/latest/
+- Citation details: please see the README
