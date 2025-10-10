@@ -4,7 +4,7 @@ Project overview & references
 Motivation
 ----------
 
-``mdopt`` expresses discrete optimisation tasks in the tensor-network (MPS/MPO) formalism.
+mdopt expresses discrete optimisation tasks in the tensor-network (MPS/MPO) formalism.
 This enables controlled approximations (e.g., bond-dimension truncation) and leverages
 well-studied contraction/optimisation techniques for problems such as decoding quantum
 error-correcting codes.
