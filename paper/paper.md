@@ -65,6 +65,11 @@ logicals, success = decode_css(
     silent=False,
 )
 ```
+Following the minimal example above, users can easily adapt *mdopt* to larger codes,
+different noise models, or alternative contraction strategies. Additional usage examples,
+detailed API documentation, and advanced decoding configurations are provided in the
+[mdopt Documentation](https://mdopt.readthedocs.io/en/latest/).
+
 
 # Acknowledgements
 
