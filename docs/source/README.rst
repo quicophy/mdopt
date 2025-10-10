@@ -1,5 +1,5 @@
-``mdopt`` — Discrete Optimisation in the MPS-MPO Language
-=========================================================
+mdopt — Discrete Optimisation in the MPS-MPO Language
+=====================================================
 
 .. image:: logo.png
    :alt: logo
