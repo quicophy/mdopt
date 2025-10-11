@@ -3,15 +3,15 @@ This module contains the MPS-MPO contractor functions.
 """
 
 from typing import Union, List, Tuple, cast
-import numpy as np
 from opt_einsum import contract
 
+from mdopt.backend import array as A
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
 
 
-def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
+def apply_one_site_operator(tensor, operator):
     """
     Applies a one-site operator to a MPS as follows::
 
@@ -49,26 +49,24 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
         raise ValueError(
             f"A valid MPS tensor must have 3 legs while the one given has {tensor.ndim}."
         )
-
-    if len(operator.shape) != 2:
+    if operator.ndim != 2:
         raise ValueError(
-            "A valid one-site operator must have 2 legs"
-            f"while the one given has {len(operator.shape)}."
+            "A valid one-site operator must have 2 legs "
+            f"while the one given has {operator.ndim}."
         )
 
     tensor_updated = contract("ijk, jl -> ilk", tensor, operator, optimize=[(0, 1)])
-
-    return np.asarray(tensor_updated)
+    return A.xp.asarray(tensor_updated)
 
 
 def apply_two_site_unitary(
     lambda_0: list,
-    b_1: np.ndarray,
-    b_2: np.ndarray,
-    unitary: np.ndarray,
+    b_1,
+    b_2,
+    unitary,
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple:
     """
     Applies a two-site unitary operator to a right-canonical MPS as follows::
 
@@ -119,29 +117,29 @@ def apply_two_site_unitary(
 
     """
 
-    if len(b_1.shape) != 3:
+    if b_1.ndim != 3:
         raise ValueError(
-            f"A valid MPS tensor must have 3 legs while the b_1 given has {len(b_1.shape)}."
+            f"A valid MPS tensor must have 3 legs while b_1 has {b_1.ndim}."
+        )
+    if b_2.ndim != 3:
+        raise ValueError(
+            f"A valid MPS tensor must have 3 legs while b_2 has {b_2.ndim}."
+        )
+    if unitary.ndim != 4:
+        raise ValueError(
+            f"A valid two-site operator must have 4 legs while the one given has {unitary.ndim}."
         )
 
-    if len(b_2.shape) != 3:
-        raise ValueError(
-            f"A valid MPS tensor must have 3 legs while the b_2 given has {len(b_1.shape)}."
-        )
-
-    if len(unitary.shape) != 4:
-        raise ValueError(
-            "A valid two-site operator must have 4 legs"
-            f"while the one given has {len(unitary.shape)}."
-        )
-
+    lam = A.xp.asarray(lambda_0)
+    # two-site with lambda_0 on the left bond
     two_site_tensor_with_lambda_0 = contract(
-        "ij, jkl, lmn -> ikmn", np.diag(lambda_0), b_1, b_2, optimize=[(0, 1), (0, 1)]
+        "ij, jkl, lmn -> ikmn", A.xp.diag(lam), b_1, b_2, optimize=[(0, 1), (0, 1)]
     )
     two_site_tensor_with_lambda_0 = contract(
         "ijkl, jkmn -> imnl", two_site_tensor_with_lambda_0, unitary, optimize=[(0, 1)]
     )
 
+    # two-site without lambda_0 (for back-substitution)
     two_site_tensor_wo_lambda_0 = contract("ijk, klm", b_1, b_2, optimize=[(0, 1)])
     two_site_tensor_wo_lambda_0 = contract(
         "ijkl, jkmn -> imnl", two_site_tensor_wo_lambda_0, unitary, optimize=[(0, 1)]
@@ -157,22 +155,21 @@ def apply_two_site_unitary(
     b_1_updated = contract(
         "ijkl, mkl -> ijm",
         two_site_tensor_wo_lambda_0,
-        np.conjugate(b_2_updated),
+        A.xp.conjugate(b_2_updated),
         optimize=[(0, 1)],
     )
 
-    return np.asarray(b_1_updated), np.asarray(b_2_updated)
+    return A.xp.asarray(b_1_updated), A.xp.asarray(b_2_updated)
 
 
 def mps_mpo_contract(
     mps: Union[ExplicitMPS, CanonicalMPS],
-    mpo: List[np.ndarray],
-    start_site: int = int(0),
+    mpo: List,
+    start_site: int = 0,
     renormalise: bool = False,
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     inplace: bool = False,
-    result_to_explicit: bool = False,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     Applies an MPO to an MPS.
@@ -248,7 +245,6 @@ def mps_mpo_contract(
             raise ValueError(
                 f"A valid MPO tensor must have 4 legs while tensor {i} has {tensor.ndim}."
             )
-
     if start_site + len(mpo) > len(mps):
         raise ValueError(
             "The length of the MPO should correspond to the number of sites where it is applied, "
@@ -256,25 +252,74 @@ def mps_mpo_contract(
             f"while the MPS has length {len(mps)}."
         )
 
-    orth_centre_index = start_site
+    # keep data resident on device if GPU backend is active
+    with A.stream():
+        if A.GPU:
+            mps.tensors = [A.to_device(T) for T in mps.tensors]
+            mpo = [A.to_device(T) for T in mpo]
 
-    two_site_mps_mpo_tensor = contract(
-        "ijk, klm, nojp, oqlr -> iprqm",
-        mps.tensors[start_site],
-        mps.tensors[start_site + 1],
-        mpo[0],
-        mpo[1],
-        optimize=[(0, 1), (1, 2), (0, 1)],
-    ).reshape(
-        (
-            mps.tensors[start_site].shape[0],
-            mpo[0].shape[3],
-            mpo[1].shape[3],
-            mps.tensors[start_site + 1].shape[2] * mpo[1].shape[1],
+        orth_centre_index = start_site
+
+        two_site_mps_mpo_tensor = contract(
+            "ijk, klm, nojp, oqlr -> iprqm",
+            mps.tensors[start_site],
+            mps.tensors[start_site + 1],
+            mpo[0],
+            mpo[1],
+            optimize=[(0, 1), (1, 2), (0, 1)],
+        ).reshape(
+            (
+                mps.tensors[start_site].shape[0],
+                mpo[0].shape[3],
+                mpo[1].shape[3],
+                mps.tensors[start_site + 1].shape[2] * mpo[1].shape[1],
+            )
         )
-    )
 
-    for i in range(len(mpo) - 2):
+        # Sweep across the MPO
+        for i in range(len(mpo) - 2):
+            mps.tensors[orth_centre_index], singular_values, b_r, _ = (
+                split_two_site_tensor(
+                    two_site_mps_mpo_tensor,
+                    chi_max=chi_max,
+                    cut=cut,
+                    renormalise=renormalise,
+                    return_truncation_error=True,
+                )
+            )
+
+            orth_centre_index += 1
+            if isinstance(mps, CanonicalMPS):
+                mps.orth_centre = orth_centre_index
+
+            # Replace diag(s) @ b_r with broadcast multiply (no diag allocation)
+            mps.tensors[orth_centre_index] = (
+                b_r * singular_values[:, None, None]
+            ).reshape(
+                (
+                    len(singular_values),
+                    mpo[i + 1].shape[3],
+                    mpo[i + 1].shape[1],
+                    mps.tensors[orth_centre_index + 1].shape[0],
+                )
+            )
+
+            two_site_mps_mpo_tensor = contract(
+                "ijkl, lmn, komp -> ijpon",
+                mps.tensors[orth_centre_index],
+                mps.tensors[orth_centre_index + 1],
+                mpo[i + 2],
+                optimize=[(0, 1), (0, 1)],
+            ).reshape(
+                (
+                    len(singular_values),
+                    mps.tensors[orth_centre_index].shape[1],
+                    mpo[i + 2].shape[3],
+                    mps.tensors[orth_centre_index + 1].shape[2] * mpo[i + 2].shape[1],
+                )
+            )
+
+        # Final split and update last tensor
         mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
             two_site_mps_mpo_tensor,
             chi_max=chi_max,
@@ -282,54 +327,21 @@ def mps_mpo_contract(
             renormalise=renormalise,
             return_truncation_error=True,
         )
+        mps.tensors[orth_centre_index + 1] = b_r * singular_values[:, None, None]
+        mps.orth_centre = orth_centre_index + 1
 
-        orth_centre_index += 1
-        if isinstance(mps, CanonicalMPS):
-            mps.orth_centre = orth_centre_index
+        # Renormalise orthogonality centre (GPU-safe)
+        if renormalise:
+            oc = orth_centre_index
+            norm = A.xp.linalg.norm(mps.tensors[oc])
+            if norm != 0:
+                mps.tensors[oc] /= norm
 
-        mps.tensors[orth_centre_index] = contract(
-            "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
-        ).reshape(
-            (
-                len(singular_values),
-                mpo[i + 1].shape[3],
-                mpo[i + 1].shape[1],
-                mps.tensors[orth_centre_index + 1].shape[0],
-            )
-        )
+        # Barrier so timing includes device completion
+        A.synchronize()
 
-        two_site_mps_mpo_tensor = contract(
-            "ijkl, lmn, komp -> ijpon",
-            mps.tensors[orth_centre_index],
-            mps.tensors[orth_centre_index + 1],
-            mpo[i + 2],
-            optimize=[(0, 1), (0, 1)],
-        ).reshape(
-            (
-                len(singular_values),
-                mps.tensors[orth_centre_index].shape[1],
-                mpo[i + 2].shape[3],
-                mps.tensors[orth_centre_index + 1].shape[2] * mpo[i + 2].shape[1],
-            )
-        )
-
-    mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
-        two_site_mps_mpo_tensor,
-        chi_max=chi_max,
-        cut=cut,
-        renormalise=renormalise,
-        return_truncation_error=True,
-    )
-    mps.tensors[orth_centre_index + 1] = contract(
-        "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
-    )
-    mps.orth_centre = orth_centre_index + 1
-
-    # Renormalising the orthogonality centre
-    if renormalise:
-        mps.tensors[orth_centre_index] /= np.linalg.norm(mps.tensors[orth_centre_index])
-
-    if result_to_explicit and isinstance(mps, CanonicalMPS):
-        return mps.explicit(tolerance=mps.tolerance, renormalise=renormalise)
+    # Convert back to host NumPy arrays before returning
+    if A.GPU:
+        mps.tensors = [A.to_host(T) for T in mps.tensors]
 
     return mps
