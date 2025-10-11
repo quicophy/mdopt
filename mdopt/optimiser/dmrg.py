@@ -20,7 +20,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
 
     In order to take more advantage of the ``scipy.sparse.linalg`` module,
     we make a special class for local effective operators.
-    It allows us to compute eigenvectors more effeciently.
+    It allows us to compute eigenvectors more efficiently.
 
     Such effective operator is to be diagonalised in the
     ``update_bond`` method of the :class:`DMRG` class::
