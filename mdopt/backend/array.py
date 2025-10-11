@@ -1,59 +1,106 @@
 import os
+import importlib
+from types import SimpleNamespace
 
-_backend = os.getenv("MDOPT_BACKEND", "numpy").lower()
+# ----------------------------------------------------------------------
+# Backend selection: default to NumPy; allow CUPY if available.
+# ----------------------------------------------------------------------
+_BACKEND_ENV = os.getenv("MDOPT_BACKEND", "numpy").lower()
 
-if _backend == "cupy":
-    import cupy as xp
-    from cupy.linalg import svd as xp_svd
-    from cupy import cuda
+
+def _load_backend():
+    if _BACKEND_ENV == "cupy":
+        try:
+            return importlib.import_module("cupy")
+        except Exception:
+            # Graceful fallback on machines without CuPy (e.g., macOS)
+            pass
+    return importlib.import_module("numpy")
+
+
+_xp = _load_backend()
+
+# Flag for quick checks elsewhere
+GPU = _xp.__name__ == "cupy"
+
+
+# ----------------------------------------------------------------------
+# Introspection helpers
+# ----------------------------------------------------------------------
+def backend_name() -> str:
+    """Return the active backend name: 'cupy' or 'numpy'."""
+    return "cupy" if GPU else "numpy"
+
+
+def is_cuda_backend() -> bool:
+    """True iff the active backend is CuPy."""
+    return GPU
+
+
+# ----------------------------------------------------------------------
+# Host/device transfer + streams
+# ----------------------------------------------------------------------
+if GPU:
+    # CuPy-specific helpers
+    from cupy import cuda as _cuda  # type: ignore
 
     def to_device(a):
-        return xp.asarray(a)
+        """Move/ensure array is on device."""
+        return _xp.asarray(a)
 
     def to_host(a):
-        return xp.asnumpy(a)
+        """Move/ensure array is on host (NumPy)."""
+        return _xp.asnumpy(a)
 
     def stream():
-        return cuda.Stream(non_blocking=True)
+        """Return a non-blocking CUDA stream context manager."""
+        return _cuda.Stream(non_blocking=True)
 
     def synchronize():
-        cuda.Device().synchronize()
+        """Synchronize the current CUDA device."""
+        _cuda.Device().synchronize()
 
-    GPU = True
 else:
-    import numpy as xp
-    from numpy.linalg import svd as xp_svd
-
+    # NumPy "no-op" fallbacks
     def to_device(a):
-        return a
+        return _xp.asarray(a)
 
     def to_host(a):
         return a
 
-    class _Null:
+    class _NullStream:
         def __enter__(self):
             return self
 
-        def __exit__(self, *_):
+        def __exit__(self, *exc):
             pass
 
     def stream():
-        return _Null()
+        return _NullStream()
 
     def synchronize():
         pass
 
-    GPU = False
 
-
-def einsum(expr, *args, **kw):  # delegate to xp
-    return xp.einsum(expr, *args, **kw)
+# ----------------------------------------------------------------------
+# Convenience wrappers (work for both backends)
+# ----------------------------------------------------------------------
+def einsum(expr, *args, **kw):
+    return _xp.einsum(expr, *args, **kw)
 
 
 def svd(x, full_matrices=False):
-    return xp_svd(x, full_matrices=full_matrices)
+    # Expose a consistent SVD surface; for CuPy this is GPU-accelerated
+    return _xp.linalg.svd(x, full_matrices=full_matrices)
 
 
 def asfortran(a):
-    # CuPy/NumPy both expose asfortranarray
-    return xp.asfortranarray(a)
+    return _xp.asfortranarray(a)
+
+
+# ----------------------------------------------------------------------
+# Module-level attribute forwarding
+# This lets callers do: xp.asarray, xp.linalg.svd, xp.random, etc.
+# ----------------------------------------------------------------------
+def __getattr__(name):
+    return getattr(_xp, name)
