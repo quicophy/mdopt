@@ -131,11 +131,11 @@ def svd(
     if return_truncation_error:
         return (
             np.asarray(u_l),
-            cast(List[float], s.tolist()),
+            np.asarray(s),
             np.asarray(v_h),
             truncation_error,
         )
-    return np.asarray(u_l), cast(List[float], s.tolist()), np.asarray(v_h), None
+    return np.asarray(u_l), np.asarray(s), np.asarray(v_h), None
 
 
 def qr(

@@ -2,6 +2,7 @@
 This module contains the MPS-MPO contractor functions.
 """
 
+import numpy as np
 from typing import Union, List, Tuple, cast
 from opt_einsum import contract
 
@@ -56,7 +57,7 @@ def apply_one_site_operator(tensor, operator):
         )
 
     tensor_updated = contract("ijk, jl -> ilk", tensor, operator, optimize=[(0, 1)])
-    return A.xp.asarray(tensor_updated)
+    return A.to_device(np.asarray(tensor_updated))
 
 
 def apply_two_site_unitary(
@@ -130,10 +131,10 @@ def apply_two_site_unitary(
             f"A valid two-site operator must have 4 legs while the one given has {unitary.ndim}."
         )
 
-    lam = A.xp.asarray(lambda_0)
+    lam = np.asarray(lambda_0)
     # two-site with lambda_0 on the left bond
     two_site_tensor_with_lambda_0 = contract(
-        "ij, jkl, lmn -> ikmn", A.xp.diag(lam), b_1, b_2, optimize=[(0, 1), (0, 1)]
+        "ij, jkl, lmn -> ikmn", np.diag(lam), b_1, b_2, optimize=[(0, 1), (0, 1)]
     )
     two_site_tensor_with_lambda_0 = contract(
         "ijkl, jkmn -> imnl", two_site_tensor_with_lambda_0, unitary, optimize=[(0, 1)]
@@ -155,11 +156,11 @@ def apply_two_site_unitary(
     b_1_updated = contract(
         "ijkl, mkl -> ijm",
         two_site_tensor_wo_lambda_0,
-        A.xp.conjugate(b_2_updated),
+        np.conjugate(b_2_updated),
         optimize=[(0, 1)],
     )
 
-    return A.xp.asarray(b_1_updated), A.xp.asarray(b_2_updated)
+    return np.asarray(b_1_updated), np.asarray(b_2_updated)
 
 
 def mps_mpo_contract(
@@ -287,6 +288,7 @@ def mps_mpo_contract(
                     return_truncation_error=True,
                 )
             )
+            singular_values = np.asarray(singular_values)
 
             orth_centre_index += 1
             if isinstance(mps, CanonicalMPS):
@@ -327,13 +329,14 @@ def mps_mpo_contract(
             renormalise=renormalise,
             return_truncation_error=True,
         )
+        singular_values = np.asarray(singular_values)
         mps.tensors[orth_centre_index + 1] = b_r * singular_values[:, None, None]
         mps.orth_centre = orth_centre_index + 1
 
         # Renormalise orthogonality centre (GPU-safe)
         if renormalise:
             oc = orth_centre_index
-            norm = A.xp.linalg.norm(mps.tensors[oc])
+            norm = np.linalg.norm(mps.tensors[oc])
             if norm != 0:
                 mps.tensors[oc] /= norm
 
