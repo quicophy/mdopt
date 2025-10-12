@@ -1,10 +1,29 @@
-"""This module contains miscellaneous utilities."""
+"""This module contains different tensor utilities."""
 
 from typing import Tuple, Optional, List, cast
 from itertools import chain
 import numpy as np
 import scipy
 from opt_einsum import contract
+
+# --- Backend shim: prefer your GPU/array backend if available, else NumPy ---
+try:
+    # expected to export a NumPy-like API (e.g., NumPy or CuPy)
+    from mdopt.backend import array as xp  # type: ignore
+except Exception:
+    import numpy as xp  # type: ignore
+
+
+def _to_numpy(a):
+    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
+    try:
+        import cupy as cp  # type: ignore
+
+        if isinstance(a, cp.ndarray):
+            return cp.asnumpy(a)
+    except Exception:
+        pass
+    return np.asarray(a)
 
 
 def svd(
@@ -46,69 +65,77 @@ def svd(
     ValueError
         If the input matrix does not have 2 dimensions.
     """
-
     if mat.ndim != 2:
         raise ValueError(
             f"A valid matrix must have 2 dimensions while the one given has {mat.ndim}."
         )
 
-    svd_methods = [
-        lambda: np.linalg.svd(
-            mat, full_matrices=False, compute_uv=True, hermitian=False
-        ),
-        lambda: scipy.linalg.svd(
-            mat,
-            full_matrices=False,
-            compute_uv=True,
-            check_finite=True,
-            lapack_driver="gesdd",
-        ),
-        lambda: scipy.linalg.svd(
-            mat,
-            full_matrices=False,
-            compute_uv=True,
-            check_finite=True,
-            lapack_driver="gesvd",
-        ),
-        lambda: scipy.linalg.svd(
-            mat + np.eye(mat.shape[0], mat.shape[1]) * 1e-12,
-            full_matrices=False,
-            compute_uv=True,
-            check_finite=True,
-            lapack_driver="gesvd",
-        ),
-    ]
+    # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
-    for method in svd_methods:
+    u_l = s = v_h = None  # type: ignore
+    a = xp.asarray(mat)
+    for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
-            u_l, singular_values, v_r = method()
+            if attempt == "xp":
+                u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)  # returns U, S, Vh
+            elif attempt == "gesdd":
+                u_l, s, v_h = scipy.linalg.svd(
+                    _to_numpy(a),
+                    full_matrices=False,
+                    compute_uv=True,
+                    check_finite=True,
+                    lapack_driver="gesdd",
+                )
+            elif attempt == "gesvd":
+                u_l, s, v_h = scipy.linalg.svd(
+                    _to_numpy(a),
+                    full_matrices=False,
+                    compute_uv=True,
+                    check_finite=True,
+                    lapack_driver="gesvd",
+                )
+            else:
+                an = _to_numpy(a)
+                u_l, s, v_h = scipy.linalg.svd(
+                    an + np.eye(an.shape[0], an.shape[1]) * 1e-12,
+                    full_matrices=False,
+                    compute_uv=True,
+                    check_finite=True,
+                    lapack_driver="gesvd",
+                )
             break
         except Exception as e:
             last_exception = e
+            continue
     else:
         raise RuntimeError(f"All SVD methods failed. Last error: {last_exception}")
 
-    max_num = min(chi_max, np.sum(singular_values > cut))
-    residual_spectrum = singular_values[max_num:]
-    truncation_error = np.linalg.norm(residual_spectrum) ** 2
-    u_l, singular_values, v_r = (
-        u_l[:, :max_num],
-        singular_values[:max_num],
-        v_r[:max_num, :],
-    )
+    # Convert to NumPy for downstream consistency with the current codebase
+    u_l = _to_numpy(u_l)
+    s = _to_numpy(s).astype(float, copy=False)  # singular values are real non-negative
+    v_h = _to_numpy(v_h)
 
-    if renormalise:
-        singular_values /= np.linalg.norm(singular_values)
+    # Truncate by cut and chi_max
+    max_num = min(int(chi_max), int(np.sum(s > cut)))
+    residual = s[max_num:]
+    truncation_error = float(np.linalg.norm(residual) ** 2)
+    u_l = u_l[:, :max_num]
+    s = s[:max_num]
+    v_h = v_h[:max_num, :]
+
+    if renormalise and s.size > 0:
+        norm = float(np.linalg.norm(s))
+        if norm > 0:
+            s = s / norm
 
     if return_truncation_error:
         return (
             np.asarray(u_l),
-            cast(list, singular_values),
-            np.asarray(v_r),
-            float(truncation_error),
+            cast(List[float], s.tolist()),
+            np.asarray(v_h),
+            truncation_error,
         )
-
-    return np.asarray(u_l), cast(list, singular_values), np.asarray(v_r), None
+    return np.asarray(u_l), cast(List[float], s.tolist()), np.asarray(v_h), None
 
 
 def qr(
@@ -159,25 +186,30 @@ def qr(
         raise ValueError(f"Input matrix must have 2 dimensions, got {len(mat.shape)}.")
 
     q_l, r_r, pivots = scipy.linalg.qr(
-        mat, pivoting=True, mode="economic", check_finite=False
+        _to_numpy(mat), pivoting=True, mode="economic", check_finite=False
     )
 
-    abs_diag_r = np.absolute(np.diag(r_r))
-    effective_rank = min(chi_max, int(np.sum(abs_diag_r > cut)))
-    truncation_indices = list(range(len(abs_diag_r)))[:effective_rank]
+    # Determine effective rank and truncate
+    abs_diag_r = np.abs(np.diag(r_r))
+    effective_rank = min(int(chi_max), int(np.sum(abs_diag_r > cut)))
+    trunc_idx = list(range(effective_rank))
 
-    permutation_matrix = np.eye(mat.shape[1])[:, pivots]
-    r_r = r_r[truncation_indices, :] @ permutation_matrix.T
-    q_l = q_l[:, truncation_indices]
+    # Undo column pivoting without building a dense permutation matrix
+    inv_piv = np.argsort(pivots)
+    r_r = r_r[trunc_idx, :][:, inv_piv]
+    q_l = q_l[:, trunc_idx]
 
-    if renormalise:
-        r_r /= np.linalg.norm(np.diag(r_r))
+    if renormalise and effective_rank > 0:
+        diag = np.diag(r_r[:effective_rank, :effective_rank])
+        nrm = float(np.linalg.norm(diag))
+        if nrm > 0:
+            r_r = r_r / nrm
 
     if return_truncation_error:
-        truncation_error = np.linalg.norm(mat - np.dot(q_l, r_r))
-        return q_l, r_r, float(truncation_error)
+        trunc_error = float(np.linalg.norm(_to_numpy(mat) - q_l @ r_r))
+        return np.asarray(q_l), np.asarray(r_r), trunc_error
 
-    return q_l, r_r, None
+    return np.asarray(q_l), np.asarray(r_r), None
 
 
 def kron_tensors(
@@ -229,22 +261,19 @@ def kron_tensors(
     The legs of the resulting tensor are indexed as ``(jl, m, i, kn)``.
     Indices `i` and `m` can be merged if `merge_physicals=True`.
     """
-
-    if len(tensor_1.shape) != 3:
+    if tensor_1.ndim != 3:
         raise ValueError(
-            f"The number of dimensions of the first tensor is {len(tensor_1.shape)},"
+            f"The number of dimensions of the first tensor is {tensor_1.ndim},"
             "but the number of dimensions expected is 3."
         )
-    if len(tensor_2.shape) != 3:
+    if tensor_2.ndim != 3:
         raise ValueError(
-            f"The number of dimensions of the second tensor is {len(tensor_2.shape)},"
+            f"The number of dimensions of the second tensor is {tensor_2.ndim},"
             "but the number of dimensions expected is 3."
         )
 
-    if conjugate_second:
-        product = np.kron(tensor_1, np.conjugate(tensor_2))
-    else:
-        product = np.kron(tensor_1, tensor_2)
+    t2 = np.conjugate(tensor_2) if conjugate_second else tensor_2
+    product = np.kron(tensor_1, t2)
 
     if not merge_physicals:
         return product.reshape(
@@ -255,7 +284,6 @@ def kron_tensors(
                 tensor_1.shape[2] * tensor_2.shape[2],
             )
         )
-
     return product
 
 
@@ -312,55 +340,47 @@ def split_two_site_tensor(
     ValueError
         If the strategy is not one of the available ones.
     """
-
     if tensor.ndim != 4:
         raise ValueError(
             "A valid two-site tensor must have 4 legs"
             f"while the one given has {tensor.ndim}."
         )
-
     if strategy not in ["svd", "qr"]:
         raise ValueError("The strategy must be either `svd` or `qr`.")
 
     chi_v_l, phys_l, phys_r, chi_v_r = tensor.shape
-    tensor = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
+    mat = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
-        u_l, singular_values, v_r, truncation_error = svd(
-            mat=tensor,
+        u_l, singular_values, v_h, truncation_error = svd(
+            mat=mat,
             cut=cut,
             chi_max=chi_max,
             renormalise=renormalise,
             return_truncation_error=return_truncation_error,
         )
-        chi_v_cut = len(singular_values)
+        s = np.asarray(singular_values, dtype=float)
+        chi_v_cut = s.size
         u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
-        v_r = v_r.reshape((chi_v_cut, phys_r, chi_v_r))
+        v_r = v_h.reshape((chi_v_cut, phys_r, chi_v_r))
         if return_truncation_error:
-            return (
-                u_l,
-                singular_values,
-                v_r,
-                truncation_error,
-            )  # pylint: disable=unbalanced-tuple-unpacking
+            return u_l, singular_values, v_r, truncation_error  # type: ignore[return-value]
         return u_l, singular_values, v_r
 
-    if strategy == "qr":
-        q_l, r_r, truncation_error = qr(
-            mat=tensor,
-            cut=cut,
-            chi_max=chi_max,
-            renormalise=renormalise,
-            return_truncation_error=return_truncation_error,
-        )
-        chi_v_cut = min(chi_max, q_l.shape[1])
-        q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
-        r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
-        if return_truncation_error:
-            return q_l, r_r, truncation_error, None
-        return q_l, r_r, None, None
-
-    return tuple()
+    # strategy == "qr"
+    q_l, r_r, truncation_error = qr(
+        mat=mat,
+        cut=cut,
+        chi_max=chi_max,
+        renormalise=renormalise,
+        return_truncation_error=return_truncation_error,
+    )
+    chi_v_cut = min(chi_max, q_l.shape[1])
+    q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
+    r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
+    if return_truncation_error:
+        return q_l, r_r, truncation_error, None
+    return q_l, r_r, None, None
 
 
 def create_random_mpo(
@@ -401,7 +421,6 @@ def create_random_mpo(
     Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
     ``p`` -- for "physical", and ``L, R, U, D`` -- for "left", "right", "up", "down" accordingly.
     """
-
     bonds = [[dim, dim] for dim in bond_dimensions]
     bonds.append([1])
     bonds.insert(0, [1])
@@ -414,23 +433,22 @@ def create_random_mpo(
 
     if which == "randint":
         mpo = [
-            np.random.randint(0, 2, size=shapes[i])
-            + 1j * np.random.randint(0, 2, size=shapes[i])
+            (
+                np.random.randint(0, 2, size=shapes[i])
+                + 1j * np.random.randint(0, 2, size=shapes[i])
+            )
             for i in range(num_sites)
         ]
-
     elif which == "normal":
         mpo = [
-            np.random.normal(size=shapes[i]) + 1j * np.random.normal(size=shapes[i])
+            (np.random.normal(size=shapes[i]) + 1j * np.random.normal(size=shapes[i]))
             for i in range(num_sites)
         ]
-
     else:
         mpo = [
-            np.random.uniform(size=shapes[i]) + 1j * np.random.uniform(size=shapes[i])
+            (np.random.uniform(size=shapes[i]) + 1j * np.random.uniform(size=shapes[i]))
             for i in range(num_sites)
         ]
-
     return mpo
 
 
@@ -485,7 +503,6 @@ def mpo_to_matrix(
     p -- for "physical", and L, R, U, D -- for "left", "right", "up", "down" accordingly.
     Warning: will cause memory overflow for number of sites > ~20.
     """
-
     for i, tensor in enumerate(mpo):
         if tensor.ndim != 4:
             raise ValueError(
@@ -494,12 +511,12 @@ def mpo_to_matrix(
 
     phys_dim = mpo[0].shape[2]
     num_sites = len(mpo)
+
     matrix = (
         np.tensordot(mpo[0], mpo[1], (1, 0))
         .transpose((0, 3, 1, 2, 4, 5))
         .reshape((-1, mpo[1].shape[1], phys_dim**2, phys_dim**2))
     )
-
     for i in range(num_sites - 2):
         matrix = (
             np.tensordot(matrix, mpo[i + 2], (1, 0))
@@ -530,127 +547,82 @@ def mpo_from_matrix(
     chi_max: int = int(1e4),
 ) -> List[np.ndarray]:
     """
-    Creates an MPO from a matrix.
+    Creates an MPO from a matrix (either grouped 2D or ungrouped 2N-D).
 
-    Parameters
-    ----------
-    matrix : np.ndarray
-        The matrix to convert to an MPO.
-        Can be given with either physical legs grouped together or merged (see notes).
-    num_sites : int
-        The number of sites in the MPO.
-    interlaced : bool
-        Whether the matrix' legs are interlaced or not.
-    orthogonalise: bool
-        Whether to make the MPO tensors isometric
-        with respect to 2 physical legs and one virtual.
-    phys_dim : int
-        Local dimension of the physical legs.
-    chi_max : int
-        Maximum bond dimension allowed in the MPO.
-
-    Returns
-    -------
-    mpo : List[np.ndarray]
-        The resulting Matrix Product Operator.
-
-    Raises
-    ------
-    ValueError
-        If the matrix' shape does not correspond to ``phys_dim`` and ``num_sites``.
-
-    Notes
-    -----
-    If ``interlaced==True``, the matrix' legs are considered to go as
-    ``(p0U, p0D, p1U, p1D, ...)``, which means physical legs sticking up and down with site number.
-    If ``interlaced==False``, the matrix' legs are considered to go as
-    ``(p0D, p1D, ..., p0U, p1U, ...)``, which means listing first all physical legs sticking down
-    with the site number, and then all physical legs sticking up.
-    This is done to adjust the matrix to the ``@`` numpy-native matrix-vector multiplication.
-
-    If ``orthogonalise==True``, the singular values at each bond are being carried further to the
-    orthogonality centre thus making all the tensors except the latter isometric.
-    The orthogonality centre is then isometric up to a multiplier which would be its norm.
-    If ``orthogonalise==False``, the singular values at each bond are being splitted by taking
-    the square root and distribbuted to both MPO tensors at each bond thus leaving all the tensors
-    nonisometric. There is no orthogonality centre in this case.
-
-    An example of a matrix with ungrouped legs on three sites::
-
-          p0U p1U p2U
-         __|___|___|__
-        |            |
-        |____________|
-           |   |   |
-          p0D p1D p2D
-
-    Each tensor in the ``mpo`` list has legs ``(vL, vR, pU, pD)``, where ``v`` stands for "virtual",
-    ``p`` -- for "physical", and ``L, R, U, D`` -- for "left", "right", "up", "down" accordingly.
+    If orthogonalise=True, carry singular values to the orthogonality centre
+    (isometric tensors except centre). Otherwise split sqrt singular values
+    to both sides (non-isometric, no single centre).
     """
-
     hilbert_space_dim = phys_dim**num_sites
     phys_dims = [phys_dim] * num_sites * 2
 
-    # Checking the matrix has correct shapes for
-    # a given physical dimension and number of sites.
-    if (matrix.shape != tuple([hilbert_space_dim] * 2)) and (
+    if (matrix.shape != (hilbert_space_dim, hilbert_space_dim)) and (
         matrix.shape != tuple(phys_dims)
     ):
         raise ValueError(
-            f"The matrix' shape should be either {tuple([hilbert_space_dim] * 2)}, "
+            f"The matrix' shape should be either {(hilbert_space_dim, hilbert_space_dim)}, "
             f"or {tuple(phys_dims)}, instead, the matrix given has shape {matrix.shape}."
         )
 
-    # Copying the matrix not to change the original one inplace.
-    matrix = matrix.copy()
+    mat = np.array(matrix, copy=True)
 
-    # Reshaping the matrix.
-    if matrix.shape == tuple([hilbert_space_dim] * 2):
-        matrix = matrix.reshape(tuple(phys_dims))
+    if mat.shape == (hilbert_space_dim, hilbert_space_dim):
+        mat = mat.reshape(tuple(phys_dims))
 
-    # Dealing with possible interlacing.
     if not interlaced:
-        correct_order = list([i + num_sites, i] for i in range(num_sites))
-        matrix = matrix.transpose(list(chain.from_iterable(correct_order)))
+        correct_order = [(i + num_sites, i) for i in range(num_sites)]
+        mat = mat.transpose(list(chain.from_iterable(correct_order)))
 
-    # Treating the MPO as an MPS with squared physical dimensions.
-    mpo = []
+    # Treat as MPS with squared physical dimension
+    mpo: List[np.ndarray] = []
     mps_dim = phys_dim**2
-    matrix = matrix.reshape((-1, mps_dim))
-    matrix, singular_values, v_r, _ = svd(matrix, chi_max=chi_max, renormalise=False)
-    if not orthogonalise:
-        v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
-    mpo.append(np.expand_dims(v_r, -1))
-    while matrix.shape[0] >= mps_dim:
-        if not orthogonalise:
-            singular_values = list(np.sqrt(np.array(singular_values)))
-        matrix = np.matmul(matrix, np.diag(singular_values))
-        bond_dim = matrix.shape[-1]
-        matrix = matrix.reshape((-1, mps_dim * bond_dim))
-        matrix, singular_values, v_r, _ = svd(
-            matrix, chi_max=chi_max, renormalise=False
-        )
-        if not orthogonalise:
-            v_r = np.matmul(np.diag(np.sqrt(singular_values)), v_r)
-        v_r = v_r.reshape((-1, mps_dim, bond_dim))
-        mpo.insert(0, v_r)
+    mat2 = mat.reshape((-1, mps_dim))
 
-    # Contracting in the orthogonality centre.
-    if not orthogonalise:
-        singular_values = list(np.sqrt(np.array(singular_values)))
-    mpo[0] = contract(
-        "ij, jk, klm",
-        matrix,
-        np.diag(singular_values),
-        mpo[0],
-        optimize=[(0, 1), (0, 1)],
-    )
+    U, S, Vh, _ = svd(mat2, chi_max=chi_max, renormalise=False)
+    S_np = np.asarray(S, dtype=float)
+    Vh_np = np.asarray(Vh)
 
-    # Converting the MPS back to the MPO.
+    if not orthogonalise:
+        # v_r = sqrt(S)[:, None] * Vh
+        sqrtS = np.sqrt(S_np)
+        Vh_np = sqrtS[:, None] * Vh_np
+    mpo.append(np.expand_dims(Vh_np, -1))
+
+    while U.shape[0] >= mps_dim:
+        if not orthogonalise:
+            S_np = np.sqrt(S_np)
+
+        # matrix = U @ diag(S)  → scale columns of U by S
+        if S_np.size:
+            U = U * S_np[None, :]
+
+        bond_dim = U.shape[-1]
+        U_reshaped = U.reshape((-1, mps_dim * bond_dim))
+        U, S, Vh, _ = svd(U_reshaped, chi_max=chi_max, renormalise=False)
+        S_np = np.asarray(S, dtype=float)
+        Vh_np = np.asarray(Vh)
+
+        if not orthogonalise:
+            sqrtS = np.sqrt(S_np)
+            Vh_np = sqrtS[:, None] * Vh_np
+
+        Vh_np = Vh_np.reshape((-1, mps_dim, bond_dim))
+        mpo.insert(0, Vh_np)
+
+    # Contract orthogonality centre (avoid diag by broadcasting)
+    if not orthogonalise:
+        S_np = np.sqrt(S_np)
+    # mpo[0] = contract("ij, jk, klm", U, diag(S), mpo[0])  -> scale rows of mpo[0] by S, then contract
+    if S_np.size:
+        mpo0_scaled = S_np[:, None, None] * mpo[0]  # (r, mps_dim, bond_dim)
+    else:
+        mpo0_scaled = mpo[0]
+    mpo[0] = contract("ij, jlm -> ilm", U, mpo0_scaled, optimize=[(0, 1)])
+
+    # Convert MPS back to MPO layout (vL, vR, pU, pD)
     mpo = [tensor.transpose((0, 2, 1)) for tensor in mpo]
     mpo = [
         tensor.reshape((tensor.shape[0], tensor.shape[1], phys_dim, phys_dim))
         for tensor in mpo
     ]
-
     return mpo
