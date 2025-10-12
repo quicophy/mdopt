@@ -134,8 +134,8 @@ def svd(
             np.asarray(s),
             np.asarray(v_h),
             truncation_error,
-        )
-    return np.asarray(u_l), np.asarray(s), np.asarray(v_h), None
+        )  # type: ignore
+    return np.asarray(u_l), np.asarray(s), np.asarray(v_h), None  # type: ignore
 
 
 def qr(
