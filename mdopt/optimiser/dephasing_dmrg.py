@@ -43,6 +43,9 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
     The diagram displaying the contraction can be found in the supplementary notes.
     """
 
+    # Single compiled einsum route kept for readability/reuse
+    _EINSUM = "ustw, ailu, ifj, jhk, bef, cgh, lom, mpn, eso, gtp, dknw -> abcd"
+
     def __init__(
         self,
         left_environment: np.ndarray,
@@ -50,68 +53,46 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         mps_target_2: np.ndarray,
         right_environment: np.ndarray,
     ) -> None:
-        """
-        Initialise an effective dephased density operator tensor network.
-
-        Parameters
-        ----------
-        left_environment : np.ndarray
-            The left environment for the effective dephased density operator.
-        mps_target_1 : np.ndarray
-            The left target matrix product state tensor.
-        mps_target_2 : np.ndarray
-            The right target matrix product state tensor.
-        right_environment : np.ndarray
-            The right environment for the effective dephased density operator.
-
-        Raises
-        ------
-        ValueError
-            If the left environment tensor is not four-dimensional.
-        ValueError
-            If the first target MPS tensor is not three-dimensional.
-        ValueError
-            If the second target MPS tensor is not three-dimensional.
-        ValueError
-            If the right environment tensor is not four-dimensional.
-        """
-        if len(left_environment.shape) != 4:
+        if left_environment.ndim != 4:
             raise ValueError(
-                "A valid left environment tensor must have 4 legs"
-                f"while the one given has {len(left_environment.shape)}."
+                "A valid left environment tensor must have 4 legs "
+                f"while the one given has {left_environment.ndim}."
             )
-        if len(mps_target_1.shape) != 3:
+        if mps_target_1.ndim != 3:
             raise ValueError(
-                "A valid target MPS tensor must have 3 legs"
-                f"while the one given has {len(mps_target_1.shape)}."
+                "A valid target MPS tensor must have 3 legs "
+                f"while the one given has {mps_target_1.ndim}."
             )
-        if len(mps_target_2.shape) != 3:
+        if mps_target_2.ndim != 3:
             raise ValueError(
-                "A valid target MPS tensor must have 3 legs"
-                f"while the one given has {len(mps_target_1.shape)}."
+                "A valid target MPS tensor must have 3 legs "
+                f"while the one given has {mps_target_2.ndim}."
             )
-        if len(right_environment.shape) != 4:
+        if right_environment.ndim != 4:
             raise ValueError(
-                "A valid right environment tensor must have 4 legs"
-                f"while the one given has {len(right_environment.shape)}."
+                "A valid right environment tensor must have 4 legs "
+                f"while the one given has {right_environment.ndim}."
             )
 
         self.left_environment = left_environment
         self.right_environment = right_environment
         self.mps_target_1 = mps_target_1
         self.mps_target_2 = mps_target_2
-        chi_1, chi_2 = (
-            left_environment.shape[3],
-            right_environment.shape[3],
-        )
-        d_1, d_2 = (
-            mps_target_1.shape[1],
-            mps_target_2.shape[1],
-        )
+
+        chi_1 = left_environment.shape[3]
+        chi_2 = right_environment.shape[3]
+        d_1 = mps_target_1.shape[1]
+        d_2 = mps_target_2.shape[1]
+
         self.x_shape = (chi_1, d_1, d_2, chi_2)
         self.shape = (chi_1 * d_1 * d_2 * chi_2, chi_1 * d_1 * d_2 * chi_2)
         self.dtype = mps_target_1.dtype
         super().__init__(shape=self.shape, dtype=self.dtype)
+
+        # Precompute the 3-way copy tensor δ_{i,j,k} once (dtype-safe)
+        self._copy = np.zeros((2, 2, 2), dtype=self.dtype)
+        self._copy[0, 0, 0] = 1
+        self._copy[1, 1, 1] = 1
 
     def _matvec(self, x: np.ndarray) -> np.ndarray:
         """
@@ -126,34 +107,24 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         x : np.ndarray
             The two-site tensor to be acted on by an effective density operator.
         """
-
         two_site_tensor = np.reshape(x, self.x_shape)
-
-        if len(two_site_tensor.shape) != 4:
+        if two_site_tensor.ndim != 4:
             raise ValueError(
-                f"A valid two-site tensor must have 4 legs"
-                f"while the one given has {len(two_site_tensor.shape)}."
+                f"A valid two-site tensor must have 4 legs while the one given has {two_site_tensor.ndim}."
             )
 
-        copy_tensor = np.fromfunction(
-            lambda i, j, k: np.logical_and(i == j, j == k), (2, 2, 2), dtype=int
-        )
-
-        einsum_string = (
-            "ustw, ailu, ifj, jhk, bef, cgh, lom, mpn, eso, gtp, dknw -> abcd"
-        )
-        two_site_tensor = contract(
-            einsum_string,
+        y = contract(
+            self._EINSUM,
             two_site_tensor,
             self.left_environment,
             np.conjugate(self.mps_target_1),
             np.conjugate(self.mps_target_2),
-            copy_tensor,
-            copy_tensor,
+            self._copy,
+            self._copy,
             self.mps_target_1,
             self.mps_target_2,
-            copy_tensor,
-            copy_tensor,
+            self._copy,
+            self._copy,
             self.right_environment,
             optimize=[
                 (0, 8),
@@ -170,7 +141,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
             use_blas=True,
         )
 
-        return np.reshape(two_site_tensor, self.shape[0])
+        return np.reshape(y, self.shape[0])
 
 
 class DephasingDMRG:
@@ -218,57 +189,58 @@ class DephasingDMRG:
         """
         if len(mps) != len(mps_target):
             raise ValueError(
-                f"The MPS has length {len(mps)},"
-                f"the target MPS has length {len(mps_target)},"
+                f"The MPS has length {len(mps)}, the target MPS has length {len(mps_target)}, "
                 "but the lengths should be equal."
             )
-        if copy:
-            self.mps = mps.copy()
-        self.mps = mps
-        self.left_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
-        self.right_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
+
+        self.mps = mps.copy() if copy else mps
         self.mps_target = mps_target.right_canonical()
         self.chi_max = chi_max
         self.cut = cut
         self.mode = mode
         self.silent = silent
 
+        L = len(mps)
+        self.left_environments = [
+            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype)
+        ] * L
+        self.right_environments = [
+            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype)
+        ] * L
+
+        # dtype-safe envs (complex if needed)
+        dtype = self.mps.tensors[0].dtype
         start_bond_dim = self.mps_target.tensors[0].shape[0]
-        chi = mps.tensors[0].shape[0]
+        chi = self.mps.tensors[0].shape[0]
+
         left_environment = np.zeros(
-            [chi, start_bond_dim, start_bond_dim, chi], dtype=float
+            (chi, start_bond_dim, start_bond_dim, chi), dtype=dtype
         )
         right_environment = np.zeros(
-            [chi, start_bond_dim, start_bond_dim, chi], dtype=float
+            (chi, start_bond_dim, start_bond_dim, chi), dtype=dtype
         )
-        left_environment[:, 0, 0, :] = np.eye(chi, dtype=float)
+
+        left_environment[:, 0, 0, :] = np.eye(chi, dtype=dtype)
         right_environment[:, start_bond_dim - 1, start_bond_dim - 1, :] = np.eye(
-            chi, dtype=float
+            chi, dtype=dtype
         )
+
         self.left_environments[0] = left_environment
         self.right_environments[-1] = right_environment
-        for i in reversed(range(1, len(mps))):
+
+        # Build right environments (right-to-left)
+        for i in reversed(range(1, L)):
             self.update_right_environment(i)
 
     def sweep(self) -> None:
-        """
-        One Dephasing DMRG sweep.
-
-        A method performing one Dephasing DMRG sweep, which consists of
-        two series of ``update_bond`` sweeps which go back and forth.
-        """
-
+        """One full Dephasing DMRG sweep (left→right, then right→left)."""
         for i in range(self.mps.num_sites - 1):
             self.update_bond(i)
-
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
     def update_bond(self, i: int) -> None:
-        """
-        Updates the bond between sites ``i`` and ``i+1``.
-        """
-
+        """Update the bond between sites i and i+1."""
         j = i + 1
 
         effective_density_operator = EffectiveDensityOperator(
@@ -297,6 +269,7 @@ class DephasingDMRG:
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
+
         left_iso_i, singular_values_j, right_iso_j, _ = split_two_site_tensor(
             x,
             chi_max=self.chi_max,
@@ -305,32 +278,33 @@ class DephasingDMRG:
             return_truncation_error=True,
         )
 
+        s = np.asarray(singular_values_j, dtype=self.mps.tensors[i].dtype)
+
         if isinstance(self.mps, CanonicalMPS):
-            self.mps.tensors[i] = np.tensordot(
-                left_iso_i, np.diag(singular_values_j), (2, 0)
-            )
+            # mps[i] = left_iso_i @ diag(s)  -> scale vR axis by s
+            self.mps.tensors[i] = left_iso_i * s[None, None, :]
             self.mps.orth_centre = i
             self.mps.tensors[j] = right_iso_j
 
         if isinstance(self.mps, ExplicitMPS):
-            self.mps.tensors[i] = np.tensordot(
-                np.linalg.inv(np.diag(self.mps.singular_values[i])), left_iso_i, (1, 0)
-            )
-            self.mps.tensors[j] = np.tensordot(
-                right_iso_j,
-                np.linalg.inv(np.diag(self.mps.singular_values[j + 1])),
-                (2, 0),
-            )
+            # Left site: inv(diag(Λ_i)) @ left_iso_i  -> divide vL axis by Λ_i
+            sL = np.asarray(self.mps.singular_values[i], dtype=left_iso_i.dtype)
+            sL_safe = np.where(sL != 0.0, sL, 1.0)
+            self.mps.tensors[i] = left_iso_i / sL_safe[:, None, None]
+
+            # Right site: right_iso_j @ inv(diag(Λ_{j+1})) -> divide vR axis by Λ_{j+1}
+            sR = np.asarray(self.mps.singular_values[j + 1], dtype=right_iso_j.dtype)
+            sR_safe = np.where(sR != 0.0, sR, 1.0)
+            self.mps.tensors[j] = right_iso_j / sR_safe[None, None, :]
+
+            # Update middle singular values
             self.mps.singular_values[j] = singular_values_j
 
         self.update_left_environment(i)
         self.update_right_environment(j)
 
     def update_right_environment(self, i: int) -> None:
-        """
-        Compute the ``right_environment`` right of site ``i-1``
-        from the ``right_environment`` right of site ``i``.
-        """
+        """Compute right_environment right of site i-1 from right of site i."""
 
         right_environment = self.right_environments[i]
 
@@ -352,10 +326,7 @@ class DephasingDMRG:
         self.right_environments[i - 1] = right_environment
 
     def update_left_environment(self, i: int) -> None:
-        """
-        Compute the ``left_environment`` left of site ``i+1``
-        from the  ``left_environment`` left of site ``i``.
-        """
+        """Compute left_environment left of site i+1 from left of site i."""
 
         left_environment = self.left_environments[i]
 
@@ -377,9 +348,6 @@ class DephasingDMRG:
         self.left_environments[i + 1] = left_environment
 
     def run(self, num_iter: int = 1) -> None:
-        """
-        Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of times.
-        """
-
+        """Run the algorithm for `num_iter` full sweeps."""
         for _ in tqdm(range(num_iter), disable=self.silent):
             self.sweep()
