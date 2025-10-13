@@ -88,7 +88,7 @@ def random_constraints(num_bits: int, constraint_size: int, rng: Generator) -> d
             "Bitstring must have at least 3 bits for meaningful XOR and swap sites."
         )
 
-    indices = sorted(rng.choice(num_bits, size=constraint_size, replace=False))
+    indices = sorted(rng.choice(num_bits, size=constraint_size, replace=False))  # type: ignore
     xor_left_sites = [indices[0]]
     xor_right_sites = [indices[-1]]
     xor_bulk_sites = indices[1:-1]
