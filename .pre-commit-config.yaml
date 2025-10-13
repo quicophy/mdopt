@@ -42,6 +42,3 @@ repos:
     rev: 1.8.0
     hooks:
       - id: poetry-check
-      - id: poetry-export
-        args: ["-f", "requirements.txt", "-o", "requirements.txt"]
-        verbose: true
