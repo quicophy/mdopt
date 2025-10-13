@@ -245,8 +245,8 @@ class DephasingDMRG:
         right_environment[:, start_bond_dim - 1, start_bond_dim - 1, :] = np.eye(
             chi, dtype=float
         )
-        self.left_environments[0] = left_environment
-        self.right_environments[-1] = right_environment
+        self.left_environments[0] = left_environment  # type: ignore
+        self.right_environments[-1] = right_environment  # type: ignore
         for i in reversed(range(1, len(mps))):
             self.update_right_environment(i)
 
