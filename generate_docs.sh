@@ -19,9 +19,14 @@ fi
 echo "==> Preparing Sphinx source tree"
 mkdir -p "$SPHINX_SOURCE_DIR" "$SPHINX_BUILD_DIR" "$NOTEBOOKS_DEST_DIR" "$API_DEST_DIR"
 
-# 1) Convert README.md to README.rst (safe to overwrite)
-echo "==> Converting README.md to $README_RST"
-pandoc "./README.md" -o "$README_RST"
+# 1) Convert README.md to README.rst (only if it doesn't exist)
+README_RST="$SPHINX_SOURCE_DIR/README.rst"
+if [ -f "$README_RST" ]; then
+    echo "README.rst exists; skipping conversion from README.md."
+else
+    echo "Converting README.md to README.rst..."
+    pandoc "./README.md" -o "$README_RST"
+fi
 
 # 2) Refresh notebooks in docs/source/notebooks (without touching other .rst files)
 echo "==> Syncing example notebooks into $NOTEBOOKS_DEST_DIR"
