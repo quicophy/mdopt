@@ -1,4 +1,4 @@
-"""This module contains different tensor utilities."""
+"""This module contains miscellaneous utilities."""
 
 from typing import Tuple, Optional, List, cast
 from itertools import chain
