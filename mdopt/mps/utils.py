@@ -494,7 +494,7 @@ def create_custom_product_state(
             )
         tensors.append(tensor)
 
-    tensors = [tensor.reshape((1, phys_dim, 1)) for tensor in tensors]
+    tensors = [tensor.reshape((1, phys_dim, 1)) for tensor in tensors]  # type: ignore
     singular_values = [[1.0] for _ in range(num_sites + 1)]
 
     if form == "Right-canonical":
