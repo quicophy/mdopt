@@ -29,8 +29,8 @@ Examples
 
    notebooks/ground_state.ipynb
    notebooks/mps-rand-circ.ipynb
-   notebooks/maxbonddim.ipynb
    notebooks/main_component.ipynb
+   notebooks/maxbonddim.ipynb
 
 - :doc:`notebooks/ground_state` — Solve a simple 1D quantum Ising chain using an MPS ground-state search. Compares observables and magnetisation curves from exact diagonalisation and DMRG to confirm correctness. A gentle introduction to MPS/MPO mechanics outside of decoding.
 
