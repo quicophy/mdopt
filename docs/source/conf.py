@@ -13,7 +13,7 @@
 import os
 import sys
 import datetime
-import sphinx_rtd_theme
+import pydata_sphinx_theme
 from sphinx.ext.autodoc import ClassDocumenter, _
 
 sys.path.insert(0, os.path.abspath("../"))
@@ -39,7 +39,7 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.napoleon",
     "myst_parser",
-    "sphinx_rtd_theme",
+    "pydata_sphinx_theme",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
@@ -61,7 +61,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_rtd_theme"
+html_theme = "pydata_sphinx_theme"
 nbsphinx_allow_errors = True
 html_theme_options = {
     "collapse_navigation": True,
