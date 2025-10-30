@@ -1,6 +1,6 @@
 [project]
 name = "mdopt"
-version = "1.0.0"
+version = "1.0.1"
 description = "Discrete optimisation in the tensor-network (specifically, MPS-MPO) language."
 authors = [
     { name = "Aleksandr Berezutskii", email = "berezutskii.aleksandr@gmail.com" },
