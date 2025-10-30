@@ -1,0 +1,8 @@
+/* Remove the light gray "card" background the theme adds to images */
+.bd-content img.no-bg-logo {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  filter: none !important;
+}
