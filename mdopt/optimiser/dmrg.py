@@ -142,8 +142,8 @@ class DMRG:
         L = len(mps)
         dtype = self.mps.tensors[0].dtype
 
-        self.left_environments = [np.zeros(shape=(1,), dtype=dtype)] * L
-        self.right_environments = [np.zeros(shape=(1,), dtype=dtype)] * L
+        self.left_environments = [np.zeros(shape=(1,), dtype=dtype) for _ in range(L)]
+        self.right_environments = [np.zeros(shape=(1,), dtype=dtype) for _ in range(L)]
         self.mpo = mpo
         self.chi_max = chi_max
         self.cut = cut
