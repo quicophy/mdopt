@@ -10,7 +10,7 @@ from opt_einsum import contract
 try:
     # expected to export a NumPy-like API (e.g., NumPy or CuPy)
     from mdopt.backend import array as xp  # type: ignore
-except Exception:
+except (ImportError, ModuleNotFoundError):
     import numpy as xp  # type: ignore
 
 
