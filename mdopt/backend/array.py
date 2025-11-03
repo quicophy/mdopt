@@ -106,4 +106,10 @@ def asfortran(a):
 # This lets callers do: xp.asarray, xp.linalg.svd, xp.random, etc.
 # ----------------------------------------------------------------------
 def __getattr__(name):
-    return getattr(_xp, name)
+    if hasattr(_xp, name):
+        return getattr(_xp, name)
+    raise AttributeError(
+        f"module '{__name__}' has no attribute '{name}'. "
+        f"The current backend ('{_xp.__name__}') also does not have this attribute. "
+        "This may be due to a typo or an API change."
+    )
