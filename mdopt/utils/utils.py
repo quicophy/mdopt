@@ -1,6 +1,6 @@
 """This module contains miscellaneous utilities."""
 
-from typing import Tuple, Optional, List, cast
+from typing import Tuple, Optional, List
 from itertools import chain
 import numpy as np
 import scipy

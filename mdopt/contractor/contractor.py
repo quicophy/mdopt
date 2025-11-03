@@ -13,7 +13,7 @@ from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
 
 
-def apply_one_site_operator(tensor, operator):
+def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
     """
     Applies a one-site operator to a MPS as follows::
 
@@ -65,9 +65,9 @@ def apply_one_site_operator(tensor, operator):
 
 def apply_two_site_unitary(
     lambda_0: list,
-    b_1,
-    b_2,
-    unitary,
+    b_1: np.ndarray,
+    b_2: np.ndarray,
+    unitary: np.ndarray,
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
 ) -> Tuple:

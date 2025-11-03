@@ -401,8 +401,7 @@ def create_simple_product_state(
         | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
         | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
 
-    The returned state is normalised.
-
+    The returned state is normalised at the end.
     """
     tensor = np.zeros((phys_dim,))
     if which == "0":
@@ -474,8 +473,7 @@ def create_custom_product_state(
         | :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
         | :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
 
-    The state is renormalised at the end.
-
+    The returned state is renormalised at the end.
     """
     num_sites = len(string)
     tensors = []
