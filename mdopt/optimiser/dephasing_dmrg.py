@@ -202,11 +202,11 @@ class DephasingDMRG:
 
         L = len(mps)
         self.left_environments = [
-            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype)
-        for _ in range(L)]
+            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype) for _ in range(L)
+        ]
         self.right_environments = [
-            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype)
-        for _ in range(L)]
+            np.zeros(shape=(1,), dtype=self.mps.tensors[0].dtype) for _ in range(L)
+        ]
 
         # dtype-safe envs (complex if needed)
         dtype = self.mps.tensors[0].dtype
