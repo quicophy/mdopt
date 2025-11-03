@@ -37,6 +37,8 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     are ordered as follows: ``(uL/uR, vL/vR, dL/dR)`` which means "(up, virtual, down)".
     """
 
+    _EINSUM = "ijkl, mni, nopj, oqrk, sql -> mprs"
+
     def __init__(
         self,
         left_environment: np.ndarray,
@@ -44,84 +46,54 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
         mpo_tensor_right: np.ndarray,
         right_environment: np.ndarray,
     ) -> None:
-        """
-        Initialises an effective operator tensor network.
-
-        Parameters
-        ----------
-        left_environment : np.ndarray
-            The left environment for the effective operator.
-        mpo_tensor_left : np.ndarray
-            The left MPO tensor.
-        mpo_tensor_right : np.ndarray
-            The right MPO tensor.
-        right_environment : np.ndarray
-            The right environment for the effective operator.
-        """
-
-        if len(left_environment.shape) != 3:
+        if left_environment.ndim != 3:
             raise ValueError(
-                "A valid left environment tensor must have 3 legs"
-                f"while the one given has {len(left_environment.shape)}."
+                "A valid left environment tensor must have 3 legs "
+                f"while the one given has {left_environment.ndim}."
             )
-        if len(mpo_tensor_left.shape) != 4:
+        if mpo_tensor_left.ndim != 4:
             raise ValueError(
-                "A valid mpo left tensor must have 4 legs"
-                f"while the one given has {len(mpo_tensor_left.shape)}."
+                "A valid mpo left tensor must have 4 legs "
+                f"while the one given has {mpo_tensor_left.ndim}."
             )
-        if len(mpo_tensor_right.shape) != 4:
+        if mpo_tensor_right.ndim != 4:
             raise ValueError(
-                "A valid mpo right tensor must have 4 legs"
-                f"while the one given has {len(mpo_tensor_right.shape)}."
+                "A valid mpo right tensor must have 4 legs "
+                f"while the one given has {mpo_tensor_right.ndim}."
             )
-        if len(right_environment.shape) != 3:
+        if right_environment.ndim != 3:
             raise ValueError(
-                "A valid right environment tensor must have 3 legs"
-                f"while the one given has {len(right_environment.shape)}."
+                "A valid right environment tensor must have 3 legs "
+                f"while the one given has {right_environment.ndim}."
             )
 
         self.left_environment = left_environment
         self.right_environment = right_environment
         self.mpo_tensor_left = mpo_tensor_left
         self.mpo_tensor_right = mpo_tensor_right
-        chi_1, chi_2 = (
-            left_environment.shape[2],
-            right_environment.shape[2],
-        )
-        d_1, d_2 = (
-            mpo_tensor_left.shape[3],
-            mpo_tensor_right.shape[3],
-        )
+
+        chi_1 = left_environment.shape[2]
+        chi_2 = right_environment.shape[2]
+        d_1 = mpo_tensor_left.shape[3]
+        d_2 = mpo_tensor_right.shape[3]
+
         self.x_shape = (chi_1, d_1, d_2, chi_2)
         self.shape = (chi_1 * d_1 * d_2 * chi_2, chi_1 * d_1 * d_2 * chi_2)
         self.dtype = mpo_tensor_left.dtype
         super().__init__(shape=self.shape, dtype=self.dtype)
 
     def _matvec(self, x: np.ndarray) -> np.ndarray:
-        """
-        Performs matrix-vector multiplication.
-
-        Computes ``effective_operator * |x> = |x'>``.
-        This function is being used by ``scipy.sparse.linalg.eigsh`` to diagonalise
-        the effective operator with the Lanczos method, without generating the full matrix.
-
-        Parameters
-        ----------
-        x : np.ndarray
-            The two-site tensor on which acts an effective operator.
-        """
-
+        """Performs matrix-vector multiplication: (effective operator) @ vec(x)."""
         two_site_tensor = np.reshape(x, self.x_shape)
 
-        if len(two_site_tensor.shape) != 4:
+        if two_site_tensor.ndim != 4:
             raise ValueError(
-                f"A valid two-site tensor must have 4 legs"
-                f"while the one given has {len(two_site_tensor.shape)}."
+                f"A valid two-site tensor must have 4 legs "
+                f"while the one given has {two_site_tensor.ndim}."
             )
 
-        einsum_string = "ijkl, mni, nopj, oqrk, sql -> mprs"
-        two_site_tensor = contract(
-            einsum_string,
+        y = contract(
+            self._EINSUM,
             two_site_tensor,
             self.left_environment,
             self.mpo_tensor_left,
@@ -131,40 +103,13 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
             use_blas=True,
         )
 
-        return np.reshape(two_site_tensor, self.shape[0])
+        return np.reshape(y, self.shape[0])
 
 
 class DMRG:
     """
-    Class storing the DMRG methods.
-
     Class holding the Density Matrix Renormalisation Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
-
-    Attributes
-    ----------
-    mps : Union[ExplicitMPS, CanonicalMPS]
-        MPS serving as a current approximation of the target state.
-    mpo : List[np.ndarray]
-        The MPO of which the target state is to be computed.
-        Each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
-        where ``v`` stands for "virtual", ``p`` -- for "physical",
-        and ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
-    chi_max : int
-        The highest bond dimension of an MPS allowed.
-    cut : float
-        The lower boundary of the spectrum, i.e., all the
-        singular values smaller than that will be discarded.
-    mode : str
-        The eigensolver mode. Available options:
-            | ``LM`` : Largest (in magnitude) eigenvalues.
-            | ``SM`` : Smallest (in magnitude) eigenvalues.
-            | ``LA`` : Largest (algebraic) eigenvalues.
-            | ``SA`` : Smallest (algebraic) eigenvalues.
-    silent : bool
-        Whether to show/hide the progress bar.
-    copy : bool
-        Whether to copy the input MPS or modify inplace.
     """
 
     def __init__(
@@ -179,8 +124,7 @@ class DMRG:
     ) -> None:
         if len(mps) != len(mpo):
             raise ValueError(
-                f"The MPS has length {len(mps)},"
-                f"the MPO has length {len(mpo)},"
+                f"The MPS has length {len(mps)}, the MPO has length {len(mpo)}, "
                 "but the lengths should be equal."
             )
         for i, tensor in enumerate(mpo):
@@ -191,13 +135,15 @@ class DMRG:
         if mode not in ["SA", "LA", "SM", "LM"]:
             raise ValueError("Invalid eigensolver mode given.")
 
-        self.mps = mps
-        if copy:
-            self.mps = mps.copy()
+        self.mps = mps.copy() if copy else mps
         if isinstance(self.mps, CanonicalMPS):
             self.mps = self.mps.right_canonical()
-        self.left_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
-        self.right_environments = [np.zeros(shape=(1,), dtype=float)] * len(mps)
+
+        L = len(mps)
+        dtype = self.mps.tensors[0].dtype
+
+        self.left_environments = [np.zeros(shape=(1,), dtype=dtype) for _ in range(L)]
+        self.right_environments = [np.zeros(shape=(1,), dtype=dtype) for _ in range(L)]
         self.mpo = mpo
         self.chi_max = chi_max
         self.cut = cut
@@ -205,35 +151,27 @@ class DMRG:
         self.silent = silent
 
         start_bond_dim = self.mpo[0].shape[0]
-        chi = mps.tensors[0].shape[0]
-        left_environment = np.zeros([chi, start_bond_dim, chi], dtype=float)
-        right_environment = np.zeros([chi, start_bond_dim, chi], dtype=float)
-        left_environment[:, 0, :] = np.eye(chi, dtype=float)
-        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=float)
-        self.left_environments[0] = left_environment  # type: ignore
-        self.right_environments[-1] = right_environment  # type: ignore
-        for i in reversed(range(1, len(mps))):
+        chi = self.mps.tensors[0].shape[0]
+        left_environment = np.zeros((chi, start_bond_dim, chi), dtype=dtype)
+        right_environment = np.zeros((chi, start_bond_dim, chi), dtype=dtype)
+        left_environment[:, 0, :] = np.eye(chi, dtype=dtype)
+        right_environment[:, start_bond_dim - 1, :] = np.eye(chi, dtype=dtype)
+        self.left_environments[0] = left_environment
+        self.right_environments[-1] = right_environment
+
+        # Build right environments from right to left
+        for i in reversed(range(1, L)):
             self.update_right_environment(i)
 
     def sweep(self) -> None:
-        """
-        One DMRG sweep.
-
-        A method performing one DMRG sweep, which consists of
-        two series of ``update_bond`` sweeps which go back and forth.
-        """
-
+        """One full DMRG sweep (left→right, then right→left)."""
         for i in range(self.mps.num_sites - 1):
             self.update_bond(i)
-
         for i in reversed(range(self.mps.num_sites - 1)):
             self.update_bond(i)
 
     def update_bond(self, i: int) -> None:
-        """
-        Updates the bond between sites ``i`` and ``i+1``.
-        """
-
+        """Update the bond between sites ``i`` and ``i+1``."""
         j = i + 1
 
         effective_hamiltonian = EffectiveOperator(
@@ -247,7 +185,7 @@ class DMRG:
             initial_guess = self.mps.two_site_right_iso(i).reshape(
                 effective_hamiltonian.shape[0]
             )
-        if isinstance(self.mps, CanonicalMPS):
+        else:  # CanonicalMPS
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
                 effective_hamiltonian.shape[0]
@@ -262,6 +200,7 @@ class DMRG:
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_hamiltonian.x_shape)
+
         left_iso_i, singular_values_j, right_iso_j, _ = split_two_site_tensor(
             x,
             chi_max=self.chi_max,
@@ -270,22 +209,26 @@ class DMRG:
             return_truncation_error=True,
         )
 
+        s = np.asarray(singular_values_j, dtype=self.mps.tensors[i].dtype)
+
         if isinstance(self.mps, CanonicalMPS):
-            self.mps.tensors[i] = np.tensordot(
-                left_iso_i, np.diag(singular_values_j), (2, 0)
-            )
+            # mps[i] = left_iso_i @ diag(s)  -> scale vR axis by s
+            self.mps.tensors[i] = left_iso_i * s[None, None, :]
             self.mps.orth_centre = i
             self.mps.tensors[j] = right_iso_j
 
-        if isinstance(self.mps, ExplicitMPS):
-            self.mps.tensors[i] = np.tensordot(
-                np.linalg.inv(np.diag(self.mps.singular_values[i])), left_iso_i, (1, 0)
-            )
-            self.mps.tensors[j] = np.tensordot(
-                right_iso_j,
-                np.linalg.inv(np.diag(self.mps.singular_values[j + 1])),
-                (2, 0),
-            )
+        else:  # ExplicitMPS
+            # Left site: inv(diag(Λ_i)) @ left_iso_i  -> divide vL axis by Λ_i
+            sL = np.asarray(self.mps.singular_values[i], dtype=left_iso_i.dtype)
+            sL_safe = np.where(sL != 0.0, sL, 1.0)
+            self.mps.tensors[i] = left_iso_i / sL_safe[:, None, None]
+
+            # Right site: right_iso_j @ inv(diag(Λ_{j+1})) -> divide vR axis by Λ_{j+1}
+            sR = np.asarray(self.mps.singular_values[j + 1], dtype=right_iso_j.dtype)
+            sR_safe = np.where(sR != 0.0, sR, 1.0)
+            self.mps.tensors[j] = right_iso_j / sR_safe[None, None, :]
+
+            # Update middle singular values
             self.mps.singular_values[j] = singular_values_j
 
         self.update_left_environment(i)
@@ -296,12 +239,11 @@ class DMRG:
         Compute the ``right_environment`` right of site ``i-1``
         from the ``right_environment`` right of site ``i``.
         """
-
         right_environment = self.right_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
             right_iso = self.mps.one_site_right_iso(i)
-        if isinstance(self.mps, CanonicalMPS):
+        else:  # CanonicalMPS
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
             right_iso = self.mps.one_site_tensor(i)
 
@@ -320,12 +262,11 @@ class DMRG:
         Compute the ``left_environment`` left of site ``i+1``
         from the ``left_environment`` left of site ``i``.
         """
-
         left_environment = self.left_environments[i]
 
         if isinstance(self.mps, ExplicitMPS):
             left_iso = self.mps.one_site_left_iso(i)
-        if isinstance(self.mps, CanonicalMPS):
+        else:  # CanonicalMPS
             self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
             left_iso = self.mps.one_site_tensor(i)
 
@@ -340,9 +281,6 @@ class DMRG:
         self.left_environments[i + 1] = left_environment
 
     def run(self, num_iter: int = 1) -> None:
-        """
-        Run the algorithm, i.e., run the ``sweep`` method for ``num_iter`` number of iterations.
-        """
-
+        """Run the algorithm, i.e., run ``sweep`` for ``num_iter`` iterations."""
         for _ in tqdm(range(num_iter), disable=self.silent):
             self.sweep()

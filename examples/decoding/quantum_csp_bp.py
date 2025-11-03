@@ -3,10 +3,19 @@
 import os
 import json
 import numpy as np
+import seaborn as sns
+
+import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 
 from tqdm import tqdm
 from qldpc.codes import CSSCode
+
+sns.set_style("whitegrid")
+sns.set_palette("colorblind")
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
 
 
 def load_csp_code(num_qubits: int, batch: int, code_id: int):
@@ -59,14 +68,20 @@ def main():
     # Physical error rates to sweep
     ps = [0.0001, 0.001, 0.002, 0.004, 0.008, 0.01, 0.1]
 
-    plt.figure(figsize=(7, 5))
+    cmap = matplotlib.colormaps["viridis_r"]
 
-    # Sweep these code sizes
-    for N in [30, 40, 50, 60, 70, 80, 90, 100]:
+    # Sweep these code sizes (each becomes a series)
+    Ns = [30, 40, 50, 60, 70, 80, 90, 100]
+    norm = Normalize(vmin=0, vmax=len(Ns) - 1)
+
+    plt.figure(figsize=(6.5, 4))  # same size used in bond_dim mode
+
+    for series_idx, N in enumerate(Ns):
         per_batch_means = []  # list of arrays, shape (len(ps),) per batch
         per_batch_counts = []  # number of codes found in each batch
 
-        for batch in tqdm(range(1, 15), desc=f"N={N}: batches", leave=False):
+        # for batch in tqdm(range(1, 15), desc=f"N={N}: batches", leave=False):
+        for batch in tqdm([9], desc=f"N={N}: batches", leave=False):
             per_code_rates = []  # list of arrays shape (len(ps),) per code_id
 
             for code_id in tqdm(
@@ -120,23 +135,33 @@ def main():
             sem_over_batches = np.zeros_like(avg_over_batches)
 
         total_codes = sum(per_batch_counts) if per_batch_counts else 0
+
         plt.errorbar(
             ps,
             avg_over_batches,
             yerr=sem_over_batches,
-            marker="o",
-            linestyle="-",
-            label=f"N={N} (B={n_batches}, codes={total_codes})",
+            fmt="o--",
+            linewidth=3,
+            label=f"N={N} (num_batches={n_batches}, num_codes={total_codes})",
+            color=cmap(norm(series_idx)),
         )
 
+    plt.plot(
+        ps,
+        list(map(lambda x: x, ps)),
+        "--",
+        marker=None,
+        label="Pseudo-threshold equation",
+    )
     plt.xlabel("Physical error rate $p$")
     plt.ylabel("Logical error rate (avg over batches)")
-    plt.yscale("log")
     plt.xscale("log")
+    plt.yscale("log")
     plt.grid(True, which="both", ls=":")
     plt.legend(fontsize="small")
     plt.tight_layout()
     plt.savefig("csp_bp_osd_avg.pdf", dpi=300)
+    plt.show()
 
 
 if __name__ == "__main__":

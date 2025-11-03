@@ -28,12 +28,10 @@ def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
     state_vector : np.ndarray
         The resulting state vector.
     """
-
     state_vector = np.random.uniform(
         size=(phys_dim**num_sites)
     ) + 1j * np.random.uniform(size=phys_dim**num_sites)
     state_vector /= np.linalg.norm(state_vector)
-
     return state_vector
 
 
@@ -67,7 +65,6 @@ def find_orth_centre(
         If an :class:`ExplicitMPS` instance is passed as an input.
         They do not have orthogonality centres by definition.
     """
-
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
             "Orthogonality centre is undefined for an Explicit MPS instance."
@@ -87,8 +84,12 @@ def find_orth_centre(
             contract("ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
 
-        identity_left = np.identity(to_be_identity_left.shape[0])
-        identity_right = np.identity(to_be_identity_right.shape[0])
+        identity_left = np.eye(
+            to_be_identity_left.shape[0], dtype=to_be_identity_left.dtype
+        )
+        identity_right = np.eye(
+            to_be_identity_right.shape[0], dtype=to_be_identity_right.dtype
+        )
 
         norm_left = np.linalg.norm(to_be_identity_left - identity_left)
         norm_right = np.linalg.norm(to_be_identity_right - identity_right)
@@ -112,7 +113,6 @@ def find_orth_centre(
         if orth_flags_right == [not flag for flag in orth_flags_left]:
             orth_centres.append(num_sites - 1)
 
-    # Handling a product state.
     if (orth_flags_left == [True] * num_sites) and (
         orth_flags_right == [True] * num_sites
     ):
@@ -146,7 +146,6 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
         If an :class:`ExplicitMPS` instance is passed as an input.
         They do not have orthogonality centres by definition.
     """
-
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
             "Orthogonality centre is undefined for an Explicit MPS instance."
@@ -162,8 +161,12 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
             contract("ijk, ljk -> il", tensor, np.conjugate(tensor), optimize=[(0, 1)])
         )
 
-        identity_left = np.identity(to_be_identity_left.shape[0], dtype=float)
-        identity_right = np.identity(to_be_identity_right.shape[0], dtype=float)
+        identity_left = np.eye(
+            to_be_identity_left.shape[0], dtype=to_be_identity_left.dtype
+        )
+        identity_right = np.eye(
+            to_be_identity_right.shape[0], dtype=to_be_identity_right.dtype
+        )
 
         flags_left.append(
             np.isclose(
@@ -180,9 +183,7 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
         return True
 
     orth_centres = find_orth_centre(mps)
-    if_canonical = len(orth_centres) == 1
-
-    return if_canonical
+    return len(orth_centres) == 1
 
 
 def inner_product(
@@ -208,7 +209,6 @@ def inner_product(
     ValueError
         If the Matrix Product States are of different length.
     """
-
     if len(mps_1) != len(mps_2):
         raise ValueError(
             f"The number of sites in the first MPS is {len(mps_1)} while "
@@ -217,7 +217,6 @@ def inner_product(
         )
 
     num_sites = len(mps_1)
-
     mps_1 = mps_1.conjugate()
 
     if isinstance(mps_1, ExplicitMPS):
@@ -226,11 +225,9 @@ def inner_product(
         mps_2 = mps_2.right_canonical()
 
     tensors = []
-
     for i in range(num_sites):
         dims_1 = mps_1.tensors[i].shape
         dims_2 = mps_2.tensors[i].shape
-
         tensors.append(
             contract(
                 "ijk, ljm -> ilkm",
@@ -241,10 +238,8 @@ def inner_product(
         )
 
     product = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)[0][0]
-
     if np.isclose(np.imag(product), 0):
         return float(np.real(product))
-
     return np.complex128(product)
 
 
@@ -289,7 +284,6 @@ def mps_from_dense(
     ValueError
         If the vector's length does not correspond to the physical dimension.
     """
-
     if form not in ["Explicit", "Right-canonical", "Left-canonical", "Mixed-canonical"]:
         raise ValueError(
             "Wrong value of the form option. "
@@ -304,20 +298,22 @@ def mps_from_dense(
             "(does not correspond to the product of local dimensions)."
         )
 
-    tensors = []
-    singular_values = []
+    tensors: list[np.ndarray] = []
+    singular_values: list[list] = []
 
     state_vector = state_vector.reshape((-1, phys_dim))
 
+    # First SVD
     state_vector, singular_values_local, v_r, _ = svd(
         state_vector, chi_max=chi_max, renormalise=False
     )
-
     tensors.append(np.expand_dims(v_r, -1))
     singular_values.append(singular_values_local)
 
+    # Sweep over bonds
     while state_vector.shape[0] >= phys_dim:
-        state_vector = np.matmul(state_vector, np.diag(singular_values_local))
+        # state_vector @ diag(s)  -> scale columns by s
+        state_vector = state_vector * np.asarray(singular_values_local)[None, :]
 
         bond_dim = state_vector.shape[-1]
         state_vector = state_vector.reshape((-1, phys_dim * bond_dim))
@@ -331,10 +327,11 @@ def mps_from_dense(
 
     singular_values.append([1.0])
 
+    # Final cleanup: tensordot with inv(diag(s[i+1]))  -> divide vR axis by s
     for i, _ in enumerate(tensors):
-        tensors[i] = np.tensordot(
-            tensors[i], np.linalg.inv(np.diag(singular_values[i + 1])), (2, 0)
-        )
+        s = np.asarray(singular_values[i + 1], dtype=tensors[i].dtype)
+        s_safe = np.where(s != 0.0, s, 1.0)
+        tensors[i] = tensors[i] / s_safe[None, None, :]
 
     if form == "Right-canonical":
         return ExplicitMPS(
@@ -404,18 +401,15 @@ def create_simple_product_state(
         | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
         | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
 
-    The returned state is normalised.
-
+    The returned state is normalised at the end.
     """
-
     tensor = np.zeros((phys_dim,))
     if which == "0":
         tensor[0] = 1.0
     if which == "1":
         tensor[-1] = 1.0
     if which == "+":
-        for i in range(phys_dim):
-            tensor[i] = 1 / np.sqrt(phys_dim)
+        tensor[:] = 1 / np.sqrt(phys_dim)
 
     tensors = [tensor.reshape((1, phys_dim, 1)) for _ in range(num_sites)]
     singular_values = [[1.0] for _ in range(num_sites + 1)]
@@ -479,10 +473,8 @@ def create_custom_product_state(
         | :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
         | :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
 
-    The state is renormalised at the end.
-
+    The returned state is renormalised at the end.
     """
-
     num_sites = len(string)
     tensors = []
 
@@ -493,8 +485,7 @@ def create_custom_product_state(
         elif symbol == "1":
             tensor[-1] = 1.0
         elif symbol == "+":
-            for i in range(phys_dim):
-                tensor[i] = 1 / np.sqrt(phys_dim)
+            tensor[:] = 1 / np.sqrt(phys_dim)
         else:
             raise ValueError(
                 f"The string argument accepts only 0, 1 or + as elements, given {symbol}."

@@ -3,7 +3,6 @@ This module contains different combinatorial optimisation utilities.
 
 First, we define the tensors which represent logical operation.
 We use the following tensors: IDENTITY, COPY, XOR, SWAP.
-See the notes for additional information.
 
 According to our convention, each tensor has legs (vL, vR, pU, pD),
 where v stands for "virtual", p -- for "physical",
@@ -22,43 +21,31 @@ from mdopt.utils.utils import mpo_to_matrix
 from mdopt.contractor.contractor import mps_mpo_contract
 
 
-IDENTITY = np.eye(2).reshape((1, 1, 2, 2))
+IDENTITY = np.eye(2, dtype=float).reshape((1, 1, 2, 2))
 
 COPY_LEFT = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[j, l],
-    (1, 2, 2, 2),
-    dtype=int,
-)
+    lambda i, j, k, l: np.eye(2)[j, l], (1, 2, 2, 2), dtype=int
+).astype(float, copy=False)
 
 XOR_BULK = np.fromfunction(
-    lambda i, j, k, l: (i ^ j ^ k ^ 1) * np.eye(2)[k, l],
-    (2, 2, 2, 2),
-    dtype=int,
-)
+    lambda i, j, k, l: (i ^ j ^ k ^ 1) * np.eye(2)[k, l], (2, 2, 2, 2), dtype=int
+).astype(float, copy=False)
 
 XOR_LEFT = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[j, k] * np.eye(2)[k, l],
-    (1, 2, 2, 2),
-    dtype=int,
-)
+    lambda i, j, k, l: np.eye(2)[j, k] * np.eye(2)[k, l], (1, 2, 2, 2), dtype=int
+).astype(float, copy=False)
 
 XOR_RIGHT = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[i, k] * np.eye(2)[k, l],
-    (2, 1, 2, 2),
-    dtype=int,
-)
+    lambda i, j, k, l: np.eye(2)[i, k] * np.eye(2)[k, l], (2, 1, 2, 2), dtype=int
+).astype(float, copy=False)
 
 SWAP = np.fromfunction(
-    lambda i, j, k, l: np.eye(2)[i, j] * np.eye(2)[k, l],
-    (2, 2, 2, 2),
-    dtype=int,
-)
+    lambda i, j, k, l: np.eye(2)[i, j] * np.eye(2)[k, l], (2, 2, 2, 2), dtype=int
+).astype(float, copy=False)
 
 
 def parity(bitstring: str, indices: list[int]) -> int:
-    """
-    Returns the parity of the bits at the given indices in the bitstring.
-    """
+    """Returns the parity of the bits at the given indices in the bitstring."""
     return sum(int(bitstring[i]) for i in indices) % 2
 
 
@@ -102,11 +89,9 @@ def random_constraints(num_bits: int, constraint_size: int, rng: Generator) -> d
         )
 
     indices = sorted(rng.choice(num_bits, size=constraint_size, replace=False))  # type: ignore
-
     xor_left_sites = [indices[0]]
     xor_right_sites = [indices[-1]]
     xor_bulk_sites = indices[1:-1]
-
     swap_sites = [
         i for i in range(indices[0] + 1, indices[-1]) if i not in xor_bulk_sites
     ]
@@ -147,17 +132,13 @@ class ConstraintString:
     """
 
     def __init__(self, constraints: List[np.ndarray], sites: List[List[int]]) -> None:
-        self.constraints = [
-            np.array(constraint, dtype=float) for constraint in constraints
-        ]
+        self.constraints = [np.asarray(constraint) for constraint in constraints]
         self.sites = sites
 
-        if self.constraints == []:
+        if not self.constraints:
             raise ValueError("Empty list of constraints passed.")
-
-        if self.sites == []:
+        if not self.sites:
             raise ValueError("Empty list of sites passed.")
-
         if len(self.sites) != len(self.constraints):
             raise ValueError(
                 f"We have {len(self.constraints)} constraint(s) in the constraints list, "
@@ -165,59 +146,37 @@ class ConstraintString:
             )
 
         seen = set()
-        uniq = [
-            site for site in self.flat() if site not in seen and not seen.add(site)  # type: ignore
-        ]
-        if uniq != self.flat():
+        flat_sites = self.flat()
+        uniq = [site for site in flat_sites if site not in seen and not seen.add(site)]  # type: ignore
+        if uniq != flat_sites:
             raise ValueError("Non-unique sites encountered in the list.")
 
-        if self.flat(sort=True) != list(range(min(self.flat()), max(self.flat()) + 1)):
+        fs = self.flat(sort=True)
+        if fs != list(range(min(fs), max(fs) + 1)):
             raise ValueError("The string should not have breaks in it.")
 
     def __getitem__(self, index: int) -> tuple:
-        """
-        Returns the pair of a list of sites together with the corresponding MPO.
-
-        Parameters
-        ----------
-        index : int
-            The index of the list of sites.
-        """
-
+        """Returns (sites, mpo_tensor) pair at `index`."""
         return self.sites[index], self.constraints[index]
 
     def flat(self, sort: bool = False) -> List[int]:
-        """
-        Returns a flattened list of sites.
-
-        Parameters
-        ----------
-        sort : bool
-            Whether to sort the flattened list.
-        """
-
-        if sort:
-            return sorted([item for sites in self.sites for item in sites])
-
-        return [item for sites in self.sites for item in sites]
+        """Returns a flattened list of sites."""
+        out = [item for sites in self.sites for item in sites]
+        return sorted(out) if sort else out
 
     def span(self) -> int:
-        """
-        Returns the span (length) of the constraint string.
-        """
-
-        return max(self.flat()) - min(self.flat()) + 1
+        """Returns the span (length) of the constraint string."""
+        fs = self.flat()
+        return max(fs) - min(fs) + 1
 
     def mpo(self) -> List[np.ndarray]:
-        """
-        Returns an MPO corresponding to the current ``ConstraintString`` instance.
-        """
-
-        mpo = [np.array(None) for _ in range(self.span())]
-        for index, sites_sites in enumerate(self.sites):
+        """Returns an MPO list aligned to the span of this constraint string."""
+        fs = self.flat()
+        base = min(fs)
+        mpo = [np.array(None, dtype=float) for _ in range(self.span())]
+        for idx, sites_sites in enumerate(self.sites):
             for site in sites_sites:
-                mpo[site - min(self.flat())] = self.constraints[index]
-
+                mpo[site - base] = self.constraints[idx]
         return mpo
 
 
@@ -278,12 +237,11 @@ def apply_constraints(
     if strategy == "Optimised":
         # Using matrix front minimization technique to optimise the order
         # in which to apply the checks.
-        mpo_location_matrix = np.zeros((len(strings), mps.num_sites))
+        mpo_location_matrix = np.zeros((len(strings), mps.num_sites), dtype=int)
         for row_idx, sublist in enumerate(strings):
             for subsublist in sublist:
                 for index in subsublist:  # type: ignore
-                    mpo_location_matrix[row_idx][index] = 1
-
+                    mpo_location_matrix[row_idx, index] = 1
         optimised_order = msro(mpo_location_matrix)
         strings = [strings[index] for index in optimised_order]
 
@@ -296,12 +254,15 @@ def apply_constraints(
 
         start_site = min(string.flat())
         if dense:
+            # Pad MPO with identities to full length and apply as a matrix
             identities_l = [IDENTITY for _ in range(start_site)]
             identities_r = [IDENTITY for _ in range(len(mps) - len(mpo) - start_site)]
             full_mpo = identities_l + mpo + identities_r
             mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
-            mps_dense = mpo_dense @ mps_dense
+            mps_dense = mpo_dense @ mps_dense  # type: ignore[has-type]
+            continue
 
+        # Ensure orthogonality centre is set and moved once per string
         if mps.orth_centre is None:
             orth_centres, flags_left, flags_right = find_orth_centre(
                 mps, return_orth_flags=True
@@ -332,22 +293,26 @@ def apply_constraints(
                 final_pos=start_site, renormalise=False, return_singular_values=False
             )  # type: ignore
 
-        if not dense:
-            mps = mps_mpo_contract(  # type: ignore
-                mps=mps,
-                mpo=mpo,
-                start_site=start_site,
-                chi_max=chi_max,
-                cut=cut,
-                renormalise=False,
-                inplace=False,
-            )
-            if renormalise:
-                orth_centre_index = int(mps.orth_centre)  # type: ignore
-                norm = np.linalg.norm(mps.tensors[orth_centre_index])
-                mps.tensors[orth_centre_index] /= norm
+        # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
+        mps = mps_mpo_contract(  # type: ignore
+            mps=mps,
+            mpo=mpo,
+            start_site=start_site,
+            chi_max=chi_max,
+            cut=cut,
+            renormalise=False,
+            inplace=False,
+        )
 
-        if return_entropies_and_bond_dims and not dense:
+        if renormalise:
+            orth_centre_index = int(mps.orth_centre)  # type: ignore
+            centre = mps.tensors[orth_centre_index]
+            norm = np.linalg.norm(centre)
+            if norm > 0:
+                mps.tensors[orth_centre_index] = centre / norm
+
+        if return_entropies_and_bond_dims:
+            # Use a copy to avoid mutating `mps` during entropy computation
             mps_copy = mps.copy()
             entropies.append(mps_copy.entanglement_entropy())
             bond_dims.append(mps_copy.bond_dimensions)
