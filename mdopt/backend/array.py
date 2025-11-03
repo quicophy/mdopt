@@ -1,6 +1,9 @@
+"""
+Array backend selection and helpers.
+"""
+
 import os
 import importlib
-from types import SimpleNamespace
 
 # ----------------------------------------------------------------------
 # Backend selection: default to NumPy; allow CUPY if available.
