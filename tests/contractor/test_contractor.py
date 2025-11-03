@@ -22,6 +22,7 @@ def _to_numpy(a):
         if isinstance(a, cp.ndarray):
             return cp.asnumpy(a)
     except ImportError:
+        # CuPy is not installed; fall back to using NumPy.
         pass
     return np.asarray(a)
 
