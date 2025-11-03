@@ -15,7 +15,7 @@ def _load_backend():
     if _BACKEND_ENV == "cupy":
         try:
             return importlib.import_module("cupy")
-        except Exception:
+        except (ImportError, ModuleNotFoundError):
             # Graceful fallback on machines without CuPy (e.g., macOS)
             pass
     return importlib.import_module("numpy")

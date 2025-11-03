@@ -21,7 +21,7 @@ def _to_numpy(a):
 
         if isinstance(a, cp.ndarray):
             return cp.asnumpy(a)
-    except Exception:
+    except ImportError:
         pass
     return np.asarray(a)
 
