@@ -10,6 +10,7 @@ For a curated, tutorial-style set of examples, see :doc:`examples`.
    :caption: Notebooks:
 
    notebooks/classical_ldpc.ipynb
+   notebooks/gpu_example.ipynb
    notebooks/ground_state.ipynb
    notebooks/main_component.ipynb
    notebooks/maxbonddim.ipynb

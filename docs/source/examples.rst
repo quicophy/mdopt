@@ -31,6 +31,7 @@ Examples
    notebooks/mps-rand-circ.ipynb
    notebooks/main_component.ipynb
    notebooks/maxbonddim.ipynb
+   notebooks/gpu_example.ipynb
 
 - :doc:`notebooks/ground_state` — Solve a simple 1D quantum Ising chain using an MPS ground-state search. Compares observables and magnetisation curves from exact diagonalisation and DMRG to confirm correctness. A gentle introduction to MPS/MPO mechanics outside of decoding.
 
@@ -39,3 +40,5 @@ Examples
 - :doc:`notebooks/main_component` — Defines and solves the Main Component Problem (finding the basis state that contributes most to a given state) as a sanity check for the dephasing DMRG optimiser. Compares solutions from exact diagonalisation, standard DMRG, and dephasing DMRG, demonstrating agreement.
 
 - :doc:`notebooks/maxbonddim` — Tests an MPO order-optimisation strategy (based on matrix bandwidth minimisation) to reduce intermediate bond growth during operator application. Shows how reordering lowers contraction cost and improves practical performance within experiments.
+
+- :doc:`notebooks/gpu_example` — Illustrates how to leverage GPU acceleration (via CuPy) for MPS/MPO operations. Compares performance between CPU and GPU backends for key tensor network routines, demonstrating speedups on compatible hardware.
