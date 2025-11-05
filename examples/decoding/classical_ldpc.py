@@ -18,7 +18,7 @@ logging.basicConfig(
 project_root_beluga = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt"
 )
-project_root_cedar = os.getenv(
+project_root_fir = os.getenv(
     "MDOPT_PATH", "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt"
 )
 project_root_graham = os.getenv("MDOPT_PATH", "/home/bereza/mdopt")
@@ -29,7 +29,7 @@ project_root_narval = os.getenv(
 examples_path_beluga = os.getenv(
     "MDOPT_EXAMPLES_PATH", "/home/bereza/projects/def-ko1/bereza/mdopt/examples"
 )
-examples_path_cedar = os.getenv(
+examples_path_fir = os.getenv(
     "MDOPT_EXAMPLES_PATH",
     "/home/bereza/projects/def-ko1/bereza/project-mdopt/mdopt/examples",
 )
