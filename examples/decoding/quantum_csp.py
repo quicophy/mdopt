@@ -1,4 +1,4 @@
-"""This script launches decoding of quantum CSP code from JSON file."""
+"""This script launches decoding of quantum CSP codes from JSON file."""
 
 import os
 import sys
