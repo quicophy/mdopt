@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  schedule:
+    - cron: "13 7 * * 1"   # weekly canary
+
+jobs:
+  tests:
+    name: tests (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+      - name: Show Python
+        run: python -V && pip -V
+      - name: Install package + test deps
+        run: |
+          python -m pip install -U pip
+          # If you have extras, switch to: pip install -e ".[test]"
+          python -m pip install -e .
+          python -m pip install pytest pytest-cov
+      - name: Run tests
+        run: |
+          pytest -q --disable-warnings --maxfail=1
+
+  # Canary for next CPython (marked non-blocking)
+  py314:
+    name: canary (ubuntu-24.04, py3.14)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: |
+          python -m pip install -U pip
+          python -m pip install -e .
+          python -m pip install pytest
+      - run: pytest -q
+
+  # Extra architectures/images (best effort; non-blocking)
+  experimental:
+    name: experimental (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # arm64 Linux; Intel macOS image
+        os: [ubuntu-24.04-arm, macos-15-intel]
+        python: ["3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: |
+          python -m pip install -U pip
+          python -m pip install -e .
+          python -m pip install pytest
+      - run: pytest -q
