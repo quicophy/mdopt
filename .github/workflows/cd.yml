@@ -1,0 +1,73 @@
+name: release
+
+on:
+  release:
+    types: [published]      # fires when a GitHub Release is published
+  workflow_dispatch:        # allow manual runs (useful for testing)
+
+permissions:
+  contents: read
+  id-token: write           # REQUIRED for PyPI Trusted Publishing (OIDC)
+
+concurrency:
+  group: pypi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build dists
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build backend
+        run: python -m pip install -U pip build
+      - name: Build sdist & wheel
+        run: python -m build --sdist --wheel --outdir dist/
+      - name: Check metadata
+        run: |
+          python -m pip install -U twine
+          python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publish-testpypi:
+    name: publish (TestPyPI prerelease)
+    needs: build
+    if: ${{ github.event.release.prerelease || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/mdopt
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Upload to TestPyPI (trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist
+
+  publish-pypi:
+    name: publish (PyPI release)
+    needs: build
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mdopt
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Upload to PyPI (trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
