@@ -10,7 +10,18 @@ maintainers = [
 ]
 readme = "README.md"
 keywords = [ "tensor networks", "quantum error correction", "discrete optimisation", "MPS", "MPO", "python", "decoding" ]
-requires-python = ">=3.10,<3.14"
+license = "MIT"
+license-files = ["LICENSE.md"]
+requires-python = ">=3.10,<4.0"
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 
 dependencies = [
     "scipy>=1.9.2,<2.0.0",
