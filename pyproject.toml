@@ -11,6 +11,9 @@ maintainers = [
 readme = "README.md"
 keywords = [ "tensor networks", "quantum error correction", "discrete optimisation", "MPS", "MPO", "python", "decoding" ]
 requires-python = ">=3.10,<4.0"
+classifiers = [
+    "Typing :: Typed",
+]
 
 dependencies = [
     "scipy>=1.9.2,<2.0.0",
