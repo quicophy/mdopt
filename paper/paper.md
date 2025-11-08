@@ -27,10 +27,10 @@ Decoding is central to assessing the performance of quantum codes and hardware. 
 
 `mdopt` fills the gap by providing an open-source, Python-first implementation of a code-agnostic TN decoder:
 
-- **Inputs:** parity-check matrices, a description of logical observables, and a parametric noise model.
-- **Outputs:** logical-error posteriors and sample-level decisions (success/failure), with utilities to aggregate failure-rate curves.
-- **Scope:** any CSS/LDPC stabilizer code; independent or biased Pauli noise; exact or approximate contractions.
-- **Integration:** minimal API, command-line scripts for large parameter sweeps (e.g., via SLURM), and Jupyter-friendly helpers.
+- **Inputs:** parity-check matrices, a description of logical observables, and a parametric noise model
+- **Outputs:** logical-error posteriors and sample-level decisions (success/failure), with utilities to aggregate failure-rate curves
+- **Scope:** any CSS/LDPC stabilizer code; independent or biased Pauli noise; exact or approximate contractions
+- **Integration:** minimal API, command-line scripts for large parameter sweeps (e.g., via SLURM), and Jupyter-friendly helpers
 
 This combination complements specialized open-source decoders such as PyMatching (MWPM) [@higgott2021pymatching], general QEC simulators with decoder plug-ins like `qecsim` [@qecsim], and stabilizer-circuit tooling such as Stim [@gidney2021stim].
 
