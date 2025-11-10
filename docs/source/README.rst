@@ -7,7 +7,7 @@ mdopt — Discrete Optimisation in the MPS-MPO Language
    :align: center
    :target: https://github.com/quicophy/mdopt
 
-|codecov| |tests| |Documentation Status| |pre-commit.ci status| |lint|
+|codecov| |tests| |DOI| |Documentation Status| |pre-commit.ci status| |lint|
 |mypy| |Unitary Fund| |MIT license|
 
 mdopt is a python package built on top of numpy for discrete optimisation (such as classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
@@ -152,6 +152,8 @@ Full documentation is available at
    :target: https://codecov.io/gh/quicophy/mdopt
 .. |tests| image:: https://github.com/quicophy/mdopt/actions/workflows/tests.yml/badge.svg?branch=main
    :target: https://github.com/quicophy/mdopt/actions/workflows/tests.yml
+.. |DOI| image:: https://joss.theoj.org/papers/10.21105/joss.09125/status.svg
+   :target: https://doi.org/10.21105/joss.09125
 .. |Documentation Status| image:: https://readthedocs.org/projects/mdopt/badge/?version=latest
    :target: https://mdopt.readthedocs.io/en/latest/?badge=latest
 .. |pre-commit.ci status| image:: https://results.pre-commit.ci/badge/github/quicophy/mdopt/main.svg
