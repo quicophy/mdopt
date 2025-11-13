@@ -77,11 +77,14 @@ supporting development by citing it.
 
 ::
 
-   @software{mdopt2022,
-     author = {Aleksandr Berezutskii},
-     title = {mdopt: Discrete optimisation in the tensor-network (specifically, MPS-MPO) language.},
-     url = {https://github.com/quicophy/mdopt},
-     year = {2022},
+   @article{berezutskii2025mdopt,
+   title={mdopt: A code-agnostic tensor-network decoder for quantum error-correcting codes},
+   author={Berezutskii, Aleksandr},
+   journal={Journal of Open Source Software},
+   volume={10},
+   number={115},
+   pages={9125},
+   year={2025}
    }
 
 Contribution guidelines
