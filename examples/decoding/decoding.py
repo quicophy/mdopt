@@ -1359,7 +1359,7 @@ def decode_css(
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= 10:
+    if num_logical_sites <= 12:
         logical_dense = abs(
             logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
         )
@@ -1376,7 +1376,7 @@ def decode_css(
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    if num_logical_sites > 10 or optimiser == "Dephasing DMRG":
+    if num_logical_sites > 12 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
@@ -1584,17 +1584,24 @@ def decode_custom(
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= 10:
+    if num_logical_sites <= 12:
         logical_dense = abs(
             logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
         )
-        result = logical_dense, int(
-            np.argmax(logical_dense) == 0 and logical_dense[0] > max(logical_dense[1:])
-        )
-        if not silent:
-            logging.info("Decoding completed with result: %s", result)
+
+        # find global maximum amplitude
+        max_amp = np.max(logical_dense)
+
+        # treat identity logical as success if it is among the maximisers
+        # (within some numerical tolerance)
+        eps = 1e-12 * max_amp
+        is_map_identity = logical_dense[0] >= max_amp - eps
+
+        result = logical_dense, int(is_map_identity)
         return result
-    if num_logical_sites > 10 or optimiser == "Dephasing DMRG":
+        # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
+
+    if num_logical_sites > 12 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
