@@ -21,6 +21,30 @@ sns.set_palette("colorblind")
 plt.rcParams["text.usetex"] = True
 plt.rcParams["font.family"] = "serif"
 
+INT_TO_PAULI = {0: "I", 1: "X", 2: "Y", 3: "Z", 4: "E"}
+PAULI_TO_INT = {"I": 0, "X": 1, "Y": 2, "Z": 3, "E": 4}
+
+
+def decode_pauli_array(arr: np.ndarray) -> str:
+    """Decode a uint8 array back into a Pauli string."""
+    return "".join(INT_TO_PAULI[int(x)] for x in arr)
+
+
+def pauli_string_to_xi(pauli: str, one_based: bool = True) -> str:
+    """
+    Convert a Pauli string (e.g. 'IIIIXII...') into 'X_i' format.
+
+    If multiple X's are present, returns 'X_i X_j ...'.
+    If no X is present, returns 'I'.
+    """
+    offset = 1 if one_based else 0  # 1-based or 0-based indexing
+    positions = [i + offset for i, c in enumerate(pauli) if c == "X"]
+
+    if not positions:
+        return "I"
+
+    return " ".join(f"X_{p}" for p in positions)
+
 
 def load_data(file_key: str):
     """Load the experiment data from a pickle file."""
@@ -763,3 +787,189 @@ def fit_failure_statistics(
             plt.show()
         else:
             print(f"Skipping plot for chi_max={chi_max} due to no valid data.")
+
+
+def analyze_csp_failures_for_params(
+    directory: str,
+    lattice_size: int,
+    chi_max: int,
+    target_error_rate: float,
+    error_model: str = "Bitflip",
+    precision: int = 5,
+):
+    """
+    For given (L, chi_max, p, error_model), aggregate per-code failure statistics
+    and collect the errors that were not decoded.
+
+    Parameters
+    ----------
+    directory : str
+        Directory containing the .pkl files.
+    lattice_size : int
+        Number of qubits (L).
+    chi_max : int
+        Bond dimension used in the decoder (bonddim).
+    target_error_rate : float
+        Physical error rate p to filter on.
+    error_model : str
+        Error model string (e.g. 'Bitflip').
+    precision : int
+        Rounding precision for comparing error rates.
+
+    Returns
+    -------
+    code_summaries : list of dict
+        Each dict has keys:
+            'batch', 'codeid', 'total_experiments',
+            'total_failures', 'fail_rate', 'num_unique_failed_errors'.
+    failed_errors_by_code : dict
+        Mapping (batch, codeid) -> np.ndarray of all failed errors_uint8.
+    """
+    # Pattern including batch/codeid/seed (similar to process_failure_statistics_csp)
+    pattern = (
+        rf"^latticesize{lattice_size}_bonddim{chi_max}_"
+        r"errorrate[0-9\.]+(?:e[+-]?[0-9]+)?_"
+        rf"errormodel{error_model}+_"
+        r"bias_prob[0-9\.]+(?:e[+-]?[0-9]+)?_"
+        r"numexperiments[0-9]+_"
+        r"tolerance[0-9\.]+(?:e[+-]?[0-9]+)?_"
+        r"cut[0-9\.]+(?:e[+-]?[0-9]+)?_"
+        r"batch\d+_codeid\d+_seed\d+\.pkl$"
+    )
+
+    target_er = round(target_error_rate, precision)
+
+    # Aggregators
+    total_experiments = {}  # (batch, codeid) -> int
+    total_failures = {}  # (batch, codeid) -> int
+    failed_errors_by_code = {}  # (batch, codeid) -> [np.ndarray, ...]
+
+    num_files = 0
+
+    for fname in os.listdir(directory):
+        if not re.match(pattern, fname):
+            continue
+
+        path = os.path.join(directory, fname)
+        data = load_data(path)
+
+        erate = round(float(data["error_rate"]), precision)
+        if erate != target_er:
+            continue
+
+        # Must have errors_uint8; otherwise we can't inspect which errors failed
+        if "errors_uint8" not in data:
+            print(f"Warning: 'errors_uint8' missing in {fname}, skipping.")
+            continue
+
+        failures = np.array(data["failures"])
+        errors_uint8 = np.array(data["errors_uint8"])
+
+        if failures.shape[0] != errors_uint8.shape[0]:
+            print(
+                f"Warning: mismatch failures vs errors length in {fname}: "
+                f"{failures.shape[0]} vs {errors_uint8.shape[0]}"
+            )
+            continue
+
+        batch = int(re.search(r"_batch(\d+)_codeid", fname).group(1))
+        codeid = int(re.search(r"_codeid(\d+)_seed", fname).group(1))
+        key = (batch, codeid)
+
+        num_exp = len(failures)
+        num_fail = int(np.nansum(failures))
+
+        total_experiments[key] = total_experiments.get(key, 0) + num_exp
+        total_failures[key] = total_failures.get(key, 0) + num_fail
+
+        fail_mask = failures == 1
+        failed_errors = errors_uint8[fail_mask]
+
+        if failed_errors.size > 0:
+            failed_errors_by_code.setdefault(key, []).append(failed_errors)
+
+        num_files += 1
+
+    if num_files == 0:
+        print("No matching files found for given parameters.")
+        return [], {}
+
+    # Build summaries
+    code_summaries = []
+    for key in total_experiments:
+        batch, codeid = key
+        nexp = total_experiments[key]
+        nfail = total_failures.get(key, 0)
+        fail_rate = nfail / nexp if nexp > 0 else np.nan
+
+        if key in failed_errors_by_code:
+            all_failed = np.concatenate(failed_errors_by_code[key], axis=0)
+            # unique failed patterns
+            unique_failed = np.unique(all_failed, axis=0)
+            num_unique_failed = unique_failed.shape[0]
+            failed_errors_by_code[key] = all_failed  # store flattened
+        else:
+            all_failed = np.empty((0, lattice_size), dtype=np.uint8)
+            num_unique_failed = 0
+            failed_errors_by_code[key] = all_failed
+
+        code_summaries.append(
+            {
+                "batch": batch,
+                "codeid": codeid,
+                "total_experiments": nexp,
+                "total_failures": nfail,
+                "fail_rate": fail_rate,
+                "num_unique_failed_errors": num_unique_failed,
+            }
+        )
+
+    # Sort by worst fail_rate descending
+    code_summaries.sort(key=lambda d: d["fail_rate"], reverse=True)
+
+    return code_summaries, failed_errors_by_code
+
+
+def summarize_failed_errors_for_code(
+    failed_errors: np.ndarray,
+    max_examples: int = 10,
+):
+    """
+    Given the failed errors for a single code (array of shape [n_fail, L]),
+    print some diagnostics: weight distribution and most frequent patterns.
+    """
+    if failed_errors.size == 0:
+        print("No failed errors for this code.")
+        return
+
+    # Hamming weight of each error (ignore erasures; for Bitflip only X/I, so !=0 means error)
+    weights = np.count_nonzero(failed_errors != 0, axis=1)
+
+    print("Total failed errors:", failed_errors.shape[0])
+    print("Mean weight of failed errors:", np.mean(weights))
+    print(
+        "Min/Max weight of failed errors:",
+        int(np.min(weights)),
+        "/",
+        int(np.max(weights)),
+    )
+
+    # Weight histogram
+    max_w = int(np.max(weights))
+    hist = np.bincount(weights, minlength=max_w + 1)
+    print("Weight histogram (weight: count):")
+    for w in range(len(hist)):
+        if hist[w] > 0:
+            print(f"  {w}: {hist[w]}")
+
+    # Most frequent patterns
+    unique_errs, counts = np.unique(failed_errors, axis=0, return_counts=True)
+    order = np.argsort(counts)[::-1]
+
+    print(f"\nTop {min(max_examples, len(order))} most frequent failed errors:")
+    for idx in order[:max_examples]:
+        arr = unique_errs[idx]
+        cnt = counts[idx]
+        pauli_str = decode_pauli_array(arr)
+        xi_str = pauli_string_to_xi(pauli_str, one_based=True)
+        print(f"  count={cnt}: {xi_str}  ({pauli_str})")
