@@ -21,8 +21,8 @@ sns.set_palette("colorblind")
 plt.rcParams["text.usetex"] = True
 plt.rcParams["font.family"] = "serif"
 
-INT_TO_PAULI = {0: "I", 1: "X", 2: "Y", 3: "Z", 4: "E"}
 PAULI_TO_INT = {"I": 0, "X": 1, "Y": 2, "Z": 3, "E": 4}
+INT_TO_PAULI = {v: k for k, v in PAULI_TO_INT.items()}
 
 
 def decode_pauli_array(arr: np.ndarray) -> str:
