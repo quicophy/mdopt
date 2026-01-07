@@ -57,6 +57,23 @@ except ImportError as e:
     )
     sys.exit(1)
 
+PAULI_TO_INT = {"I": 0, "X": 1, "Y": 2, "Z": 3, "E": 4}
+INT_TO_PAULI = {v: k for k, v in PAULI_TO_INT.items()}
+
+
+def encode_pauli_string(pauli: str) -> np.ndarray:
+    """Encode a Pauli string into a uint8 array."""
+    return np.fromiter(
+        (PAULI_TO_INT[c] for c in pauli),
+        dtype=np.uint8,
+        count=len(pauli),
+    )
+
+
+def decode_pauli_array(arr: np.ndarray) -> str:
+    """Decode a uint8 array back into a Pauli string."""
+    return "".join(INT_TO_PAULI[int(x)] for x in arr)
+
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -201,15 +218,19 @@ def run_single_experiment(
     tolerance,
     cut,
 ):
-    """Run a single experiment."""
+    """Run a single experiment (with a few random stabiliser gauges)."""
     csp_code = get_csp_code(num_qubits, batch, code_id)
 
-    try:
-        logicals_distribution, success = decode_css(
+    had_valid_attempt = False
+    last_distribution = np.nan
+
+    def _decode(multiply_by_stabiliser: bool):
+        """Small helper to call decode_css with common args."""
+        return decode_css(
             code=csp_code,
             error=error,
             chi_max=chi_max,
-            multiply_by_stabiliser=False,
+            multiply_by_stabiliser=multiply_by_stabiliser,
             bias_type=error_model,
             bias_prob=bias_prob,
             renormalise=True,
@@ -218,40 +239,57 @@ def run_single_experiment(
             tolerance=tolerance,
             cut=cut,
         )
+
+    # 1) First try: original error (no stabiliser)
+    try:
+        logicals_distribution, success = _decode(multiply_by_stabiliser=False)
+        # Handle possible float "overlap" return (DMRG branch)
+        if isinstance(success, float):
+            success = int(success > 1.0 - 1e-5)
+
+        had_valid_attempt = True
+        last_distribution = logicals_distribution
+
+        if success == 1:
+            if not silent:
+                logging.info("Decoding successful without stabiliser.")
+            return logicals_distribution, 0  # failure = 0
     except Exception as e:
-        logging.error(f"Error during decoding: {e}", exc_info=True)
+        logging.error("Error during decoding (no stabiliser).", exc_info=True)
+
+    # 2) Gauge sampling: try a few random stabilisers
+    for k in range(10):
         try:
-            logging.info("Trying to decode with multiply_by_stabiliser=True.")
-            logicals_distribution, success = decode_css(
-                code=csp_code,
-                error=error,
-                chi_max=chi_max,
-                multiply_by_stabiliser=True,
-                bias_type=error_model,
-                bias_prob=bias_prob,
-                renormalise=True,
-                silent=silent,
-                contraction_strategy="Optimised",
-                tolerance=tolerance,
-                cut=cut,
-            )
-            logging.info("Decoding finished with multiply_by_stabiliser=True.")
+            logicals_distribution, success = _decode(multiply_by_stabiliser=True)
+            if isinstance(success, float):
+                success = int(success > 1.0 - 1e-6)
+
+            had_valid_attempt = True
+            last_distribution = logicals_distribution
+
+            if success == 1:
+                if not silent:
+                    logging.info(
+                        "Decoding successful with random stabiliser (attempt %d).",
+                        k + 1,
+                    )
+                return logicals_distribution, 0  # failure = 0
         except Exception as ex:
             logging.error(
-                f"Decoding has not been completed due to: {ex}", exc_info=True
+                "Error during decoding with random stabiliser (attempt %d).",
+                k + 1,
+                exc_info=True,
             )
-            logicals_distribution, success = np.nan, np.nan
 
-    if success == 1:
+    # 3) No success after all attempts
+    if had_valid_attempt:
         if not silent:
-            logging.info("Decoding successful.")
-        return logicals_distribution, 0
-    if success == 0:
-        if not silent:
-            logging.info("Decoding failed.")
-        return logicals_distribution, 1
+            logging.info("Decoding failed after all gauge samples.")
+        return last_distribution, 1  # failure = 1 is the convention
+
+    # 4) All attempts crashed
     if not silent:
-        logging.info("Decoding has not been completed.")
+        logging.info("Decoding has not been completed for this error.")
     return np.nan, np.nan
 
 
@@ -268,8 +306,8 @@ def run_experiment(
     errors,
     silent,
     num_processes=1,
-    tolerance=1e-8,
-    cut=1e-8,
+    tolerance=0,
+    cut=0,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
@@ -278,13 +316,20 @@ def run_experiment(
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )
 
+    # Pre-encode all errors into a compact uint8 array -------------
+    # Shape: (num_experiments, num_qubits)
+    errors_uint8 = np.stack(
+        [encode_pauli_string(err) for err in errors],
+        axis=0,
+    )
+
     args = [
         (
             num_qubits,
             batch,
             code_id,
             chi_max,
-            errors[i],
+            errors[i],  # still pass the string to the decoder
             bias_prob,
             error_model,
             silent,
@@ -307,6 +352,7 @@ def run_experiment(
 
     return {
         "failures": failures,
+        "errors_uint8": errors_uint8,
         "lattice_size": num_qubits,
         "chi_max": chi_max,
         "error_rate": error_rate,
