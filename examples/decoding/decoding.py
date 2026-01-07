@@ -1364,12 +1364,15 @@ def decode_css(
             logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
         )
 
-        # find global maximum amplitude
+        # Global maximum amplitude
         max_amp = np.max(logical_dense)
 
-        # treat identity logical as success if it is among the maximisers
-        # (within some numerical tolerance)
-        eps = 1e-12 * max_amp
+        # Machine-precision–level tolerance (relative + absolute)
+        rel_tol = 1e-9
+        abs_tol = 1e-12
+        eps = max(rel_tol * max_amp, abs_tol)
+
+        # Success ⇔ identity logical is in the MAP set (degeneracy allowed)
         is_map_identity = logical_dense[0] >= max_amp - eps
 
         result = logical_dense, int(is_map_identity)
