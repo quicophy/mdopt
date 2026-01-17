@@ -232,6 +232,22 @@ class DephasingDMRG:
         for i in reversed(range(1, L)):
             self.update_right_environment(i)
 
+    @staticmethod
+    def _snap_to_computational_basis(x: np.ndarray) -> np.ndarray:
+        """
+        Project a two-site tensor onto a single computational-basis configuration
+        (one-hot in the flattened basis). This is essential in degenerate cases
+        (e.g., maximally mixed / large maximum a posteriori degeneracy), where eigensolvers may
+        return arbitrary superpositions inside the top eigenspace.
+
+        The tie-break is still deterministic: argmax on |x_k| chooses the first maximal index.
+        """
+        x_flat = x.reshape(-1)
+        idx = int(np.argmax(np.abs(x_flat)))
+        x_snapped = np.zeros_like(x_flat)
+        x_snapped[idx] = np.array(1, dtype=x_flat.dtype)
+        return x_snapped.reshape(x.shape)
+
     def sweep(self) -> None:
         """One full Dephasing DMRG sweep (left→right, then right→left)."""
         for i in range(self.mps.num_sites - 1):
@@ -269,6 +285,10 @@ class DephasingDMRG:
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
+
+        # Enforce the search domain: computational-basis bitstrings only.
+        # Without this, degenerate top eigenspaces lead to coherence/entanglement leakage.
+        x = self._snap_to_computational_basis(x)
 
         left_iso_i, singular_values_j, right_iso_j, _ = split_two_site_tensor(
             x,
