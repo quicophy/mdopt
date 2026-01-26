@@ -40,7 +40,6 @@ from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
 from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 
-
 # Setting up logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

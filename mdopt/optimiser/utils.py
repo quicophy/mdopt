@@ -20,7 +20,6 @@ from mdopt.mps.utils import find_orth_centre
 from mdopt.utils.utils import mpo_to_matrix
 from mdopt.contractor.contractor import mps_mpo_contract
 
-
 IDENTITY = np.eye(2, dtype=float).reshape((1, 1, 2, 2))
 
 COPY_LEFT = np.fromfunction(
