@@ -2,7 +2,7 @@
 Here, we define some decoding-specific functions over the MPS/MPO entities
 we encounter during the decoding process as well as the functions we use
 to generate and operate over both classical and quantum error correcting codes.
-Note, this is auxiliary code which isn't included into the library and thus provided as is.
+Note, this is example code which isn't included into the library and thus provided as is.
 """
 
 import logging
