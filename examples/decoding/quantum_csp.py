@@ -43,8 +43,8 @@ examples_path_narval = os.getenv(
 )
 examples_path_iq = os.getenv("MDOPT_EXAMPLES_PATH", "/home/bereza/mdopt/examples")
 
-sys.path.append(project_root_narval)
-sys.path.append(examples_path_narval)
+sys.path.append(project_root_fir)
+sys.path.append(examples_path_fir)
 
 try:
     from examples.decoding.decoding import (
@@ -57,6 +57,7 @@ except ImportError as e:
     )
     sys.exit(1)
 
+# Compact encoding of Pauli errors: I,X,Y,Z,E -> 0..4
 PAULI_TO_INT = {"I": 0, "X": 1, "Y": 2, "Z": 3, "E": 4}
 INT_TO_PAULI = {v: k for k, v in PAULI_TO_INT.items()}
 
@@ -285,7 +286,7 @@ def run_single_experiment(
     if had_valid_attempt:
         if not silent:
             logging.info("Decoding failed after all gauge samples.")
-        return last_distribution, 1  # failure = 1 is the convention
+        return last_distribution, 1  # failure = 1
 
     # 4) All attempts crashed
     if not silent:
@@ -316,8 +317,8 @@ def run_experiment(
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
     )
 
-    # Pre-encode all errors into a compact uint8 array -------------
-    # Shape: (num_experiments, num_qubits)
+    # pre-encode all errors into a compact uint8 array of
+    # shape: (num_experiments, num_qubits)
     errors_uint8 = np.stack(
         [encode_pauli_string(err) for err in errors],
         axis=0,
