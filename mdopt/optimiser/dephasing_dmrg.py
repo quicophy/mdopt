@@ -3,10 +3,10 @@ This module contains the :class:`DephasingDMRG` and the :class:`EffectiveDensity
 
 This algorithm's main feature is that it restricts the target-state search to
 the computational basis states domain.
-In particular, we use it to find the main component of a Matrix Density Product Operator (MDPO),
+In particular, we use it to find the main component of a Matrix Product Density Operator (MPDO),
 i.e., a computational basis state contributing the largest amplitude.
 
-In our notation, MDPO for ``n`` sites denotes the following object::
+In our notation, MPDO for ``n`` sites denotes the following object::
 
          |      |               |       |
          |      |               |       |
@@ -15,7 +15,7 @@ In our notation, MDPO for ``n`` sites denotes the following object::
          |      |               |       |
          |      |               |       |
 
-An MDPO is formed by an MPS and its complex-conjugated version.
+An MPDO is formed by an MPS and its complex-conjugated version.
 The main idea is to find the main component of this object without
 performing the kronecker product explicitly.
 """
@@ -155,7 +155,7 @@ class DephasingDMRG:
         MPS serving as a current approximation of the target state.
     mps_target : Union[ExplicitMPS, CanonicalMPS]
         The target MPS in the right-canonical form.
-        This MPS is used to construct the dephased MDPO.
+        This MPS is used to construct the dephased MPDO.
     chi_max : int
         The highest bond dimension of an MPS allowed.
     mode : str

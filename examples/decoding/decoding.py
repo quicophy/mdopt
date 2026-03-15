@@ -1141,7 +1141,8 @@ def decode_message(
     mps_dmrg_start = create_simple_product_state(num_bits, which="+")
 
     # Running the Dephasing DMRG algorithm,
-    # which finds the closest basis product state to a given MPDO,
+    # which finds the computational basis product state
+    # contributing the most to a given MPDO,
     # which is formed from the message MPS.
     engine = DephasingDMRG(
         mps_dmrg_start,

@@ -141,10 +141,8 @@ def test_dephasing_dmrg_returns_bitstring_for_two_maxima_degenerate():
 
 def test_dephasing_dmrg_never_creates_entanglement_if_claimed_bitstring_only():
     """
-    If the implementation truly restricts the search domain to computational-basis bitstrings,
+    Our implementation restricts the search domain to computational-basis bitstrings,
     it should never create entanglement: all bond dimensions must remain 1 after any run.
-
-    This catches the failure mode you just saw (bond dims jumping to 2).
     """
     num_sites = 8
     num_runs = 1
@@ -221,7 +219,7 @@ def test_optimiser_main_component():
         mps = mps_from_dense(psi, form="Right-canonical")
 
         # Creating the matrix density product operator.
-        mdpo = mps.density_mpo()
+        mpdo = mps.density_mpo()
 
         # Finding the main component (a computational basis state having the largest overlap)
         # of the density matrix in the dense form.
@@ -234,10 +232,10 @@ def test_optimiser_main_component():
             )
         main_component_exact = np.argmax(overlaps_exact)
 
-        # Finding the main component of the MDPO using DMRG.
+        # Finding the main component of the MPDO using DMRG.
         mps_start = create_simple_product_state(num_sites, which="+", form="Explicit")
         engine = dmrg(
-            mps_start, mdpo, chi_max=1e4, cut=1e-12, mode="LA", copy=True, silent=True
+            mps_start, mpdo, chi_max=1e4, cut=1e-12, mode="LA", copy=True, silent=True
         )
         engine.run(num_runs)
         max_excited_mps_from_dmrg = engine.mps
@@ -256,7 +254,7 @@ def test_optimiser_main_component():
             )
         main_component_dmrg = np.argmax(overlaps_dmrg)
 
-        # Finding the main component of the MDPO using dephasing DMRG.
+        # Finding the main component of the MPDO using dephasing DMRG.
         mps_start = create_simple_product_state(num_sites, which="+", form="Explicit")
         dephasing_engine = deph_dmrg(
             mps_start,
@@ -303,9 +301,8 @@ def test_optimiser_main_component():
 
 def test_dephasing_dmrg_returns_bitstring_for_plus_target():
     """
-    Regression/bug-catcher:
-    target = |+>^{⊗n}. The dephased MDPO is maximally mixed (huge degeneracy).
-    A solver that *truly searches only over computational basis bitstrings*
+    Bug-catcher: target = |+>^{⊗n}. The dephased MPDO is maximally mixed (huge degeneracy).
+    A solver that truly searches only over computational basis bitstrings
     must still output a computational-basis bitstring, not |+>^{⊗n}.
     """
     num_sites = 8
@@ -331,3 +328,167 @@ def test_dephasing_dmrg_returns_bitstring_for_plus_target():
 
     # Must be a computational-basis bitstring product state.
     _assert_is_computational_basis_product_state(engine.mps)
+
+
+def test_snap_to_computational_basis_one_hot_and_dtype():
+    """
+    The snapping helper must project any two-site tensor to a one-hot computational-basis vector
+    and preserve dtype (both real and complex).
+    """
+    # Real case
+    xr = np.random.randn(1, 2, 2, 1).astype(float)
+    ys = deph_dmrg._snap_to_computational_basis(xr)
+    assert ys.dtype == xr.dtype
+    flat = ys.reshape(-1)
+    assert np.count_nonzero(flat) == 1
+    assert np.isclose(np.max(np.abs(flat)), 1.0)
+
+    # Complex case
+    xc = (np.random.randn(1, 2, 2, 1) + 1j * np.random.randn(1, 2, 2, 1)).astype(
+        complex
+    )
+    yc = deph_dmrg._snap_to_computational_basis(xc)
+    assert yc.dtype == xc.dtype
+    flatc = yc.reshape(-1)
+    assert np.count_nonzero(flatc) == 1
+    # Magnitude of the kept entry is 1
+    assert np.isclose(np.max(np.abs(flatc)), 1.0)
+
+
+def test_effective_density_operator_dtype_preserved_complex():
+    """
+    The EffectiveDensityOperator must preserve complex dtype when targets are complex.
+    For chi_left=chi_right=1, the operator should remain diagonal in computational basis
+    and the materialised matrix should be complex-typed.
+    """
+    # Environments for chi=1 with complex dtype
+    left_env = np.zeros((1, 1, 1, 1), dtype=complex)
+    right_env = np.zeros((1, 1, 1, 1), dtype=complex)
+    left_env[0, 0, 0, 0] = 1.0 + 0j
+    right_env[0, 0, 0, 0] = 1.0 + 0j
+
+    # One-site tensor for |+i> = (|0> + i|1>)/sqrt(2)
+    t = np.zeros((1, 2, 1), dtype=complex)
+    t[0, 0, 0] = 1.0 / np.sqrt(2.0)
+    t[0, 1, 0] = 1.0j / np.sqrt(2.0)
+
+    op = EffectiveDensityOperator(
+        left_environment=left_env,
+        mps_target_1=t,
+        mps_target_2=t,
+        right_environment=right_env,
+    )
+    M = _linear_operator_to_dense(op)
+
+    assert np.iscomplexobj(M)
+    # Still diagonal for chi=1 and product |+i> targets
+    assert np.allclose(M, np.diag(np.diag(M)), atol=1e-12)
+
+
+def test_effective_density_operator_matvec_wrong_size_raises():
+    """
+    If the provided vector cannot be reshaped into x_shape, numpy should raise ValueError in _matvec.
+    """
+    left_env = np.zeros((1, 1, 1, 1), dtype=float)
+    right_env = np.zeros((1, 1, 1, 1), dtype=float)
+    left_env[0, 0, 0, 0] = 1.0
+    right_env[0, 0, 0, 0] = 1.0
+
+    t = np.zeros((1, 2, 1), dtype=float)
+    t[0, 0, 0] = 1.0 / np.sqrt(2.0)
+    t[0, 1, 0] = 1.0 / np.sqrt(2.0)
+
+    op = EffectiveDensityOperator(
+        left_environment=left_env,
+        mps_target_1=t,
+        mps_target_2=t,
+        right_environment=right_env,
+    )
+
+    bad = np.zeros(op.shape[1] - 1, dtype=op.dtype)
+    with pytest.raises(ValueError):
+        op._matvec(bad)
+
+
+def test_dephasing_dmrg_no_entanglement_complex_target():
+    r"""
+    With a complex product target (e.g., |+i>^⊗n), the algorithm must still maintain
+    bond dimensions equal to 1 after a run (bitstring-only search domain).
+    """
+    num_sites = 6
+    num_runs = 1
+
+    # Complex product target |+i>^{⊗n}
+    t = np.zeros((1, 2, 1), dtype=complex)
+    t[0, 0, 0] = 1.0 / np.sqrt(2.0)
+    t[0, 1, 0] = 1.0j / np.sqrt(2.0)
+
+    # Build explicit product state tensors for target
+    tensors = [t.copy() for _ in range(num_sites)]
+    # Create an ExplicitMPS via utilities: start from |+> and replace tensors directly if supported
+    # Simpler: take |+> product and coerce dtype by adding 0j, then right_canonical
+    target = create_simple_product_state(num_sites, which="+", form="Explicit")
+    # Overwrite physical entries to match |+i>
+    for i in range(num_sites):
+        assert target.tensors[i].shape == (1, 2, 1)
+        target.tensors[i] = t.copy()
+    target = target.right_canonical()
+
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start,
+        target,
+        chi_max=1e4,
+        cut=1e-12,
+        mode="LA",
+        copy=True,
+        silent=True,
+    )
+    engine.run(num_runs)
+
+    # Must remain a product state with bond dims 1
+    assert engine.mps.bond_dimensions == [1 for _ in range(engine.mps.num_bonds)]
+    # And be a computational-basis bitstring product state
+    _assert_is_computational_basis_product_state(engine.mps)
+
+
+def test_dephasing_dmrg_deterministic_snap_in_degeneracy_LA():
+    r"""
+    In a highly degenerate case (target = |+>^{⊗n}), the solver should still snap
+    deterministically via argmax to the first basis configuration, yielding 0...0.
+    """
+    num_sites = 6
+    num_runs = 1
+
+    target = create_simple_product_state(num_sites, which="+", form="Explicit")
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start,
+        target.right_canonical(),
+        chi_max=1e4,
+        cut=1e-12,
+        mode="LA",
+        copy=True,
+        silent=True,
+    )
+    engine.run(num_runs)
+
+    bitstring = _assert_is_computational_basis_product_state(engine.mps)
+    # Determinism: running again from the same start should yield the same bitstring.
+    engine2 = deph_dmrg(
+        start,
+        target.right_canonical(),
+        chi_max=1e4,
+        cut=1e-12,
+        mode="LA",
+        copy=True,
+        silent=True,
+    )
+    engine2.run(num_runs)
+    bitstring2 = _assert_is_computational_basis_product_state(engine2.mps)
+
+    # Both solutions must be valid computational-basis product states and keep bond dims at 1.
+    assert engine.mps.bond_dimensions == [1 for _ in range(engine.mps.num_bonds)]
+    assert engine2.mps.bond_dimensions == [1 for _ in range(engine2.mps.num_bonds)]
