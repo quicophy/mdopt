@@ -1,4 +1,4 @@
-# `mdopt` — Discrete Optimisation in the MPS-MPO Language
+# `mdopt` — A code-agnostic tensor-network (MPS-MPO) decoder for quantum error-correcting codes.
 
 <p align="center">
   <img src="docs/source/logo.png" alt="logo" width="1100">
