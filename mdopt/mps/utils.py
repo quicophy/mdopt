@@ -330,7 +330,14 @@ def mps_from_dense(
     # Final cleanup: tensordot with inv(diag(s[i+1]))  -> divide vR axis by s
     for i, _ in enumerate(tensors):
         s = np.asarray(singular_values[i + 1], dtype=tensors[i].dtype)
-        s_safe = np.where(s != 0.0, s, 1.0)
+        s_max = float(np.max(np.abs(s))) if s.size > 0 else 1.0
+        eps = (
+            float(np.finfo(s.dtype).eps)
+            if np.issubdtype(s.dtype, np.floating)
+            else 1e-15
+        )
+        rcond = eps * s.size * s_max
+        s_safe = np.where(np.abs(s) > rcond, s, 1.0)
         tensors[i] = tensors[i] / s_safe[None, None, :]
 
     if form == "Right-canonical":
