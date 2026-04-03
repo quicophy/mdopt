@@ -1,4 +1,4 @@
-# `mdopt` — Discrete Optimisation in the MPS-MPO Language
+# `mdopt` — code-agnostic tensor-network (MPS-MPO) decoder for quantum error-correcting codes.
 
 <p align="center">
   <img src="docs/source/logo.png" alt="logo" width="1100">
@@ -16,7 +16,7 @@
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 
 
-##### `mdopt` is a python package built on top of `numpy` for discrete optimisation (mainly for classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
+##### `mdopt` is a python package built on top of `numpy` for discrete optimisation (with the main application to classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
 
 ## Installation
 
