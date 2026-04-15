@@ -28,7 +28,7 @@ jobs:
           poetry run pytest --cov=./ --cov-report=xml -W ignore::DeprecationWarning
 
       - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           fail_ci_if_error: true
           use_oidc: true
