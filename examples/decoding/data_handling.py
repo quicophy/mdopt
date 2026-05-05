@@ -385,6 +385,7 @@ def plot_failure_statistics(
     max_bond_dims: list[int],
     mode: str = "lattice_size",
     xlim: tuple = None,
+    ylim: tuple = None,
     xscale: str = "linear",
     yscale: str = "linear",
     bb: bool = False,
@@ -410,6 +411,8 @@ def plot_failure_statistics(
         or "bond_dim" (varying lattice sizes for each bond dimension). Default is "lattice_size".
     xlim : tuple, optional
         Limits for the x-axis. Default is automatic.
+    ylim : tuple, optional
+        Limits for the y-axis. Default is automatic.
     xscale : str, optional
         Scale of the x-axis. Default is "linear".
     yscale : str, optional
@@ -473,6 +476,8 @@ def plot_failure_statistics(
             plt.legend(fontsize=7)
             if xlim:
                 plt.xlim(xlim)
+            if ylim:
+                plt.ylim(ylim)
             plt.xscale(xscale)
             plt.yscale(yscale)
             plt.grid(True, which="both", ls=":")
@@ -527,6 +532,8 @@ def plot_failure_statistics(
             plt.legend(fontsize="small")
             if xlim:
                 plt.xlim(xlim)
+            if ylim:
+                plt.ylim(ylim)
             plt.xscale(xscale)
             plt.yscale(yscale)
             plt.grid(True, which="both", ls=":")

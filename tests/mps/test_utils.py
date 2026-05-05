@@ -146,6 +146,38 @@ def test_mps_utils_mps_from_dense():
             mps_from_dense(np.ones(shape=(23,)))
 
 
+def test_mps_from_dense_near_zero_singular_values():
+    """
+    Test that ``mps_from_dense(form="Explicit")`` does not produce NaN or Inf
+    for states with near-zero singular values at interior bonds.
+
+    The state |00...0> + eps|11...1> has singular values ~[1, eps] at every
+    bond after normalisation.  The old ``np.where(s != 0, s, 1)`` guard let
+    near-zero values through unchanged, causing 1/eps overflow in float64.
+    """
+    num_sites = 5
+    for eps in (1e-20, 1e-15, 1e-10):
+        psi = np.zeros(2**num_sites, dtype=complex)
+        psi[0] = 1.0
+        psi[-1] = eps
+        psi /= np.linalg.norm(psi)
+
+        mps = mps_from_dense(psi, form="Explicit")
+        for i, gamma in enumerate(mps.tensors):
+            assert np.all(
+                np.isfinite(gamma)
+            ), f"Γ[{i}] contains NaN or Inf for eps={eps}"
+        assert np.all(
+            np.isfinite(mps.dense())
+        ), f"dense() contains NaN or Inf for eps={eps}"
+
+    # float32 path
+    psi32 = psi.astype(np.complex64)
+    mps32 = mps_from_dense(psi32, form="Explicit")
+    for gamma in mps32.tensors:
+        assert np.all(np.isfinite(gamma)), "float32 Γ tensor contains NaN or Inf"
+
+
 def test_mps_utils_create_simple_product_state():
     """Test for the ``create_simple_product_state`` function."""
 

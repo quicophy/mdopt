@@ -508,8 +508,19 @@ class CanonicalMPS:
         for i in range(self.num_sites):
             # tensordot(A[i], inv(diag(s[i+1])), (2,0))  == divide last axis by s
             s = np.asarray(singular_values[i + 1], dtype=mps_canonical.tensors[i].dtype)
-            # robust to tiny zeros
-            s_safe = np.where(s != 0.0, s, 1.0)
+            # Pseudoinverse with machine-epsilon relative threshold (LAPACK pinv
+            # convention): singular values below eps * bond_dim * max(s) are
+            # numerically zero; their Γ columns contribute negligibly to any
+            # physical amplitude.  Setting the divisor to 1.0 for those avoids
+            # overflow while leaving all physically relevant Γ entries intact.
+            s_max = float(np.max(np.abs(s))) if s.size > 0 else 1.0
+            eps = (
+                float(np.finfo(s.dtype).eps)
+                if np.issubdtype(s.dtype, np.floating)
+                else 1e-15
+            )
+            rcond = eps * s.size * s_max
+            s_safe = np.where(np.abs(s) > rcond, s, 1.0)
             explicit_tensors.append(mps_canonical.tensors[i] / s_safe[None, None, :])
 
         return mdopt.mps.explicit.ExplicitMPS(  # type: ignore

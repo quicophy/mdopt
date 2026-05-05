@@ -440,6 +440,46 @@ def test_canonical_explicit():
         )
 
 
+def test_canonical_explicit_near_zero_singular_values():
+    """
+    Test that ``explicit()`` does not produce NaN or Inf when the MPS has
+    near-zero (but not exactly zero) singular values at some bonds.
+
+    The old implementation used ``np.where(s != 0.0, s, 1.0)`` which only
+    guards against exact zeros.  A value like 1e-20 passed through unchanged,
+    so ``1/s`` overflowed.  The fixed code uses a machine-epsilon relative
+    threshold (LAPACK pinv convention) so those near-zero components are
+    suppressed rather than inverted.
+    """
+    # |00...0> + eps|11...1>: after normalisation the interior singular values
+    # at every bond are ~eps, exercising the near-zero division path.
+    num_sites = 5
+    for eps in (1e-20, 1e-15, 1e-10):
+        psi = np.zeros(2**num_sites, dtype=complex)
+        psi[0] = 1.0
+        psi[-1] = eps
+        psi /= np.linalg.norm(psi)
+
+        for form in ("Right-canonical", "Left-canonical"):
+            mps_canonical = mps_from_dense(psi, form=form)
+            mps_explicit = mps_canonical.explicit()
+
+            for i, gamma in enumerate(mps_explicit.tensors):
+                assert np.all(
+                    np.isfinite(gamma)
+                ), f"Γ[{i}] contains NaN or Inf for eps={eps}, form={form}"
+            assert np.all(
+                np.isfinite(mps_explicit.dense())
+            ), f"dense() contains NaN or Inf for eps={eps}, form={form}"
+
+    # float32 path
+    psi32 = psi.astype(np.complex64)
+    mps32 = mps_from_dense(psi32, form="Right-canonical")
+    mps32_explicit = mps32.explicit()
+    for gamma in mps32_explicit.tensors:
+        assert np.all(np.isfinite(gamma)), "float32 Γ tensor contains NaN or Inf"
+
+
 def test_canonical_norm():
     """
     Test for the ``norm`` method of the :class:`CanonicalMPS` class.

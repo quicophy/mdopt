@@ -13,7 +13,6 @@
 import os
 import sys
 import datetime
-import pydata_sphinx_theme
 from sphinx.ext.autodoc import ClassDocumenter, _
 
 sys.path.insert(0, os.path.abspath("../"))
@@ -39,7 +38,6 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.napoleon",
     "myst_parser",
-    "pydata_sphinx_theme",
     "nbsphinx",
     "IPython.sphinxext.ipython_console_highlighting",
 ]

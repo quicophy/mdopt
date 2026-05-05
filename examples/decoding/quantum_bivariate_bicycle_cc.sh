@@ -75,7 +75,7 @@ seeds=(                                         # 100 random seeds
     )
 num_experiments=100                             # Runs per each random seed
 error_model="Bitflip"                           # The error model
-bias_probs=(1e-1)                               # Decoder bias probabilities
+bias_probs=(1e-3)                               # Decoder bias probabilities
 tolerances=(0)                                  # Numerical tolerances for the MPS
 cuts=(0)                                        # SVD cut-offs for the MPS
 num_processes=16                                # Parallel processes
@@ -101,6 +101,7 @@ for seed in "${seeds[@]}"; do
 #SBATCH --job-name=bb-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}       # Descriptive job name
 #SBATCH --output=bb-${order_x}-${order_y}-${bond_dim}-${error_rate}-${error_model}-${seed}-%j.out  # Standard output and error log
 
+export OPENBLAS_NUM_THREADS=1
 export OMP_NUM_THREADS=1
 module load python/3.11.5
 source "\$HOME/envs/myenv/bin/activate"
