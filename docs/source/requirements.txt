@@ -1,4 +1,4 @@
-sphinx
+sphinx<9
 sphinxcontrib-napoleon
 myst-parser
 pydata_sphinx_theme
