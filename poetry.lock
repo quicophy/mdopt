@@ -1788,33 +1788,38 @@ files = [
 
 [[package]]
 name = "ldpc"
-version = "2.3.6"
+version = "2.4.1"
 description = "LDPC: Python Tools for Low Density Parity Check Codes"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "ldpc-2.3.6-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:3472d9a651e25e9c7c641c502a1f6d7043555fc6ef2c2b71eb2a0eb1d1f822e1"},
-    {file = "ldpc-2.3.6-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:602e429559bef0dcc1665a355e6ba3508b04c7b829ae3fa085e8f442d69bbbac"},
-    {file = "ldpc-2.3.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:80d7fc40841944431f9a8d1384c3b05ec1b3676bf907da6563d385ef5653d473"},
-    {file = "ldpc-2.3.6-cp310-cp310-win_amd64.whl", hash = "sha256:f6d908e25cbdb3baf40386ddc41b6fbae9b5a73d7ea636f511f1e188151b6bcb"},
-    {file = "ldpc-2.3.6-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:e06b6baccb9e8af169a30c786ceebe2ddefba30f2b0e34bea8d728fc7e605cc8"},
-    {file = "ldpc-2.3.6-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:50609e3bb421e96e9a07ea4e381d0da805b311ce284881d191bb35d727d6c336"},
-    {file = "ldpc-2.3.6-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f42fcc5422a1b58a7e28e40d8a6e6148bd4b592af4b5dd5823d71dabcbf67172"},
-    {file = "ldpc-2.3.6-cp311-cp311-win_amd64.whl", hash = "sha256:72533a6e77fd9e634df9ad223f32fffc9f7d2b1eb437f07a70b2afddb66a7e36"},
-    {file = "ldpc-2.3.6-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:b7287998fe0f31d430d43f8e4f8686ab9a289c375ea1626f29085e7868343720"},
-    {file = "ldpc-2.3.6-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:23d4166f7a42e19cab31826088009840f34d8ea1904db18c23a8263537c42cef"},
-    {file = "ldpc-2.3.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:b73e57fc7ad46710c9f44142f4a0ee4c33d25e8880c5cbde0e52bc14854fef32"},
-    {file = "ldpc-2.3.6-cp312-cp312-win_amd64.whl", hash = "sha256:231caaafc6e2cb02d22825008e83f3dd338db5656d39e749a99ad24335fb0c7d"},
-    {file = "ldpc-2.3.6-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:0785f5e6c7836baecf3bb22b4f2d8d6591daf01352b495c799e6b9458bcc0ffd"},
-    {file = "ldpc-2.3.6-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:065e9dc09cedd60ce6bdab22ed219adf9059dcda7bcb573ded243245f51e6aaa"},
-    {file = "ldpc-2.3.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:053331b35f2d928308caf0c7a3b3d62b8fbb1ac2d487a48434776b116a5547ef"},
-    {file = "ldpc-2.3.6-cp313-cp313-win_amd64.whl", hash = "sha256:dcd6a9f8d3ff9c6ea603f82c7188395910081226669e1c92347bbe27c5843db4"},
-    {file = "ldpc-2.3.6-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:789c5348e574b1bfd5164f0237eef99c024dcd0d19c0ac527cf1e11e5f3cb0a3"},
-    {file = "ldpc-2.3.6-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:d72cb69f856efe97cd13184fe568758215b8ce645bd1cff8aa1a32f0f52064f1"},
-    {file = "ldpc-2.3.6-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d2b734bbc61c5688860da2658819e9d4d3cc0cabe5857afc4b695255034aae56"},
-    {file = "ldpc-2.3.6-cp39-cp39-win_amd64.whl", hash = "sha256:e090a83f7c0bdc1f199d673e9dcc568d0211d9d17b69c754d43324c30f98d16a"},
-    {file = "ldpc-2.3.6.tar.gz", hash = "sha256:0bb1c48e174593f5fbf2081d7cc0e9e2b5dc9a44c5132d2c06c94b3118979a05"},
+    {file = "ldpc-2.4.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:dd3236dfafca2d131fda447bc0967cfebe416c300e57843ecc4ad2e6bcbb5b41"},
+    {file = "ldpc-2.4.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:e4668eb988c0f02fc5aa9a33546a5d8d77e22a313cc05bd4057e29b45234fcfc"},
+    {file = "ldpc-2.4.1-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:e1bfa21ec4839e203651627dedf94931d7b88ca6888afd3161c79f5cfb49c766"},
+    {file = "ldpc-2.4.1-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9b861c9b6e0e9d21db95a1adad9f69fe06e729417edb44363c8c37c24259816d"},
+    {file = "ldpc-2.4.1-cp310-cp310-win_amd64.whl", hash = "sha256:b143a62e55ac8d8ee60d7956b835426f980d04897af91185c978552321caf7e8"},
+    {file = "ldpc-2.4.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:fae91c5a279cb60c0c1d78ae343e241124e4de1a6dcca881cda688a9ea7a404c"},
+    {file = "ldpc-2.4.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a15d944db7434a7435df512666b7b60e7c243809fa160f94bb9123009656c4dd"},
+    {file = "ldpc-2.4.1-cp311-cp311-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1af8949d463273bfec595411dbf98192510a80255844bac464a05b909939fc80"},
+    {file = "ldpc-2.4.1-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:37028d9d045130b101f4fcedae3b7a4c04802633bf2b09927703d3a0604c8554"},
+    {file = "ldpc-2.4.1-cp311-cp311-win_amd64.whl", hash = "sha256:602445197320d9dc9ce4a2af6e0661d8d303ef2cddea24b99bee6b51415a343e"},
+    {file = "ldpc-2.4.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:035ceb48f9d8c0d2ab37eee67f87692a935ba586ebc380a0f7ad7bac3192a872"},
+    {file = "ldpc-2.4.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:4010c9ac9eff008c058dfa9f225325d5aed8b7a0b55ec0975a737fc7352aa301"},
+    {file = "ldpc-2.4.1-cp312-cp312-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:6701b042f8d505f205c7fe39820566513f1191ed04413e0968bb54bfbc6f0086"},
+    {file = "ldpc-2.4.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b49b8b14413ec0d4c68c4f5a9bcaff0232363aed71652a75ed6af1234c58031b"},
+    {file = "ldpc-2.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:1d7965b6c3dc53ac0bc852e3769516a4b4a2756f26c6a683ea675c1e1771da42"},
+    {file = "ldpc-2.4.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:9b4d3630f4410700a099a8a3fefd030684294ed624e3285f415c6997b0a9f63f"},
+    {file = "ldpc-2.4.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:08ebc2e6cde49b1c0645a0eab8e2b4a843935858daeb3fd86598119c9c3a6d99"},
+    {file = "ldpc-2.4.1-cp313-cp313-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:07ecf26a3ffe5ffddd6bbe5d6c4c764d11753664379b566a86e136a4a6f9dd59"},
+    {file = "ldpc-2.4.1-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:9a77bcfd3570bc3cda0c429ba9e5b3a4404c422228d3b6fcc1b0e7dee6493cdf"},
+    {file = "ldpc-2.4.1-cp313-cp313-win_amd64.whl", hash = "sha256:5790180b77c588a72d2bf828b4e38e6f85c5e9dae967420c6b2ac7c317b3bd83"},
+    {file = "ldpc-2.4.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:609f71596553e9c1d916bc154674dd6c9b90062de8a53ff0a197e2d2e9422480"},
+    {file = "ldpc-2.4.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:73c59007646cb2256711240e42a857dfda3c65c099c4b8c45d99857d8737e803"},
+    {file = "ldpc-2.4.1-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c5a5359842a5be1bd026a887e4cdd77e8ba01c5ad70088fd50180715b60eac21"},
+    {file = "ldpc-2.4.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:569e9b6b13aa0165a49c6108eec3fda573054f62bb04927ff934c06ba5420c8e"},
+    {file = "ldpc-2.4.1-cp314-cp314-win_amd64.whl", hash = "sha256:35426040ccbf633683009de0528eee06b4fa944ffdf13e6f89167770bc4fe10d"},
+    {file = "ldpc-2.4.1.tar.gz", hash = "sha256:729376026af4e46e550c333152f073dcf42224589380d309f38923e00736ceba"},
 ]
 
 [package.dependencies]
@@ -4590,4 +4595,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<4.0"
-content-hash = "08706d5b22cbd962754326c1312ed4f478017afca74d07159984f2e52eddb552"
+content-hash = "000c559cca1d10d2fb6a5cf5c9d98a83aa6a968c2b4dcf8fc648cff66563f638"
