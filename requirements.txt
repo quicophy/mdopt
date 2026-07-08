@@ -219,9 +219,9 @@ fonttools==4.60.2 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:fac5e921d3bd0ca3bb8517dced2784f0742bc8ca28579a68b139f04ea323a779 \
     --hash=sha256:fe905403fe59683b0e9a45f234af2866834376b8821f34633b1c76fb731b6311 \
     --hash=sha256:ffcab6f5537136046ca902ed2491ab081ba271b07591b916289b7c27ff845f96
-galois==0.4.6 ; python_version >= "3.10" and python_version < "4.0" \
-    --hash=sha256:1e6a6230ffd21c39d60f165e17bfd6c1a685a023a967d84d240f2ef3eb0bf62c \
-    --hash=sha256:b5da70bca8d29bda71a832dde908a65591a9c30fa50fa5c5e7aab0a9aacf17df
+galois==0.4.11 ; python_version >= "3.10" and python_version < "4.0" \
+    --hash=sha256:d2e12a2b7fd44b108cc15d7de27dabcb8a98a556ea2c69c94fe695139629d9aa \
+    --hash=sha256:f5055546c4b39d1e36decae9d4f21f3d66d9c6c7c9aec39189cb5d2284e9022f
 iniconfig==2.0.0 ; python_version >= "3.10" and python_version < "4.0" \
     --hash=sha256:2d91e135bf72d31a410b17c16da610a82cb55f6b0477d1a902134b24a455b8b3 \
     --hash=sha256:b6a85871a79d2e3b22d2d1b94ac2824226a63c6b741c88f7ae975f18b6778374
