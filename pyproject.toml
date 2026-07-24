@@ -59,7 +59,7 @@ optional = true
 [tool.poetry.group.test.dependencies]
 coverage = ">=6.4.4,<8.0.0"
 pytest-cov = ">=3,<7"
-pytest = ">=9.0.3,<10.0"
+pytest = ">=9.1.1,<10.0"
 py = "^1.11.0"
 
 [tool.poetry.group.docs]
