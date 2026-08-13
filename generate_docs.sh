@@ -9,6 +9,7 @@ NOTEBOOKS_DEST_DIR="$SPHINX_SOURCE_DIR/notebooks"
 API_DEST_DIR="$SPHINX_SOURCE_DIR/api"
 EXAMPLES_AUTO_RST="$SPHINX_SOURCE_DIR/examples_auto.rst"
 README_RST="$SPHINX_SOURCE_DIR/README.rst"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 
 # Ensure the script is executed from the project root
 if [ ! -d "$PACKAGE_DIR" ] || [ ! -d "$DOCS_DIR" ]; then
@@ -76,7 +77,7 @@ fi
 #    IMPORTANT: No --force, so it won't overwrite hand-edited files.
 #    Exclude tests and keep a clean, module-first layout.
 echo "==> Running sphinx-apidoc into $API_DEST_DIR"
-sphinx-apidoc \
+"$PYTHON_BIN" -m sphinx.ext.apidoc \
     -o "$API_DEST_DIR" \
     "$PACKAGE_DIR" \
     "$PACKAGE_DIR/tests" \
@@ -88,6 +89,6 @@ echo "==> Cleaning previous builds"
 rm -rf "$SPHINX_BUILD_DIR"
 
 echo "==> Building Sphinx documentation"
-sphinx-build -b html "$SPHINX_SOURCE_DIR" "$SPHINX_BUILD_DIR"
+"$PYTHON_BIN" -m sphinx -b html "$SPHINX_SOURCE_DIR" "$SPHINX_BUILD_DIR"
 
 echo "==> Done. Open: $SPHINX_BUILD_DIR/index.html"
