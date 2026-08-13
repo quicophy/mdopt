@@ -43,7 +43,7 @@ For a curated overview of notebooks, see :doc:`examples`.
    :caption: API reference
 
    api_reference
-   modules
+   api/modules
 
 .. toctree::
    :maxdepth: 2

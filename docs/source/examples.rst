@@ -42,3 +42,9 @@ Examples
 - :doc:`notebooks/maxbonddim` — Tests an MPO order-optimisation strategy (based on matrix bandwidth minimisation) to reduce intermediate bond growth during operator application. Shows how reordering lowers contraction cost and improves practical performance within experiments.
 
 - :doc:`notebooks/gpu_example` — Illustrates how to leverage GPU acceleration (via CuPy) for MPS/MPO operations. Compares performance between CPU and GPU backends for key tensor network routines, demonstrating speedups on compatible hardware.
+
+
+.. toctree::
+   :hidden:
+
+   examples_auto
