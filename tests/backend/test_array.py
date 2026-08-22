@@ -14,7 +14,9 @@ def _reload_backend(monkeypatch, backend_env, fake_cupy):
         monkeypatch.delitem(sys.modules, name, raising=False)
     monkeypatch.delitem(sys.modules, "cupy", raising=False)
 
-    if fake_cupy is not None:
+    if fake_cupy is None:
+        monkeypatch.setitem(sys.modules, "cupy", None)
+    else:
         monkeypatch.setitem(sys.modules, "cupy", fake_cupy)
     if backend_env is None:
         monkeypatch.delenv("MDOPT_BACKEND", raising=False)
