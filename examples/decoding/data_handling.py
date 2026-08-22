@@ -178,6 +178,8 @@ def process_failure_statistics_csp(
     error_model: str,
     directory: str,
     precision: int = 5,
+    equalize: bool = False,
+    max_experiments_per_code: int = None,
 ):
     """
     Processing of failure statistics: exactly the same as
@@ -196,6 +198,16 @@ def process_failure_statistics_csp(
         Path to the directory containing data files.
     precision : int, optional
         Precision to round the error rates to. Default is 5.
+    equalize : bool, optional
+        If True, truncate each code's failure list to the minimum total
+        experiment count across all codes for each error rate, so every code
+        contributes the same number of experiments before averaging.
+        Default is False.
+    max_experiments_per_code : int, optional
+        Hard cap on the number of experiments used per code per error rate.
+        Applied after ``equalize`` (i.e. the effective cap is
+        ``min(equalized_min, max_experiments_per_code)`` when both are set).
+        Default is None (no cap).
 
     Returns
     -------
@@ -220,6 +232,8 @@ def process_failure_statistics_csp(
     logicals_distributions_dict = {}
     failures_statistics_dict = {}
 
+    num_codes_dict = {}
+
     for lattice_size in lattice_sizes:
         for chi_max in max_bond_dims:
             # match files including batch and codeid
@@ -237,6 +251,7 @@ def process_failure_statistics_csp(
             # per‐file grouping of failures
             per_file_failures = {}  # error_rate -> {(batch,codeid): [failures]}
             all_logicals_distributions = {}  # error_rate -> [logicals...]
+            all_codeids = set()  # union of (batch, codeid) across all error rates
             error_rates = set()
 
             for fname in os.listdir(directory):
@@ -262,8 +277,12 @@ def process_failure_statistics_csp(
                     (batch, codeid), []
                 ).extend(failures)
 
+                all_codeids.add((batch, codeid))
                 error_rates.add(erate)
                 all_unique_error_rates.add(erate)
+
+            # record number of unique codes for this (L, χ)
+            num_codes_dict[(lattice_size, chi_max)] = len(all_codeids)
 
             # record sorted error‐rates for this (L, χ)
             sorted_errs = sorted(error_rates)
@@ -279,9 +298,18 @@ def process_failure_statistics_csp(
                     )
                     continue
 
-                # one mean per file:
+                # determine per-code experiment cap
+                cap = max_experiments_per_code
+                if equalize:
+                    min_count = min(len(v) for v in file_dict.values())
+                    cap = min_count if cap is None else min(cap, min_count)
+
+                # one mean per code (optionally capped):
                 file_means = np.array(
-                    [np.nanmean(flist) for flist in file_dict.values()]
+                    [
+                        np.nanmean(flist[:cap] if cap is not None else flist)
+                        for flist in file_dict.values()
+                    ]
                 )
 
                 failure_rates[(lattice_size, chi_max, er)] = np.nanmean(file_means)
@@ -301,7 +329,80 @@ def process_failure_statistics_csp(
         sorted(all_unique_error_rates),
         logicals_distributions_dict,
         failures_statistics_dict,
+        num_codes_dict,
     )
+
+
+def process_bp_statistics(
+    bp_results: dict,
+    lattice_sizes: list[int] | None = None,
+):
+    """
+    Extract two-level averaged failure rates and SEMs from a BP-OSD results
+    dict (v3 format produced by quantum_csp_bp.py).
+
+    Handles per-p sample counts (v3: n_samples_per_p) so that p=1e-4 uses
+    more samples than the other error rates for a fair comparison with TN data.
+
+    Parameters
+    ----------
+    bp_results : dict
+        The dict returned by ``quantum_csp_bp.run_or_load()``.
+    lattice_sizes : list of int, optional
+        Subset of lattice sizes to process.  Defaults to all sizes in the
+        results dict.
+
+    Returns
+    -------
+    ps : list of float
+    failure_rates : dict  — (lattice_size, error_rate) -> mean LER
+    error_bars : dict     — (lattice_size, error_rate) -> SEM over code means
+    num_codes_dict : dict — lattice_size -> number of codes
+    """
+    from scipy.stats import sem as scipy_sem
+
+    ps = list(bp_results.get("ps", []))
+
+    base = bp_results.get("base_samples", bp_results.get("n_samples", 50_000))
+    reps_low_p = bp_results.get("reps_low_p", {})  # N -> reps at p=1e-4 (v3)
+    reps_per_np = bp_results.get("reps_per_np", {})  # (N, p) -> total reps (v4+)
+
+    if lattice_sizes is None:
+        lattice_sizes = [k for k in bp_results if isinstance(k, int)]
+
+    failure_rates = {}
+    error_bars = {}
+    num_codes_dict = {}
+
+    for N in lattice_sizes:
+        code_dict = bp_results.get(N, {})
+        if not code_dict:
+            num_codes_dict[N] = 0
+            continue
+
+        reps = reps_low_p.get(N, 1)
+        # v4: per-(N, p) reps override the v3 defaults if present.
+        n_samp = np.array(
+            [reps_per_np.get((N, p), reps if p == 0.0001 else 1) * base for p in ps],
+            dtype=float,
+        )
+
+        # shape (n_codes, len(ps)) — LER per code per error rate
+        ler_mat = np.array(
+            [np.array(arr, dtype=float) / n_samp for arr in code_dict.values()],
+            dtype=float,
+        )
+        n_codes = len(ler_mat)
+        num_codes_dict[N] = n_codes
+
+        for i, p in enumerate(ps):
+            code_means = ler_mat[:, i]
+            failure_rates[(N, p)] = float(np.nanmean(code_means))
+            error_bars[(N, p)] = float(
+                scipy_sem(code_means, nan_policy="omit") if n_codes > 1 else 0.0
+            )
+
+    return ps, failure_rates, error_bars, num_codes_dict
 
 
 def check_error_consistency(
@@ -389,6 +490,8 @@ def plot_failure_statistics(
     xscale: str = "linear",
     yscale: str = "linear",
     bb: bool = False,
+    save_path: str = None,
+    num_codes_dict: dict = None,
 ):
     """
     Plot failure rates with error bars for either varying bond dimensions at all lattice sizes,
@@ -420,6 +523,8 @@ def plot_failure_statistics(
     bb : bool, optional
         If True, displays the BB code parameters based on "lattice_size".
         Ref: https://arxiv.org/pdf/2308.07915
+    save_path : str, optional
+        File path to save the figure (e.g. "plot.pdf"). If None, the figure is not saved.
 
     Returns
     -------
@@ -429,7 +534,20 @@ def plot_failure_statistics(
     if mode not in ["lattice_size", "bond_dim"]:
         raise ValueError("Mode must be either 'lattice_size' or 'bond_dim'.")
 
-    # Setup colormap
+    import matplotlib as mpl
+
+    mpl.rcParams.update(
+        {
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.labelsize": 9,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+        }
+    )
+
     cmap = matplotlib.colormaps["viridis_r"]
 
     bb_code_params = {
@@ -442,7 +560,7 @@ def plot_failure_statistics(
     # Mode 1: Fixed lattice size, vary bond dimensions
     if mode == "lattice_size":
         for lattice_size in lattice_sizes:
-            plt.figure(figsize=(6, 4))
+            fig, ax = plt.subplots(figsize=(3.5, 3.0), constrained_layout=True)
             norm = Normalize(vmin=0, vmax=len(max_bond_dims) - 1)
 
             for index, chi_max in enumerate(max_bond_dims):
@@ -454,43 +572,39 @@ def plot_failure_statistics(
                     continue
 
                 error_rates = error_rates_dict[key]
-                plt.errorbar(
+                ax.errorbar(
                     error_rates,
-                    [
-                        failure_rates[lattice_size, chi_max, error_rate]
-                        for error_rate in error_rates
-                    ],
-                    yerr=[
-                        error_bars[lattice_size, chi_max, error_rate]
-                        for error_rate in error_rates
-                    ],
+                    [failure_rates[lattice_size, chi_max, er] for er in error_rates],
+                    yerr=[error_bars[lattice_size, chi_max, er] for er in error_rates],
                     fmt="o--",
-                    label=f"Bond dim: {chi_max}",
-                    linewidth=3,
+                    label=rf"$\chi_{{\max}} = {chi_max}$",
+                    linewidth=1.5,
+                    markersize=4,
+                    capsize=2,
                     color=cmap(norm(index)),
                 )
 
-            plt.title(f"Failure Rate vs Error Rate (Lattice size = {lattice_size})")
-            plt.xlabel("Error Rate")
-            plt.ylabel("Failure Rate")
-            plt.legend(fontsize=7)
+            ax.set_xlabel(r"Physical error rate $p$")
+            ax.set_ylabel("Logical error rate")
+            ax.legend()
             if xlim:
-                plt.xlim(xlim)
+                ax.set_xlim(xlim)
             if ylim:
-                plt.ylim(ylim)
-            plt.xscale(xscale)
-            plt.yscale(yscale)
-            plt.grid(True, which="both", ls=":")
+                ax.set_ylim(ylim)
+            ax.set_xscale(xscale)
+            ax.set_yscale(yscale)
+            ax.grid(True, which="both", ls=":", linewidth=0.6)
+            if save_path:
+                fig.savefig(save_path, dpi=300, bbox_inches="tight")
             plt.show()
 
     # Mode 2: Fixed bond dimension, vary lattice sizes
     elif mode == "bond_dim":
         for chi_max in max_bond_dims:
-            plt.figure(
-                figsize=(6.5, 4)
-            )  # this is double-column, use 5x3 for single-column
+            fig, ax = plt.subplots(figsize=(3.5, 3.0), constrained_layout=True)
             norm = Normalize(vmin=0, vmax=len(lattice_sizes) - 1)
 
+            all_error_rates_plotted = []
             for index, lattice_size in enumerate(lattice_sizes):
                 key = (lattice_size, chi_max)
                 if key not in error_rates_dict:
@@ -500,45 +614,58 @@ def plot_failure_statistics(
                     continue
 
                 error_rates = error_rates_dict[key]
-                plt.errorbar(
+                all_error_rates_plotted.extend(error_rates)
+
+                if bb:
+                    label = bb_code_params.get(lattice_size, str(lattice_size))
+                else:
+                    n_codes = (
+                        num_codes_dict.get(key, "")
+                        if num_codes_dict is not None
+                        else ""
+                    )
+                    label = (
+                        rf"$N={lattice_size}$ (num\_codes$={n_codes}$)"
+                        if n_codes != ""
+                        else rf"$N={lattice_size}$"
+                    )
+
+                ax.errorbar(
                     error_rates,
-                    [
-                        failure_rates[lattice_size, chi_max, error_rate]
-                        for error_rate in error_rates
-                    ],
-                    yerr=[
-                        error_bars[lattice_size, chi_max, error_rate]
-                        for error_rate in error_rates
-                    ],
+                    [failure_rates[lattice_size, chi_max, er] for er in error_rates],
+                    yerr=[error_bars[lattice_size, chi_max, er] for er in error_rates],
                     fmt="o--",
-                    label=(
-                        f"Number of qubits: {lattice_size}"
-                        if not bb
-                        else f"{bb_code_params.get(lattice_size, '')}"
-                    ),
-                    linewidth=3,
+                    label=label,
+                    linewidth=1.5,
+                    markersize=4,
+                    capsize=2,
                     color=cmap(norm(index)),
                 )
-            plt.plot(
-                error_rates,
-                list(map(lambda x: x, error_rates)),
-                "--",
-                marker=None,
-                label="Pseudo-threshold equation",
-            )
-            plt.title(f"Failure Rate vs Error Rate (Bond dim = {chi_max})")
-            plt.xlabel("Error Rate")
-            plt.ylabel("Failure Rate")
-            plt.legend(fontsize="small")
+
+            if all_error_rates_plotted:
+                p_ref = np.array(sorted(set(all_error_rates_plotted)))
+                pt_y = p_ref
+                ax.plot(
+                    p_ref,
+                    pt_y,
+                    "--",
+                    marker=None,
+                    color="#1f77b4",
+                    linewidth=1.5,
+                    label="Pseudo-threshold equation",
+                )
+            ax.set_xlabel(r"Physical error rate $p$")
+            ax.set_ylabel("Logical error rate (avg over codes)")
+            ax.legend(fontsize=6)
             if xlim:
-                plt.xlim(xlim)
+                ax.set_xlim(xlim)
             if ylim:
-                plt.ylim(ylim)
-            plt.xscale(xscale)
-            plt.yscale(yscale)
-            plt.grid(True, which="both", ls=":")
-            plt.tight_layout()
-            plt.savefig("plot.pdf", dpi=300)
+                ax.set_ylim(ylim)
+            ax.set_xscale(xscale)
+            ax.set_yscale(yscale)
+            ax.grid(True, which="both", ls=":", linewidth=0.6)
+            if save_path:
+                fig.savefig(save_path, dpi=300, bbox_inches="tight")
             plt.show()
 
 
@@ -583,27 +710,39 @@ def plot_bond_dimension_scaling(
     latticesize_fit = np.linspace(0, 50, 2000)
     bondim_fit = poly(latticesize_fit)
 
-    plt.figure(figsize=(5, 3))  # this is single-column, use 6.5x4 for double-column
-    plt.plot(lattice_sizes, bond_dims, "o", label="Minimum bond dim")
-    plt.plot(
+    import matplotlib as mpl
+
+    mpl.rcParams.update(
+        {
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.labelsize": 9,
+            "legend.fontsize": 7,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+        }
+    )
+
+    fig, ax = plt.subplots(figsize=(3.5, 3.0), constrained_layout=True)
+    ax.plot(lattice_sizes, bond_dims, "o", markersize=5, label=r"Min.\ $\chi$")
+    ax.plot(
         latticesize_fit,
         bondim_fit,
         "--",
-        label=f"Fit: $\chi \\sim {coefs[2]:.3f}L^2 + {coefs[1]:.3f}L + {coefs[0]:.3f} $",
-        linewidth=3,
+        label=rf"${coefs[2]:.2f}L^2 + {coefs[1]:.2f}L + {coefs[0]:.2f}$",
+        linewidth=1.5,
+        color="tab:orange",
     )
-    plt.xlabel("Lattice size $L$")
-    plt.ylabel("Bond dimension $\chi$")
-    plt.title(f"Bond dimension scaling at $p = {target_error_rate}$")
-    plt.legend(fontsize=7)
-    plt.grid(True, which="both", ls=":")
-    plt.xlim(min(lattice_sizes) - 1, max(lattice_sizes) + 1)
-    plt.ylim(min(bond_dims) - 1, max(bond_dims) + 1)
-    ax = plt.gca()
+    ax.set_xlabel(r"Lattice size $L$")
+    ax.set_ylabel(r"Bond dimension $\chi$")
+    ax.legend()
+    ax.grid(True, which="both", ls=":", linewidth=0.6)
+    ax.set_xlim(min(lattice_sizes) - 0.5, max(lattice_sizes) + 0.5)
+    ax.set_ylim(max(0, min(bond_dims) - 2), max(bond_dims) + 2)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-    plt.tight_layout()
-    plt.savefig("surface_bond_dimension_scaling.pdf", dpi=300)
+    fig.savefig("surface_bond_dimension_scaling.pdf", dpi=300, bbox_inches="tight")
     plt.show()
 
 
