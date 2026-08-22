@@ -4,6 +4,7 @@ Array backend selection and helpers.
 
 import os
 import importlib
+import warnings
 
 # ----------------------------------------------------------------------
 # Backend selection: default to NumPy; allow CUPY if available.
@@ -11,13 +12,45 @@ import importlib
 _BACKEND_ENV = os.getenv("MDOPT_BACKEND", "numpy").lower()
 
 
+def _cuda_device_available(cupy) -> bool:
+    """
+    Whether CuPy can actually reach a CUDA device.
+
+    Importing CuPy succeeds on machines with no GPU or an outdated driver --
+    the failure only surfaces on the first device call. Probing here keeps
+    :data:`GPU` meaning "GPU usable" rather than "CuPy importable", so we fall
+    back to NumPy instead of raising from deep inside a contraction.
+    """
+    try:
+        return cupy.cuda.runtime.getDeviceCount() > 0
+    except Exception:  # pylint: disable=broad-except
+        # Any driver/runtime problem (e.g. cudaErrorInsufficientDriver) means
+        # there is no device we can use.
+        return False
+
+
 def _load_backend():
     if _BACKEND_ENV == "cupy":
         try:
-            return importlib.import_module("cupy")
+            cupy = importlib.import_module("cupy")
         except (ImportError, ModuleNotFoundError):
             # Graceful fallback on machines without CuPy (e.g., macOS)
-            pass
+            warnings.warn(
+                "MDOPT_BACKEND=cupy was requested but CuPy is not installed; "
+                "falling back to the NumPy backend.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+        else:
+            if _cuda_device_available(cupy):
+                return cupy
+            warnings.warn(
+                "MDOPT_BACKEND=cupy was requested and CuPy imported, but no "
+                "usable CUDA device was found; falling back to the NumPy "
+                "backend.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
     return importlib.import_module("numpy")
 
 
