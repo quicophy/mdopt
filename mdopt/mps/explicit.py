@@ -18,7 +18,7 @@ We index MPS tensors with ``i`` from ``0`` to ``L-1``,
 while the singular values matrices are indexed from the left of each tensor, i.e.,
 the singular values matrux with index ``i`` is to the left of site ``i``.
 Essentially, it corresponds to storing each ``Γ[i]`` and ``Λ[i]`` as shown in
-fig.4b in reference `[1]`_.
+Fig. 4b of the standard MPS diagram conventions.
 """
 
 from functools import reduce
