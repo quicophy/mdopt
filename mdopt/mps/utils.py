@@ -404,9 +404,10 @@ def create_simple_product_state(
     -----
     Produces a Matrix Product State consisting of tensors with bond dimenstions equal to 1.
     The tensors are defined as follows:
-        | :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
-        | :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
-        | :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
+
+    - :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`
+    - :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`
+    - :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`
 
     The returned state is normalised at the end.
     """
@@ -476,9 +477,10 @@ def create_custom_product_state(
     -----
     Produces a Matrix Product State consisting of tensors with bond dimensions equal to 1.
     The tensors are defined as follows:
-        | :math:`|0\rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`,
-        | :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`,
-        | :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`.
+
+    - :math:`|0\rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`
+    - :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`
+    - :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`
 
     The returned state is renormalised at the end.
     """

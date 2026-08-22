@@ -43,6 +43,40 @@ SWAP = np.fromfunction(
 ).astype(float, copy=False)
 
 
+def optimise_qubit_order(H: np.ndarray) -> np.ndarray:
+    """
+    Given a binary parity check matrix ``H`` of shape
+    ``(num_checks, num_qubits)``, returns a permutation ``perm`` that
+    minimises the bandwidth of ``H`` by reordering its columns (qubits).
+
+    ``perm[i]`` is the original qubit index placed at MPS position ``i``
+    after reordering.  The inverse ``inv_perm = np.argsort(perm)`` gives
+    the new MPS position of original qubit ``j``.
+
+    The algorithm builds the qubit interaction graph (nodes = qubits,
+    undirected edge ``(i, j)`` whenever qubits ``i`` and ``j`` appear
+    together in at least one check) and applies the Reverse
+    Cuthill-McKee (RCM) algorithm to find a low-bandwidth ordering.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        Binary parity check matrix of shape ``(num_checks, num_qubits)``.
+
+    Returns
+    -------
+    perm : np.ndarray
+        Permutation array of length ``num_qubits``.
+    """
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import reverse_cuthill_mckee
+
+    A = ((H.T @ H) > 0).astype(np.uint8)
+    np.fill_diagonal(A, 0)
+    perm = reverse_cuthill_mckee(csr_matrix(A), symmetric_mode=True)
+    return perm
+
+
 def parity(bitstring: str, indices: list[int]) -> int:
     """Returns the parity of the bits at the given indices in the bitstring."""
     return sum(int(bitstring[i]) for i in indices) % 2
