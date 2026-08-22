@@ -25,7 +25,11 @@ from qecstruct import (
 
 import sympy as sp
 from sympy.abc import x, y
-from qldpc.codes import BBCode
+
+try:
+    from qldpc.codes import BBCode
+except ModuleNotFoundError:
+    BBCode = None  # only needed for BB-code specific functions
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
@@ -34,7 +38,7 @@ from mdopt.mps.utils import (
     create_simple_product_state,
     create_custom_product_state,
 )
-from mdopt.optimiser.utils import apply_constraints
+from mdopt.optimiser.utils import apply_constraints, optimise_qubit_order
 from mdopt.utils.utils import split_two_site_tensor
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
@@ -509,7 +513,9 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     return stabilisers_x, stabilisers_z
 
 
-def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
+def css_code_checks(
+    code: CssCode, qubit_perm: Optional[np.ndarray] = None
+) -> Tuple[List[List[int]]]:
     """
     Given a quantum CSS code, returns a list of its checks, where each check
     is represented as a list of indices of the bits adjacent to it.
@@ -518,6 +524,12 @@ def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
     ----------
     code : qec.CssCode
         The CSS code object.
+    qubit_perm : np.ndarray, optional
+        Permutation array of length ``num_qubits`` such that ``qubit_perm[i]``
+        is the original qubit index placed at MPS position ``i``.
+        When provided, qubit indices in each check are remapped via the
+        inverse permutation so that the returned MPS site indices reflect
+        the new qubit ordering along the chain.
 
     Returns
     -------
@@ -542,21 +554,27 @@ def css_code_checks(code: CssCode) -> Tuple[List[List[int]]]:
         for col in cols:
             array_z[row, col] = 1
 
-    checks_x = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
-        for row in array_x
-    ]
-    checks_x = [list(check_x) for check_x in checks_x]
-    checks_z = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
-        for row in array_z
-    ]
-    checks_z = [list(check_z) for check_z in checks_z]
+    offset = code.num_x_logicals() + code.num_z_logicals()
+
+    if qubit_perm is not None:
+        inv_perm = np.argsort(qubit_perm)
+        checks_x = [
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+        ]
+        checks_z = [
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
+            for row in array_z
+        ]
+    else:
+        checks_x = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
+        checks_z = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
 
     return checks_x, checks_z
 
 
-def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
+def css_code_constraint_sites(
+    code: CssCode, qubit_perm: Optional[np.ndarray] = None
+) -> Tuple[List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -564,6 +582,8 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
     ----------
     code : qec.CssCode
         CSS code object.
+    qubit_perm : np.ndarray, optional
+        Qubit permutation; see :func:`css_code_checks`.
 
     Returns
     -------
@@ -571,7 +591,7 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
         List of MPS sites.
     """
 
-    checks_x, checks_z = css_code_checks(code)
+    checks_x, checks_z = css_code_checks(code, qubit_perm=qubit_perm)
 
     constraint_sites_x = []
     constraint_sites_z = []
@@ -605,7 +625,9 @@ def css_code_constraint_sites(code: CssCode) -> Tuple[List[List[List[int]]]]:
     return constraint_sites_x, constraint_sites_z
 
 
-def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
+def css_code_logicals(
+    code: CssCode, qubit_perm: Optional[np.ndarray] = None
+) -> Tuple[List[List[int]], List[List[int]]]:
     """
     Returns the list of MPS sites where the logical constraints should be applied.
 
@@ -613,6 +635,8 @@ def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
     ----------
     code : qec.CssCode
         The CSS code object.
+    qubit_perm : np.ndarray, optional
+        Qubit permutation; see :func:`css_code_checks`.
 
     Returns
     -------
@@ -633,22 +657,27 @@ def css_code_logicals(code: CssCode) -> Tuple[List[List[int]], List[List[int]]]:
         for col in cols:
             array_z[row, col] = 1
 
-    x_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals()
-        for row in array_x
-    ]
-    x_logicals = [list(x_logical) for x_logical in x_logicals]
-    z_logicals = [
-        2 * np.nonzero(row)[0] + code.num_x_logicals() + code.num_z_logicals() + 1
-        for row in array_z
-    ]
-    z_logicals = [list(z_logical) for z_logical in z_logicals]
+    offset = code.num_x_logicals() + code.num_z_logicals()
+
+    if qubit_perm is not None:
+        inv_perm = np.argsort(qubit_perm)
+        x_logicals = [
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+        ]
+        z_logicals = [
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
+            for row in array_z
+        ]
+    else:
+        x_logicals = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
+        z_logicals = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
 
     return x_logicals, z_logicals
 
 
 def css_code_logicals_sites(
     code: CssCode,
+    qubit_perm: Optional[np.ndarray] = None,
 ) -> Tuple[List[List[List[int]]], List[List[List[int]]]]:
     """
     Returns the list of MPS sites where the logical operators should be applied.
@@ -657,6 +686,8 @@ def css_code_logicals_sites(
     ----------
     code : qec.CssCode
         CSS code object.
+    qubit_perm : np.ndarray, optional
+        Qubit permutation; see :func:`css_code_checks`.
 
     Returns
     -------
@@ -664,7 +695,7 @@ def css_code_logicals_sites(
         List of MPS sites.
     """
 
-    sites_x, sites_z = css_code_logicals(code)
+    sites_x, sites_z = css_code_logicals(code, qubit_perm=qubit_perm)
 
     logical_sites_x = []
     logical_sites_z = []
@@ -1173,6 +1204,7 @@ def decode_css(
     multiply_by_stabiliser: bool = False,
     silent: bool = False,
     contraction_strategy: str = "Naive",
+    qubit_order_strategy: str = "Natural",
     optimiser: str = "Dephasing DMRG",
     tolerance: float = float(1e-12),
 ):
@@ -1207,6 +1239,12 @@ def decode_css(
         Whether to show the progress bars or not.
     contraction_strategy : str
         The contractor's strategy.
+    qubit_order_strategy : str
+        Strategy for ordering qubits along the MPS chain.
+        ``"Natural"`` keeps the original column order of the parity check matrix.
+        ``"Optimised"`` applies the Reverse Cuthill-McKee algorithm to the qubit
+        interaction graph to reduce the bandwidth of each MPO constraint string,
+        lowering the required bond dimension.
     optimiser : str
         The optimiser used to find the closest basis product state to a given MPDO.
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
@@ -1239,6 +1277,27 @@ def decode_css(
         stabilisers = stabilisers_x + stabilisers_z
         error = multiply_pauli_strings(error, np.random.choice(stabilisers))
 
+    # Compute qubit permutation that minimises MPO bandwidth.
+    if qubit_order_strategy == "Optimised":
+        pm_x = code.x_stabs_binary()
+        H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
+        for r, cols in enumerate(pm_x.rows()):
+            for c in cols:
+                H_x[r, c] = 1
+        pm_z = code.z_stabs_binary()
+        H_z = np.zeros((pm_z.num_rows(), pm_z.num_columns()), dtype=int)
+        for r, cols in enumerate(pm_z.rows()):
+            for c in cols:
+                H_z[r, c] = 1
+        qubit_perm = optimise_qubit_order(np.vstack([H_x, H_z]))
+        # Rearrange the error string so that MPS site i carries the Pauli
+        # of original qubit qubit_perm[i].
+        error = "".join(error[qubit_perm[i]] for i in range(len(error)))
+        if not silent:
+            logging.info("Applied optimised qubit ordering.")
+    else:
+        qubit_perm = None
+
     error = pauli_to_mps(error)
 
     num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
@@ -1260,8 +1319,8 @@ def decode_css(
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
-    constraint_sites = css_code_constraint_sites(code)
-    logicals_sites = css_code_logicals_sites(code)
+    constraint_sites = css_code_constraint_sites(code, qubit_perm=qubit_perm)
+    logicals_sites = css_code_logicals_sites(code, qubit_perm=qubit_perm)
     sites_to_bias = list(range(num_logicals, num_sites))
 
     if bias_type == "Bitflip":
@@ -1359,7 +1418,7 @@ def decode_css(
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= 12:
+    if num_logical_sites <= 30:
         logical_dense = abs(
             logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
         )
@@ -1379,7 +1438,7 @@ def decode_css(
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    if num_logical_sites > 12 or optimiser == "Dephasing DMRG":
+    if num_logical_sites > 30 or optimiser == "Dephasing DMRG":
         mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
         mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
         engine = DephasingDMRG(
@@ -1507,25 +1566,37 @@ def decode_custom(
         stabilizers, x_logicals + z_logicals
     )
     logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
-    sites_to_bias = list(range(num_logicals, num_sites))
 
-    if bias_type == "Bitflip":
-        if not silent:
-            logging.info("Applying bitflip bias.")
-        error_mps = apply_bitflip_bias(
-            mps=error_mps,
-            sites_to_bias=sites_to_bias,
-            prob_bias_list=bias_prob,
-        )
-    else:
-        if not silent:
-            logging.info("Applying depolarising bias.")
-        error_mps = apply_depolarising_bias(
-            mps=error_mps,
-            sites_to_bias=sites_to_bias,
-            prob_bias_list=bias_prob,
-            renormalise=renormalise,
-        )
+    # Exclude erased qubit sites from bias: erased qubits are initialised as
+    # |+>, which already represents complete ignorance, so biasing them would
+    # corrupt that state.  Each physical qubit q occupies MPS sites
+    # (num_logicals + 2q) and (num_logicals + 2q + 1).
+    num_qubits = len(stabilizers[0])
+    sites_to_bias = [
+        s
+        for q in range(num_qubits)
+        if q not in erased_qubits
+        for s in (num_logicals + 2 * q, num_logicals + 2 * q + 1)
+    ]
+
+    if sites_to_bias:
+        if bias_type == "Bitflip":
+            if not silent:
+                logging.info("Applying bitflip bias.")
+            error_mps = apply_bitflip_bias(
+                mps=error_mps,
+                sites_to_bias=sites_to_bias,
+                prob_bias_list=bias_prob,
+            )
+        else:
+            if not silent:
+                logging.info("Applying depolarising bias.")
+            error_mps = apply_depolarising_bias(
+                mps=error_mps,
+                sites_to_bias=sites_to_bias,
+                prob_bias_list=bias_prob,
+                renormalise=renormalise,
+            )
 
     if not silent:
         logging.info("Applying X logicals' constraints.")
@@ -1566,19 +1637,12 @@ def decode_custom(
         strategy=contraction_strategy,
     )
 
-    if erased_qubits:
-        if not silent:
-            logging.info("Tracing out the erased qubits.")
-        error_mps = error_mps.marginal(
-            sites_to_marginalise=erased_qubits,
-            renormalise=renormalise,
-        )
-
     if not silent:
         logging.info("Marginalising the error MPS.")
-    sites_to_marginalise = list(
-        range(num_logicals, len(error) + num_logicals - len(erased_qubits))
-    )
+    # Marginalise ALL physical qubit sites in one pass.  Erased qubits are
+    # already in |+> and are naturally included here — no separate
+    # intermediate marginalization is needed.
+    sites_to_marginalise = list(range(num_logicals, num_sites))
     logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
     ).reverse()
