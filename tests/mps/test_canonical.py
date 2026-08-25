@@ -878,7 +878,10 @@ def test_marginal_does_not_produce_nans_when_the_centre_underflows():
     the decoder as unusable shots.
     """
     mps = create_simple_product_state(12, which="0", form="Right-canonical")
-    mps.tensors[0] = mps.tensors[0] * 0.0
+    # It has to be the LAST tensor: marginal() sets the orthogonality centre to
+    # the final site and renormalises by *that* tensor's norm, so zeroing any
+    # earlier one leaves the guard untouched and the test vacuous.
+    mps.tensors[-1] = mps.tensors[-1] * 0.0
 
     marginalised = mps.marginal(sites_to_marginalise=list(range(10)), renormalise=True)
 
