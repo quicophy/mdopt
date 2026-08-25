@@ -25,7 +25,10 @@ cat > submit-job.sh << 'EOS'
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-python mdopt/examples/random_circuit/mps-rand-circ.py
+# Resolve the script inside the installed package rather than by a
+# checkout-relative path, so the batch job does not depend on its working
+# directory. The file name has a hyphen, so it cannot be run with -m.
+python "$(python -c 'import pathlib, mdopt.examples.random_circuit as m; print(pathlib.Path(m.__file__).parent / "mps-rand-circ.py")')"
 EOS
 
 # Submit the job
