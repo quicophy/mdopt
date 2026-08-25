@@ -89,14 +89,12 @@ mpl.rcParams.update(
     }
 )
 
-previous_cwd = os.getcwd()
-try:
-    os.chdir(_FIGDIR)
-    plot_bond_dimension_scaling(
-        failure_rates=failure_rates2,
-        target_error_rate=0.06,
-        threshold=0.06,
-    )
-finally:
-    os.chdir(previous_cwd)
+# The figure lands in the assets figures/ directory because
+# plot_bond_dimension_scaling defaults its save_path there; the chdir dance this
+# replaced relied on _FIGDIR, which the paths helper made redundant.
+plot_bond_dimension_scaling(
+    failure_rates=failure_rates2,
+    target_error_rate=0.06,
+    threshold=0.06,
+)
 print("Saved surface-bdim-scaling.pdf")
