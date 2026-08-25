@@ -47,6 +47,7 @@ sys.path.append(examples_path_beluga)
 
 try:
     from examples.decoding.decoding import (
+        str_to_bool,
         decode_css,
         css_code_stabilisers,
         generate_pauli_error_string,
@@ -107,7 +108,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--silent",
-        type=bool,
+        type=str_to_bool,
         required=True,
         help="Whether to silence the output.",
     )

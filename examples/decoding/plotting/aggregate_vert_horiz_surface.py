@@ -238,16 +238,10 @@ def main():
                     s=18,
                     linewidths=0.9,
                 )
-    # Connect real-point lines per (chi, ordering) so the chi colour is readable.
-    for idx, c in enumerate(chis):
-        color = cmap(norm(idx))
-        for ordering, ls in [("Natural", "--"), ("Optimised", "--")]:
-            xs, ys = [], []
-            for p in ps:
-                v, _, is_ub = ler_or_ub(res[(c, p, ordering, "Naive")])
-                xs.append(p)
-                ys.append(v)
-            ax_ler.plot(xs, ys, ls=ls, color=color, linewidth=1.0, alpha=0.7)
+    # No second connecting pass: the errorbar calls above already join the real
+    # points in the intended colour and style. Redrawing here dashed every
+    # ordering, hiding the solid Natural curve, and joined the Wilson upper
+    # bounds as though they were measured values.
 
     ax_ler.set_xscale("log")
     ax_ler.set_yscale("log")
@@ -257,7 +251,7 @@ def main():
     ax_ler.grid(True, ls=":", linewidth=0.6)
     ler_handles = [
         plt.Line2D(
-            [], [], color="k", ls="--", marker="o", markersize=4, label="Natural"
+            [], [], color="k", ls="-", marker="o", markersize=4, label="Natural"
         ),
         plt.Line2D([], [], color="k", ls="--", marker="s", markersize=4, label="RCM"),
         plt.Line2D(

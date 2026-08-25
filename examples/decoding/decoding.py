@@ -5,6 +5,7 @@ to generate and operate over both classical and quantum error correcting codes.
 Note, this is example code which isn't included into the library and thus provided as is.
 """
 
+import argparse
 import logging
 from functools import reduce
 from typing import cast, Union, Optional, List, Tuple
@@ -1145,6 +1146,24 @@ def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
         result.append(pauli_multiplication_table[(p1, p2)])
 
     return "".join(result)
+
+
+def str_to_bool(value: str) -> bool:
+    """Parse a command-line boolean.
+
+    ``argparse(type=bool)`` calls ``bool()`` on the raw string, so every
+    non-empty value -- including ``"false"`` -- comes back ``True``. Every
+    cluster script passes ``--silent false``, which therefore silenced the run
+    and suppressed exactly the diagnostics those runs were meant to surface.
+    """
+    if isinstance(value, bool):
+        return value
+    normalised = str(value).strip().lower()
+    if normalised in {"true", "t", "yes", "y", "1"}:
+        return True
+    if normalised in {"false", "f", "no", "n", "0", ""}:
+        return False
+    raise argparse.ArgumentTypeError(f"expected a boolean value, got {value!r}")
 
 
 def _score_tie(is_map_identity: bool, degeneracy: int, tie_policy: str) -> float:

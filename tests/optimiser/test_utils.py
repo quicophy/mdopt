@@ -394,7 +394,7 @@ def test_optimiser_utils_swap_tensor():
         assert np.isclose(overlap, 0.0)
 
 
-def test_optimiser_utils_apply_constraints():
+def test_optimiser_utils_apply_constraints(rng):
     """Test the application of XOR constraints to an MPS via MPS-MPO contraction."""
 
     for _ in range(100):
@@ -403,9 +403,7 @@ def test_optimiser_utils_apply_constraints():
         start_dense = start_mps.dense(flatten=True)
 
         constraint_size = 3
-        random_constraint = random_constraints(
-            num_sites, constraint_size, np.random.default_rng()
-        )
+        random_constraint = random_constraints(num_sites, constraint_size, rng)
         constraint_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
         constraint_sites = [
             random_constraint["xor_left_sites"],

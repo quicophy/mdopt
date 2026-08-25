@@ -22,3 +22,14 @@ def seed_global_rng(request):
     ``-x`` and ``pytest-xdist`` shuffling all stay reproducible).
     """
     np.random.seed(zlib.crc32(request.node.nodeid.encode()) & 0xFFFFFFFF)
+
+
+@pytest.fixture
+def rng(request):
+    """A seeded :class:`numpy.random.Generator` for tests that need one.
+
+    ``seed_global_rng`` above only seeds the legacy ``np.random`` singleton, so a
+    test that reaches for ``np.random.default_rng()`` still draws from fresh OS
+    entropy and stays unreproducible. Ask for this fixture instead.
+    """
+    return np.random.default_rng(zlib.crc32(request.node.nodeid.encode()) & 0xFFFFFFFF)

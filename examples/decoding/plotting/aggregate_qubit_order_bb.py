@@ -175,7 +175,8 @@ def main():
     fig, (ax_l, ax_r) = plt.subplots(1, 2, figsize=(7.0, 3.0), constrained_layout=True)
     cmap = colormaps["viridis_r"]
     norm = Normalize(vmin=0, vmax=len(CHI_LIST) - 1)
-    style = {"Natural": ("--", "o"), "Optimised": ("--", "s")}
+    # Natural solid, RCM dashed, as the module docstring above promises.
+    style = {"Natural": ("-", "o"), "Optimised": ("--", "s")}
 
     # Left panel: LER vs p, both orderings (overlap demonstrates LER preservation).
     for idx, chi in enumerate(CHI_LIST):
@@ -239,7 +240,7 @@ def main():
     ]
     ord_handles = [
         plt.Line2D(
-            [], [], color="k", ls="--", marker="o", markersize=4, label="Natural"
+            [], [], color="k", ls="-", marker="o", markersize=4, label="Natural"
         ),
         plt.Line2D([], [], color="k", ls="--", marker="s", markersize=4, label="RCM"),
     ]

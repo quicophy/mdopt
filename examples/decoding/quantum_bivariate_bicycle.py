@@ -46,6 +46,7 @@ sys.path.append(examples_path_narval)
 
 try:
     from examples.decoding.decoding import (
+        str_to_bool,
         decode_css,
         create_bb_code,
         generate_pauli_error_string,
@@ -114,7 +115,10 @@ def parse_arguments():
         help="The number of processes to use in parallel.",
     )
     parser.add_argument(
-        "--silent", type=bool, required=True, help="Whether to silence the output."
+        "--silent",
+        type=str_to_bool,
+        required=True,
+        help="Whether to silence the output.",
     )
     parser.add_argument(
         "--tolerance",

@@ -8,6 +8,7 @@ all-ones trace vector, so a logical class carries the *sum of amplitudes* -- its
 weight is that sum squared, not the sum of the squares.
 """
 
+import argparse
 import itertools
 import logging
 import sys
@@ -21,6 +22,7 @@ from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
 
 from examples.decoding.decoding import (
+    str_to_bool,
     css_code_stabilisers,
     decode_css,
     decode_custom,
@@ -1000,3 +1002,35 @@ def test_tie_tolerance_is_scale_invariant(caplog):
     assert degeneracy_at(1.0) == 1
     # Same distribution, only rescaled: the verdict must not move.
     assert degeneracy_at(1e-250) == 1
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("0", False),
+        ("", False),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+        ("1", True),
+    ],
+)
+def test_str_to_bool_parses_command_line_booleans(text, expected):
+    """``argparse(type=bool)`` maps every non-empty string to True.
+
+    Every cluster script passes ``--silent false``, which under the old
+    declaration silenced the run and suppressed the decoder diagnostics those
+    runs exist to surface -- a collapsed posterior, a negative logical
+    amplitude, a DMRG sweep below its own bound.
+    """
+    assert str_to_bool(text) is expected
+
+
+def test_str_to_bool_rejects_nonsense():
+    """A typo must fail the job rather than pick a silent default."""
+    with pytest.raises(argparse.ArgumentTypeError):
+        str_to_bool("maybe")
