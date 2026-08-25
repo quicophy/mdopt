@@ -218,9 +218,11 @@ def run_single_experiment(
     silent,
     tolerance,
     cut,
+    seed=None,
 ):
     """Run a single experiment (with a few random stabiliser gauges)."""
     csp_code = get_csp_code(num_qubits, batch, code_id)
+    rng = np.random.default_rng(seed)
 
     had_valid_attempt = False
     last_distribution = np.nan
@@ -239,6 +241,7 @@ def run_single_experiment(
             contraction_strategy="Optimised",
             tolerance=tolerance,
             cut=cut,
+            rng=rng,
         )
 
     # 1) First try: original error (no stabiliser)
