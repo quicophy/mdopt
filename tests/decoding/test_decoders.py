@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import qecstruct as qec
 
+from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
 
 from examples.decoding.decoding import (
@@ -847,3 +848,38 @@ def test_trivial_error_is_decoded_to_the_identity_class(name):
             posterior = exact_posterior(code, zero_error, bias, prob)
             assert int(np.argmax(posterior)) == 0
             assert posterior[0] > posterior[1:].max()
+
+
+def test_a_collapsed_posterior_is_not_scored_as_a_success(monkeypatch):
+    """Numerical collapse must not read as a correctly decoded shot.
+
+    Every entry of an all-zero posterior is within ``eps`` of the maximum, so the
+    identity class is trivially "among the maximisers" and the shot would score a
+    success under the default tie policy. With ``silent=True`` the warning is
+    suppressed as well, so the collapse would silently bias the measured failure
+    rate downward -- the direction that makes a decoder look better than it is.
+    """
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+
+    # Force the readout to see a collapsed vector without having to find a
+    # chi_max small enough to underflow a real instance.
+    real_dense = CanonicalMPS.dense
+
+    def collapsed_dense(self, *args, **kwargs):
+        return np.zeros_like(np.asarray(real_dense(self, *args, **kwargs)))
+
+    monkeypatch.setattr(CanonicalMPS, "dense", collapsed_dense)
+
+    posterior, success = decode_css(
+        code,
+        error,
+        chi_max=64,
+        bias_type="Depolarising",
+        bias_prob=0.1,
+        renormalise=True,
+        silent=True,
+    )
+
+    assert float(success) == 0.0
+    assert np.allclose(np.asarray(posterior, dtype=float), 0.0)

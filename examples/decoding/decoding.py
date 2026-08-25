@@ -1736,17 +1736,21 @@ def decode_css(
         most_negative = float(np.min(np.real(np.asarray(logical_signed))))
         peak = float(np.max(logical_dense))
 
-        # A collapsed posterior carries no information, yet the identity is
-        # trivially "among the maximisers" of an all-zero vector, so the shot
-        # would be scored a success. Truncation is what destroys it -- at low
-        # chi_max a whole site tensor can be driven to zero -- and a silent
-        # false success is the worst way for that to surface.
-        if peak <= 1e-300 and not silent:
-            logging.warning(
-                "The logical posterior collapsed to zero at chi_max=%d; this "
-                "shot carries no information and its verdict is meaningless.",
-                chi_max,
-            )
+        # A collapsed posterior carries no information. Truncation is what
+        # destroys it: at low chi_max a whole site tensor can be driven to zero.
+        if peak <= 1e-300:
+            # Scoring must stop here. Every entry of an all-zero vector is within
+            # eps of the maximum, so the identity would be "among the maximisers"
+            # and the shot would score a success -- turning numerical collapse
+            # into a correctly decoded shot and biasing the failure rate
+            # downward, invisibly when silent=True. Report the failure instead.
+            if not silent:
+                logging.warning(
+                    "The logical posterior collapsed to zero at chi_max=%d; this "
+                    "shot carries no information and is scored as a failure.",
+                    chi_max,
+                )
+            return logical_dense, 0.0
         if most_negative < -1e-12 * max(peak, 1.0) and not silent:
             logging.warning(
                 "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
@@ -2085,17 +2089,21 @@ def decode_custom(
         most_negative = float(np.min(np.real(np.asarray(logical_signed))))
         peak = float(np.max(logical_dense))
 
-        # A collapsed posterior carries no information, yet the identity is
-        # trivially "among the maximisers" of an all-zero vector, so the shot
-        # would be scored a success. Truncation is what destroys it -- at low
-        # chi_max a whole site tensor can be driven to zero -- and a silent
-        # false success is the worst way for that to surface.
-        if peak <= 1e-300 and not silent:
-            logging.warning(
-                "The logical posterior collapsed to zero at chi_max=%d; this "
-                "shot carries no information and its verdict is meaningless.",
-                chi_max,
-            )
+        # A collapsed posterior carries no information. Truncation is what
+        # destroys it: at low chi_max a whole site tensor can be driven to zero.
+        if peak <= 1e-300:
+            # Scoring must stop here. Every entry of an all-zero vector is within
+            # eps of the maximum, so the identity would be "among the maximisers"
+            # and the shot would score a success -- turning numerical collapse
+            # into a correctly decoded shot and biasing the failure rate
+            # downward, invisibly when silent=True. Report the failure instead.
+            if not silent:
+                logging.warning(
+                    "The logical posterior collapsed to zero at chi_max=%d; this "
+                    "shot carries no information and is scored as a failure.",
+                    chi_max,
+                )
+            return logical_dense, 0.0
         if most_negative < -1e-12 * max(peak, 1.0) and not silent:
             logging.warning(
                 "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
