@@ -392,7 +392,7 @@ def test_explicit_entanglement_entropy():
 
     entropy_list = np.array(mps_dimer.entanglement_entropy())
 
-    # Dimers span sites (0,1), (2,3), ... so the cut after site 1 falls INSIDE
+    # Dimers span sites (0,1), (2,3), ... so the cut after site 0 falls INSIDE
     # the first dimer: the sequence starts at log(2), not at 0.
     correct_entropy_list = np.array(
         [np.log(2), 0, np.log(2), 0, np.log(2), 0, np.log(2)]
