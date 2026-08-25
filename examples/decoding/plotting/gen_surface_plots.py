@@ -103,9 +103,14 @@ mpl.rcParams.update(
     }
 )
 
-plot_bond_dimension_scaling(
-    failure_rates=failure_rates2,
-    target_error_rate=0.06,
-    threshold=0.06,
-)
+previous_cwd = os.getcwd()
+try:
+    os.chdir(_FIGDIR)
+    plot_bond_dimension_scaling(
+        failure_rates=failure_rates2,
+        target_error_rate=0.06,
+        threshold=0.06,
+    )
+finally:
+    os.chdir(previous_cwd)
 print("Saved surface_bond_dimension_scaling.pdf")
