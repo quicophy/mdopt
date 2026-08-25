@@ -985,7 +985,12 @@ class CanonicalMPS:
             self.orth_centre = self.num_sites - 1
 
             if renormalise:
-                orth_centre_norm = np.linalg.norm(self.tensors[self.orth_centre])
-                self.tensors[self.orth_centre] /= orth_centre_norm
+                orth_centre_norm = float(np.linalg.norm(self.tensors[self.orth_centre]))
+                # Marginalising a long chain of small amplitudes can underflow
+                # the orthogonality centre to zero. Dividing then yields 0/0 and
+                # poisons the whole state with NaNs, so leave it alone -- the
+                # other renormalisation sites guard the same way.
+                if orth_centre_norm > 0:
+                    self.tensors[self.orth_centre] /= orth_centre_norm
 
         return self

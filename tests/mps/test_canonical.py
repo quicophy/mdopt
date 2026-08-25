@@ -280,7 +280,11 @@ def test_canonical_entanglement_entropy():
 
     entropy_list = np.array(mps_dimer.entanglement_entropy(tolerance=1e-1))
 
-    correct_entropy_list = np.array([0, np.log(2), 0, np.log(2), 0, np.log(2), 0])
+    # Dimers span sites (0,1), (2,3), ... so the cut after site 1 falls INSIDE
+    # the first dimer: the sequence starts at log(2), not at 0.
+    correct_entropy_list = np.array(
+        [np.log(2), 0, np.log(2), 0, np.log(2), 0, np.log(2)]
+    )
 
     zeros = entropy_list - correct_entropy_list
 
@@ -863,3 +867,19 @@ def test_canonical_marginal():
 
     assert mps.tensors[1].shape == expected_tensor_1.shape
     assert np.allclose(mps.tensors[1], expected_tensor_1)
+
+
+def test_marginal_does_not_produce_nans_when_the_centre_underflows():
+    """Marginalising a chain whose amplitudes have underflowed must stay finite.
+
+    Long chains of very small amplitudes (low physical error rates, hundreds of
+    sites) can drive the orthogonality centre to exactly zero. Renormalising by
+    that norm gives 0/0 and silently fills the state with NaNs, which then reach
+    the decoder as unusable shots.
+    """
+    mps = create_simple_product_state(12, which="0", form="Right-canonical")
+    mps.tensors[0] = mps.tensors[0] * 0.0
+
+    marginalised = mps.marginal(sites_to_marginalise=list(range(10)), renormalise=True)
+
+    assert np.all(np.isfinite(marginalised.dense(flatten=True)))

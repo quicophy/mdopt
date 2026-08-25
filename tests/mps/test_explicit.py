@@ -392,7 +392,11 @@ def test_explicit_entanglement_entropy():
 
     entropy_list = np.array(mps_dimer.entanglement_entropy())
 
-    correct_entropy_list = np.array([0, np.log(2), 0, np.log(2), 0, np.log(2), 0])
+    # Dimers span sites (0,1), (2,3), ... so the cut after site 1 falls INSIDE
+    # the first dimer: the sequence starts at log(2), not at 0.
+    correct_entropy_list = np.array(
+        [np.log(2), 0, np.log(2), 0, np.log(2), 0, np.log(2)]
+    )
 
     zeros = entropy_list - correct_entropy_list
 
@@ -688,3 +692,65 @@ def test_explicit_compress():
         for truncation_error in truncation_errors:
             assert truncation_error >= 0
         assert np.sum(truncation_errors) <= mps.num_singval_mat
+
+
+def test_explicit_compress_bond_accepts_a_list_spectrum():
+    """The stored spectra are lists from some constructors and arrays from others.
+
+    ``mps_from_dense`` yields arrays, which is why the existing tests pass, but
+    ``create_simple_product_state`` yields lists and comparing one against the
+    truncation cut raises. Coercing the type here keeps both constructors usable.
+    """
+    mps = create_simple_product_state(4, which="+", form="Explicit")
+    assert isinstance(
+        mps.singular_values[1], list
+    ), "constructor no longer yields lists"
+
+    compressed, truncation_error = mps.compress_bond(
+        bond=1, chi_max=8, cut=1e-16, renormalise=True, return_truncation_error=True
+    )
+
+    assert np.isfinite(float(truncation_error))
+    assert np.all(np.isfinite(np.asarray(compressed.singular_values[2], dtype=float)))
+
+
+def test_explicit_compress_bond_survives_a_zero_spectrum():
+    """An underflowed spectrum must not renormalise to NaN."""
+    mps = create_simple_product_state(4, which="+", form="Explicit")
+    mps.singular_values[2] = np.zeros(
+        len(np.atleast_1d(np.asarray(mps.singular_values[2], dtype=float)))
+    )
+
+    compressed, _ = mps.compress_bond(
+        bond=1, chi_max=8, cut=1e-16, renormalise=True, return_truncation_error=True
+    )
+
+    spectrum = np.asarray(compressed.singular_values[2], dtype=float)
+    assert np.all(np.isfinite(spectrum))
+
+
+def test_entanglement_entropy_matches_dense_schmidt_decomposition():
+    """Entropies must match an independent dense reference at every bond.
+
+    ``singular_values[i]`` sits left of ``tensors[i]``, so indices 0 and
+    ``num_sites`` are trivial boundary bonds. Indexing the entropy loop from 0
+    reports the trivial left bond and silently drops the last real one, which
+    shifts the whole array by one -- invisible for a state whose entropy
+    profile happens to be symmetric under that shift.
+    """
+    for num_sites in (3, 4, 5, 6):
+        psi = create_state_vector(num_sites, rng=np.random.default_rng(num_sites))
+        psi = psi / np.linalg.norm(psi)
+
+        expected = []
+        for cut in range(1, num_sites):
+            spectrum = np.linalg.svd(psi.reshape(2**cut, -1), compute_uv=False)
+            spectrum = spectrum[spectrum > 1e-14]
+            probs = spectrum**2 / np.sum(spectrum**2)
+            expected.append(-np.sum(probs * np.log(probs)))
+
+        mps = mps_from_dense(psi, form="Explicit")
+        assert np.allclose(mps.entanglement_entropy(), expected, atol=1e-8)
+        assert np.allclose(
+            mps.right_canonical().entanglement_entropy(), expected, atol=1e-8
+        )

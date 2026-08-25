@@ -250,3 +250,60 @@ def test_mps_utils_create_custom_product_state():
     assert mps_2.orth_centre is None
     with pytest.raises(ValueError):
         create_custom_product_state("0011++", form="Mixed-canonical")
+
+
+def test_create_state_vector_rng_is_honoured():
+    """A passed generator must control the draw and be reproducible."""
+    first = create_state_vector(4, rng=np.random.default_rng(2024))
+    second = create_state_vector(4, rng=np.random.default_rng(2024))
+    assert np.array_equal(first, second)
+
+    different = create_state_vector(4, rng=np.random.default_rng(2025))
+    assert not np.array_equal(first, different)
+
+    # An explicit generator must ignore the global stream entirely.
+    np.random.seed(0)
+    third = create_state_vector(4, rng=np.random.default_rng(2024))
+    assert np.array_equal(first, third)
+    assert np.isclose(np.linalg.norm(first), 1.0)
+
+
+def test_create_state_vector_global_seed_is_reproducible():
+    """Without a generator the legacy global stream is used, so seeding works."""
+    np.random.seed(99)
+    first = create_state_vector(4)
+    np.random.seed(99)
+    assert np.array_equal(first, create_state_vector(4))
+
+
+def test_mps_from_dense_honours_a_truncating_chi_max():
+    """``chi_max`` must actually be usable for truncation.
+
+    Every SVD in the construction ran with ``renormalise=False``, so a
+    truncating ``chi_max`` left each Schmidt spectrum with norm < 1 and
+    ``ExplicitMPS`` rejected it. The argument therefore only worked for values
+    large enough not to truncate, which is why no call site ever passed one.
+    """
+    num_sites = 5
+    psi = create_state_vector(num_sites, rng=np.random.default_rng(1))
+
+    overlaps = []
+    for chi_max in (1, 2, 4):
+        mps = mps_from_dense(psi, chi_max=chi_max, form="Explicit")
+        assert all(bond <= chi_max for bond in mps.bond_dimensions)
+        dense = mps.dense(flatten=True, renormalise=True)
+        overlaps.append(
+            abs(np.vdot(psi, dense)) / (np.linalg.norm(psi) * np.linalg.norm(dense))
+        )
+
+    # Accuracy must improve with chi and be exact once chi reaches the true rank.
+    assert overlaps[0] < overlaps[1] < overlaps[2]
+    assert np.isclose(overlaps[2], 1.0, atol=1e-10)
+
+    for form in ("Right-canonical", "Left-canonical"):
+        mps_canonical = mps_from_dense(psi, chi_max=2, form=form)
+        assert all(bond <= 2 for bond in mps_canonical.bond_dimensions)
+
+    # A non-normalised input vector must still be rejected as before.
+    with pytest.raises(ValueError):
+        mps_from_dense(psi * 3.0, form="Explicit")
