@@ -251,16 +251,16 @@ def inner_product(
     return np.complex128(product)
 
 
-def _renormalise_if_truncated(
+def _renormalise_after_truncation(
     singular_values: List[float], truncation_error: Optional[float]
 ) -> List[float]:
-    """Renormalises a Schmidt spectrum, but only when ``chi_max`` discarded weight.
+    """Renormalises a Schmidt spectrum after ``chi_max`` truncation.
 
     :class:`ExplicitMPS` requires a unit-norm spectrum at every bond. Truncation
-    leaves the retained spectrum short of that, so without this the documented
-    ``chi_max`` argument of :func:`mps_from_dense` raises for every value that
-    actually truncates. Spectra that were not truncated are returned untouched,
-    which keeps the existing rejection of non-normalised input vectors intact.
+    leaves the retained spectrum short of that, so we always renormalise when
+    truncation has occurred. The input state vector is validated for unit norm
+    before decomposition, so spectra that were not truncated already satisfy
+    the constraint.
     """
     if not truncation_error:
         return singular_values
@@ -325,6 +325,13 @@ def mps_from_dense(
             "(does not correspond to the product of local dimensions)."
         )
 
+    vec_norm = float(np.linalg.norm(state_vector))
+    if abs(vec_norm - 1) > tolerance:
+        raise ValueError(
+            "The input state vector must be normalised to 1, "
+            f"instead the norm is {vec_norm}."
+        )
+
     tensors: list[np.ndarray] = []
     singular_values: list[list] = []
 
@@ -334,7 +341,7 @@ def mps_from_dense(
     state_vector, singular_values_local, v_r, trunc_err = svd(
         state_vector, chi_max=chi_max, renormalise=False, return_truncation_error=True
     )
-    singular_values_local = _renormalise_if_truncated(singular_values_local, trunc_err)
+    singular_values_local = _renormalise_after_truncation(singular_values_local, trunc_err)
     tensors.append(np.expand_dims(v_r, -1))
     singular_values.append(singular_values_local)
 
@@ -351,7 +358,7 @@ def mps_from_dense(
             renormalise=False,
             return_truncation_error=True,
         )
-        singular_values_local = _renormalise_if_truncated(
+        singular_values_local = _renormalise_after_truncation(
             singular_values_local, trunc_err
         )
         v_r = v_r.reshape((-1, phys_dim, bond_dim))
