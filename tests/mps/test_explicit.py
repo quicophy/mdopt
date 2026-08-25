@@ -722,7 +722,7 @@ def test_explicit_compress_bond_survives_a_zero_spectrum():
     )
 
     compressed, _ = mps.compress_bond(
-        bond=1, chi_max=8, cut=1e-16, renormalise=True, return_truncation_error=True
+        bond=1, chi_max=8, cut=-1.0, renormalise=True, return_truncation_error=True
     )
 
     spectrum = np.asarray(compressed.singular_values[2], dtype=float)
