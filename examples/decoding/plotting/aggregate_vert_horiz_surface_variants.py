@@ -303,7 +303,7 @@ def main():
         sharey=True,
         constrained_layout=True,
     )
-    axes_flat = axes.flat if n_rows > 1 else list(axes)
+    axes_flat = np.atleast_1d(axes).ravel()
     for ax, c in zip(axes_flat, chis):
         for strat, lbl, color, marker in strats:
             means = np.array([paired_time(res, c, p, strat, rng)[0] for p in ps])
