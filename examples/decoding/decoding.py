@@ -1797,6 +1797,14 @@ def decode_css(
         raise NotImplementedError("Optima TT is not implemented yet.")
     if optimiser != "Dephasing DMRG":
         raise ValueError("Invalid optimiser chosen.")
+    if tie_policy != "optimistic":
+        raise NotImplementedError(
+            f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "
+            "path; the DMRG readout does not enumerate all tied classes and "
+            "therefore cannot implement 'fractional' or 'pessimistic' scoring. "
+            "Use tie_policy='optimistic' or reduce dense_readout_max_sites so "
+            "that the dense branch is taken instead."
+        )
 
     if not silent:
         logging.info("Reading out the logical class.")
@@ -2146,6 +2154,14 @@ def decode_custom(
         raise NotImplementedError("Optima TT is not implemented yet.")
     if optimiser != "Dephasing DMRG":
         raise ValueError("Invalid optimiser chosen.")
+    if tie_policy != "optimistic":
+        raise NotImplementedError(
+            f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "
+            "path; the DMRG readout does not enumerate all tied classes and "
+            "therefore cannot implement 'fractional' or 'pessimistic' scoring. "
+            "Use tie_policy='optimistic' or reduce dense_readout_max_sites so "
+            "that the dense branch is taken instead."
+        )
 
     if not silent:
         logging.info("Reading out the logical class.")
