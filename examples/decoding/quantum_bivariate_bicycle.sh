@@ -93,7 +93,7 @@ for seed in "${seeds[@]}"; do
                     for cut in "${cuts[@]}"; do
                         echo "Running ${num_experiments} experiments for orders ${order_x}, ${order_y}, polynomials "${poly_a}", "${poly_b}", bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
                         # Run the Python script with the specified arguments
-                        poetry run python examples/decoding/quantum_bivariate_bicycle.py --order_x ${order_x} --order_y ${order_y} --poly_a "${poly_a}" --poly_b "${poly_b}" --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+                        poetry run python -m mdopt.examples.decoding.quantum_bivariate_bicycle --order_x ${order_x} --order_y ${order_y} --poly_a "${poly_a}" --poly_b "${poly_b}" --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
                         (( current_iteration++ ))
                         show_progress "$current_iteration" "$total_iterations"
                     done

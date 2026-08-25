@@ -57,7 +57,7 @@ module load python/3.11.5
 source "$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified system size, bond dimension, and error rate
-python examples/decoding/classical_ldpc.py --system_size $system_size --bond_dim $bond_dim --error_rate $error_rate --num_experiments $num_experiments --seed $seed
+python -m mdopt.examples.decoding.classical_ldpc --system_size $system_size --bond_dim $bond_dim --error_rate $error_rate --num_experiments $num_experiments --seed $seed
 EOS
                 echo "Submitting the job for system size ${system_size}, bond dimension ${bond_dim}, error rate ${error_rate} and seed ${seed}."
                 sbatch "submit-job-${system_size}-${bond_dim}-${error_rate}-${seed}.sh"

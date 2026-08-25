@@ -36,7 +36,7 @@ repos:
     rev: v2.3.1
     hooks:
         - id: mypy
-          exclude: '(^examples|^docs)/.*'
+          exclude: '(^examples|^docs|^mdopt/examples)/.*'
 
   - repo: https://github.com/python-poetry/poetry
     rev: 2.4.1

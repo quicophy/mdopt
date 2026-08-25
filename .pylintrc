@@ -52,7 +52,10 @@ ignore=CVS
 # ignore-list. The regex matches against paths and can be in Posix or Windows
 # format. Because '\\' represents the directory delimiter on Windows systems,
 # it can't be used as an escape character.
-ignore-paths=
+# The examples moved under mdopt/ so they can be imported (issue #446), but
+# they are demonstration scripts, not library code, and were never linted to
+# library standards. Keep `pylint mdopt` scoped to the library.
+ignore-paths=^mdopt/examples/.*$
 
 # Files or directories matching the regular expression patterns are skipped.
 # The regex matches against base names, not paths. The default value ignores

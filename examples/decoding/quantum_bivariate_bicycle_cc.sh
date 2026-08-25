@@ -100,7 +100,7 @@ module load python/3.11.5
 source "\$HOME/envs/myenv/bin/activate"
 
 # Run the Python script with the specified arguments
-python examples/decoding/quantum_bivariate_bicycle.py --order_x ${order_x} --order_y ${order_y} --poly_a "${poly_a}" --poly_b "${poly_b}" --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+python -m mdopt.examples.decoding.quantum_bivariate_bicycle --order_x ${order_x} --order_y ${order_y} --poly_a "${poly_a}" --poly_b "${poly_b}" --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
 EOS
                         echo "Submitting the job for orders ${order_x}x${order_y}, bond dimension ${bond_dim}, error rate ${error_rate}, num_exp ${num_experiments}, error model ${error_model}, bias probability ${bias_prob} and seed ${seed}."
                         sbatch "$job_script"

@@ -27,7 +27,7 @@ Run this quick decoding example to verify your setup:
 
     import numpy as np
     import qecstruct as qec
-    from examples.decoding.decoding import decode_css
+    from mdopt.examples.decoding.decoding import decode_css
 
     # Define a small instance of the surface code
     LATTICE_SIZE = 3

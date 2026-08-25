@@ -1,8 +1,8 @@
 # Figures
 
-Every PDF here is a build artifact: it can be regenerated from a script in
-`../plotting/`. Nothing in this folder is hand-edited, so it is always safe to
-delete a figure and rebuild it.
+Each figure below maps to the script that regenerates it. **The scripts now live
+in the package** at `mdopt/examples/decoding/plotting/`; the data they read and
+the figures they write stay here, under the repo-level `examples/decoding/`.
 
 **The figures themselves are not tracked in git.** They are reproducible from the
 scripts below and would otherwise add several megabytes of binaries to the
@@ -10,21 +10,17 @@ repository, so `.gitignore` keeps this directory local and tracks only this
 manifest. The two hand-made decoder illustrations cannot be rebuilt and stay
 tracked one directory up, in `examples/decoding/`.
 
-All plotting scripts are **cwd-independent** — they anchor their paths on
-`__file__`, `chdir` to `examples/decoding/`, and write figures here via an
-absolute path. Run them from anywhere:
+The scripts are cwd-independent — they resolve these assets through
+`mdopt/examples/paths.py`. Run one from anywhere:
 
 ```bash
-poetry run python examples/decoding/plotting/<script>.py
+python -m mdopt.examples.decoding.plotting.gen_surface_plots
 ```
 
-## Rebuild cost
+Set `MDOPT_EXAMPLES_ASSETS` to point at these assets if they are not inside a
+checkout (see `mdopt/examples/paths.py`).
 
-- **FAST** — reads a cached `.pkl` or a `data-*/` directory and only draws.
-  Seconds to a few minutes.
-- **SIM** — reruns the decoder before plotting. Minutes to many hours.
-  Where a `.pkl` cache is listed, the script reuses it if present, so prefer
-  the FAST re-plot script when one exists.
+FAST = replots from a stored pickle. SIM = re-runs the simulation.
 
 | Figure | Script | Cost | Cache / input |
 |---|---|---|---|
