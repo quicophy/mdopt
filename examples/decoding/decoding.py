@@ -1828,12 +1828,17 @@ def decode_css(
     # have stopped short, in which case the identity can clear a bar the real
     # maximiser would not have -- a false success -- so say so rather than let
     # it pass silently.
-    if amplitude_found <= 1e-300 and not silent:
-        logging.warning(
-            "The logical posterior collapsed to zero at chi_max=%d; this shot "
-            "carries no information and its verdict is meaningless.",
-            chi_max,
-        )
+    if amplitude_found <= 1e-300:
+        # Same trap as the dense branch: with both amplitudes underflowed to
+        # zero, `amplitude_identity >= amplitude_found - eps` holds trivially and
+        # the shot would be scored a success. Report the failure instead.
+        if not silent:
+            logging.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this shot "
+                "carries no information and is scored as a failure.",
+                chi_max,
+            )
+        return engine, 0
 
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:
@@ -2172,12 +2177,17 @@ def decode_custom(
     # have stopped short, in which case the identity can clear a bar the real
     # maximiser would not have -- a false success -- so say so rather than let
     # it pass silently.
-    if amplitude_found <= 1e-300 and not silent:
-        logging.warning(
-            "The logical posterior collapsed to zero at chi_max=%d; this shot "
-            "carries no information and its verdict is meaningless.",
-            chi_max,
-        )
+    if amplitude_found <= 1e-300:
+        # Same trap as the dense branch: with both amplitudes underflowed to
+        # zero, `amplitude_identity >= amplitude_found - eps` holds trivially and
+        # the shot would be scored a success. Report the failure instead.
+        if not silent:
+            logging.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this shot "
+                "carries no information and is scored as a failure.",
+                chi_max,
+            )
+        return engine, 0
 
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:

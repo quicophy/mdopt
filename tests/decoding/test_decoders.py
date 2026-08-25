@@ -10,6 +10,7 @@ weight is that sum squared, not the sum of the squares.
 
 import itertools
 import logging
+import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -883,3 +884,44 @@ def test_a_collapsed_posterior_is_not_scored_as_a_success(monkeypatch):
 
     assert float(success) == 0.0
     assert np.allclose(np.asarray(posterior, dtype=float), 0.0)
+
+
+def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
+    """The DMRG readout has the same trap as the dense one.
+
+    There the verdict is ``amplitude_identity >= amplitude_found - eps``. When
+    both amplitudes underflow to zero that holds trivially, so the shot scores a
+    success exactly as it did in the dense branch. ``dense_readout_max_sites=0``
+    forces the DMRG path on a code small enough to test.
+    """
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+
+    # Resolve the decoder's own module rather than naming its import path, so
+    # this test does not care whether the examples live at `examples.decoding`
+    # or `mdopt.examples.decoding`.
+    decoding_module = sys.modules[decode_css.__module__]
+
+    real_readout = decoding_module._logical_readout
+
+    def collapsed_readout(*args, **kwargs):
+        engine, _amplitude, certified = real_readout(*args, **kwargs)
+        return engine, 0.0, certified
+
+    monkeypatch.setattr(decoding_module, "_logical_readout", collapsed_readout)
+    monkeypatch.setattr(
+        decoding_module, "inner_product", lambda *a, **k: np.complex128(0.0)
+    )
+
+    _posterior, success = decode_css(
+        code,
+        error,
+        chi_max=64,
+        bias_type="Depolarising",
+        bias_prob=0.1,
+        renormalise=True,
+        silent=True,
+        dense_readout_max_sites=0,
+    )
+
+    assert float(success) == 0.0
