@@ -10,6 +10,7 @@ weight is that sum squared, not the sum of the squares.
 
 import itertools
 import logging
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -630,24 +631,29 @@ def test_multiply_by_stabiliser_uses_the_supplied_generator():
 
     Reaching for ``np.random`` made this path depend on process-wide state, so a
     run that fell back to it could not be reproduced from its seed.
+
+    We verify this by wrapping the generator so we can record whether its
+    ``choice`` method was actually called during decoding.
     """
     code = qec.steane_code()
     error = "X" + "I" * (len(code) - 1)
 
-    def run(seed):
-        return decode_css(
-            code,
-            error,
-            chi_max=256,
-            bias_type="Depolarising",
-            bias_prob=0.1,
-            renormalise=True,
-            silent=True,
-            multiply_by_stabiliser=True,
-            rng=np.random.default_rng(seed),
-        )[0]
+    real_rng = np.random.default_rng(7)
+    mock_rng = MagicMock(wraps=real_rng)
 
-    assert np.allclose(np.asarray(run(7), float), np.asarray(run(7), float))
+    decode_css(
+        code,
+        error,
+        chi_max=256,
+        bias_type="Depolarising",
+        bias_prob=0.1,
+        renormalise=True,
+        silent=True,
+        multiply_by_stabiliser=True,
+        rng=mock_rng,
+    )
+
+    mock_rng.choice.assert_called_once()
 
 
 def test_posterior_is_invariant_under_multiplication_by_a_stabiliser():
