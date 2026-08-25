@@ -70,6 +70,8 @@ def load_all():
             continue
         with open(os.path.join(DATA_DIR, fn), "rb") as fh:
             d = pickle.load(fh)
+        if d.get("contraction_strategy", "Naive") != "Naive":
+            continue
         by_cell[(d["chi"], d["p"], d["ordering"])].append(d)
     return by_cell
 
