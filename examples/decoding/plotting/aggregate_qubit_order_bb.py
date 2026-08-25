@@ -109,9 +109,8 @@ def main():
     aggregated = aggregate(by_cell)
 
     expected = [(c, p, o) for c in CHI_LIST for p in P_LIST for o in ORDERINGS]
-    missing = [k for k in expected if k not in aggregated]
     if missing:
-        print(f"WARNING: {len(missing)} cells missing: {missing[:3]}…")
+        raise RuntimeError(f"{len(missing)} cells missing: {missing[:3]}…")
 
     # Speedup per (chi, p): pair Natural & RCM by seed → per-seed speedup → mean ± SEM.
     speedup = {}
