@@ -4,6 +4,12 @@ Every PDF here is a build artifact: it can be regenerated from a script in
 `../plotting/`. Nothing in this folder is hand-edited, so it is always safe to
 delete a figure and rebuild it.
 
+**The figures themselves are not tracked in git.** They are reproducible from the
+scripts below and would otherwise add several megabytes of binaries to the
+repository, so `.gitignore` keeps this directory local and tracks only this
+manifest. The two hand-made decoder illustrations cannot be rebuilt and stay
+tracked one directory up, in `examples/decoding/`.
+
 All plotting scripts are **cwd-independent** — they anchor their paths on
 `__file__`, `chdir` to `examples/decoding/`, and write figures here via an
 absolute path. Run them from anywhere:
@@ -52,7 +58,7 @@ poetry run python examples/decoding/plotting/<script>.py
 | `csp_chi_min.pdf` | **no known producer** — keep, cannot rebuild |
 | `failure_rate_surface_bond_dim.pdf` | **no known producer** — keep, cannot rebuild |
 | `failure_rate_surface_lattice_size.png` | **no known producer** (PDF version is rebuildable) |
-| `5-qubit-decoder.png`, `shor-decoder.png` | hand-made illustrations — keep, cannot rebuild |
+| `../5-qubit-decoder.png`, `../shor-decoder.png` | hand-made illustrations — cannot rebuild, tracked in git |
 
 ## Thesis figure names
 
