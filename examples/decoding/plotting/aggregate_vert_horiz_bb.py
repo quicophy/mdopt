@@ -130,11 +130,9 @@ def main():
         for o in ORDERINGS
         for v in VERTICALS
     ]
-    missing = [k for k in expected if k not in agg]
     if missing:
-        print(f"WARNING: {len(missing)} cells missing: {missing[:5]}…")
-    else:
-        print(f"All {len(expected)} cells of the 2x2 strategy grid present.")
+        raise RuntimeError(f"{len(missing)} cells missing: {missing[:5]}…")
+    print(f"All {len(expected)} cells of the 2x2 strategy grid present.")
 
     # Three ablation paths (baseline always = Naive vert + Natural horiz):
     BASELINE = ("Natural", "Naive")  # no opt
