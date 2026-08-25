@@ -3,12 +3,16 @@
 import os
 import re
 import pickle
+from typing import Optional
 import numpy as np
 import seaborn as sns
 
 import matplotlib
 import matplotlib.pyplot as plt
+
 from matplotlib.colors import Normalize
+
+from mdopt.examples.paths import figure
 from matplotlib.ticker import MaxNLocator
 
 from scipy.stats import sem
@@ -673,6 +677,7 @@ def plot_bond_dimension_scaling(
     failure_rates: dict,
     target_error_rate: float,
     threshold: float,
+    save_path: Optional[str] = None,
 ):
     """
     Plot the minimum bond dimension required to achieve a target error rate
@@ -742,7 +747,11 @@ def plot_bond_dimension_scaling(
     ax.set_ylim(max(0, min(bond_dims) - 2), max(bond_dims) + 2)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-    fig.savefig("surface-bdim-scaling.pdf", dpi=300, bbox_inches="tight")
+    # A bare relative name lands in whatever directory the caller happened to be
+    # in; route it to the assets figures/ directory like every other figure.
+    if save_path is None:
+        save_path = str(figure("surface-bdim-scaling.pdf"))
+    fig.savefig(save_path, dpi=300, bbox_inches="tight")
     plt.show()
 
 
