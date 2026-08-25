@@ -8,7 +8,7 @@ import numpy as np
 from threadpoolctl import threadpool_limits
 from scipy.sparse.linalg import eigsh
 
-from ising import IsingExact, IsingMPO
+from mdopt.examples.ising.ising import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
 from mdopt.optimiser.dmrg import DMRG as dmrg_optimiser
 
