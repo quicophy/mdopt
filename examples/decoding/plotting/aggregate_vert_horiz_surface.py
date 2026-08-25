@@ -78,10 +78,11 @@ def paired_speedup(res, chi, p, target, rng):
     assert tb.shape == tt.shape, f"shape mismatch at ({chi},{p}) {target}"
     n = tb.size
     point = 1.0 - tt.sum() / tb.sum()
-    idx = rng.integers(0, n, size=(N_BOOT, n))
-    sb = tb[idx].sum(axis=1)
-    st = tt[idx].sum(axis=1)
-    boot = 1.0 - st / sb
+    boot = np.empty(N_BOOT)
+    for start in range(0, N_BOOT, 256):
+        stop = min(start + 256, N_BOOT)
+        idx = rng.integers(0, n, size=(stop - start, n))
+        boot[start:stop] = 1.0 - tt[idx].sum(axis=1) / tb[idx].sum(axis=1)
     return 100.0 * point, 100.0 * boot.std(ddof=1)
 
 
