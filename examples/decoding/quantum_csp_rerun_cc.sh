@@ -82,7 +82,12 @@ ERROR_MODEL="Bitflip"
 BIAS_PROB=1e-3
 TOLERANCE=0
 CUT=0
-SILENT=true
+# false, matching every other cluster script. The decoder's diagnostics -- a
+# collapsed posterior, a negative logical amplitude (an exact run cannot produce
+# one, so it flags unconverged chi), a DMRG sweep that stopped below its own
+# upper bound -- are all gated on `not silent`. Suppressing them in a run whose
+# whole purpose is to explain an anomaly would throw away the evidence.
+SILENT=false
 WALLTIME="12:00:00"
 # Memory is set per mode from a measurement, not guessed. Peak RSS of ONE decode
 # at n = 90 on a light (weight-2) error:
@@ -128,8 +133,9 @@ esac
 
 # Read the code ids straight off disk rather than hardcoding them: a truncated
 # list would silently change the code-average the re-run is meant to match.
-CODE_DIR_ROOT="examples/decoding/data-csp-codes/batch_${BATCH}/codes"
-[ -d "$CODE_DIR_ROOT" ] || CODE_DIR_ROOT="data-csp-codes/batch_${BATCH}/codes"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+OUTDIR="${REPO_ROOT}/examples/decoding/data-quantum-csp-batch-${BATCH}"
+CODE_DIR_ROOT="${REPO_ROOT}/examples/decoding/data-csp-codes/batch_${BATCH}/codes"
 
 code_ids_for() {
     local dir="${CODE_DIR_ROOT}/qubits_${1}"
@@ -163,7 +169,16 @@ export OPENBLAS_NUM_THREADS=1
 module load python/3.11.5
 source "\$HOME/envs/myenv/bin/activate"
 
-python examples/decoding/quantum_csp.py \\
+# quantum_csp.py writes its pickle to a BARE filename, i.e. into the job's
+# working directory -- historically the submit directory, from where
+# cleanup_cc.sh swept the files up afterwards. Land them straight in the dataset
+# directory instead, keeping the repo importable via PYTHONPATH so that
+# python -m still resolves after the cd.
+export PYTHONPATH="${REPO_ROOT}:\${PYTHONPATH:-}"
+mkdir -p "${OUTDIR}"
+cd "${OUTDIR}"
+
+python -m mdopt.examples.decoding.quantum_csp \\
     --num_qubits ${num_qubits} --batch ${BATCH} --code_id ${code_id} \\
     --bond_dim ${bond_dim} --error_rate ${error_rate} \\
     --num_experiments ${NUM_EXPERIMENTS} --bias_prob ${BIAS_PROB} \\

@@ -558,19 +558,20 @@ def test_create_random_mpo_rng_is_honoured():
         second = create_random_mpo(
             3, [2, 2], 2, which=which, rng=np.random.default_rng(5)
         )
-        assert all(np.array_equal(a, b) for a, b in zip(first, second))
+        assert len(first) == 3, "empty result would satisfy the comparison below"
+        assert all(np.array_equal(a, b) for a, b in zip(first, second, strict=True))
 
         other = create_random_mpo(
             3, [2, 2], 2, which=which, rng=np.random.default_rng(6)
         )
-        assert not all(np.array_equal(a, b) for a, b in zip(first, other))
+        assert not all(np.array_equal(a, b) for a, b in zip(first, other, strict=True))
 
         # An explicit generator must ignore the global stream entirely.
         np.random.seed(0)
         again = create_random_mpo(
             3, [2, 2], 2, which=which, rng=np.random.default_rng(5)
         )
-        assert all(np.array_equal(a, b) for a, b in zip(first, again))
+        assert all(np.array_equal(a, b) for a, b in zip(first, again, strict=True))
 
 
 def test_create_random_mpo_global_seed_is_reproducible():
@@ -579,4 +580,5 @@ def test_create_random_mpo_global_seed_is_reproducible():
     first = create_random_mpo(3, [2, 2], 2)
     np.random.seed(77)
     second = create_random_mpo(3, [2, 2], 2)
-    assert all(np.array_equal(a, b) for a, b in zip(first, second))
+    assert len(first) == 3, "empty result would satisfy the comparison below"
+    assert all(np.array_equal(a, b) for a, b in zip(first, second, strict=True))
