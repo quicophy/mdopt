@@ -960,3 +960,43 @@ def test_gauge_seeds_are_independent_of_the_error_seeds():
         np.random.default_rng(gauge_children[0]).integers(0, 2**32, 4),
         np.random.default_rng(repeat[0]).integers(0, 2**32, 4),
     )
+
+
+def test_tie_tolerance_is_scale_invariant(caplog):
+    """A uniformly rescaled posterior must not change the degeneracy verdict.
+
+    The tie window is ``max(1e-9 * max_amp, 1e-12)``. Against a raw posterior
+    that has underflowed towards ``1e-250`` the absolute floor dominates, every
+    entry lands inside the window, and a sharply peaked distribution is reported
+    as fully degenerate -- which scores as a tie rather than a clean win, and
+    fires a spurious degeneracy warning. Normalising by the peak first makes the
+    comparison scale-free.
+    """
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+    real_dense = CanonicalMPS.dense
+
+    def degeneracy_at(scale):
+        def scaled(self, *args, **kwargs):
+            return np.asarray(real_dense(self, *args, **kwargs), dtype=float) * scale
+
+        with patch.object(CanonicalMPS, "dense", scaled):
+            caplog.clear()
+            with caplog.at_level(logging.WARNING):
+                decode_css(
+                    code,
+                    error,
+                    chi_max=64,
+                    bias_type="Depolarising",
+                    bias_prob=0.1,
+                    renormalise=True,
+                    silent=False,
+                )
+        reported = [
+            r.getMessage() for r in caplog.records if "degenerate" in r.getMessage()
+        ]
+        return int(reported[0].split("is ")[1].split("-fold")[0]) if reported else 1
+
+    assert degeneracy_at(1.0) == 1
+    # Same distribution, only rescaled: the verdict must not move.
+    assert degeneracy_at(1e-250) == 1
