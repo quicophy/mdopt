@@ -178,7 +178,7 @@ export PYTHONPATH="${REPO_ROOT}:\${PYTHONPATH:-}"
 mkdir -p "${OUTDIR}"
 cd "${OUTDIR}"
 
-python -m mdopt.examples.decoding.quantum_csp \\
+python -m examples.decoding.quantum_csp \
     --num_qubits ${num_qubits} --batch ${BATCH} --code_id ${code_id} \\
     --bond_dim ${bond_dim} --error_rate ${error_rate} \\
     --num_experiments ${NUM_EXPERIMENTS} --bias_prob ${BIAS_PROB} \\
