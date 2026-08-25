@@ -135,10 +135,14 @@ def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
             f"given {prob_bias}."
         )
 
-    bias_operator = np.full(shape=(2, 2, 2, 2), fill_value=np.sqrt(prob_bias / 3))
+    # Build it as a 4x4 map on the two-qubit basis and only then fold it back
+    # into legs (pUL, pUR, pDL, pDR). np.fill_diagonal on a rank-4 array walks
+    # B[i, i, i, i], which sets only |00> -> |00> and |11> -> |11>, leaving
+    # |01> -> |01> and |10> -> |10> at the off-diagonal weight.
+    bias_operator = np.full(shape=(4, 4), fill_value=np.sqrt(prob_bias / 3))
     np.fill_diagonal(bias_operator, np.sqrt(1 - prob_bias))
 
-    return bias_operator
+    return bias_operator.reshape(2, 2, 2, 2)
 
 
 def apply_bitflip_bias(
@@ -232,15 +236,18 @@ def apply_depolarising_bias(
     """
 
     if sites_to_bias == "All":
-        sites_to_bias = list(range(0, mps.num_sites, step=2))
+        sites_to_bias = list(range(0, mps.num_sites, 2))
 
     if not isinstance(prob_bias_list, List):
         prob_bias_list = [prob_bias_list for _ in range(len(sites_to_bias))]
 
-    if len(sites_to_bias) % 2 != 0:
+    if any(site + 1 >= mps.num_sites for site in sites_to_bias):
         raise ValueError(
-            f"The number of sites in the list should be even, given {len(sites_to_bias)}."
+            "Each site in the list is the first of a two-site pair, so every "
+            "entry needs a right neighbour within the chain."
         )
+    if len(set(sites_to_bias)) != len(sites_to_bias):
+        raise ValueError("The sites to bias should be distinct.")
 
     if len(sites_to_bias) != len(prob_bias_list):
         raise ValueError(
@@ -257,7 +264,7 @@ def apply_depolarising_bias(
 
     mps = mps.mixed_canonical(orth_centre=min(sites_to_bias))
 
-    for site, prob_bias in zip(sites_to_bias[:-1], prob_bias_list[:-1]):
+    for site, prob_bias in zip(sites_to_bias, prob_bias_list):
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
@@ -275,7 +282,9 @@ def apply_depolarising_bias(
         )
         mps.orth_centre = site + 1
         if renormalise:
-            mps.tensors[mps.orth_centre] /= np.linalg.norm(mps.tensors[mps.orth_centre])
+            centre_norm = float(np.linalg.norm(mps.tensors[mps.orth_centre]))
+            if centre_norm > 0:
+                mps.tensors[mps.orth_centre] /= centre_norm
 
     return mps
 
@@ -803,8 +812,17 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
+        # A stabiliser's syndrome is a symplectic product: its Z part detects X
+        # errors and its X part detects Z errors. The parity check therefore acts
+        # on the *opposite* component to the one pauli_to_mps would assign, so
+        # the two bits of every qubit are swapped here. (A Y acts on both and is
+        # unaffected; for a self-dual code such as Steane the swap is invisible,
+        # which is why it went unnoticed.)
         bitstring = pauli_to_mps(stabilizer)
-        check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
+        swapped = "".join(
+            bitstring[i + 1] + bitstring[i] for i in range(0, len(bitstring), 2)
+        )
+        check = len(logicals) + np.nonzero([int(bit) for bit in swapped])[0]
         checks.append(list(check))
 
     return checks
@@ -1046,7 +1064,11 @@ def generate_pauli_error_string(
     for _ in range(num_qubits):
         if error_model == "Depolarising":
             if rng.random() < error_rate:
-                error = np.random.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
+                # Draw from the generator that was passed in, not the global
+                # numpy one: using np.random here left the *positions* of the
+                # errors reproducible while their Pauli types were not, so a
+                # depolarising run could not be reproduced from its seed.
+                error = rng.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
                 error = "I"
         elif error_model == "Bitflip":
@@ -1123,6 +1145,239 @@ def multiply_pauli_strings(pauli1: str, pauli2: str) -> str:
         result.append(pauli_multiplication_table[(p1, p2)])
 
     return "".join(result)
+
+
+def _score_tie(is_map_identity: bool, degeneracy: int, tie_policy: str) -> float:
+    """Turn "identity is among the maximisers" into a success score.
+
+    A decoder that has to name one class picks arbitrarily among the maximisers,
+    so it succeeds a fraction ``1/degeneracy`` of the time. "fractional" reports
+    that expectation directly: unbiased, and being deterministic it has lower
+    variance than actually sampling the tie-break. "optimistic" is the
+    long-standing behaviour here and never scores a tie as a failure;
+    "pessimistic" never scores one as a success.
+
+    The choice is not a small one. Under depolarising noise a fifth to a half of
+    shots have a degenerate MAP set and the policy moves the failure rate by
+    tens of percent; under bit-flip noise the Z sector is frozen, no exact
+    degeneracies arise, and all three policies agree.
+    """
+    if not is_map_identity:
+        return 0.0
+    if tie_policy == "optimistic":
+        return 1.0
+    if tie_policy == "fractional":
+        return 1.0 / max(1, degeneracy)
+    if tie_policy == "pessimistic":
+        return 1.0 if degeneracy == 1 else 0.0
+    raise ValueError(
+        f"Unknown tie_policy {tie_policy!r}; expected 'optimistic', "
+        "'fractional' or 'pessimistic'."
+    )
+
+
+def max_amplitude_bound(logical_mps) -> float:
+    """Upper bound on ``max_s |<s|logical_mps>|``, in ``O(k d chi^2)``.
+
+    Propagates absolute values along the chain, maximising over the physical
+    index at each site. Since ``|sum_a v[a] A[a, b]| <= sum_a |v[a]| |A[a, b]|``
+    this can only over-estimate, so the result is always a valid upper bound --
+    no enumeration of the ``4^k`` classes and no variational search.
+
+    The bound is *exact* when the logical MPS has no negative amplitudes, which
+    is the case for an untruncated run: the initial state, the bias MPOs and the
+    XOR/COPY/SWAP tensors all have non-negative entries, and marginalisation
+    traces against all-ones, so nothing can cancel. Truncation breaks that --
+    the best rank-``chi`` approximation of a non-negative object need not be
+    non-negative -- and then the bound is only an upper bound. In practice the
+    negative amplitudes that appear are small and the bound has stayed tight,
+    but that is an observation rather than a guarantee, so treat it as a bound.
+    """
+    vector = np.array([1.0])
+    for tensor in logical_mps.tensors:
+        magnitudes = np.abs(np.asarray(tensor, dtype=float))
+        vector = np.einsum("a,apb->pb", vector, magnitudes).max(axis=0)
+    return float(vector.max())
+
+
+def max_product_readout(logical_mps, beam_width: int = 4):
+    """Search the logical MPS for the largest-amplitude basis state, by beam search.
+
+    Runs a max-product pass along the chain, keeping the ``beam_width`` best
+    partial bitstrings at each site. Because the pass works on ``|A|`` the score
+    it carries is only an over-estimate, so each surviving candidate is scored
+    exactly at the end with a signed inner product and the best is returned.
+
+    Deterministic and free of local minima in the sense that matters here: it
+    never has to escape a basin, it simply keeps several. Paired with
+    :func:`max_amplitude_bound` it usually settles the readout outright -- when
+    the returned amplitude meets the bound, no basis state can do better and the
+    answer is proven optimal without touching DMRG.
+
+    Returns
+    -------
+    bitstring : str
+        The best basis state found.
+    amplitude : float
+        ``|<bitstring|logical_mps>|``, evaluated exactly.
+    """
+    beams = [(np.array([1.0]), "")]
+    for tensor in logical_mps.tensors:
+        magnitudes = np.abs(np.asarray(tensor, dtype=float))
+        candidates = []
+        for vector, bits in beams:
+            for value in range(magnitudes.shape[1]):
+                candidates.append((vector @ magnitudes[:, value, :], bits + str(value)))
+        candidates.sort(key=lambda item: -float(item[0].max()))
+        beams = candidates[: max(1, beam_width)]
+
+    best_bits, best_amplitude = None, -1.0
+    for _, bits in beams:
+        amplitude = abs(inner_product(create_custom_product_state(bits), logical_mps))
+        if amplitude > best_amplitude:
+            best_bits, best_amplitude = bits, amplitude
+    return best_bits, best_amplitude
+
+
+class _ReadoutResult:
+    """What the logical readout settled on.
+
+    Mirrors the two attributes callers used to reach for on the DMRG engine, so
+    a readout decided by beam search can be returned in its place.
+    """
+
+    def __init__(self, mps, mps_target):
+        self.mps = mps
+        self.mps_target = mps_target
+
+
+def _logical_readout(
+    logical_mps,
+    num_sites: int,
+    chi_max: int,
+    cut: float,
+    num_runs: int,
+    num_restarts: int,
+    silent: bool,
+    beam_width: int = 4,
+):
+    """Find the largest-amplitude computational basis state of ``logical_mps``.
+
+    Tries the cheap route first. :func:`max_product_readout` proposes a basis
+    state and :func:`max_amplitude_bound` caps what any basis state could reach;
+    when the two agree the proposal is provably optimal and the search is over,
+    at ``O(k d chi^2)`` and with no variational sweep at all. Only when that
+    bracket stays open does Dephasing DMRG run, and its answer is then taken
+    together with the beam-search one, so the result is never worse than DMRG
+    alone.
+
+    Returns
+    -------
+    result : _ReadoutResult or DephasingDMRG
+        Carries ``mps`` (the chosen basis state) and ``mps_target``.
+    amplitude : float
+        ``|<s*|logical_mps>|`` for the best basis state found.
+    certified : bool
+        Whether the amplitude provably equals the maximum over all basis states.
+    """
+    bound = max_amplitude_bound(logical_mps)
+    bits, amplitude = max_product_readout(logical_mps, beam_width=beam_width)
+
+    if amplitude >= bound * (1 - 1e-9):
+        if not silent:
+            logging.info(
+                "Readout settled by beam search: |<s*|psi>| = %.6e matches the "
+                "upper bound, so no basis state can do better.",
+                amplitude,
+            )
+        return (
+            _ReadoutResult(create_custom_product_state(bits), logical_mps),
+            amplitude,
+            True,
+        )
+
+    if not silent:
+        logging.info(
+            "Beam search reached %.6e against an upper bound of %.6e; "
+            "falling back to Dephasing DMRG.",
+            amplitude,
+            bound,
+        )
+    engine, dmrg_amplitude = _dmrg_readout(
+        logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
+    )
+    if dmrg_amplitude >= amplitude:
+        return engine, dmrg_amplitude, dmrg_amplitude >= bound * (1 - 1e-9)
+    return (
+        _ReadoutResult(create_custom_product_state(bits), logical_mps),
+        amplitude,
+        False,
+    )
+
+
+def _dmrg_readout(
+    logical_mps,
+    num_sites: int,
+    chi_max: int,
+    cut: float,
+    num_runs: int,
+    num_restarts: int,
+    silent: bool,
+):
+    """Find the largest-amplitude computational basis state by Dephasing DMRG.
+
+    Dephasing DMRG is a local optimiser, so a single sweep from a single start
+    often settles on a class that is not the global maximum. That matters here
+    because the success test compares the identity's amplitude against whatever
+    DMRG returned: if DMRG stops short, the identity can clear a bar that the
+    true maximiser would not have, turning a logical error into a reported
+    success. Restarting from several product states and keeping the best result
+    makes that far less likely; empirically a single start recovers the true
+    maximum only when it exceeds the runner-up by roughly a factor of five,
+    whereas eight starts stay reliable well below that.
+
+    The all-zeros state is always among the starts, so the identity class is
+    never missed for want of a lucky initialisation.
+
+    Returns
+    -------
+    engine : DephasingDMRG
+        The engine of the best restart.
+    best_amplitude : float
+        ``|<s*|logical_mps>|`` for the best basis state found.
+    """
+    rng = np.random.default_rng(0)
+    best_engine, best_amplitude = None, -1.0
+
+    for restart in range(max(1, num_restarts)):
+        if restart == 0:
+            start = create_simple_product_state(num_sites, which="+")
+        elif restart == 1:
+            start = create_simple_product_state(num_sites, which="0")
+        else:
+            start = create_custom_product_state(
+                "".join(rng.choice(["0", "1"], size=num_sites))
+            )
+        engine = DephasingDMRG(
+            mps=start,
+            mps_target=logical_mps,
+            chi_max=chi_max,
+            cut=cut,
+            mode="LA",
+            silent=True,
+        )
+        engine.run(num_iter=num_runs)
+        amplitude = abs(inner_product(engine.mps, logical_mps))
+        if amplitude > best_amplitude:
+            best_engine, best_amplitude = engine, amplitude
+
+    if not silent:
+        logging.info(
+            "Dephasing DMRG: best of %d restart(s), |<s*|psi>| = %.6e",
+            max(1, num_restarts),
+            best_amplitude,
+        )
+    return best_engine, best_amplitude
 
 
 def decode_message(
@@ -1207,6 +1462,10 @@ def decode_css(
     qubit_order_strategy: str = "Natural",
     optimiser: str = "Dephasing DMRG",
     tolerance: float = float(1e-12),
+    dense_readout_max_sites: int = 30,
+    num_restarts: int = 8,
+    tie_policy: str = "optimistic",
+    rng: Optional[np.random.Generator] = None,
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalisation and
@@ -1250,6 +1509,16 @@ def decode_css(
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
     tolerance : float
         The tolerance for the MPS classes.
+    dense_readout_max_sites : int
+        Read the logical class out by dense contraction while the logical MPS has
+        at most this many sites, and by Dephasing DMRG beyond it. The default
+        keeps the usual behaviour; setting it to 0 forces the DMRG path, which is
+        how the two readouts can be compared on a code small enough to check.
+    rng : np.random.Generator, optional
+        Source of randomness for ``multiply_by_stabiliser``. Pass the same
+        generator used to sample the error if the run needs to be reproducible;
+        when omitted a fresh generator is created and the choice will differ
+        between runs.
 
     Raises
     ------
@@ -1263,19 +1532,35 @@ def decode_css(
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
+        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
+        # shots, and the identity class is provably the MAP answer for a
+        # trivial error (verified by exact enumeration up to p = 0.49). The
+        # returned vector is a k = 1-shaped STUB, not a real posterior -- do
+        # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
+        # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
+        # skip. Callers here consume only the success flag.
         return [1.0, 0.0, 0.0, 0.0], 1
 
-    error_contains_x = "X" in error
-    error_contains_z = "Z" in error
+    # Both sectors always carry a live degree of freedom: the bias channel
+    # spreads amplitude onto every physical site regardless of which Paulis the
+    # input error happens to contain, so a sector whose constraints are skipped
+    # keeps its logical site in |+> and marginalises to a uniform -- and
+    # therefore meaningless -- distribution over that sector's classes.
+    error_contains_x = True
+    error_contains_z = True
 
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
     ]
 
     if multiply_by_stabiliser and not erased_qubits:
+        # Draw from the generator that was passed in. Reaching for np.random
+        # here would make the choice depend on global state, so a run using this
+        # path could not be reproduced from its seed.
+        generator = np.random.default_rng() if rng is None else rng
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
         stabilisers = stabilisers_x + stabilisers_z
-        error = multiply_pauli_strings(error, np.random.choice(stabilisers))
+        error = multiply_pauli_strings(error, str(generator.choice(stabilisers)))
 
     # Compute qubit permutation that minimises MPO bandwidth.
     if qubit_order_strategy == "Optimised":
@@ -1297,6 +1582,13 @@ def decode_css(
             logging.info("Applied optimised qubit ordering.")
     else:
         qubit_perm = None
+
+    # Recompute the erased positions in the MPS frame: the reordering above
+    # moves qubits along the chain, so the indices collected from the original
+    # error string no longer point at the right sites.
+    erased_qubits = [
+        index for index, single_error in enumerate(error) if single_error == "E"
+    ]
 
     error = pauli_to_mps(error)
 
@@ -1321,25 +1613,44 @@ def decode_css(
 
     constraint_sites = css_code_constraint_sites(code, qubit_perm=qubit_perm)
     logicals_sites = css_code_logicals_sites(code, qubit_perm=qubit_perm)
-    sites_to_bias = list(range(num_logicals, num_sites))
 
+    # Exclude erased qubits from the bias: they are initialised as |+>, which
+    # already represents complete ignorance, so biasing them would corrupt that
+    # state. Physical qubit q occupies MPS sites (num_logicals + 2q) and
+    # (num_logicals + 2q + 1).
+    #
+    # The bit-flip bias is a one-site MPO, so it wants every site. The
+    # depolarising bias is a two-site MPO acting jointly on a qubit's pair, so
+    # it wants only the first site of each pair -- passing both would apply it
+    # to overlapping pairs and the result would not be a depolarising channel.
+    unerased = [q for q in range(len(code)) if q not in erased_qubits]
     if bias_type == "Bitflip":
-        if not silent:
-            logging.info("Applying bitflip bias.")
-        error_mps = apply_bitflip_bias(
-            mps=error_mps,
-            sites_to_bias=sites_to_bias,
-            prob_bias_list=bias_prob,
-        )
+        sites_to_bias = [
+            s
+            for q in unerased
+            for s in (num_logicals + 2 * q, num_logicals + 2 * q + 1)
+        ]
     else:
-        if not silent:
-            logging.info("Applying depolarising bias.")
-        error_mps = apply_depolarising_bias(
-            mps=error_mps,
-            sites_to_bias=sites_to_bias,
-            prob_bias_list=bias_prob,
-            renormalise=renormalise,
-        )
+        sites_to_bias = [num_logicals + 2 * q for q in unerased]
+
+    if sites_to_bias:
+        if bias_type == "Bitflip":
+            if not silent:
+                logging.info("Applying bitflip bias.")
+            error_mps = apply_bitflip_bias(
+                mps=error_mps,
+                sites_to_bias=sites_to_bias,
+                prob_bias_list=bias_prob,
+            )
+        else:
+            if not silent:
+                logging.info("Applying depolarising bias.")
+            error_mps = apply_depolarising_bias(
+                mps=error_mps,
+                sites_to_bias=sites_to_bias,
+                prob_bias_list=bias_prob,
+                renormalise=renormalise,
+            )
 
     if error_contains_x:
         if not silent:
@@ -1397,19 +1708,12 @@ def decode_css(
             strategy=contraction_strategy,
         )
 
-    if erased_qubits:
-        if not silent:
-            logging.info("Tracing out the erased qubits.")
-        error_mps = error_mps.marginal(
-            sites_to_marginalise=erased_qubits,
-            renormalise=renormalise,
-        )
-
     if not silent:
         logging.info("Marginalising the error MPS.")
-    sites_to_marginalise = list(
-        range(num_logicals, len(error) + num_logicals - len(erased_qubits))
-    )
+    # Marginalise ALL physical qubit sites in one pass.  Erased qubits are
+    # already in |+> and are naturally included here -- no separate
+    # intermediate marginalisation is needed.
+    sites_to_marginalise = list(range(num_logicals, num_sites))
     logical_mps = error_mps.marginal(
         sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
     ).reverse()
@@ -1418,10 +1722,39 @@ def decode_css(
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= 30:
-        logical_dense = abs(
-            logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
+    if num_logical_sites <= dense_readout_max_sites:
+        logical_signed = logical_mps.dense(
+            flatten=True, renormalise=renormalise, norm=2
         )
+        logical_dense = abs(logical_signed)
+
+        # An exact run cannot produce a negative amplitude: every tensor in the
+        # pipeline is non-negative and marginalisation traces against all-ones.
+        # A negative one is therefore a truncation artefact and a direct signal
+        # that chi_max is too small for this instance -- the cheapest
+        # convergence diagnostic available, since the vector is already here.
+        most_negative = float(np.min(np.real(np.asarray(logical_signed))))
+        peak = float(np.max(logical_dense))
+
+        # A collapsed posterior carries no information, yet the identity is
+        # trivially "among the maximisers" of an all-zero vector, so the shot
+        # would be scored a success. Truncation is what destroys it -- at low
+        # chi_max a whole site tensor can be driven to zero -- and a silent
+        # false success is the worst way for that to surface.
+        if peak <= 1e-300 and not silent:
+            logging.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this "
+                "shot carries no information and its verdict is meaningless.",
+                chi_max,
+            )
+        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
+            logging.warning(
+                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+                "is not converged for this instance.",
+                most_negative,
+                100.0 * abs(most_negative) / max(peak, 1e-300),
+                chi_max,
+            )
 
         # Global maximum amplitude
         max_amp = np.max(logical_dense)
@@ -1431,36 +1764,100 @@ def decode_css(
         abs_tol = 1e-12
         eps = max(rel_tol * max_amp, abs_tol)
 
-        # Success ⇔ identity logical is in the MAP set (degeneracy allowed)
+        # Success <=> the identity logical is in the MAP set (degeneracy allowed).
+        #
+        # Note the asymmetry with the Dephasing DMRG branch below: when several
+        # classes tie for the maximum this counts as a success, whereas DMRG
+        # returns whichever tied class its sweep lands on and so usually scores
+        # the same shot as a failure. Small codes read out densely and large ones
+        # by DMRG, so the two regimes apply different conventions to degenerate
+        # posteriors; a fully uniform posterior always reads as success here.
         is_map_identity = logical_dense[0] >= max_amp - eps
+        degeneracy = int(np.count_nonzero(logical_dense >= max_amp - eps))
+        score = _score_tie(is_map_identity, degeneracy, tie_policy)
 
-        result = logical_dense, int(is_map_identity)
+        if degeneracy > 1 and not silent:
+            logging.warning(
+                "The MAP set is %d-fold degenerate; scored under the '%s' "
+                "policy as %.4f.",
+                degeneracy,
+                tie_policy,
+                score,
+            )
+
+        result = logical_dense, score
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    if num_logical_sites > 30 or optimiser == "Dephasing DMRG":
-        mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
-        mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
-        engine = DephasingDMRG(
-            mps=mps_dmrg_start,
-            mps_target=logical_mps,
-            chi_max=chi_max,
-            cut=cut,
-            mode="LA",
-            silent=silent,
-        )
-        if not silent:
-            logging.info("Running the Dephasing DMRG engine.")
-        engine.run(num_iter=num_runs)
-        mps_dmrg_final = engine.mps
-        overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
-        if not silent:
-            logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
-        return engine, overlap
-
     if optimiser == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
-    raise ValueError("Invalid optimiser chosen.")
+    if optimiser != "Dephasing DMRG":
+        raise ValueError("Invalid optimiser chosen.")
+
+    if not silent:
+        logging.info("Reading out the logical class.")
+    engine, amplitude_found, certified = _logical_readout(
+        logical_mps,
+        num_logical_sites,
+        chi_max,
+        cut,
+        num_runs,
+        num_restarts,
+        silent,
+    )
+
+    # DMRG returns a single basis state, so on a degenerate posterior it lands on
+    # whichever tied class its sweep reached first. Comparing only that state
+    # with the identity would then score a tie as a failure, while the dense
+    # branch above scores the same shot as a success. Instead ask the question
+    # dense readout asks -- is the identity among the maximisers? -- by pulling
+    # both amplitudes out of the logical MPS directly, which costs O(k chi^2) and
+    # needs no enumeration of the 4^k classes.
+    mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
+    amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
+    eps = max(1e-9 * amplitude_found, 1e-12)
+    is_map_identity = amplitude_identity >= amplitude_found - eps
+
+    # The true maximum lies in [amplitude_found, bound]. That brackets the
+    # verdict: the identity is certainly a maximiser once it reaches the bound,
+    # and certainly is not once DMRG has beaten it. In between the sweep may
+    # have stopped short, in which case the identity can clear a bar the real
+    # maximiser would not have -- a false success -- so say so rather than let
+    # it pass silently.
+    if amplitude_found <= 1e-300 and not silent:
+        logging.warning(
+            "The logical posterior collapsed to zero at chi_max=%d; this shot "
+            "carries no information and its verdict is meaningless.",
+            chi_max,
+        )
+
+    bound = max_amplitude_bound(logical_mps)
+    if not silent and not certified:
+        if amplitude_found < bound * (1 - 1e-6):
+            logging.warning(
+                "Dephasing DMRG reached %.6e but the maximum is at most %.6e; "
+                "the sweep may have stopped at a local optimum. Consider raising "
+                "num_restarts or num_runs.",
+                amplitude_found,
+                bound,
+            )
+        if is_map_identity and amplitude_identity < bound * (1 - 1e-6):
+            logging.warning(
+                "Success here rests on DMRG's estimate: the identity amplitude "
+                "%.6e clears |<s*|psi>| but not the upper bound %.6e.",
+                amplitude_identity,
+                bound,
+            )
+
+    if not silent:
+        logging.info(
+            "Dephasing DMRG finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
+            "identity in the MAP set: %s",
+            amplitude_found,
+            amplitude_identity,
+            bool(is_map_identity),
+        )
+    return engine, int(is_map_identity)
 
 
 def decode_custom(
@@ -1479,6 +1876,10 @@ def decode_custom(
     contraction_strategy: str = "Naive",
     optimiser: str = "Dephasing DMRG",
     tolerance: float = float(1e-12),
+    dense_readout_max_sites: int = 12,
+    num_restarts: int = 8,
+    tie_policy: str = "optimistic",
+    rng: Optional[np.random.Generator] = None,
 ):
     """
     This function performs error-based decoding for a custom quantum error-correcting code.
@@ -1518,6 +1919,10 @@ def decode_custom(
         Available options: "Dephasing DMRG", "Dense", "Optima TT".
     tolerance : float
         The tolerance for the MPS classes.
+    dense_readout_max_sites : int
+        Read the logical class out by dense contraction while the logical MPS has
+        at most this many sites, and by Dephasing DMRG beyond it. See
+        :func:`decode_css`.
 
     Returns
     -------
@@ -1530,6 +1935,13 @@ def decode_custom(
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
+        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
+        # shots, and the identity class is provably the MAP answer for a
+        # trivial error (verified by exact enumeration up to p = 0.49). The
+        # returned vector is a k = 1-shaped STUB, not a real posterior -- do
+        # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
+        # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
+        # skip. Callers here consume only the success flag.
         return [1.0, 0.0, 0.0, 0.0], 1
 
     erased_qubits = [
@@ -1537,7 +1949,10 @@ def decode_custom(
     ]
 
     if multiply_by_stabiliser and not erased_qubits:
-        chosen_stabiliser = np.random.choice(stabilizers)
+        # See decode_css: the choice must come from the passed-in generator so
+        # the run stays reproducible from its seed.
+        generator = np.random.default_rng() if rng is None else rng
+        chosen_stabiliser = str(generator.choice(stabilizers))
         error = multiply_pauli_strings(error, chosen_stabiliser)
 
     error = pauli_to_mps(error)
@@ -1571,13 +1986,18 @@ def decode_custom(
     # |+>, which already represents complete ignorance, so biasing them would
     # corrupt that state.  Each physical qubit q occupies MPS sites
     # (num_logicals + 2q) and (num_logicals + 2q + 1).
+    # See decode_css: the one-site bit-flip bias wants every site, the two-site
+    # depolarising bias only the first site of each qubit pair.
     num_qubits = len(stabilizers[0])
-    sites_to_bias = [
-        s
-        for q in range(num_qubits)
-        if q not in erased_qubits
-        for s in (num_logicals + 2 * q, num_logicals + 2 * q + 1)
-    ]
+    unerased = [q for q in range(num_qubits) if q not in erased_qubits]
+    if bias_type == "Bitflip":
+        sites_to_bias = [
+            s
+            for q in unerased
+            for s in (num_logicals + 2 * q, num_logicals + 2 * q + 1)
+        ]
+    else:
+        sites_to_bias = [num_logicals + 2 * q for q in unerased]
 
     if sites_to_bias:
         if bias_type == "Bitflip":
@@ -1651,42 +2071,130 @@ def decode_custom(
     if not silent:
         logging.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= 12:
-        logical_dense = abs(
-            logical_mps.dense(flatten=True, renormalise=renormalise, norm=2)
+    if num_logical_sites <= dense_readout_max_sites:
+        logical_signed = logical_mps.dense(
+            flatten=True, renormalise=renormalise, norm=2
         )
+        logical_dense = abs(logical_signed)
+
+        # An exact run cannot produce a negative amplitude: every tensor in the
+        # pipeline is non-negative and marginalisation traces against all-ones.
+        # A negative one is therefore a truncation artefact and a direct signal
+        # that chi_max is too small for this instance -- the cheapest
+        # convergence diagnostic available, since the vector is already here.
+        most_negative = float(np.min(np.real(np.asarray(logical_signed))))
+        peak = float(np.max(logical_dense))
+
+        # A collapsed posterior carries no information, yet the identity is
+        # trivially "among the maximisers" of an all-zero vector, so the shot
+        # would be scored a success. Truncation is what destroys it -- at low
+        # chi_max a whole site tensor can be driven to zero -- and a silent
+        # false success is the worst way for that to surface.
+        if peak <= 1e-300 and not silent:
+            logging.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this "
+                "shot carries no information and its verdict is meaningless.",
+                chi_max,
+            )
+        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
+            logging.warning(
+                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+                "is not converged for this instance.",
+                most_negative,
+                100.0 * abs(most_negative) / max(peak, 1e-300),
+                chi_max,
+            )
 
         # find global maximum amplitude
         max_amp = np.max(logical_dense)
 
         # treat identity logical as success if it is among the maximisers
         # (within some numerical tolerance)
-        eps = 1e-12 * max_amp
+        # Same tolerance as decode_css, so both decoders call a tie the same way.
+        eps = max(1e-9 * max_amp, 1e-12)
         is_map_identity = logical_dense[0] >= max_amp - eps
+        degeneracy = int(np.count_nonzero(logical_dense >= max_amp - eps))
+        score = _score_tie(is_map_identity, degeneracy, tie_policy)
 
-        result = logical_dense, int(is_map_identity)
+        if degeneracy > 1 and not silent:
+            logging.warning(
+                "The MAP set is %d-fold degenerate; scored under the '%s' "
+                "policy as %.4f.",
+                degeneracy,
+                tie_policy,
+                score,
+            )
+
+        result = logical_dense, score
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    if num_logical_sites > 12 or optimiser == "Dephasing DMRG":
-        mps_dmrg_start = create_simple_product_state(num_logical_sites, which="+")
-        mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
-        engine = DephasingDMRG(
-            mps=mps_dmrg_start,
-            mps_target=logical_mps,
-            chi_max=chi_max,
-            cut=cut,
-            mode="LA",
-            silent=silent,
-        )
-        if not silent:
-            logging.info("Running the Dephasing DMRG engine.")
-        engine.run(num_iter=num_runs)
-        mps_dmrg_final = engine.mps
-        overlap = abs(inner_product(mps_dmrg_final, mps_dmrg_target))
-        if not silent:
-            logging.info("Dephasing DMRG run completed with overlap: %f", overlap)
-        return engine, overlap
     if optimiser == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
-    raise ValueError("Invalid optimiser chosen.")
+    if optimiser != "Dephasing DMRG":
+        raise ValueError("Invalid optimiser chosen.")
+
+    if not silent:
+        logging.info("Reading out the logical class.")
+    engine, amplitude_found, certified = _logical_readout(
+        logical_mps,
+        num_logical_sites,
+        chi_max,
+        cut,
+        num_runs,
+        num_restarts,
+        silent,
+    )
+
+    # DMRG returns a single basis state, so on a degenerate posterior it lands on
+    # whichever tied class its sweep reached first. Comparing only that state
+    # with the identity would then score a tie as a failure, while the dense
+    # branch above scores the same shot as a success. Instead ask the question
+    # dense readout asks -- is the identity among the maximisers? -- by pulling
+    # both amplitudes out of the logical MPS directly, which costs O(k chi^2) and
+    # needs no enumeration of the 4^k classes.
+    mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
+    amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
+    eps = max(1e-9 * amplitude_found, 1e-12)
+    is_map_identity = amplitude_identity >= amplitude_found - eps
+
+    # The true maximum lies in [amplitude_found, bound]. That brackets the
+    # verdict: the identity is certainly a maximiser once it reaches the bound,
+    # and certainly is not once DMRG has beaten it. In between the sweep may
+    # have stopped short, in which case the identity can clear a bar the real
+    # maximiser would not have -- a false success -- so say so rather than let
+    # it pass silently.
+    if amplitude_found <= 1e-300 and not silent:
+        logging.warning(
+            "The logical posterior collapsed to zero at chi_max=%d; this shot "
+            "carries no information and its verdict is meaningless.",
+            chi_max,
+        )
+
+    bound = max_amplitude_bound(logical_mps)
+    if not silent and not certified:
+        if amplitude_found < bound * (1 - 1e-6):
+            logging.warning(
+                "Dephasing DMRG reached %.6e but the maximum is at most %.6e; "
+                "the sweep may have stopped at a local optimum. Consider raising "
+                "num_restarts or num_runs.",
+                amplitude_found,
+                bound,
+            )
+        if is_map_identity and amplitude_identity < bound * (1 - 1e-6):
+            logging.warning(
+                "Success here rests on DMRG's estimate: the identity amplitude "
+                "%.6e clears |<s*|psi>| but not the upper bound %.6e.",
+                amplitude_identity,
+                bound,
+            )
+
+    if not silent:
+        logging.info(
+            "Dephasing DMRG finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
+            "identity in the MAP set: %s",
+            amplitude_found,
+            amplitude_identity,
+            bool(is_map_identity),
+        )
+    return engine, int(is_map_identity)
