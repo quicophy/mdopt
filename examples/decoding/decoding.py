@@ -1833,19 +1833,10 @@ def decode_css(
     # needs no enumeration of the 4^k classes.
     mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
     amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
-    eps = max(1e-9 * amplitude_found, 1e-12)
-    is_map_identity = amplitude_identity >= amplitude_found - eps
 
-    # The true maximum lies in [amplitude_found, bound]. That brackets the
-    # verdict: the identity is certainly a maximiser once it reaches the bound,
-    # and certainly is not once DMRG has beaten it. In between the sweep may
-    # have stopped short, in which case the identity can clear a bar the real
-    # maximiser would not have -- a false success -- so say so rather than let
-    # it pass silently.
-    if amplitude_found <= 1e-300:
-        # Same trap as the dense branch: with both amplitudes underflowed to
-        # zero, `amplitude_identity >= amplitude_found - eps` holds trivially and
-        # the shot would be scored a success. Report the failure instead.
+    # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
+    # mirroring the dense branch.
+    if not np.isfinite(amplitude_found) or amplitude_found == 0.0:
         if not silent:
             logging.warning(
                 "The logical posterior collapsed to zero at chi_max=%d; this shot "
@@ -1853,6 +1844,12 @@ def decode_css(
                 chi_max,
             )
         return engine, 0
+
+    # Compare amplitudes on a unit scale (normalised by the DMRG maximum) so
+    # that the fixed tolerance is meaningful regardless of overall scale.
+    normed_identity = amplitude_identity / amplitude_found
+    eps = 1e-9
+    is_map_identity = normed_identity >= 1.0 - eps
 
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:
@@ -2196,19 +2193,10 @@ def decode_custom(
     # needs no enumeration of the 4^k classes.
     mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
     amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
-    eps = max(1e-9 * amplitude_found, 1e-12)
-    is_map_identity = amplitude_identity >= amplitude_found - eps
 
-    # The true maximum lies in [amplitude_found, bound]. That brackets the
-    # verdict: the identity is certainly a maximiser once it reaches the bound,
-    # and certainly is not once DMRG has beaten it. In between the sweep may
-    # have stopped short, in which case the identity can clear a bar the real
-    # maximiser would not have -- a false success -- so say so rather than let
-    # it pass silently.
-    if amplitude_found <= 1e-300:
-        # Same trap as the dense branch: with both amplitudes underflowed to
-        # zero, `amplitude_identity >= amplitude_found - eps` holds trivially and
-        # the shot would be scored a success. Report the failure instead.
+    # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
+    # mirroring the dense branch.
+    if not np.isfinite(amplitude_found) or amplitude_found == 0.0:
         if not silent:
             logging.warning(
                 "The logical posterior collapsed to zero at chi_max=%d; this shot "
@@ -2216,6 +2204,12 @@ def decode_custom(
                 chi_max,
             )
         return engine, 0
+
+    # Compare amplitudes on a unit scale (normalised by the DMRG maximum) so
+    # that the fixed tolerance is meaningful regardless of overall scale.
+    normed_identity = amplitude_identity / amplitude_found
+    eps = 1e-9
+    is_map_identity = normed_identity >= 1.0 - eps
 
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:
