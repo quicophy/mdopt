@@ -341,7 +341,9 @@ def mps_from_dense(
     state_vector, singular_values_local, v_r, trunc_err = svd(
         state_vector, chi_max=chi_max, renormalise=False, return_truncation_error=True
     )
-    singular_values_local = _renormalise_after_truncation(singular_values_local, trunc_err)
+    singular_values_local = _renormalise_after_truncation(
+        singular_values_local, trunc_err
+    )
     tensors.append(np.expand_dims(v_r, -1))
     singular_values.append(singular_values_local)
 
