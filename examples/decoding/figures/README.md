@@ -35,8 +35,8 @@ poetry run python examples/decoding/plotting/<script>.py
 | `failure_rate_surface_lattice_size.pdf` | `gen_surface_plots.py` | FAST | `data-quantum-surface/` |
 | `vert_horiz_surface.pdf` | `aggregate_vert_horiz_surface.py` | FAST | `vert_horiz_surface_L5_data.pkl` |
 | `figs_vert_horiz_surface_v1/v2/v3.pdf` | `aggregate_vert_horiz_surface_variants.py` | FAST | `vert_horiz_surface_L5*_data.pkl` |
-| `vert_horiz_bb.pdf` | `aggregate_vert_horiz_bb.py` | FAST | needs `vert_horiz_bb_data.pkl` (not yet generated) |
-| `qubit_order_bb.pdf` | `aggregate_qubit_order_bb.py` | FAST | needs `qubit_order_bb_data.pkl` (not yet generated) |
+| `vert_horiz_bb.pdf` | `aggregate_vert_horiz_bb.py` | FAST | writes `vert_horiz_bb_data.pkl` |
+| `qubit_order_bb.pdf` | `aggregate_qubit_order_bb.py` | FAST | `qubit_order_bb_data.pkl` |
 | `failure_rate_5qubit_erasure.pdf` | `plot_erasure_from_pickle.py` | FAST | `failure_rate_5qubit_erasure_data.pkl` |
 | `failure_rate_5qubit_erasure.pdf` | `gen_failure_rate_5qubit_erasure.py` | SIM | writes the `.pkl` above |
 | `failure_rate_3qubit.pdf` | `gen_failure_rate_3qubit.py` | SIM | `failure_rate_3qubit_data.pkl` |

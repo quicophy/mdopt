@@ -109,8 +109,14 @@ def main():
     aggregated = aggregate(by_cell)
 
     expected = [(c, p, o) for c in CHI_LIST for p in P_LIST for o in ORDERINGS]
+    # See aggregate_vert_horiz_bb: refuse to plot a partial grid, and build the
+    # list before testing it.
+    missing = [k for k in expected if k not in aggregated]
     if missing:
-        raise RuntimeError(f"{len(missing)} cells missing: {missing[:3]}…")
+        raise RuntimeError(
+            f"{len(missing)} of {len(expected)} cells missing, e.g. {missing[:3]}. "
+            "Generate the remaining runs before plotting."
+        )
 
     # Speedup per (chi, p): pair Natural & RCM by seed → per-seed speedup → mean ± SEM.
     speedup = {}

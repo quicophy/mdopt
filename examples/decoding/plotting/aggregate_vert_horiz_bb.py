@@ -130,8 +130,15 @@ def main():
         for o in ORDERINGS
         for v in VERTICALS
     ]
+    # A partially populated grid yields a figure that silently omits points, so
+    # this refuses to plot rather than warn. The list has to be built first --
+    # dropping it left `if missing:` raising NameError before any data was read.
+    missing = [k for k in expected if k not in agg]
     if missing:
-        raise RuntimeError(f"{len(missing)} cells missing: {missing[:5]}…")
+        raise RuntimeError(
+            f"{len(missing)} of {len(expected)} cells missing, e.g. {missing[:5]}. "
+            "Generate the remaining runs before plotting."
+        )
     print(f"All {len(expected)} cells of the 2x2 strategy grid present.")
 
     # Three ablation paths (baseline always = Naive vert + Natural horiz):
