@@ -327,6 +327,11 @@ def run_experiment(
         axis=0,
     )
 
+    # Derive a deterministic per-shot seed so that stabiliser-gauge retries
+    # inside each shot are reproducible from the experiment seed.
+    seed_seq = np.random.SeedSequence(seed)
+    shot_seeds = seed_seq.spawn(num_experiments)
+
     args = [
         (
             num_qubits,
@@ -339,6 +344,7 @@ def run_experiment(
             silent,
             tolerance,
             cut,
+            shot_seeds[i],
         )
         for i in range(num_experiments)
     ]
