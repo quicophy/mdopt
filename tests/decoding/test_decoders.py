@@ -925,3 +925,38 @@ def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
     )
 
     assert float(success) == 0.0
+
+
+def test_gauge_seeds_are_independent_of_the_error_seeds():
+    """The stabiliser-gauge sampler must not reuse the error generator's stream.
+
+    ``generate_errors`` derives its per-shot streams from ``SeedSequence(seed)``.
+    Rooting the gauge seeds there too hands each shot's gauge sampler the very
+    stream that produced that shot's error, so the stabiliser choice becomes a
+    deterministic function of the error rather than an independent draw. The
+    error streams themselves must not move: the stored datasets came from them.
+
+    This exercises ``gauge_seed_sequences`` itself rather than re-deriving the
+    seeds, so that changing how ``run_experiment`` builds them is caught.
+    """
+    import importlib
+
+    package = decode_css.__module__.rsplit(".", 1)[0]
+    quantum_csp = importlib.import_module(f"{package}.quantum_csp")
+
+    num_shots, seed = 8, 0
+    error_children = np.random.SeedSequence(seed).spawn(num_shots)
+    gauge_children = quantum_csp.gauge_seed_sequences(seed, num_shots)
+
+    assert len(gauge_children) == num_shots
+    for error_child, gauge_child in zip(error_children, gauge_children, strict=True):
+        drawn_for_error = np.random.default_rng(error_child).integers(0, 2**32, 4)
+        drawn_for_gauge = np.random.default_rng(gauge_child).integers(0, 2**32, 4)
+        assert not np.array_equal(drawn_for_error, drawn_for_gauge)
+
+    # ...and the gauge stream is still reproducible from the experiment seed.
+    repeat = quantum_csp.gauge_seed_sequences(seed, num_shots)
+    assert np.array_equal(
+        np.random.default_rng(gauge_children[0]).integers(0, 2**32, 4),
+        np.random.default_rng(repeat[0]).integers(0, 2**32, 4),
+    )

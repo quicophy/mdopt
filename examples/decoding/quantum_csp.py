@@ -71,6 +71,22 @@ def encode_pauli_string(pauli: str) -> np.ndarray:
     )
 
 
+# Arbitrary fixed word separating gauge-sampling streams from error streams.
+_GAUGE_SEED_NAMESPACE = 0x9E3779B9
+
+
+def gauge_seed_sequences(seed, num_experiments):
+    """Per-shot seeds for stabiliser-gauge sampling.
+
+    Deliberately rooted at different entropy from :func:`generate_errors`, which
+    derives its per-shot streams from ``SeedSequence(seed)``. Sharing the root
+    would hand each shot's gauge sampler the stream that produced that shot's
+    error, making the stabiliser choice a function of the error instead of an
+    independent draw.
+    """
+    return np.random.SeedSequence([seed, _GAUGE_SEED_NAMESPACE]).spawn(num_experiments)
+
+
 def decode_pauli_array(arr: np.ndarray) -> str:
     """Decode a uint8 array back into a Pauli string."""
     return "".join(INT_TO_PAULI[int(x)] for x in arr)
@@ -329,8 +345,15 @@ def run_experiment(
 
     # Derive a deterministic per-shot seed so that stabiliser-gauge retries
     # inside each shot are reproducible from the experiment seed.
-    seed_seq = np.random.SeedSequence(seed)
-    shot_seeds = seed_seq.spawn(num_experiments)
+    #
+    # The extra entropy word matters: generate_errors above derives its per-shot
+    # streams from SeedSequence(seed), so spawning from SeedSequence(seed) here
+    # would hand each shot's gauge sampler the very stream that produced that
+    # shot's error, making the stabiliser choice a deterministic function of the
+    # error. Seeding from a distinct root keeps the two independent, and leaves
+    # the error streams -- which existing datasets were generated from -- exactly
+    # as they were.
+    shot_seeds = gauge_seed_sequences(seed, num_experiments)
 
     args = [
         (
