@@ -17,8 +17,8 @@ The scripts are cwd-independent — they resolve these assets through
 python -m mdopt.examples.decoding.plotting.gen_surface_plots
 ```
 
-Set `MDOPT_EXAMPLES_ASSETS` to point at these assets if they are not inside a
-checkout (see `mdopt/examples/paths.py`).
+Set `MDOPT_EXAMPLES_ASSETS` to the top-level `examples/` directory containing
+`decoding/` when the assets are not inside a checkout (see `mdopt/examples/paths.py`).
 
 FAST = replots from a stored pickle. SIM = re-runs the simulation.
 
