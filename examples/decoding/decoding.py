@@ -1738,7 +1738,7 @@ def decode_css(
 
         # A collapsed posterior carries no information. Truncation is what
         # destroys it: at low chi_max a whole site tensor can be driven to zero.
-        if peak <= 1e-300:
+        if not np.isfinite(peak) or peak == 0.0:
             # Scoring must stop here. Every entry of an all-zero vector is within
             # eps of the maximum, so the identity would be "among the maximisers"
             # and the shot would score a success -- turning numerical collapse
@@ -1756,12 +1756,18 @@ def decode_css(
                 "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
                 "is not converged for this instance.",
                 most_negative,
-                100.0 * abs(most_negative) / max(peak, 1e-300),
+                100.0 * abs(most_negative) / peak,
                 chi_max,
             )
 
-        # Global maximum amplitude
-        max_amp = np.max(logical_dense)
+        # Normalise to the peak so that tie tolerances are scale-independent.
+        # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
+        # collapse guard but have every entry within the fixed 1e-12 absolute
+        # tolerance of the maximum, marking all classes as tied.
+        logical_normed = logical_dense / peak
+
+        # Global maximum amplitude (always 1.0 after normalisation)
+        max_amp = np.max(logical_normed)
 
         # Machine-precision–level tolerance (relative + absolute)
         rel_tol = 1e-9
@@ -1776,8 +1782,8 @@ def decode_css(
         # the same shot as a failure. Small codes read out densely and large ones
         # by DMRG, so the two regimes apply different conventions to degenerate
         # posteriors; a fully uniform posterior always reads as success here.
-        is_map_identity = logical_dense[0] >= max_amp - eps
-        degeneracy = int(np.count_nonzero(logical_dense >= max_amp - eps))
+        is_map_identity = logical_normed[0] >= max_amp - eps
+        degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
         score = _score_tie(is_map_identity, degeneracy, tie_policy)
 
         if degeneracy > 1 and not silent:
@@ -2104,7 +2110,7 @@ def decode_custom(
 
         # A collapsed posterior carries no information. Truncation is what
         # destroys it: at low chi_max a whole site tensor can be driven to zero.
-        if peak <= 1e-300:
+        if not np.isfinite(peak) or peak == 0.0:
             # Scoring must stop here. Every entry of an all-zero vector is within
             # eps of the maximum, so the identity would be "among the maximisers"
             # and the shot would score a success -- turning numerical collapse
@@ -2122,19 +2128,25 @@ def decode_custom(
                 "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
                 "is not converged for this instance.",
                 most_negative,
-                100.0 * abs(most_negative) / max(peak, 1e-300),
+                100.0 * abs(most_negative) / peak,
                 chi_max,
             )
 
-        # find global maximum amplitude
-        max_amp = np.max(logical_dense)
+        # Normalise to the peak so that tie tolerances are scale-independent.
+        # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
+        # collapse guard but have every entry within the fixed 1e-12 absolute
+        # tolerance of the maximum, marking all classes as tied.
+        logical_normed = logical_dense / peak
+
+        # find global maximum amplitude (always 1.0 after normalisation)
+        max_amp = np.max(logical_normed)
 
         # treat identity logical as success if it is among the maximisers
         # (within some numerical tolerance)
         # Same tolerance as decode_css, so both decoders call a tie the same way.
         eps = max(1e-9 * max_amp, 1e-12)
-        is_map_identity = logical_dense[0] >= max_amp - eps
-        degeneracy = int(np.count_nonzero(logical_dense >= max_amp - eps))
+        is_map_identity = logical_normed[0] >= max_amp - eps
+        degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
         score = _score_tie(is_map_identity, degeneracy, tie_policy)
 
         if degeneracy > 1 and not silent:
