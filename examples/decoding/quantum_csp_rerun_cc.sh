@@ -8,6 +8,7 @@
 #   bash quantum_csp_rerun_cc.sh chi_extension   #   60 jobs,  0.3M shots  P1
 #   bash quantum_csp_rerun_cc.sh nan_refill      # 1920 jobs,  9.6M shots  P2
 #   bash quantum_csp_rerun_cc.sh deep_p          #  360 jobs, 18.0M shots  P3
+#   bash quantum_csp_rerun_cc.sh threshold_gap   # 1255 jobs,  2.5M shots  P1
 #   bash quantum_csp_rerun_cc.sh --dry-run chi_extension
 #
 # WHY THESE THREE
@@ -47,7 +48,7 @@ if [ "${1:-}" = "--dry-run" ]; then DRY_RUN=true; shift; fi
 JOB="${1:-}"
 
 if [ -z "$JOB" ]; then
-    echo "usage: $0 [--dry-run] {chi_extension|nan_refill|deep_p}" >&2
+    echo "usage: $0 [--dry-run] {chi_extension|nan_refill|deep_p|threshold_gap}" >&2
     exit 1
 fi
 
@@ -125,8 +126,26 @@ case "$JOB" in
     # the existing chi = 400 runs completed cleanly at 30000.
     NUM_PROCESSES=16; MEM=32000
     ;;
+  threshold_gap)
+    # Locate the bit-flip threshold. p_L falls with n at p = 1e-4 (Spearman
+    # rho = -0.86) and rises with n at p = 0.1 (rho = +0.94), so the curves must
+    # cross in between -- but chi=400 was only ever run at 1e-4, 1e-3, 1e-2 and
+    # 0.1, leaving the crossing region unsampled. These five points fill it.
+    #
+    # Sizes are the ones with enough code instances for a code-average to mean
+    # anything (72, 98 and 81 respectively); n = 80 and 90 have 12 and 3, and the
+    # between-code spread there swamps any trend. Shots per code are modest on
+    # purpose: at these error rates p_L is O(1e-2), so 2000 shots already give
+    # ~100 failures per code, and precision is limited by the number of codes
+    # rather than by sampling.
+    NUMS_QUBITS=(40 50 60); BOND_DIMS=(400)
+    ERROR_RATES=(0.02 0.03 0.04 0.06 0.08); SEEDS=(0); NUM_EXPERIMENTS=2000
+    # Unlike deep_p, nearly every shot here carries an error, so most workers
+    # hold a large MPS at once. 4 GB/worker.
+    NUM_PROCESSES=16; MEM=64000
+    ;;
   *)
-    echo "unknown job '$JOB' (expected chi_extension|nan_refill|deep_p)" >&2
+    echo "unknown job '$JOB' (expected chi_extension|nan_refill|deep_p|threshold_gap)" >&2
     exit 1
     ;;
 esac
