@@ -1,4 +1,4 @@
-"""Generate failure_rate_5qubit_erasure.pdf — LER vs erasure rate for the 5-qubit code."""
+"""Generate 5qubit-erasure-failure-rate.pdf — LER vs erasure rate for the 5-qubit code."""
 
 # --- repo-relative paths (this script lives in examples/decoding/plotting/) ---
 import os as _os
@@ -198,8 +198,8 @@ def main():
     ax.set_ylabel("Logical error rate")
     ax.grid(True, ls=":", linewidth=0.6)
     ax.legend()
-    fig.savefig(_fig("failure_rate_5qubit_erasure.pdf"), dpi=300, bbox_inches="tight")
-    print("Saved failure_rate_5qubit_erasure.pdf")
+    fig.savefig(_fig("5qubit-erasure-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+    print("Saved 5qubit-erasure-failure-rate.pdf")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 """
-Generate bond_dim_scaling_n24.pdf — logical error rate vs bond dimension for n=24.
+Generate ldpc-bdim-scaling-n24.pdf — logical error rate vs bond dimension for n=24.
 Saves one pkl per (chi, error_rate) for crash-resilience. Skips already-done combos.
 Plots whatever data is available at the end.
 """
@@ -168,6 +168,6 @@ ax.set_xlabel("Physical bit-flip rate $p$")
 ax.set_ylabel("Logical error rate")
 ax.grid(True, ls=":", linewidth=0.6)
 ax.legend()
-out = _fig("bond_dim_scaling_n24.pdf")
+out = _fig("ldpc-bdim-scaling-n24.pdf")
 fig.savefig(out, dpi=300, bbox_inches="tight")
 print(f"\nSaved {out}")

@@ -1,4 +1,4 @@
-"""Generate failure_rate_3qubit.pdf with physical error rate up to 0.5."""
+"""Generate 3qubit-failure-rate.pdf with physical error rate up to 0.5."""
 
 # --- repo-relative paths (this script lives in examples/decoding/plotting/) ---
 import os as _os
@@ -146,5 +146,5 @@ ax.set_xlabel(r"Physical error rate $p$")
 ax.set_ylabel("Logical error rate")
 ax.grid(True, ls=":", linewidth=0.6)
 ax.legend()
-fig.savefig(_fig("failure_rate_3qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved failure_rate_3qubit.pdf")
+fig.savefig(_fig("3qubit-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 3qubit-failure-rate.pdf")

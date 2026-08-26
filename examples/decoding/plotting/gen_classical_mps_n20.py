@@ -1,5 +1,5 @@
 """
-Generate mps_vs_bp_n20.pdf — MPS-MPO decoder vs BP for n=20.
+Generate ldpc-mps-vs-bp-n20.pdf — MPS-MPO decoder vs BP for n=20.
 Saves one pkl per (p, batch) for crash-resilience. Loads existing data.
 """
 
@@ -206,6 +206,6 @@ ax.set_ylabel("Logical error rate")
 ax.legend()
 ax.grid(True, ls=":", linewidth=0.6)
 
-out = _fig("mps_vs_bp_n20.pdf")
+out = _fig("ldpc-mps-vs-bp-n20.pdf")
 fig.savefig(out, dpi=300, bbox_inches="tight")
 print(f"Saved {out}")

@@ -1,5 +1,5 @@
 """
-Generate correction_histograms_shor.pdf for Shor's 9-qubit code.
+Generate shor-correction-histograms.pdf for Shor's 9-qubit code.
 Shows correction statistics for all weight-1 (27), weight-2 (324), weight-3 (2268) Pauli errors.
 Each panel has 4 bars (I, X, Z, Y) counting how many errors decoded to each logical class.
 Hyperparameters match shor.ipynb exactly.
@@ -122,8 +122,8 @@ for ax, (corrections, title) in zip(axes, datasets):
     ax.grid(True, ls=":", linewidth=0.6, axis="y")
     ax.spines[["top", "right"]].set_visible(False)
 
-fig.savefig(_fig("correction_histograms_shor.pdf"), dpi=300, bbox_inches="tight")
-print("Saved correction_histograms_shor.pdf")
+fig.savefig(_fig("shor-correction-histograms.pdf"), dpi=300, bbox_inches="tight")
+print("Saved shor-correction-histograms.pdf")
 print(f"Weight-1: {dict(Counter(corrections_w1))}")
 print(f"Weight-2: {dict(Counter(corrections_w2))}")
 print(f"Weight-3: {dict(Counter(corrections_w3))}")

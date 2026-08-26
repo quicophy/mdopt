@@ -246,8 +246,8 @@ def main():
     ax_ler.set_title(rf"$\chi_{{\max}} = {PLOT_CHI}$, LER (Naive vert)", fontsize=9)
     ax_ler.grid(True, ls=":", linewidth=0.6)
     ax_ler.legend(loc="lower right", framealpha=0.9)
-    fig1.savefig(_fig("figs_vert_horiz_surface_v1.pdf"), dpi=300, bbox_inches="tight")
-    print("Saved figs_vert_horiz_surface_v1.pdf")
+    fig1.savefig(_fig("surface-vert-horiz-ablation.pdf"), dpi=300, bbox_inches="tight")
+    print("Saved surface-vert-horiz-ablation.pdf")
 
     # ── Variant 2: speedup factor vs chi, 3-panel log-log ─────────────────────
     fig2, (ax2_v, ax2_h, ax2_b) = plt.subplots(
@@ -284,8 +284,8 @@ def main():
         ax.grid(True, ls=":", linewidth=0.6)
     ax2_v.set_ylabel(r"Time ratio $t_{\mathrm{opt}}\,/\,t_{\mathrm{baseline}}$")
     ax2_h.legend(loc="lower left", framealpha=0.9)
-    fig2.savefig(_fig("figs_vert_horiz_surface_v2.pdf"), dpi=300, bbox_inches="tight")
-    print("Saved figs_vert_horiz_surface_v2.pdf")
+    fig2.savefig(_fig("qubit-ordering-comparison.pdf"), dpi=300, bbox_inches="tight")
+    print("Saved qubit-ordering-comparison.pdf")
 
     # ── Variant 3: absolute decode time vs p, one panel per chi (2x4) ─────────
     strat_colors = _strat_colors(4)
@@ -335,8 +335,8 @@ def main():
     (axes[0, 0] if n_rows > 1 else axes[0]).legend(
         loc="lower right", framealpha=0.9, fontsize=7
     )
-    fig3.savefig(_fig("figs_vert_horiz_surface_v3.pdf"), dpi=300, bbox_inches="tight")
-    print("Saved figs_vert_horiz_surface_v3.pdf")
+    fig3.savefig(_fig("qubit-ordering-speedup.pdf"), dpi=300, bbox_inches="tight")
+    print("Saved qubit-ordering-speedup.pdf")
 
 
 if __name__ == "__main__":

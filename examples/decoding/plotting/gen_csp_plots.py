@@ -1,7 +1,7 @@
 """
-Generate csp_mps_mpo.pdf — MPS-MPO decoder logical error rate for quantum CSP codes.
+Generate csp-tn-failure-rate.pdf — MPS-MPO decoder logical error rate for quantum CSP codes.
 Loads all pkl files from data-quantum-csp-batch-9, averages over codes per lattice size.
-Publication-ready style matching csp_bp_osd_avg.pdf.
+Publication-ready style matching csp-bp-osd-average.pdf.
 """
 
 # --- repo-relative paths (this script lives in examples/decoding/plotting/) ---
@@ -186,5 +186,5 @@ ax.set_ylim(1e-8, 1e1)
 ax.grid(True, ls=":", linewidth=0.6)
 ax.legend(fontsize=6)
 
-fig.savefig(_fig("csp_mps_mpo.pdf"), dpi=300, bbox_inches="tight")
-print("Saved csp_mps_mpo.pdf")
+fig.savefig(_fig("csp-tn-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+print("Saved csp-tn-failure-rate.pdf")

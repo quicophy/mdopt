@@ -1,5 +1,5 @@
 """
-Generate correction_histograms_5qubit.pdf showing correction statistics for all
+Generate 5qubit-correction-histograms.pdf showing correction statistics for all
 weight-1, 2, 3 Pauli errors on the [[5,1,3]] perfect code.
 Each panel shows 4 bars (I, X, Z, Y) counting how many errors decoded to each class.
 Hyperparameters match quantum_five_qubit.ipynb exactly.
@@ -135,8 +135,8 @@ for ax, (corrections, title) in zip(axes, datasets):
     ax.grid(True, ls=":", linewidth=0.6, axis="y")
     ax.spines[["top", "right"]].set_visible(False)
 
-fig.savefig(_fig("correction_histograms_5qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved correction_histograms_5qubit.pdf")
+fig.savefig(_fig("5qubit-correction-histograms.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-correction-histograms.pdf")
 print(f"Weight-1: {dict(Counter(corrections_w1))}")
 print(f"Weight-2: {dict(Counter(corrections_w2))}")
 print(f"Weight-3: {dict(Counter(corrections_w3))}")

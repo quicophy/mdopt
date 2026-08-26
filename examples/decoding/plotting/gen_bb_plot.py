@@ -1,5 +1,5 @@
 """
-Generate bb_mps_mpo.pdf — MPS-MPO logical error rate for IBM bivariate-bicycle
+Generate bb-tn-failure-rate.pdf — MPS-MPO logical error rate for IBM bivariate-bicycle
 codes at chi=400.  Canonical thesis style (viridis_r, lw=1.5, fmt="o--").
 
 Also prints a data-quality table: failures observed per (N, p), pooled LER and
@@ -219,5 +219,5 @@ ax.set_ylim(1e-8, 1e1)
 ax.grid(True, ls=":", linewidth=0.6)
 ax.legend(fontsize=6)
 
-fig.savefig(_fig("bb_mps_mpo.pdf"), dpi=300, bbox_inches="tight")
-print("\nSaved bb_mps_mpo.pdf")
+fig.savefig(_fig("bb-tn-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+print("\nSaved bb-tn-failure-rate.pdf")

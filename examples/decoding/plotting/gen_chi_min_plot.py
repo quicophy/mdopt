@@ -3,15 +3,15 @@ gen_chi_min_plot.py
 ===================
 Produces three figures from the chi-scan experiment:
 
-  1. csp_ler_vs_chi.pdf   — LER_TN(chi) for each N at p=1e-3, with
+  1. csp-ler-vs-chi.pdf   — LER_TN(chi) for each N at p=1e-3, with
                             0.9 * LER_BP horizontal baseline.
 
-  2. csp_ler_ratio.pdf    — LER_TN(chi=400) / LER_BP vs N at p=1e-3.
+  2. csp-ler-ratio.pdf    — LER_TN(chi=400) / LER_BP vs N at p=1e-3.
                             All seven N values are directly measured
                             (no extrapolation).  Reference lines at
                             y=1 (TN matches BP) and y=0.9 (10% advantage).
 
-  3. csp_chi_conv.pdf     — chi_conv(N): smallest chi at which the
+  3. csp-chi-convergence.pdf     — chi_conv(N): smallest chi at which the
                             cumulative-min-smoothed TN LER is within
                             CONV_TOL of the lowest LER observed in the
                             chi-scan.  All seven points are directly
@@ -181,8 +181,8 @@ proxy = [
 ]
 ax1.legend(handles=proxy, fontsize=6, loc="lower right")
 
-fig1.savefig(_fig("csp_ler_vs_chi.pdf"), dpi=300, bbox_inches="tight")
-print("Saved csp_ler_vs_chi.pdf")
+fig1.savefig(_fig("csp-ler-vs-chi.pdf"), dpi=300, bbox_inches="tight")
+print("Saved csp-ler-vs-chi.pdf")
 
 # ── Figure 2: LER ratio TN(chi=400) / BP vs N ─────────────────────────────────
 # All seven points are directly measured.
@@ -236,8 +236,8 @@ ax2.set_xticks(ns_plot)
 ax2.grid(True, ls=":", linewidth=0.6)
 ax2.legend(fontsize=6.5, loc="best")
 
-fig2.savefig(_fig("csp_ler_ratio.pdf"), dpi=300, bbox_inches="tight")
-print("Saved csp_ler_ratio.pdf")
+fig2.savefig(_fig("csp-ler-ratio.pdf"), dpi=300, bbox_inches="tight")
+print("Saved csp-ler-ratio.pdf")
 
 print("\nLER ratios (TN/BP) at p=1e-3:")
 for N, r, e in zip(ns_plot, ratios, ratio_errs):
@@ -329,5 +329,5 @@ ax3.set_yticklabels([str(c) for c in [4, 8, 16, 32, 64, 128, 256, 400]], fontsiz
 ax3.grid(True, ls=":", linewidth=0.6)
 ax3.legend(fontsize=6.5, loc="best")
 
-fig3.savefig(_fig("csp_chi_conv.pdf"), dpi=300, bbox_inches="tight")
-print("Saved csp_chi_conv.pdf")
+fig3.savefig(_fig("csp-chi-convergence.pdf"), dpi=300, bbox_inches="tight")
+print("Saved csp-chi-convergence.pdf")

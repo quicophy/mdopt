@@ -77,7 +77,7 @@ POLY_A = "x**3 + y + y**2"
 POLY_B = "y**3 + x + x**2"
 
 PICKLE = "qubit_order_bb_data.pkl"
-PLOT = _fig("qubit_order_bb.pdf")
+PLOT = _fig("bb-qubit-ordering.pdf")
 NUM_EXPERIMENTS = 10000
 SEED = 42
 NUM_WORKERS = 8

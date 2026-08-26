@@ -144,8 +144,8 @@ axes[1].set_ylabel("Constraint step")
 axes[1].set_yticks(range(n_steps))
 axes[1].set_yticklabels(range(n_steps))
 
-fig.savefig(_fig("heatmaps_5qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved heatmaps_5qubit.pdf")
+fig.savefig(_fig("5qubit-heatmaps.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-heatmaps.pdf")
 
 # 2. Truncation error
 print("Computing truncation error...")
@@ -167,8 +167,8 @@ ax.set_xlabel(r"$1/\chi_{\max}$")
 ax.set_ylabel("Truncation error")
 ax.set_yscale("log")
 ax.grid(True, ls=":", linewidth=0.6)
-fig.savefig(_fig("truncation_error_5qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved truncation_error_5qubit.pdf")
+fig.savefig(_fig("5qubit-truncation-error.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-truncation-error.pdf")
 
 # 3. Logical operator probabilities
 print("Computing logical probabilities...")
@@ -219,8 +219,8 @@ axes[1].set_xlabel(r"$1/\chi_{\max}$")
 axes[1].set_ylabel("Logical operator probability")
 axes[1].grid(True, ls=":", linewidth=0.6)
 axes[1].legend()
-fig.savefig(_fig("logical_probs_5qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved logical_probs_5qubit.pdf")
+fig.savefig(_fig("5qubit-logical-probs.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-logical-probs.pdf")
 
 # 4. Correction histograms
 print("Computing correction histograms...")
@@ -266,6 +266,6 @@ for ax, (dist, title) in zip(axes, datasets):
     ax.set_ylabel("Count")
     ax.set_title(title, fontsize=9)
     ax.grid(True, ls=":", linewidth=0.6, axis="y")
-fig.savefig(_fig("correction_histograms_5qubit.pdf"), dpi=300, bbox_inches="tight")
-print("Saved correction_histograms_5qubit.pdf")
+fig.savefig(_fig("5qubit-correction-histograms.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-correction-histograms.pdf")
 print("All 5-qubit PDFs done.")

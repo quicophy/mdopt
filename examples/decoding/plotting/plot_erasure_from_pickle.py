@@ -1,4 +1,4 @@
-"""Re-plot failure_rate_5qubit_erasure.pdf from saved pickle."""
+"""Re-plot 5qubit-erasure-failure-rate.pdf from saved pickle."""
 
 # --- repo-relative paths (this script lives in examples/decoding/plotting/) ---
 import os as _os
@@ -96,5 +96,5 @@ ax.set_xlabel(r"Erasure rate $p$")
 ax.set_ylabel("Logical error rate")
 ax.grid(True, ls=":", linewidth=0.6)
 ax.legend()
-fig.savefig(_fig("failure_rate_5qubit_erasure.pdf"), dpi=300, bbox_inches="tight")
-print("Saved failure_rate_5qubit_erasure.pdf")
+fig.savefig(_fig("5qubit-erasure-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+print("Saved 5qubit-erasure-failure-rate.pdf")

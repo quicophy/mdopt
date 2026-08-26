@@ -1,5 +1,5 @@
 """
-Generate csp_comparison.pdf — TN (MPS-MPO, chi=400) vs BP-OSD.
+Generate csp-bp-failure-rate.pdf — TN (MPS-MPO, chi=400) vs BP-OSD.
 One subplot per lattice size; solid = TN, dashed = BP-OSD.
 """
 
@@ -222,5 +222,5 @@ fig.legend(
     ncol=1,
 )
 
-fig.savefig(_fig("csp_comparison.pdf"), dpi=300, bbox_inches="tight")
-print("Saved csp_comparison.pdf")
+fig.savefig(_fig("csp-bp-failure-rate.pdf"), dpi=300, bbox_inches="tight")
+print("Saved csp-bp-failure-rate.pdf")

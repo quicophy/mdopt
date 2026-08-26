@@ -73,9 +73,9 @@ plot_failure_statistics(
     mode="bond_dim",
     yscale="log",
     bb=False,
-    save_path=_fig("failure_rate_surface_lattice_size.pdf"),
+    save_path=_fig("surface-failure-rate.pdf"),
 )
-print("Saved failure_rate_surface_lattice_size.pdf")
+print("Saved surface-failure-rate.pdf")
 
 # ── 2. Bond dimension scaling — matches plotting_bdim_scaling.ipynb exactly ───
 print("Loading bond dimension scaling data...")
@@ -113,4 +113,4 @@ try:
     )
 finally:
     os.chdir(previous_cwd)
-print("Saved surface_bond_dimension_scaling.pdf")
+print("Saved surface-bdim-scaling.pdf")

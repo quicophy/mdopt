@@ -6,7 +6,7 @@ strategies and cancel in the paired difference. SEMs come from a bootstrap
 over per-error pairs (10000 resamples).
 
 Outputs:
-  vert_horiz_surface.pdf  — two-panel figure
+  surface-vert-horiz-speedup.pdf  — two-panel figure
                             (combined speedup vs p; ablation at chi=PLOT_CHI)
 """
 
@@ -55,7 +55,7 @@ mpl.rcParams.update(
 )
 
 DATA_PKL = "vert_horiz_surface_L5_data.pkl"
-PLOT_OUT = _fig("vert_horiz_surface.pdf")
+PLOT_OUT = _fig("surface-vert-horiz-speedup.pdf")
 PLOT_CHI = 32
 N_BOOT = 10000
 BOOT_SEED = 0

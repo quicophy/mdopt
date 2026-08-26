@@ -8,7 +8,7 @@ and all other pickles default to contraction_strategy="Naive".
 
 Outputs:
   - vert_horiz_bb_data.pkl  : aggregated dict + per-seed speedups
-  - vert_horiz_bb.pdf       : 2-panel figure at chi=40
+  - bb-vert-horiz-speedup.pdf       : 2-panel figure at chi=40
                               (decode time vs p; speedup vs p)
   - prints a chi x ablation speedup table
 """
@@ -60,7 +60,7 @@ mpl.rcParams.update(
 
 DATA_DIR = "data-quantum-bivariate-bicycle/qubit_order_data"
 PICKLE_OUT = "vert_horiz_bb_data.pkl"
-PLOT_OUT = _fig("vert_horiz_bb.pdf")
+PLOT_OUT = _fig("bb-vert-horiz-speedup.pdf")
 CHI_LIST = [8, 16, 24, 32, 40]
 P_LIST = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
 ORDERINGS = ["Natural", "Optimised"]
