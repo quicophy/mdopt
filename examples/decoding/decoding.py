@@ -1322,9 +1322,37 @@ def _logical_readout(
             amplitude,
             bound,
         )
-    engine, dmrg_amplitude = _dmrg_readout(
-        logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
-    )
+    try:
+        engine, dmrg_amplitude = _dmrg_readout(
+            logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
+        )
+    except Exception as error:  # pylint: disable=broad-except
+        # Defensive, not a fix for anything seen in production. At a bond
+        # dimension too small for DMRG to work with, an effective-Hamiltonian
+        # block can be driven to zero and ARPACK refuses to start ("error -9:
+        # Starting vector is zero"). Measured on [[4,2,2]]: 5 of 15 shots at
+        # chi_max=2 and 1 of 15 at chi_max=3, then nothing at all from
+        # chi_max=4 up to 256. Production runs at chi_max=250-400, so this
+        # should never fire there.
+        #
+        # It is cheap insurance rather than a correction: the beam search has
+        # already produced a valid basis state and its exact amplitude, so a
+        # solver failure can degrade to that instead of taking the shot down
+        # and being recorded as a decoding failure by the experiment drivers.
+        if not silent:
+            logging.warning(
+                "Dephasing DMRG failed (%s: %s); keeping the beam-search "
+                "result |<s*|psi>| = %.6e, which is not certified optimal.",
+                type(error).__name__,
+                str(error)[:80],
+                amplitude,
+            )
+        return (
+            _ReadoutResult(create_custom_product_state(bits), logical_mps),
+            amplitude,
+            False,
+        )
+
     if dmrg_amplitude >= amplitude:
         return engine, dmrg_amplitude, dmrg_amplitude >= bound * (1 - 1e-9)
     return (

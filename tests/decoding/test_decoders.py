@@ -1034,3 +1034,40 @@ def test_str_to_bool_rejects_nonsense():
     """A typo must fail the job rather than pick a silent default."""
     with pytest.raises(argparse.ArgumentTypeError):
         str_to_bool("maybe")
+
+
+def test_readout_survives_a_failing_eigensolver(caplog):
+    """A DMRG solver failure must not take the shot down with it.
+
+    Defensive rather than corrective. Below a bond dimension DMRG can work with,
+    an effective-Hamiltonian block can be driven to zero and ARPACK refuses to
+    start; measured on [[4,2,2]] this happens at chi_max = 2 and 3 and never from
+    4 up to 256, so production runs at 250-400 should not see it. If it does
+    happen, nothing catches it on the way out of decode_css and the experiment
+    drivers record the shot as a failure or a NaN, so the readout degrades to the
+    beam-search result -- already computed and exact -- instead.
+    """
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+    decoding_module = sys.modules[decode_css.__module__]
+
+    def exploding_dmrg(*_args, **_kwargs):
+        raise RuntimeError("ARPACK error -9: Starting vector is zero.")
+
+    with patch.object(decoding_module, "_dmrg_readout", exploding_dmrg):
+        # force the DMRG branch, and keep the bracket open so it is reached
+        with patch.object(decoding_module, "max_amplitude_bound", lambda _mps: 1e9):
+            with caplog.at_level(logging.WARNING):
+                posterior, success = decode_css(
+                    code,
+                    error,
+                    chi_max=64,
+                    bias_type="Depolarising",
+                    bias_prob=0.1,
+                    renormalise=True,
+                    silent=False,
+                    dense_readout_max_sites=0,
+                )
+
+    assert float(success) in (0.0, 1.0)
+    assert any("Dephasing DMRG failed" in r.getMessage() for r in caplog.records)
