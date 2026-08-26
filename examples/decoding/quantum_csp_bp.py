@@ -160,7 +160,7 @@ def main():
     plt.grid(True, which="both", ls=":")
     plt.legend(fontsize="small")
     plt.tight_layout()
-    plt.savefig("csp_bp_osd_avg.pdf", dpi=300)
+    plt.savefig("csp-bp-osd-average.pdf", dpi=300)
     plt.show()
 
 

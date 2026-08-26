@@ -1,6 +1,6 @@
 """This module contains miscellaneous utilities."""
 
-from typing import Tuple, Optional, List
+from typing import Any, Tuple, Optional, List
 from itertools import chain
 import numpy as np
 import scipy
@@ -388,6 +388,7 @@ def create_random_mpo(
     bond_dimensions: List[int],
     phys_dim: int,
     which: str = "uniform",
+    rng: Optional[np.random.Generator] = None,
 ) -> List[np.ndarray]:
     """
     Creates a random complex-valued Matrix Product Operator.
@@ -401,6 +402,9 @@ def create_random_mpo(
         A list of bond dimensions.
     phys_dim : int
         Physical dimension of the tensors.
+    rng : Optional[np.random.Generator]
+        Random number generator to draw from. If ``None``, the legacy global
+        ``np.random`` stream is used, which honours :func:`numpy.random.seed`.
     which : str
         Specifies the distribution from which
         the matrix elements are being taken.
@@ -431,22 +435,27 @@ def create_random_mpo(
         for i in range(0, len(bond_dims) - 1, 2)
     ]
 
+    source: Any = np.random if rng is None else rng
+
     if which == "randint":
+
+        def draw_int(size: Tuple[int, ...]) -> np.ndarray:
+            # ``Generator`` spells this ``integers``, the legacy stream ``randint``.
+            if rng is None:
+                return np.asarray(np.random.randint(0, 2, size=size))
+            return np.asarray(rng.integers(0, 2, size=size))
+
         mpo = [
-            (
-                np.random.randint(0, 2, size=shapes[i])
-                + 1j * np.random.randint(0, 2, size=shapes[i])
-            )
-            for i in range(num_sites)
+            (draw_int(shapes[i]) + 1j * draw_int(shapes[i])) for i in range(num_sites)
         ]
     elif which == "normal":
         mpo = [
-            (np.random.normal(size=shapes[i]) + 1j * np.random.normal(size=shapes[i]))
+            (source.normal(size=shapes[i]) + 1j * source.normal(size=shapes[i]))
             for i in range(num_sites)
         ]
     else:
         mpo = [
-            (np.random.uniform(size=shapes[i]) + 1j * np.random.uniform(size=shapes[i]))
+            (source.uniform(size=shapes[i]) + 1j * source.uniform(size=shapes[i]))
             for i in range(num_sites)
         ]
     return mpo

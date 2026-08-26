@@ -298,9 +298,13 @@ class ExplicitMPS:
         """
         Returns the entanglement entropy for bipartitions at each of the bonds.
         """
+        # ``singular_values[i]`` sits to the LEFT of ``tensors[i]``, so indices 0 and
+        # ``num_sites`` are the trivial boundary bonds. The physical bonds are
+        # ``singular_values[1 .. num_sites - 1]``; indexing from 0 here would report
+        # the trivial left boundary and drop the last real bond.
         entropy = np.zeros(shape=(self.num_bonds,), dtype=float)
         for bond in range(self.num_bonds):
-            singular_values = self.singular_values[bond].copy()
+            singular_values = self.singular_values[bond + 1].copy()
             singular_values = np.array(singular_values)  # type: ignore
             singular_values[singular_values < self.tolerance] = 0  # type: ignore
             singular_values2 = [sv**2 for sv in singular_values]
@@ -556,16 +560,30 @@ class ExplicitMPS:
         singular_values = self.singular_values[bond + 1]
         tensor_right = self.tensors[bond + 1]
 
-        max_num = min(chi_max, np.sum(singular_values > cut))  # type: ignore
-        singular_values_new = singular_values[:max_num]
-        residual_spectrum = singular_values[max_num:]
-        truncation_error = np.linalg.norm(residual_spectrum) ** 2
+        # The spectra are stored as plain lists by some constructors and as
+        # arrays by others; comparing a list against `cut` raises, so normalise
+        # the type here. `int` on the count matches the cast in
+        # :func:`mdopt.utils.utils.split_two_site_tensor`, and keeps a float
+        # `chi_max` from reaching a slice.
+        spectrum = np.asarray(singular_values, dtype=float)
+        max_num = min(int(chi_max), int(np.sum(spectrum > cut)))
+        singular_values_new = spectrum[:max_num]
+        residual_spectrum = spectrum[max_num:]
+        truncation_error = float(np.linalg.norm(residual_spectrum) ** 2)
 
         if renormalise:
-            singular_values_new /= np.linalg.norm(singular_values_new)  # type: ignore
+            spectrum_norm = float(np.linalg.norm(singular_values_new))
+            # A spectrum that has underflowed to zero would give 0/0 here and
+            # fill the state with NaNs; leave it be, as the other
+            # renormalisation sites do.
+            if spectrum_norm > 0:
+                singular_values_new = singular_values_new / spectrum_norm
 
         self.tensors[bond] = tensor_left[..., :max_num]
-        self.singular_values[bond + 1] = singular_values_new
+        # The container is annotated List[List] but legitimately holds arrays
+        # too (mps_from_dense stores ndarrays), which is why the read above
+        # coerces. The annotation is imprecise, not the value.
+        self.singular_values[bond + 1] = singular_values_new  # type: ignore[call-overload]
         self.tensors[bond + 1] = tensor_right[:max_num, ...]
 
         if return_truncation_error:

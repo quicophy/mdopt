@@ -140,3 +140,9 @@ submit-job*
 
 # tmp files
 tmp*
+
+# Generated figures. They are reproducible from the scripts in
+# examples/decoding/plotting/ (see examples/decoding/figures/README.md), so the
+# binaries are kept locally rather than committed.
+examples/decoding/figures/*
+!examples/decoding/figures/README.md

@@ -2,7 +2,7 @@
 This module contains various MPS utilities.
 """
 
-from typing import Union, Optional, cast
+from typing import Any, List, Union, Optional, cast
 from functools import reduce
 import numpy as np
 from opt_einsum import contract
@@ -12,7 +12,11 @@ from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 
 
-def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
+def create_state_vector(
+    num_sites: int,
+    phys_dim: int = int(2),
+    rng: Optional[np.random.Generator] = None,
+) -> np.ndarray:
     """
     Creates a random uniform complex-valued vector of norm 1.
 
@@ -22,15 +26,19 @@ def create_state_vector(num_sites: int, phys_dim: int = int(2)) -> np.ndarray:
         Number of degrees of freedom.
     phys_dim : int
         Number of dimensions of each degree of freedom.
+    rng : Optional[np.random.Generator]
+        Random number generator to draw from. If ``None``, the legacy global
+        ``np.random`` stream is used, which honours :func:`numpy.random.seed`.
 
     Returns
     -------
     state_vector : np.ndarray
         The resulting state vector.
     """
-    state_vector = np.random.uniform(
-        size=(phys_dim**num_sites)
-    ) + 1j * np.random.uniform(size=phys_dim**num_sites)
+    source: Any = np.random if rng is None else rng
+    state_vector = source.uniform(size=(phys_dim**num_sites)) + 1j * source.uniform(
+        size=phys_dim**num_sites
+    )
     state_vector /= np.linalg.norm(state_vector)
     return state_vector
 
@@ -243,6 +251,25 @@ def inner_product(
     return np.complex128(product)
 
 
+def _renormalise_after_truncation(
+    singular_values: List[float], truncation_error: Optional[float]
+) -> List[float]:
+    """Renormalises a Schmidt spectrum after ``chi_max`` truncation.
+
+    :class:`ExplicitMPS` requires a unit-norm spectrum at every bond. Truncation
+    leaves the retained spectrum short of that, so we always renormalise when
+    truncation has occurred. The input state vector is validated for unit norm
+    before decomposition, so spectra that were not truncated already satisfy
+    the constraint.
+    """
+    if not truncation_error:
+        return singular_values
+    norm = float(np.linalg.norm(np.asarray(singular_values, dtype=float)))
+    if norm == 0:
+        return singular_values
+    return list(np.asarray(singular_values, dtype=float) / norm)
+
+
 def mps_from_dense(
     state_vector: np.ndarray,
     phys_dim: int = int(2),
@@ -298,14 +325,24 @@ def mps_from_dense(
             "(does not correspond to the product of local dimensions)."
         )
 
+    vec_norm = float(np.linalg.norm(state_vector))
+    if abs(vec_norm - 1) > tolerance:
+        raise ValueError(
+            "The input state vector must be normalised to 1, "
+            f"instead the norm is {vec_norm}."
+        )
+
     tensors: list[np.ndarray] = []
     singular_values: list[list] = []
 
     state_vector = state_vector.reshape((-1, phys_dim))
 
     # First SVD
-    state_vector, singular_values_local, v_r, _ = svd(
-        state_vector, chi_max=chi_max, renormalise=False
+    state_vector, singular_values_local, v_r, trunc_err = svd(
+        state_vector, chi_max=chi_max, renormalise=False, return_truncation_error=True
+    )
+    singular_values_local = _renormalise_after_truncation(
+        singular_values_local, trunc_err
     )
     tensors.append(np.expand_dims(v_r, -1))
     singular_values.append(singular_values_local)
@@ -317,8 +354,14 @@ def mps_from_dense(
 
         bond_dim = state_vector.shape[-1]
         state_vector = state_vector.reshape((-1, phys_dim * bond_dim))
-        state_vector, singular_values_local, v_r, _ = svd(
-            state_vector, chi_max=chi_max, renormalise=False
+        state_vector, singular_values_local, v_r, trunc_err = svd(
+            state_vector,
+            chi_max=chi_max,
+            renormalise=False,
+            return_truncation_error=True,
+        )
+        singular_values_local = _renormalise_after_truncation(
+            singular_values_local, trunc_err
         )
         v_r = v_r.reshape((-1, phys_dim, bond_dim))
 

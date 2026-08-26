@@ -48,6 +48,7 @@ sys.path.append(examples_path_fir)
 
 try:
     from examples.decoding.decoding import (
+        str_to_bool,
         decode_css,
         generate_pauli_error_string,
     )
@@ -69,6 +70,22 @@ def encode_pauli_string(pauli: str) -> np.ndarray:
         dtype=np.uint8,
         count=len(pauli),
     )
+
+
+# Arbitrary fixed word separating gauge-sampling streams from error streams.
+_GAUGE_SEED_NAMESPACE = 0x9E3779B9
+
+
+def gauge_seed_sequences(seed, num_experiments):
+    """Per-shot seeds for stabiliser-gauge sampling.
+
+    Deliberately rooted at different entropy from :func:`generate_errors`, which
+    derives its per-shot streams from ``SeedSequence(seed)``. Sharing the root
+    would hand each shot's gauge sampler the stream that produced that shot's
+    error, making the stabiliser choice a function of the error instead of an
+    independent draw.
+    """
+    return np.random.SeedSequence([seed, _GAUGE_SEED_NAMESPACE]).spawn(num_experiments)
 
 
 def decode_pauli_array(arr: np.ndarray) -> str:
@@ -135,7 +152,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--silent",
-        type=bool,
+        type=str_to_bool,
         required=True,
         help="Whether to silence the output.",
     )
@@ -218,9 +235,11 @@ def run_single_experiment(
     silent,
     tolerance,
     cut,
+    seed=None,
 ):
     """Run a single experiment (with a few random stabiliser gauges)."""
     csp_code = get_csp_code(num_qubits, batch, code_id)
+    rng = np.random.default_rng(seed)
 
     had_valid_attempt = False
     last_distribution = np.nan
@@ -239,6 +258,7 @@ def run_single_experiment(
             contraction_strategy="Optimised",
             tolerance=tolerance,
             cut=cut,
+            rng=rng,
         )
 
     # 1) First try: original error (no stabiliser)
@@ -324,6 +344,18 @@ def run_experiment(
         axis=0,
     )
 
+    # Derive a deterministic per-shot seed so that stabiliser-gauge retries
+    # inside each shot are reproducible from the experiment seed.
+    #
+    # The extra entropy word matters: generate_errors above derives its per-shot
+    # streams from SeedSequence(seed), so spawning from SeedSequence(seed) here
+    # would hand each shot's gauge sampler the very stream that produced that
+    # shot's error, making the stabiliser choice a deterministic function of the
+    # error. Seeding from a distinct root keeps the two independent, and leaves
+    # the error streams -- which existing datasets were generated from -- exactly
+    # as they were.
+    shot_seeds = gauge_seed_sequences(seed, num_experiments)
+
     args = [
         (
             num_qubits,
@@ -336,6 +368,7 @@ def run_experiment(
             silent,
             tolerance,
             cut,
+            shot_seeds[i],
         )
         for i in range(num_experiments)
     ]

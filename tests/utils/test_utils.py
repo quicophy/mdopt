@@ -547,3 +547,38 @@ def test_utils_mpo_to_matrix():
         assert np.isclose(abs(np.linalg.norm(matrix_1 - matrix_01)), 0, atol=1e-6)
         assert np.isclose(abs(np.linalg.norm(matrix_2 - matrix_02)), 0, atol=1e-6)
         assert np.isclose(abs(np.linalg.norm(matrix_3 - matrix_03)), 0, atol=1e-6)
+
+
+def test_create_random_mpo_rng_is_honoured():
+    """A passed generator must control every distribution and be reproducible."""
+    for which in ("uniform", "normal", "randint"):
+        first = create_random_mpo(
+            3, [2, 2], 2, which=which, rng=np.random.default_rng(5)
+        )
+        second = create_random_mpo(
+            3, [2, 2], 2, which=which, rng=np.random.default_rng(5)
+        )
+        assert len(first) == 3, "empty result would satisfy the comparison below"
+        assert all(np.array_equal(a, b) for a, b in zip(first, second, strict=True))
+
+        other = create_random_mpo(
+            3, [2, 2], 2, which=which, rng=np.random.default_rng(6)
+        )
+        assert not all(np.array_equal(a, b) for a, b in zip(first, other, strict=True))
+
+        # An explicit generator must ignore the global stream entirely.
+        np.random.seed(0)
+        again = create_random_mpo(
+            3, [2, 2], 2, which=which, rng=np.random.default_rng(5)
+        )
+        assert all(np.array_equal(a, b) for a, b in zip(first, again, strict=True))
+
+
+def test_create_random_mpo_global_seed_is_reproducible():
+    """Without a generator the legacy global stream is used, so seeding works."""
+    np.random.seed(77)
+    first = create_random_mpo(3, [2, 2], 2)
+    np.random.seed(77)
+    second = create_random_mpo(3, [2, 2], 2)
+    assert len(first) == 3, "empty result would satisfy the comparison below"
+    assert all(np.array_equal(a, b) for a, b in zip(first, second, strict=True))
