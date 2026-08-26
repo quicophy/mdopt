@@ -120,7 +120,7 @@ for idx, N in enumerate(LATTICE_SIZES):
             ers,
             lers,
             yerr=errs,
-            fmt="o--",
+            fmt="o-",
             color=COLOR_TN,
             linewidth=1.5,
             markersize=4,
