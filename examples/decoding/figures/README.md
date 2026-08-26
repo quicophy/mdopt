@@ -49,17 +49,6 @@ poetry run python examples/decoding/plotting/<script>.py
 | `bond_dim_scaling_n24.pdf` | `gen_classical_bond_dim.py` | SIM | `data-classical-ldpc/` |
 | `mps_vs_bp_n20.pdf` | `gen_classical_mps_n20.py` | SIM | `data-classical-ldpc/` |
 
-## Not produced by a plotting script
-
-| File | Source |
-|---|---|
-| `threshold_estimate.pdf` | `pdflatex ../threshold_estimate.tex` |
-| `csp_bp_osd_avg.pdf` | `../quantum_csp_bp.py` (BP-OSD baseline run) |
-| `csp_chi_min.pdf` | **no known producer** — keep, cannot rebuild |
-| `failure_rate_surface_bond_dim.pdf` | **no known producer** — keep, cannot rebuild |
-| `failure_rate_surface_lattice_size.png` | **no known producer** (PDF version is rebuildable) |
-| `../5-qubit-decoder.png`, `../shor-decoder.png` | hand-made illustrations — cannot rebuild, tracked in git |
-
 ## Thesis figure names
 
 The thesis (`~/phd-thesis-udes/figures/`) uses different filenames. Copying a
