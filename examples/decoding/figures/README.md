@@ -49,6 +49,20 @@ poetry run python examples/decoding/plotting/<script>.py
 | `ldpc-bdim-scaling-n24.pdf` | `gen_classical_bond_dim.py` | SIM | `data-classical-ldpc/` |
 | `ldpc-mps-vs-bp-n20.pdf` | `gen_classical_mps_n20.py` | SIM | `data-classical-ldpc/` |
 
+## Not produced by a plotting script
+
+These exist in this folder but no script in `../plotting/` rebuilds them, so
+deleting one is not recoverable the way the rest are.
+
+| File | Source |
+|---|---|
+| `csp-bp-osd-average.pdf` | `python -m examples.decoding.quantum_csp_bp` (BP-OSD baseline run) |
+| `threshold_estimate.pdf` | `pdflatex ../threshold_estimate.tex` — keeps the snake_case name because pdflatex names its output after the source |
+| `csp-chi-min.pdf` | no known producer — keep, cannot rebuild |
+| `surface-bdim-failure-rate.pdf` | no known producer — keep, cannot rebuild |
+| `surface-failure-rate.png` | no known producer (the PDF version is rebuildable) |
+| `../5qubit-decoder.png`, `../shor-decoder.png` | hand-made illustrations — cannot rebuild, tracked in git |
+
 ## Naming
 
 Figures are named `<subject>-<content>.pdf` in kebab-case: subject first, so
