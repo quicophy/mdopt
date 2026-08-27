@@ -31,13 +31,18 @@ fi
 
 # 2) Refresh notebooks in docs/source/notebooks (without touching other .rst files)
 echo "==> Syncing example notebooks into $NOTEBOOKS_DEST_DIR"
-find "$NOTEBOOKS_DEST_DIR" -mindepth 1 -maxdepth 1 -type f -name "*.ipynb" -exec rm -f {} +
+# gpu_example.ipynb is excluded from the sync below, so it has to survive this
+# clean-out too -- otherwise it would be deleted and never re-copied.
+find "$NOTEBOOKS_DEST_DIR" -mindepth 1 -maxdepth 1 -type f -name "*.ipynb" \
+    ! -name "gpu_example.ipynb" -exec rm -f {} +
 if compgen -G "examples/*/*.ipynb" > /dev/null; then
-    # Skip notebooks starting with tmp or plotting
+    # Skip scratch (tmp*) and data-only (plotting*) notebooks. gpu_example is
+    # skipped too: it targets Colab with a GPU, cannot run in CI, and is kept
+    # exactly as committed.
     shopt -s nullglob
     for nb in examples/*/*.ipynb; do
         base="$(basename "$nb")"
-        if [[ "$base" != tmp* && "$base" != plotting* ]]; then
+        if [[ "$base" != tmp* && "$base" != plotting* && "$base" != gpu_example.ipynb ]]; then
             cp "$nb" "$NOTEBOOKS_DEST_DIR/"
         fi
     done

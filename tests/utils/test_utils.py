@@ -582,3 +582,32 @@ def test_create_random_mpo_global_seed_is_reproducible():
     second = create_random_mpo(3, [2, 2], 2)
     assert len(first) == 3, "empty result would satisfy the comparison below"
     assert all(np.array_equal(a, b) for a, b in zip(first, second, strict=True))
+
+
+def test_svd_accepts_infinite_chi_max(rng):
+    """``chi_max=np.inf`` must mean "no truncation", not raise.
+
+    Four notebooks use ``np.inf`` as the first entry of their ``bond_dims``
+    sweep to get the untruncated reference curve. Coercing it with
+    ``int(chi_max)`` before taking the min raises OverflowError, which used to
+    abort those notebooks partway through.
+    """
+    mat = rng.normal(size=(12, 9)) + 1j * rng.normal(size=(12, 9))
+
+    u_l, singular_values, v_h, _ = svd(mat, cut=1e-16, chi_max=np.inf)
+
+    # Nothing is dropped: the reconstruction is exact.
+    reconstructed = u_l @ np.diag(singular_values) @ v_h
+    assert np.allclose(reconstructed, mat)
+    assert len(singular_values) == min(mat.shape)
+
+    # And a finite chi_max still truncates.
+    _, truncated, _, _ = svd(mat, cut=1e-16, chi_max=4)
+    assert len(truncated) == 4
+
+
+def test_split_two_site_tensor_accepts_infinite_chi_max(rng):
+    """The same idiom has to survive the split_two_site_tensor wrapper."""
+    tensor = rng.normal(size=(2, 3, 3, 2))
+
+    _, _, _ = split_two_site_tensor(tensor, chi_max=np.inf, cut=1e-16)[:3]

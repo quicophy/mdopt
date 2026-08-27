@@ -48,6 +48,27 @@ Every dataset lives under `decoding/data/`: the per-experiment runs in
 | `ldpc-bdim-scaling-n24.pdf` | `gen_classical_bond_dim.py` | SIM | `data/classical-ldpc/` |
 | `ldpc-mps-vs-bp-n20.pdf` | `gen_classical_mps_n20.py` | SIM | `data/classical-ldpc/` |
 
+## Also produced by the example notebooks
+
+The notebooks under `examples/` write their PDFs here too, through
+`mdopt.examples.paths.figure()`, using the same names as the scripts above.
+They previously saved next to themselves or into the data tree.
+
+| Notebook | Figures |
+|---|---|
+| `decoding/classical_ldpc.ipynb` | `ldpc-heatmaps-n16.pdf`, `ldpc-bdim-scaling-n24.pdf`, `ldpc-mps-vs-bp-n20.pdf` |
+| `decoding/quantum_three_qubit.ipynb` | `3qubit-heatmaps.pdf`, `3qubit-logical-probs.pdf`, `3qubit-truncation-error.pdf`, `3qubit-failure-rate.pdf` |
+| `decoding/quantum_five_qubit.ipynb` | `5qubit-heatmaps.pdf`, `5qubit-logical-probs.pdf`, `5qubit-truncation-error.pdf`, `5qubit-correction-histograms.pdf` |
+| `decoding/quantum_surface.ipynb` | `surface-heatmaps.pdf`, `surface-logical-probs.pdf`, `surface-truncation-error.pdf`, `surface-correction-histograms.pdf`, `surface-failure-rate-bond-dim.pdf`, `surface-failure-rate-lattice-size.pdf` |
+
+**A notebook and its script write the same file name.** That is deliberate --
+they are the same figure -- but they do not always use the same parameters, so
+whichever ran last wins. Six of these names are pinned by the thesis
+(`3qubit-*`, `5qubit-heatmaps`, `5qubit-logical-probs`,
+`5qubit-correction-histograms`). When a figure is destined for the thesis,
+regenerate it from the script, which is the version whose parameters were
+chosen for publication.
+
 ## Not produced by a plotting script
 
 These exist in this folder but no script in `mdopt/examples/decoding/plotting/`

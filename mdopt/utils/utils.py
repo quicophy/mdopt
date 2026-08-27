@@ -116,7 +116,9 @@ def svd(
     v_h = _to_numpy(v_h)
 
     # Truncate by cut and chi_max
-    max_num = min(int(chi_max), int(np.sum(s > cut)))
+    # int(chi_max) first would raise OverflowError on the chi_max=np.inf
+    # idiom the notebooks use to mean "no truncation"; take the min first.
+    max_num = int(min(chi_max, np.sum(s > cut)))
     residual = s[max_num:]
     truncation_error = float(np.linalg.norm(residual) ** 2)
     u_l = u_l[:, :max_num]
@@ -191,7 +193,7 @@ def qr(
 
     # Determine effective rank and truncate
     abs_diag_r = np.abs(np.diag(r_r))
-    effective_rank = min(int(chi_max), int(np.sum(abs_diag_r > cut)))
+    effective_rank = int(min(chi_max, np.sum(abs_diag_r > cut)))
     trunc_idx = list(range(effective_rank))
 
     # Undo column pivoting without building a dense permutation matrix
