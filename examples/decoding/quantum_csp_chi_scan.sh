@@ -5,7 +5,11 @@
 # Compute Canada submission script for the chi(N) scaling experiment.
 # Sweeps bond dimension chi across {4,8,16,32,64,128,256} for each
 # (N, code_id) pair that has TN data in data-quantum-csp-batch-9.
-# N ∈ {30,40,50,60,70,80,90}.
+# N ∈ {60,70,80,90} -- see NS below. get_code_ids() still carries ids for
+# 30, 40 and 50 because their sweeps were collected in an earlier run; every
+# size already holds chi ∈ {4,8,16,32,64,128,256} in data-quantum-csp-batch-9,
+# so re-running them would only duplicate work. Add them back to NS if that
+# data is ever discarded.
 # Results go into data-quantum-csp-chi-scan/ alongside existing batch-9 data.
 #
 # Fixed parameters:
@@ -70,6 +74,7 @@ get_code_ids() {
         90) echo "17 24 30" ;;
     esac
 }
+# Deliberately not all seven sizes -- 30, 40 and 50 are already collected.
 NS=(60 70 80 90)
 
 mkdir -p "$OUTPUT_DIR" "${PROJECT_ROOT}/logs"

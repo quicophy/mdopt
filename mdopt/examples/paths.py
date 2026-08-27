@@ -52,6 +52,17 @@ def assets_root() -> Path:
             raise FileNotFoundError(
                 f"{_ENV_VAR} is set to {root!s}, which is not a directory."
             )
+        # Check it actually looks like an assets root. Without this a typo that
+        # happens to name a real directory is accepted, and figures_dir() then
+        # creates `decoding/figures` inside it -- so output lands somewhere
+        # unrelated instead of failing, which is the opposite of what pointing
+        # this variable at the wrong place should do.
+        if not (root / "decoding").is_dir():
+            raise FileNotFoundError(
+                f"{_ENV_VAR} is set to {root!s}, which has no 'decoding' "
+                "subdirectory. It should point at the assets root -- the "
+                "directory *containing* decoding/ -- not at decoding/ itself."
+            )
         return root
 
     found = _find_repo_examples()

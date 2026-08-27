@@ -29,8 +29,22 @@ def test_assets_root_is_not_the_package_directory():
 
 def test_environment_override_is_honoured(tmp_path, monkeypatch):
     """A cluster can point the lookup at scratch storage."""
+    (tmp_path / "decoding").mkdir()
     monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))
     assert paths.assets_root() == tmp_path.resolve()
+
+
+def test_an_override_without_decoding_is_rejected(tmp_path, monkeypatch):
+    """A typo that names a real directory must fail, not redirect the output.
+
+    Without this check figures_dir() happily creates `decoding/figures` inside
+    whatever the variable points at, so a mistyped path silently scatters output
+    somewhere unrelated instead of failing.
+    """
+    monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))
+    with pytest.raises(FileNotFoundError, match="no 'decoding' subdirectory"):
+        paths.assets_root()
+    assert not (tmp_path / "decoding").exists(), "must not have created anything"
 
 
 def test_a_bad_override_fails_loudly(tmp_path, monkeypatch):
