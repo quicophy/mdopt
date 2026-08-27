@@ -56,6 +56,7 @@ mpl.rcParams.update(
 )
 
 CACHE_FILE = "data/cache/bp_results.pkl"
+os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
 BASE_SAMPLES = 50_000  # samples per ler_func call
 PS = [0.0001, 0.001, 0.01, 0.1]
 NS = [30, 40, 50, 60, 70, 80, 90]
