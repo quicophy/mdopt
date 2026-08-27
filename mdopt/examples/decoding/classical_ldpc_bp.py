@@ -1,4 +1,3 @@
-import os
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,6 +6,7 @@ from scipy.sparse import csr_matrix, hstack, vstack, eye
 from ldpc import BpDecoder
 from ldpc.monte_carlo_simulation import MonteCarloBscSimulation
 from ldpc.code_util import compute_code_parameters
+from mdopt.examples.paths import data_dir
 
 
 # ----------------------------
@@ -97,8 +97,9 @@ def main():
     # ----------------------------
     # Save results
     # ----------------------------
-    os.makedirs("data/classical-ldpc", exist_ok=True)
-    save_path = f"data/classical-ldpc/bp_numbits{n}_seed{code_seed}.pkl"
+    output_dir = data_dir("classical-ldpc", required=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    save_path = output_dir / f"bp_numbits{n}_seed{code_seed}.pkl"
     with open(save_path, "wb") as f:
         pickle.dump(
             {
@@ -132,7 +133,7 @@ def main():
     )
     plt.grid(True, which="both")
     plt.tight_layout()
-    plt.savefig("data/classical-ldpc/bp_plot.pdf", dpi=300)
+    plt.savefig(output_dir / "bp_plot.pdf", dpi=300)
     plt.show()
 
 
