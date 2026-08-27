@@ -41,6 +41,7 @@ z_logical_operators = ["ZZZ"]
 num_qubits = 3
 
 PICKLE = "data/cache/failure_rate_3qubit_data.pkl"
+_os.makedirs(_os.path.dirname(PICKLE), exist_ok=True)
 NUM_EXPERIMENTS = 10000
 SEED = 123
 error_rates = np.linspace(0.01, 0.50, 23)
