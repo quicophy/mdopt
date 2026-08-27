@@ -1,0 +1,72 @@
+name: docs-sync
+
+# Keeps docs/source/notebooks in step with examples/.
+#
+# readthedocs builds with nbsphinx_execute = "never", so the site renders
+# whatever outputs are committed under docs/source/notebooks. That directory is
+# a copy of examples/, refreshed by generate_docs.sh, and the two had already
+# drifted. This runs the copy step on every push to main and commits the
+# difference, so results a notebook was committed with reach the docs without
+# anyone remembering to run the script.
+#
+# It copies; it does not execute. Notebook outputs come from a full-scale run
+# committed alongside the notebook -- see .github/workflows/notebooks.yml for
+# why CI cannot produce them itself.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**/*.ipynb"
+      - "generate_docs.sh"
+      - ".github/workflows/docs-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: sync notebooks into docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A token that can push back to the branch.
+          persist-credentials: true
+
+      - name: Copy notebooks into docs/source/notebooks
+        run: |
+          set -euo pipefail
+          dest="docs/source/notebooks"
+          mkdir -p "$dest"
+          # Mirrors step 2 of generate_docs.sh. gpu_example.ipynb is excluded
+          # from both the clean-out and the copy: it is kept exactly as
+          # committed.
+          find "$dest" -mindepth 1 -maxdepth 1 -type f -name "*.ipynb" \
+              ! -name "gpu_example.ipynb" -exec rm -f {} +
+          shopt -s nullglob
+          for nb in examples/*/*.ipynb; do
+              base="$(basename "$nb")"
+              if [[ "$base" != tmp* && "$base" != plotting* && "$base" != gpu_example.ipynb ]]; then
+                  cp "$nb" "$dest/"
+              fi
+          done
+
+      - name: Commit any drift
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/source/notebooks; then
+              echo "docs/source/notebooks already matches examples/ -- nothing to do."
+              exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/source/notebooks
+          # [skip ci] keeps this commit from retriggering the workflow.
+          git commit -m "docs: sync notebooks from examples/ [skip ci]"
+          git push
