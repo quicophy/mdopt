@@ -17,12 +17,16 @@ on:
       - "examples/**/*.ipynb"
       - "mdopt/**"
       - "scripts/run_notebooks.py"
+      - "pyproject.toml"
+      - "poetry.lock"
       - ".github/workflows/notebooks.yml"
   pull_request:
     paths:
       - "examples/**/*.ipynb"
       - "mdopt/**"
       - "scripts/run_notebooks.py"
+      - "pyproject.toml"
+      - "poetry.lock"
       - ".github/workflows/notebooks.yml"
   workflow_dispatch:
 
