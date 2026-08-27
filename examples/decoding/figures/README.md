@@ -47,12 +47,13 @@ FAST = replots from a stored pickle. SIM = re-runs the simulation.
 
 ## Not produced by a plotting script
 
-These exist in this folder but no script in `../plotting/` rebuilds them, so
+These exist in this folder but no script in `mdopt/examples/decoding/plotting/`
+rebuilds them, so
 deleting one is not recoverable the way the rest are.
 
 | File | Source |
 |---|---|
-| `csp-bp-osd-average.pdf` | `python -m examples.decoding.quantum_csp_bp` (BP-OSD baseline run) |
+| `csp-bp-osd-average.pdf` | `python -m mdopt.examples.decoding.quantum_csp_bp` (BP-OSD baseline run) |
 | `threshold_estimate.pdf` | `pdflatex ../threshold_estimate.tex` — keeps the snake_case name because pdflatex names its output after the source |
 | `csp-chi-min.pdf` | no known producer — keep, cannot rebuild |
 | `surface-bdim-failure-rate.pdf` | no known producer — keep, cannot rebuild |
