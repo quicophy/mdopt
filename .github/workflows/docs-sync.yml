@@ -67,6 +67,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/source/notebooks
-          # The workflow path filter excludes docs/source/notebooks, so this commit does not retrigger it.
-          git commit -m "docs: sync notebooks from examples/"
+          # [skip ci] is not about this workflow -- its path filter already keeps a
+          # docs/source/notebooks commit from retriggering it. It is about the
+          # others: ci.yml, tests.yml, lint.yml and mypy.yml all run on any push
+          # with no path filter, so without this a pure file copy would spend a
+          # full test matrix, twice over, on every notebook change merged here.
+          git commit -m "docs: sync notebooks from examples/ [skip ci]"
           git push

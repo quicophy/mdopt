@@ -6,7 +6,7 @@ from scipy.sparse import csr_matrix, hstack, vstack, eye
 from ldpc import BpDecoder
 from ldpc.monte_carlo_simulation import MonteCarloBscSimulation
 from ldpc.code_util import compute_code_parameters
-from mdopt.examples.paths import data_dir
+from mdopt.examples.paths import data_dir, figure
 
 
 # ----------------------------
@@ -133,7 +133,7 @@ def main():
     )
     plt.grid(True, which="both")
     plt.tight_layout()
-    plt.savefig(output_dir / "bp_plot.pdf", dpi=300)
+    plt.savefig(figure("ldpc-bp-failure-rate.pdf"), dpi=300)
     plt.show()
 
 

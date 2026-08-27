@@ -47,6 +47,7 @@ Every dataset lives under `decoding/data/`: the per-experiment runs in
 | `ldpc-heatmaps-n16.pdf` | `gen_classical_heatmaps.py` | SIM | writes into `data/classical-ldpc/` |
 | `ldpc-bdim-scaling-n24.pdf` | `gen_classical_bond_dim.py` | SIM | `data/classical-ldpc/` |
 | `ldpc-mps-vs-bp-n20.pdf` | `gen_classical_mps_n20.py` | SIM | `data/classical-ldpc/` |
+| `ldpc-bp-failure-rate.pdf` | `classical_ldpc_bp.py` | SIM | writes into `data/classical-ldpc/` |
 
 ## Also produced by the example notebooks
 
