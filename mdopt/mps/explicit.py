@@ -566,7 +566,7 @@ class ExplicitMPS:
         # :func:`mdopt.utils.utils.split_two_site_tensor`, and keeps a float
         # `chi_max` from reaching a slice.
         spectrum = np.asarray(singular_values, dtype=float)
-        max_num = int(min(chi_max, np.sum(spectrum > cut)))
+        max_num = int(min(chi_max, int(np.sum(spectrum > cut))))
         singular_values_new = spectrum[:max_num]
         residual_spectrum = spectrum[max_num:]
         truncation_error = float(np.linalg.norm(residual_spectrum) ** 2)
