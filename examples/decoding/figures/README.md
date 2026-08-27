@@ -1,8 +1,8 @@
 # Figures
 
-Every PDF here is a build artifact: it can be regenerated from a script in
-`../plotting/`. Nothing in this folder is hand-edited, so it is always safe to
-delete a figure and rebuild it.
+Each figure below maps to the script that regenerates it. **The scripts now live
+in the package** at `mdopt/examples/decoding/plotting/`; the data they read and
+the figures they write stay here, under the repo-level `examples/decoding/`.
 
 **The figures themselves are not tracked in git.** They are reproducible from the
 scripts below and would otherwise add several megabytes of binaries to the
@@ -10,21 +10,17 @@ repository, so `.gitignore` keeps this directory local and tracks only this
 manifest. The two hand-made decoder illustrations cannot be rebuilt and stay
 tracked one directory up, in `examples/decoding/`.
 
-All plotting scripts are **cwd-independent** — they anchor their paths on
-`__file__`, `chdir` to `examples/decoding/`, and write figures here via an
-absolute path. Run them from anywhere:
+The scripts are cwd-independent — they resolve these assets through
+`mdopt/examples/paths.py`. Run one from anywhere:
 
 ```bash
-poetry run python examples/decoding/plotting/<script>.py
+python -m mdopt.examples.decoding.plotting.gen_surface_plots
 ```
 
-## Rebuild cost
+Set `MDOPT_EXAMPLES_ASSETS` to the top-level `examples/` directory containing
+`decoding/` when the assets are not inside a checkout (see `mdopt/examples/paths.py`).
 
-- **FAST** — reads a cached `.pkl` or a `data-*/` directory and only draws.
-  Seconds to a few minutes.
-- **SIM** — reruns the decoder before plotting. Minutes to many hours.
-  Where a `.pkl` cache is listed, the script reuses it if present, so prefer
-  the FAST re-plot script when one exists.
+FAST = replots from a stored pickle. SIM = re-runs the simulation.
 
 | Figure | Script | Cost | Cache / input |
 |---|---|---|---|
@@ -51,12 +47,13 @@ poetry run python examples/decoding/plotting/<script>.py
 
 ## Not produced by a plotting script
 
-These exist in this folder but no script in `../plotting/` rebuilds them, so
+These exist in this folder but no script in `mdopt/examples/decoding/plotting/`
+rebuilds them, so
 deleting one is not recoverable the way the rest are.
 
 | File | Source |
 |---|---|
-| `csp-bp-osd-average.pdf` | `python -m examples.decoding.quantum_csp_bp` (BP-OSD baseline run) |
+| `csp-bp-osd-average.pdf` | `python -m mdopt.examples.decoding.quantum_csp_bp` (BP-OSD baseline run) |
 | `threshold_estimate.pdf` | `pdflatex ../threshold_estimate.tex` — keeps the snake_case name because pdflatex names its output after the source |
 | `csp-chi-min.pdf` | no known producer — keep, cannot rebuild |
 | `surface-bdim-failure-rate.pdf` | no known producer — keep, cannot rebuild |

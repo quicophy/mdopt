@@ -33,7 +33,7 @@ for seed in "${seeds[@]}"; do
                             # Print current configuration
                             echo "Running for system size ${system_size}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
                             # Run the Python script
-                            poetry run python examples/decoding/quantum_hypergraph_product.py --system_size ${system_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+                            poetry run python -m mdopt.examples.decoding.quantum_hypergraph_product --system_size ${system_size} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
                         done
                     done
                 done

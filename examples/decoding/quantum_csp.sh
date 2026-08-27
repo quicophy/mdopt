@@ -37,7 +37,7 @@ for seed in "${seeds[@]}"; do
                                     # Print current configuration
                                     echo "Running for ${num_qubits} qubits, batch ${batch}, code id ${code_id}, bond dimension ${bond_dim}, error rate ${error_rate}, error model ${error_model}, and seed ${seed}."
                                     # Run the Python script
-                                    poetry run python examples/decoding/quantum_csp.py --num_qubits ${num_qubits} --batch ${batch} --code_id ${code_id} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
+                                    poetry run python -m mdopt.examples.decoding.quantum_csp --num_qubits ${num_qubits} --batch ${batch} --code_id ${code_id} --bond_dim ${bond_dim} --error_rate ${error_rate} --num_experiments ${num_experiments} --bias_prob ${bias_prob} --error_model "${error_model}" --seed ${seed} --num_processes ${num_processes} --silent ${silent} --tolerance ${tolerance} --cut ${cut}
                                 done
                             done
                         done

@@ -8,4 +8,6 @@
 module load python/3.11.5
 source ~/envs/myenv/bin/activate
 
-python mps-rand-circ.py
+# Resolve the script inside the installed package: it no longer sits beside
+# this file. The hyphen in the name rules out `python -m`.
+python "$(python -c 'import pathlib, mdopt.examples.random_circuit as m; print(pathlib.Path(m.__file__).parent / "mps-rand-circ.py")')"

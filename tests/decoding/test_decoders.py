@@ -21,7 +21,7 @@ import qecstruct as qec
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
 
-from examples.decoding.decoding import (
+from mdopt.examples.decoding.decoding import (
     str_to_bool,
     css_code_stabilisers,
     decode_css,
