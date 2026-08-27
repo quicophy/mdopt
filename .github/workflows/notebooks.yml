@@ -37,7 +37,10 @@ jobs:
   execute:
     name: execute notebooks (fast mode)
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # The suite is ~14 min on an M-series laptop; hosted runners are 2-3x
+    # slower, so 28-42 min expected. 90 leaves room for a slow runner rather
+    # than turning one into a red check.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
 
