@@ -53,15 +53,28 @@ if [ -z "$JOB" ]; then
 fi
 
 # ── Environment ──────────────────────────────────────────────────────────────
+# The venv on fir. Overridable for other clusters:
+#   MDOPT_VENV=$HOME/envs/myenv bash quantum_csp_rerun_cc.sh ...
+# Defaults to the fir environment because $HOME/envs/myenv on fir is missing
+# sympy and its site-packages is bypassed by pip's user-install default, so a
+# `pip install` there lands in ~/.local, which the venv does not have on sys.path.
+MDOPT_VENV="${MDOPT_VENV:-$HOME/envs/myenv-fir311}"
+
+# Charge to the right allocation. This account is associated with several _cpu
+# allocations, so sbatch refuses to guess and rejects every job without it.
+export SBATCH_ACCOUNT="${SBATCH_ACCOUNT:-def-ko1}"
+
 # Skipped under --dry-run so the plan can be previewed off-cluster.
 if [ "$DRY_RUN" = false ]; then
 module load python/3.11.5
-if [ ! -d "$HOME/envs/myenv" ]; then
-    virtualenv --no-download "$HOME/envs/myenv"
+if [ ! -d "$MDOPT_VENV" ]; then
+    virtualenv --no-download "$MDOPT_VENV"
 fi
-source "$HOME/envs/myenv/bin/activate"
+source "$MDOPT_VENV/bin/activate"
 pip install --no-index --upgrade pip
-pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx
+# sympy is imported at module level by decoding.py; omitting it here fails every
+# job at import time rather than at submission, so it must stay in this list.
+pip install --no-index numpy scipy opt_einsum tqdm qecstruct more_itertools networkx sympy
 pip install git+ssh://git@github.com/quicophy/matrex.git
 
 # Refuse to run against an unpatched mdopt: without the marginal() zero-guard
@@ -186,7 +199,7 @@ export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 module load python/3.11.5
-source "\$HOME/envs/myenv/bin/activate"
+source "${MDOPT_VENV}/bin/activate"
 
 # quantum_csp.py writes its pickle to a BARE filename, i.e. into the job's
 # working directory -- historically the submit directory, from where
