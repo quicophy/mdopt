@@ -19,7 +19,7 @@ Produces three figures from the chi-scan experiment:
 
 Data sources
 ------------
-  TN data : examples/decoding/data-quantum-csp-batch-9/   (all chi merged)
+  TN data : examples/decoding/data/quantum-csp-batch-9/   (all chi merged)
   BP-OSD  : examples/decoding/bp_results.pkl
 """
 
@@ -69,7 +69,7 @@ mpl.rcParams.update(
 LATTICE_SIZES = [30, 40, 50, 60, 70, 80, 90]
 ADVANTAGE = 0.90  # 10% LER advantage criterion (TN <= 0.9 * BP)
 ERROR_RATE = 0.001
-CHI_SCAN_DIR = "data-quantum-csp-batch-9"  # all chi merged here
+CHI_SCAN_DIR = "data/quantum-csp-batch-9"  # all chi merged here
 CHI_SCAN_VALS = [4, 8, 16, 32, 64, 128, 256]
 CHI_MAX = 400
 ALL_CHIS = sorted(CHI_SCAN_VALS + [CHI_MAX])
@@ -99,7 +99,7 @@ tn_eb = {**scan_eb, **b9_eb}
 
 # ── Load BP-OSD baseline ──────────────────────────────────────────────────────
 print("Loading BP-OSD data...")
-with open("bp_results.pkl", "rb") as f:
+with open("data/cache/bp_results.pkl", "rb") as f:
     bp_results = pickle.load(f)
 _, bp_ler, bp_err, _ = process_bp_statistics(bp_results, lattice_sizes=LATTICE_SIZES)
 

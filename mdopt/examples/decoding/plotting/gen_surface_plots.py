@@ -47,7 +47,7 @@ err_rates_dict, failure_rates, error_bars, _, _, _ = process_failure_statistics(
     lattice_sizes=lattice_sizes,
     max_bond_dims=max_bond_dims,
     error_model="Bitflip",
-    directory="data-quantum-surface",
+    directory="data/quantum-surface",
 )
 
 plot_failure_statistics(
@@ -72,7 +72,7 @@ err_rates_dict2, failure_rates2, error_bars2, _, _, _ = process_failure_statisti
     lattice_sizes=lattice_sizes_bdim,
     max_bond_dims=max_bond_dims_bdim,
     error_model="Bitflip",
-    directory="data-quantum-surface-bdimscaling",
+    directory="data/quantum-surface-bdimscaling",
 )
 
 # Re-apply style before this plot's figure creation

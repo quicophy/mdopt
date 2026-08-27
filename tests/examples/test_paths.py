@@ -62,12 +62,39 @@ def test_missing_dataset_names_itself(tmp_path, monkeypatch):
     """The datasets are untracked, so the error has to say what is missing."""
     monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))
     (tmp_path / "decoding").mkdir()
-    with pytest.raises(FileNotFoundError, match="data-quantum-surface"):
-        paths.data_dir("data-quantum-surface")
+    with pytest.raises(FileNotFoundError, match="quantum-surface"):
+        paths.data_dir("quantum-surface")
     # ...unless the caller says it may be absent.
-    assert paths.data_dir("data-quantum-surface", required=False).name == (
-        "data-quantum-surface"
+    assert paths.data_dir("quantum-surface", required=False).name == "quantum-surface"
+
+
+def test_datasets_nest_under_a_single_data_dir(tmp_path, monkeypatch):
+    """Datasets live in ``decoding/data/<name>``, not as ``data-*`` siblings.
+
+    ``data_dir`` prepends the ``data/`` component itself, so passing a name
+    that already carries it would silently resolve to ``data/data/<name>``.
+    """
+    monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))
+    (tmp_path / "decoding").mkdir()
+    assert paths.data_dir("quantum-surface", required=False) == (
+        paths.data_root() / "quantum-surface"
     )
+    assert paths.data_root().name == "data"
+    assert paths.data_root().parent == paths.decoding_assets()
+
+
+def test_cache_files_stay_inside_the_cache_dir(tmp_path, monkeypatch):
+    """cache_file() must strip any directory part it is handed.
+
+    The re-plot caches used to sit loose beside the scripts; a stray path
+    component would put them back outside the data tree.
+    """
+    monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))
+    (tmp_path / "decoding").mkdir()
+    cache = paths.cache_file("../../escaped.pkl")
+    assert cache.parent == paths.data_root() / "cache"
+    assert cache.name == "escaped.pkl"
+    assert cache.parent.is_dir()
 
 
 def test_figure_paths_are_absolute_and_flat(tmp_path, monkeypatch):

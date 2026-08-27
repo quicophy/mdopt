@@ -1,7 +1,7 @@
 """
 Run BP-OSD decoding of quantum CSP codes and average over codes.
 
-Saves per-code results to bp_results.pkl for fast re-plotting.
+Saves per-code results to data/cache/bp_results.pkl for fast re-plotting.
 Data format (v3):
     {
         'version': 3,
@@ -36,7 +36,7 @@ from matplotlib.colors import Normalize
 from tqdm import tqdm
 
 # Always run relative to the example assets so that relative paths
-# (CACHE_FILE, TN_DIRECTORY, data-csp-codes) resolve correctly regardless
+# (CACHE_FILE, TN_DIRECTORY, data/csp-codes) resolve correctly regardless
 # of where the script is invoked from. The script itself now lives in the
 # package, where none of that data is, so this can no longer key off __file__.
 from mdopt.examples.paths import decoding_assets, figure as _figure
@@ -55,12 +55,12 @@ mpl.rcParams.update(
     }
 )
 
-CACHE_FILE = "bp_results.pkl"
+CACHE_FILE = "data/cache/bp_results.pkl"
 BASE_SAMPLES = 50_000  # samples per ler_func call
 PS = [0.0001, 0.001, 0.01, 0.1]
 NS = [30, 40, 50, 60, 70, 80, 90]
 BATCH = 9
-TN_DIRECTORY = "data-quantum-csp-batch-9"  # source of truth for code IDs
+TN_DIRECTORY = "data/quantum-csp-batch-9"  # source of truth for code IDs
 
 # Repetitions of ler_func at p=1e-4 per lattice size.
 # Chosen so that expected failures per code >= 10, using TN LER as upper bound.
@@ -82,7 +82,7 @@ def n_samples_for(N: int, p: float) -> int:
 
 
 def load_csp_code(num_qubits: int, batch: int, code_id: int):
-    for prefix in ["data-csp-codes", "examples/decoding/data-csp-codes"]:
+    for prefix in ["data/csp-codes", "examples/decoding/data/csp-codes"]:
         path = os.path.join(
             prefix,
             f"batch_{batch}",

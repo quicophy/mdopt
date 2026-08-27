@@ -96,7 +96,7 @@ def parse_arguments():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="data-classical-ldpc",
+        default="data/classical-ldpc",
         help="Directory to save output pickle files.",
     )
     parser.add_argument(
@@ -227,7 +227,7 @@ def run_experiment(
 
 
 def save_experiment_data(
-    data, num_bits, chi_max, error_rate, seed, output_dir="data-classical-ldpc"
+    data, num_bits, chi_max, error_rate, seed, output_dir="data/classical-ldpc"
 ):
     """Save the experiment data."""
     os.makedirs(output_dir, exist_ok=True)

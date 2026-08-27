@@ -57,7 +57,7 @@ NUM_EXPERIMENTS = 50  # per p value
 SEED = 42
 p_grid = np.array([0.0001, 0.001, 0.01, 0.1])
 tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
-DATA_DIR = "data-classical-ldpc"
+DATA_DIR = "data/classical-ldpc"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 

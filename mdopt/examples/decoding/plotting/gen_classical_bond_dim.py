@@ -58,7 +58,7 @@ SEED = 123
 max_bond_dims = [8, 16, 32, 64, 128]
 error_rates = np.array([0.05, 0.10, 0.15, 0.20, 0.25])
 tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
-DATA_DIR = "data-classical-ldpc"
+DATA_DIR = "data/classical-ldpc"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 

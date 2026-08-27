@@ -53,7 +53,7 @@ x_logical_operators = ["XXXXX"]
 z_logical_operators = ["ZZZZZ"]
 num_qubits = 5
 
-PICKLE = "failure_rate_5qubit_erasure_data.pkl"
+PICKLE = "data/cache/failure_rate_5qubit_erasure_data.pkl"
 NUM_EXPERIMENTS = 100000
 SEED = 42
 NUM_WORKERS = 8

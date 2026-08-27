@@ -97,8 +97,8 @@ def main():
     # ----------------------------
     # Save results
     # ----------------------------
-    os.makedirs("data-classical-ldpc", exist_ok=True)
-    save_path = f"data-classical-ldpc/bp_numbits{n}_seed{code_seed}.pkl"
+    os.makedirs("data/classical-ldpc", exist_ok=True)
+    save_path = f"data/classical-ldpc/bp_numbits{n}_seed{code_seed}.pkl"
     with open(save_path, "wb") as f:
         pickle.dump(
             {
@@ -132,7 +132,7 @@ def main():
     )
     plt.grid(True, which="both")
     plt.tight_layout()
-    plt.savefig("data-classical-ldpc/bp_plot.pdf", dpi=300)
+    plt.savefig("data/classical-ldpc/bp_plot.pdf", dpi=300)
     plt.show()
 
 

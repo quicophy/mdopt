@@ -42,7 +42,7 @@ mpl.rcParams.update(
     }
 )
 
-DATA_DIR = "data-quantum-bivariate-bicycle"
+DATA_DIR = "data/quantum-bivariate-bicycle"
 CHI = 400
 ERS = [1e-4, 1e-3, 1e-2]
 TARGET_REL_ERR = 0.10  # for the "more data needed" estimate

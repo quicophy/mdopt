@@ -40,7 +40,7 @@ x_logical_operators = ["XXX"]
 z_logical_operators = ["ZZZ"]
 num_qubits = 3
 
-PICKLE = "failure_rate_3qubit_data.pkl"
+PICKLE = "data/cache/failure_rate_3qubit_data.pkl"
 NUM_EXPERIMENTS = 10000
 SEED = 123
 error_rates = np.linspace(0.01, 0.50, 23)

@@ -1,4 +1,4 @@
-"""Augment bp_results.pkl with more BP-OSD samples at p=1e-3 for high N.
+"""Augment data/cache/bp_results.pkl with more BP-OSD samples at p=1e-3 for high N.
 
 The original cache runs only 1 rep × BASE_SAMPLES at p=1e-3.  At N=90 that
 means only ~150 000 pooled samples — with BP_LER on the order of 1e-5, zero
@@ -33,7 +33,7 @@ from multiprocessing import Pool
 import numpy as np
 from tqdm import tqdm
 
-CACHE_FILE = "bp_results.pkl"
+CACHE_FILE = "data/cache/bp_results.pkl"
 BATCH = 9
 TARGET_P = 0.001
 
@@ -55,7 +55,7 @@ def list_to_parity_matrix(stabs, num_qubits):
 
 
 def load_csp_code(num_qubits, batch, code_id):
-    for prefix in ["data-csp-codes", "examples/decoding/data-csp-codes"]:
+    for prefix in ["data/csp-codes", "examples/decoding/data/csp-codes"]:
         path = os.path.join(
             prefix,
             f"batch_{batch}",

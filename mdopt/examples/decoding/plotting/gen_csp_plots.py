@@ -1,6 +1,6 @@
 """
 Generate csp-tn-failure-rate.pdf — MPS-MPO decoder logical error rate for quantum CSP codes.
-Loads all pkl files from data-quantum-csp-batch-9, averages over codes per lattice size.
+Loads all pkl files from data/quantum-csp-batch-9, averages over codes per lattice size.
 Publication-ready style matching csp-bp-osd-average.pdf.
 """
 
@@ -45,7 +45,7 @@ mpl.rcParams.update(
 lattice_sizes = [30, 40, 50, 60, 70, 80, 90]
 max_bond_dims = [400]
 
-print("Loading MPS data from data-quantum-csp-batch-9...")
+print("Loading MPS data from data/quantum-csp-batch-9...")
 (
     error_rates_dict,
     failure_rates,
@@ -58,7 +58,7 @@ print("Loading MPS data from data-quantum-csp-batch-9...")
     lattice_sizes=lattice_sizes,
     max_bond_dims=max_bond_dims,
     error_model="Bitflip",
-    directory="data-quantum-csp-batch-9",
+    directory="data/quantum-csp-batch-9",
     equalize=True,
 )
 

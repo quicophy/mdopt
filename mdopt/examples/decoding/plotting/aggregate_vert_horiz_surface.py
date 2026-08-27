@@ -40,7 +40,7 @@ mpl.rcParams.update(
     }
 )
 
-DATA_PKL = "vert_horiz_surface_L5_data.pkl"
+DATA_PKL = "data/cache/vert_horiz_surface_L5_data.pkl"
 PLOT_OUT = _fig("surface-vert-horiz-speedup.pdf")
 PLOT_CHI = 32
 N_BOOT = 10000

@@ -153,8 +153,8 @@ esac
 # Read the code ids straight off disk rather than hardcoding them: a truncated
 # list would silently change the code-average the re-run is meant to match.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-OUTDIR="${REPO_ROOT}/examples/decoding/data-quantum-csp-batch-${BATCH}"
-CODE_DIR_ROOT="${REPO_ROOT}/examples/decoding/data-csp-codes/batch_${BATCH}/codes"
+OUTDIR="${REPO_ROOT}/examples/decoding/data/quantum-csp-batch-${BATCH}"
+CODE_DIR_ROOT="${REPO_ROOT}/examples/decoding/data/csp-codes/batch_${BATCH}/codes"
 
 code_ids_for() {
     local dir="${CODE_DIR_ROOT}/qubits_${1}"

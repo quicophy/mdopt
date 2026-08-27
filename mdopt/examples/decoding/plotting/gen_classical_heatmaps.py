@@ -113,7 +113,7 @@ for ax, data, label in zip(
     ax.set_yticklabels(range(n_steps))
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
-os.makedirs("data-classical-ldpc", exist_ok=True)
-out = _fig("data-classical-ldpc/ldpc-heatmaps-n16.pdf")
+os.makedirs("data/classical-ldpc", exist_ok=True)
+out = _fig("data/classical-ldpc/ldpc-heatmaps-n16.pdf")
 fig.savefig(out, dpi=300, bbox_inches="tight")
 print(f"Saved {out}")
