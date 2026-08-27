@@ -44,6 +44,7 @@ sys.path.append(examples_path_beluga)
 try:
     from mdopt.mps.utils import create_custom_product_state
     from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+    from mdopt.examples.paths import data_dir
     from mdopt.examples.decoding.decoding import (
         linear_code_parity_matrix_dense,
         linear_code_constraint_sites,
@@ -59,6 +60,9 @@ except ImportError as e:
         "Failed to import required modules. Ensure paths are correct.", exc_info=True
     )
     sys.exit(1)
+
+
+DEFAULT_OUTPUT_DIR = str(data_dir("classical-ldpc", required=False))
 
 
 def parse_arguments():
@@ -96,7 +100,7 @@ def parse_arguments():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="data/classical-ldpc",
+        default=DEFAULT_OUTPUT_DIR,
         help="Directory to save output pickle files.",
     )
     parser.add_argument(
@@ -227,7 +231,7 @@ def run_experiment(
 
 
 def save_experiment_data(
-    data, num_bits, chi_max, error_rate, seed, output_dir="data/classical-ldpc"
+    data, num_bits, chi_max, error_rate, seed, output_dir=DEFAULT_OUTPUT_DIR
 ):
     """Save the experiment data."""
     os.makedirs(output_dir, exist_ok=True)
