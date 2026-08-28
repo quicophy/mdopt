@@ -597,3 +597,38 @@ def test_skipped_bond_still_advances_the_environments():
     # The requirement is that the sweep survives the skipped bond: the bonds
     # after it read the environments this one was supposed to advance.
     engine.sweep()
+
+
+def test_non_finite_operator_is_not_reported_as_zero():
+    """NaN in the operator is corruption, not an empty bond.
+
+    Reading it as zero would skip the bond and swallow the ArpackError, leaving a
+    corrupted run to continue silently.
+    """
+    dimension = 8
+    nan_operator = LinearOperator(
+        (dimension, dimension),
+        matvec=lambda v: np.full(dimension, np.nan),
+        dtype=float,
+    )
+    probe = np.full(dimension, 1.0 / np.sqrt(dimension))
+
+    assert not _operator_is_numerically_zero(nan_operator, probe)
+
+
+def test_non_finite_operator_lets_the_arpack_error_through():
+    """End to end: a NaN operator must raise, not be skipped."""
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.full_like(tensor, np.nan)
+
+    with pytest.raises((ArpackError, ValueError, FloatingPointError)):
+        engine.update_bond(0)

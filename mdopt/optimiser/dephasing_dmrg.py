@@ -56,6 +56,9 @@ def _operator_is_numerically_zero(
     Used only after ARPACK has already failed, to tell a genuinely zero operator
     from one that merely has the starting vector in its nullspace. Random probes
     make the second case vanishingly unlikely to be misread.
+
+    A non-finite image counts as "not zero": NaN or Inf means the state is
+    corrupted, which the caller must not quietly skip past.
     """
     generator = np.random.default_rng(0)
     dimension = operator.shape[0]
@@ -64,7 +67,12 @@ def _operator_is_numerically_zero(
     ]
     for probe in probes:
         image = operator.matvec(probe)
-        if np.all(np.isfinite(image)) and np.linalg.norm(image) > 0.0:
+        if not np.all(np.isfinite(image)):
+            # NaN or Inf is corrupted state, not a zero operator. Reporting it as
+            # "zero" would skip the bond and bury the corruption; say no so the
+            # original ArpackError propagates and the run stops loudly.
+            return False
+        if np.linalg.norm(image) > 0.0:
             return False
     return True
 
