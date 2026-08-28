@@ -1327,13 +1327,14 @@ def _logical_readout(
             logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
         )
     except Exception as error:  # pylint: disable=broad-except
-        # Defensive, not a fix for anything seen in production. At a bond
-        # dimension too small for DMRG to work with, an effective-Hamiltonian
-        # block can be driven to zero and ARPACK refuses to start ("error -9:
-        # Starting vector is zero"). Measured on [[4,2,2]]: 5 of 15 shots at
-        # chi_max=2 and 1 of 15 at chi_max=3, then nothing at all from
-        # chi_max=4 up to 256. Production runs at chi_max=250-400, so this
-        # should never fire there.
+        # An effective-Hamiltonian block can be driven to zero, after which
+        # ARPACK refuses to start ("error -9: Starting vector is zero").
+        # First measured on [[4,2,2]] at chi_max<=3 only, which is why this was
+        # once described as unreachable in production -- that was wrong. The
+        # same error ended a 4.6h full-scale classical_ldpc run at chi_max=128,
+        # through the classical decode_message path. The starting vector is now
+        # guarded at source in optimiser/dmrg.py and dephasing_dmrg.py; this
+        # stays as a backstop for any other way the solver can fail.
         #
         # It is cheap insurance rather than a correction: the beam search has
         # already produced a valid basis state and its exact amplitude, so a

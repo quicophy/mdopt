@@ -32,6 +32,22 @@ from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
 
 
+def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
+    """Return a starting vector ARPACK will accept.
+
+    ``eigsh`` raises "ARPACK error -9: Starting vector is zero" when ``v0`` is
+    all zeros, taking the whole run down. The two-site tensor can underflow to
+    zero on a hard instance -- that is what ended a 4.6h full-scale
+    classical_ldpc run at chi_max=128, so this is not confined to the tiny bond
+    dimensions where it was first seen. Any unit vector is a valid place for the
+    iteration to start, so fall back to a uniform one rather than failing.
+    """
+    norm = float(np.linalg.norm(guess))
+    if np.isfinite(norm) and norm > 0.0:
+        return guess
+    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=guess.dtype)
+
+
 class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
     """
     Class to store an effective two-site density operator.
@@ -281,7 +297,9 @@ class DephasingDMRG:
             k=1,
             which=self.mode,
             return_eigenvectors=True,
-            v0=initial_guess,
+            v0=_nonzero_start_vector(
+                initial_guess, effective_density_operator.shape[0]
+            ),
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
