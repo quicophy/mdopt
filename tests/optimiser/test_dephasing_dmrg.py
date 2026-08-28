@@ -2,6 +2,7 @@
 
 import pytest
 import numpy as np
+from scipy.sparse.linalg import ArpackError, LinearOperator, eigsh
 
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mdopt.optimiser.dmrg import DMRG as dmrg
@@ -492,3 +493,52 @@ def test_dephasing_dmrg_deterministic_snap_in_degeneracy_LA():
     # Both solutions must be valid computational-basis product states and keep bond dims at 1.
     assert engine.mps.bond_dimensions == [1 for _ in range(engine.mps.num_bonds)]
     assert engine2.mps.bond_dimensions == [1 for _ in range(engine2.mps.num_bonds)]
+
+
+def test_arpack_rejects_a_zero_operator_even_with_a_valid_start_vector():
+    """Pin the real trigger behind "ARPACK error -9: Starting vector is zero".
+
+    The message names the starting vector, which is misleading: the same error
+    is raised when the *operator* annihilates whatever it is handed, however
+    valid that vector is. Guarding v0 alone left a full-scale classical_ldpc run
+    failing here twice, 4.6 h and 2.2 h in.
+    """
+    dimension = 8
+    zero_operator = LinearOperator(
+        (dimension, dimension), matvec=lambda v: np.zeros(dimension), dtype=float
+    )
+    unit_v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+    assert np.isclose(np.linalg.norm(unit_v0), 1.0)
+
+    with pytest.raises(ArpackError):
+        eigsh(zero_operator, k=1, which="LA", v0=unit_v0, return_eigenvectors=True)
+
+
+def test_dephasing_dmrg_skips_a_bond_whose_operator_underflowed():
+    """A zeroed target must leave the sweep running, not raise.
+
+    The effective density operator is built from the target MPS tensors, so once
+    those underflow it is numerically zero on every bond.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start,
+        target,
+        chi_max=64,
+        cut=1e-12,
+        mode="LA",
+        copy=True,
+        silent=True,
+    )
+
+    # Drive the operator to zero the way an underflowed run does.
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.zeros_like(tensor)
+
+    engine.update_bond(0)  # must return quietly rather than raising ArpackError

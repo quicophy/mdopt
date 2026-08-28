@@ -1327,14 +1327,15 @@ def _logical_readout(
             logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
         )
     except Exception as error:  # pylint: disable=broad-except
-        # An effective-Hamiltonian block can be driven to zero, after which
-        # ARPACK refuses to start ("error -9: Starting vector is zero").
-        # First measured on [[4,2,2]] at chi_max<=3 only, which is why this was
-        # once described as unreachable in production -- that was wrong. The
-        # same error ended a 4.6h full-scale classical_ldpc run at chi_max=128,
-        # through the classical decode_message path. The starting vector is now
-        # guarded at source in optimiser/dmrg.py and dephasing_dmrg.py; this
-        # stays as a backstop for any other way the solver can fail.
+        # ARPACK refuses to start ("error -9: Starting vector is zero") when
+        # either the starting vector or the operator itself is numerically zero;
+        # the message names only the first. First measured on [[4,2,2]] at
+        # chi_max<=3, which is why this was once described as unreachable in
+        # production -- that was wrong. It ended full-scale classical_ldpc runs
+        # at chi_max=128 twice, through the classical decode_message path, and
+        # the cause was the zero operator rather than the starting vector.
+        # Both are now guarded at source in optimiser/dmrg.py and
+        # dephasing_dmrg.py; this stays as a backstop for anything else.
         #
         # It is cheap insurance rather than a correction: the beam search has
         # already produced a valid basis state and its exact amplitude, so a

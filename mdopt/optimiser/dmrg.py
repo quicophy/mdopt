@@ -19,11 +19,13 @@ def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
     """Return a starting vector ARPACK will accept.
 
     ``eigsh`` raises "ARPACK error -9: Starting vector is zero" when ``v0`` is
-    all zeros, taking the whole run down. The two-site tensor can underflow to
-    zero on a hard instance -- that is what ended a 4.6h full-scale
-    classical_ldpc run at chi_max=128, so this is not confined to the tiny bond
-    dimensions where it was first seen. Any unit vector is a valid place for the
-    iteration to start, so fall back to a uniform one rather than failing.
+    all zeros, and the two-site tensor can underflow to zero on a hard instance.
+    Any unit vector is a valid place for the iteration to start, so fall back to
+    a uniform one rather than failing.
+
+    Note that the same ARPACK error has a second, more common cause that this
+    does not address: an operator that annihilates whatever it is handed. See
+    ``dephasing_dmrg.DephasingDMRG.update_bond``, which guards that case.
     """
     norm = float(np.linalg.norm(guess))
     if np.isfinite(norm) and norm > 0.0:

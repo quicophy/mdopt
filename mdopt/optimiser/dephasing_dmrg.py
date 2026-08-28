@@ -292,14 +292,31 @@ class DephasingDMRG:
                 effective_density_operator.shape[0]
             )
 
+        start_vector = _nonzero_start_vector(
+            initial_guess, effective_density_operator.shape[0]
+        )
+
+        # ARPACK reports "error -9: Starting vector is zero" for two different
+        # situations, and a valid v0 only rules out one of them. The other is an
+        # operator that annihilates whatever it is given: the effective density
+        # operator is built from the target MPS tensors, and once those underflow
+        # it is numerically zero, so the Krylov space collapses however the
+        # iteration is started. Guarding v0 alone did not stop a full-scale
+        # classical_ldpc run failing here twice, 4.6 h and 2.2 h in.
+        #
+        # A zero operator carries no information about this bond, so there is
+        # nothing to optimise: leave the tensors as they are and let the sweep
+        # continue rather than taking the whole run down.
+        probe = effective_density_operator.matvec(start_vector)
+        if not np.all(np.isfinite(probe)) or np.linalg.norm(probe) == 0.0:
+            return
+
         _, eigenvectors = eigsh(
             effective_density_operator,
             k=1,
             which=self.mode,
             return_eigenvectors=True,
-            v0=_nonzero_start_vector(
-                initial_guess, effective_density_operator.shape[0]
-            ),
+            v0=start_vector,
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
