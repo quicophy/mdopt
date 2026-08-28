@@ -55,8 +55,8 @@ notebook                      full run
 ``dephasing_dmrg_debug_bb``   ~2 min
 ``quantum_three_qubit``       ~1.5 h
 ``maxbonddim``                ~3 h
-``quantum_surface``           ~3.5 h
-``classical_ldpc``            ~3 h
+``quantum_surface``           ~3.3 h
+``classical_ldpc``            ~2.5 h
 ============================  ==========
 
 The shot counts in the four expensive notebooks were chosen to land in that
