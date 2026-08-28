@@ -611,3 +611,22 @@ def test_split_two_site_tensor_accepts_infinite_chi_max(rng):
     tensor = rng.normal(size=(2, 3, 3, 2))
 
     _, _, _ = split_two_site_tensor(tensor, chi_max=np.inf, cut=1e-16)[:3]
+
+
+def test_qr_accepts_infinite_chi_max(rng):
+    """The qr branch takes the same np.inf idiom as svd.
+
+    Covered separately because ``split_two_site_tensor`` defaults to
+    ``strategy="svd"``, so the svd tests never reach this truncation site.
+    """
+    mat = rng.normal(size=(10, 6))
+
+    q_mat, r_mat, _ = qr(mat, cut=1e-16, chi_max=np.inf)
+
+    assert np.allclose(q_mat @ r_mat, mat)
+    assert q_mat.shape[1] == min(mat.shape)
+
+    # A finite chi_max still truncates.
+    q_small, r_small, _ = qr(mat, cut=1e-16, chi_max=3)
+    assert q_small.shape[1] == 3
+    assert r_small.shape[0] == 3

@@ -20,7 +20,7 @@ Produces three figures from the chi-scan experiment:
 Data sources
 ------------
   TN data : examples/decoding/data/quantum-csp-batch-9/   (all chi merged)
-  BP-OSD  : examples/decoding/bp_results.pkl
+  BP-OSD  : examples/decoding/data/cache/bp_results.pkl
 """
 
 # --- asset paths (the code lives in the package; the data does not) ---

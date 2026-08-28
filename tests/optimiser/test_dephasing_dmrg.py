@@ -6,7 +6,10 @@ from scipy.sparse.linalg import ArpackError, LinearOperator, eigsh
 
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mdopt.optimiser.dmrg import DMRG as dmrg
-from mdopt.optimiser.dephasing_dmrg import EffectiveDensityOperator
+from mdopt.optimiser.dephasing_dmrg import (
+    EffectiveDensityOperator,
+    _operator_is_numerically_zero,
+)
 from mdopt.mps.utils import (
     create_state_vector,
     create_simple_product_state,
@@ -542,3 +545,55 @@ def test_dephasing_dmrg_skips_a_bond_whose_operator_underflowed():
         engine.mps_target.tensors[index] = np.zeros_like(tensor)
 
     engine.update_bond(0)  # must return quietly rather than raising ArpackError
+
+
+def test_operator_is_numerically_zero_rejects_a_mere_nullspace_hit():
+    """A single probe landing in the nullspace must not read as a zero operator.
+
+    Skipping on one zero image would silently abandon a real optimisation
+    whenever the starting vector happened to be annihilated.
+    """
+    dimension = 8
+    # Rank-deficient but far from zero: kills e0, leaves everything else.
+    diagonal = np.ones(dimension)
+    diagonal[0] = 0.0
+    operator = LinearOperator(
+        (dimension, dimension), matvec=lambda v: diagonal * v, dtype=float
+    )
+
+    in_nullspace = np.zeros(dimension)
+    in_nullspace[0] = 1.0
+    assert np.linalg.norm(operator.matvec(in_nullspace)) == 0.0
+    assert not _operator_is_numerically_zero(operator, in_nullspace)
+
+    truly_zero = LinearOperator(
+        (dimension, dimension), matvec=lambda v: np.zeros(dimension), dtype=float
+    )
+    assert _operator_is_numerically_zero(truly_zero, in_nullspace)
+
+
+def test_skipped_bond_still_advances_the_environments():
+    """Skipping the eigensolve must not leave a placeholder environment behind.
+
+    The next bond reads ``left_environments[i + 1]``; if the skip returns early
+    it stays at the one-dimensional placeholder from ``__init__`` and the sweep
+    breaks on the following bond.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.zeros_like(tensor)
+
+    engine.update_bond(0)
+
+    # The requirement is that the sweep survives the skipped bond: the bonds
+    # after it read the environments this one was supposed to advance.
+    engine.sweep()

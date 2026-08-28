@@ -45,7 +45,9 @@ mpl.rcParams.update(
 )
 
 DATA_PKL = "data/cache/vert_horiz_surface_L5_data.pkl"
-HIGHCHI_PKLS = [f"vert_horiz_surface_L5_chi{c}_data.pkl" for c in (64, 128, 256, 512)]
+HIGHCHI_PKLS = [
+    f"data/cache/vert_horiz_surface_L5_chi{c}_data.pkl" for c in (64, 128, 256, 512)
+]
 N_BOOT = 10000
 PLOT_CHI = 32
 ALL_CHIS = [4, 8, 16, 32, 64, 128, 256, 512]

@@ -24,7 +24,7 @@ from typing import Union, cast
 import numpy as np
 import scipy.sparse
 from opt_einsum import contract
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import ArpackError, eigsh
 from tqdm import tqdm
 
 from mdopt.mps.canonical import CanonicalMPS
@@ -46,6 +46,27 @@ def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
     if np.isfinite(norm) and norm > 0.0:
         return guess
     return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=guess.dtype)
+
+
+def _operator_is_numerically_zero(
+    operator: scipy.sparse.linalg.LinearOperator, first_probe: np.ndarray
+) -> bool:
+    """Whether ``operator`` annihilates every vector it is shown.
+
+    Used only after ARPACK has already failed, to tell a genuinely zero operator
+    from one that merely has the starting vector in its nullspace. Random probes
+    make the second case vanishingly unlikely to be misread.
+    """
+    generator = np.random.default_rng(0)
+    dimension = operator.shape[0]
+    probes = [first_probe] + [
+        generator.normal(size=dimension).astype(first_probe.dtype) for _ in range(3)
+    ]
+    for probe in probes:
+        image = operator.matvec(probe)
+        if np.all(np.isfinite(image)) and np.linalg.norm(image) > 0.0:
+            return False
+    return True
 
 
 class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
@@ -296,29 +317,37 @@ class DephasingDMRG:
             initial_guess, effective_density_operator.shape[0]
         )
 
-        # ARPACK reports "error -9: Starting vector is zero" for two different
-        # situations, and a valid v0 only rules out one of them. The other is an
-        # operator that annihilates whatever it is given: the effective density
-        # operator is built from the target MPS tensors, and once those underflow
-        # it is numerically zero, so the Krylov space collapses however the
-        # iteration is started. Guarding v0 alone did not stop a full-scale
-        # classical_ldpc run failing here twice, 4.6 h and 2.2 h in.
-        #
-        # A zero operator carries no information about this bond, so there is
-        # nothing to optimise: leave the tensors as they are and let the sweep
-        # continue rather than taking the whole run down.
-        probe = effective_density_operator.matvec(start_vector)
-        if not np.all(np.isfinite(probe)) or np.linalg.norm(probe) == 0.0:
+        try:
+            _, eigenvectors = eigsh(
+                effective_density_operator,
+                k=1,
+                which=self.mode,
+                return_eigenvectors=True,
+                v0=start_vector,
+                tol=1e-8,
+            )
+        except ArpackError:
+            # "ARPACK error -9: Starting vector is zero" has two causes and names
+            # only one. v0 is guarded above, which leaves an operator that
+            # annihilates whatever it is given: the effective density operator is
+            # built from the target MPS tensors, so once those underflow it is
+            # numerically zero and the Krylov space collapses however the
+            # iteration starts. That ended full-scale classical_ldpc runs twice.
+            #
+            # Only skip once the operator is confirmed zero. A single probe
+            # proves nothing -- a perfectly good operator can have that one
+            # vector in its nullspace -- so re-raise unless several disagree.
+            if not _operator_is_numerically_zero(
+                effective_density_operator, start_vector
+            ):
+                raise
+            # A zero operator says nothing about this bond, so leave the tensors
+            # alone. The environments must still advance: the sweep reads
+            # left_environments[i + 1] on the next bond, and skipping the updates
+            # would leave it at the placeholder built in __init__.
+            self.update_left_environment(i)
+            self.update_right_environment(j)
             return
-
-        _, eigenvectors = eigsh(
-            effective_density_operator,
-            k=1,
-            which=self.mode,
-            return_eigenvectors=True,
-            v0=start_vector,
-            tol=1e-8,
-        )
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
 
         # Enforce the search domain: computational-basis bitstrings only.

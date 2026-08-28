@@ -119,7 +119,7 @@ def _decode_one_cell(args):
 
 
 def _pickle_path(chi):
-    return f"vert_horiz_surface_L{LATTICE_SIZE}_chi{chi}_data.pkl"
+    return f"data/cache/vert_horiz_surface_L{LATTICE_SIZE}_chi{chi}_data.pkl"
 
 
 def run_chi_group(chi, errors_per_p, n_qubits):
@@ -175,6 +175,7 @@ def run_chi_group(chi, errors_per_p, n_qubits):
             }
 
     elapsed = time.perf_counter() - t_start
+    os.makedirs(os.path.dirname(pkl), exist_ok=True)
     with open(pkl, "wb") as fh:
         pickle.dump(
             {

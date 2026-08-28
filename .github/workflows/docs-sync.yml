@@ -60,17 +60,22 @@ jobs:
       - name: Commit any drift
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/source/notebooks; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage first, then test the index: git diff on the worktree does not
+          # see untracked files, so a newly added notebook would look like "no
+          # change" and never be committed.
+          git add docs/source/notebooks
+          if git diff --cached --quiet -- docs/source/notebooks; then
               echo "docs/source/notebooks already matches examples/ -- nothing to do."
               exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/source/notebooks
-          # [skip ci] is not about this workflow -- its path filter already keeps a
-          # docs/source/notebooks commit from retriggering it. It is about the
-          # others: ci.yml, tests.yml, lint.yml and mypy.yml all run on any push
-          # with no path filter, so without this a pure file copy would spend a
-          # full test matrix, twice over, on every notebook change merged here.
-          git commit -m "docs: sync notebooks from examples/ [skip ci]"
+          # [skip actions], not [skip ci]. Both stop GitHub Actions, and this
+          # commit only copies notebooks, so there is no reason to spend a full
+          # test matrix plus lint and mypy on it -- ci.yml, tests.yml, lint.yml
+          # and mypy.yml all trigger on any push with no path filter. But Read
+          # the Docs also honours [skip ci], and skipping the docs build is the
+          # one thing this workflow must not do: the site would keep serving the
+          # pre-sync notebooks, which is the whole point of the sync.
+          git commit -m "docs: sync notebooks from examples/ [skip actions]"
           git push
