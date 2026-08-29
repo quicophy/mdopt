@@ -16,9 +16,9 @@ The path a result takes
              |
              |  git commit + push to main
              v
-   docs/source/notebooks/<notebook>.ipynb   docs-sync.yml copies it
-             |
-             |  readthedocs build
+   docs/source/notebooks/<notebook>.ipynb   docs-sync.yml copies it and opens
+             |                               a small sync PR (main is protected,
+             |  readthedocs build            so it cannot push directly)
              v
    this website                             nbsphinx renders the stored outputs
 
