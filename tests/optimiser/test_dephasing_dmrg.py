@@ -6,9 +6,11 @@ from scipy.sparse.linalg import ArpackError, LinearOperator, eigsh
 
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mdopt.optimiser.dmrg import DMRG as dmrg
+import mdopt.optimiser.dephasing_dmrg as dephasing_dmrg_module
 from mdopt.optimiser.dephasing_dmrg import (
     EffectiveDensityOperator,
     _operator_is_numerically_zero,
+    _restart_from_operator_range,
 )
 from mdopt.mps.utils import (
     create_state_vector,
@@ -632,3 +634,92 @@ def test_non_finite_operator_lets_the_arpack_error_through():
 
     with pytest.raises((ArpackError, ValueError, FloatingPointError)):
         engine.update_bond(0)
+
+
+def test_restart_recovers_a_start_vector_in_the_nullspace():
+    """The real cause of "ARPACK error -9" in this code base.
+
+    ARPACK reports a nullspace start vector with the same message it uses for a
+    zero one. The operator here is a healthy rank-1 projector; only ``v0`` is
+    annihilated. Treating that as "nothing to optimise" would silently discard a
+    bond whose dominant eigenvector is perfectly well defined.
+    """
+    dimension, generator = 256, np.random.default_rng(1)
+    v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+
+    raw = generator.normal(size=(dimension, 1))
+    raw -= np.outer(v0, v0 @ raw)  # range orthogonal to v0
+    basis = np.linalg.qr(raw)[0]
+    operator = LinearOperator(
+        (dimension, dimension),
+        matvec=lambda x: basis @ (basis.T @ x),
+        dtype=float,
+    )
+
+    # Precondition: the operator kills v0 exactly, but is not itself zero.
+    assert np.linalg.norm(operator.matvec(v0)) == 0.0
+    assert not _operator_is_numerically_zero(operator, v0)
+    with pytest.raises(ArpackError):
+        eigsh(operator, k=1, which="LA", v0=v0, return_eigenvectors=True)
+
+    # The restart finds the projector's eigenvector anyway.
+    eigenvectors = _restart_from_operator_range(operator, v0, "LA")
+    assert eigenvectors is not None
+    recovered = eigenvectors[:, 0]
+    assert np.isclose(abs(recovered @ basis[:, 0]), 1.0, atol=1e-6)
+
+
+def test_restart_gives_up_on_a_genuinely_zero_operator():
+    """A zero operator has no range to restart from, so None is correct."""
+    dimension = 64
+    zero = LinearOperator(
+        (dimension, dimension), matvec=lambda x: np.zeros(dimension), dtype=float
+    )
+    v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+
+    assert _restart_from_operator_range(zero, v0, "LA") is None
+    assert _operator_is_numerically_zero(zero, v0)
+
+
+def test_update_bond_recovers_when_the_guess_is_in_the_nullspace(monkeypatch):
+    """The restart has to be wired into update_bond, not merely available.
+
+    Substitutes an operator that annihilates whatever guess it is handed while
+    staying a healthy projector elsewhere -- the situation that took down three
+    full-scale classical_ldpc runs. update_bond must solve the bond rather than
+    raise or quietly skip it.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+
+    real_operator = dephasing_dmrg_module.EffectiveDensityOperator
+
+    class NullspaceOperator(real_operator):
+        """Healthy projector whose range is orthogonal to the initial guess."""
+
+        def _matvec(self, x):
+            flat = np.asarray(x).reshape(-1)
+            guess = np.ones(self.shape[0], dtype=complex)
+            guess /= np.linalg.norm(guess)
+            direction = np.zeros(self.shape[0], dtype=complex)
+            direction[0] = 1.0
+            direction -= guess * (guess.conj() @ direction)
+            direction /= np.linalg.norm(direction)
+            return direction * (direction.conj() @ flat)
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "EffectiveDensityOperator", NullspaceOperator
+    )
+
+    before = engine.mps.tensors[0].copy()
+    engine.update_bond(0)  # must not raise
+    after = engine.mps.tensors[0]
+
+    # And must not have been skipped: a skip leaves the tensor untouched.
+    assert not np.array_equal(before, after)

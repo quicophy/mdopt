@@ -21,6 +21,10 @@ performing the kronecker product explicitly.
 """
 
 from typing import Union, cast
+import os
+import pathlib
+import pickle
+
 import numpy as np
 import scipy.sparse
 from opt_einsum import contract
@@ -30,6 +34,59 @@ from tqdm import tqdm
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
+
+
+def _dump_arpack_failure(
+    operator, start_vector, left_env, right_env, target_i, target_j, bond
+):
+    """Write the failing eigensolve to disk when MDOPT_ARPACK_DUMP is set.
+
+    A no-op otherwise, so production runs are unaffected. Records the operator's
+    action on several probes as well as its inputs, because the question is
+    exactly what ARPACK saw that made it refuse to start.
+    """
+    destination = os.environ.get("MDOPT_ARPACK_DUMP")
+    if not destination:
+        return
+    path = pathlib.Path(destination)
+    if path.exists():  # keep the first failure, not the last
+        return
+
+    generator = np.random.default_rng(0)
+    dimension = operator.shape[0]
+    probes = {"start": start_vector}
+    for index in range(3):
+        probes[f"random{index}"] = generator.normal(size=dimension).astype(
+            start_vector.dtype
+        )
+    images = {}
+    for name, probe in probes.items():
+        image = operator.matvec(probe)
+        images[name] = {
+            "norm": float(np.linalg.norm(image)),
+            "max_abs": float(np.max(np.abs(image))) if image.size else 0.0,
+            "all_finite": bool(np.all(np.isfinite(image))),
+            "nan_count": int(np.sum(np.isnan(image))),
+        }
+
+    payload = {
+        "bond": bond,
+        "dimension": dimension,
+        "dtype": str(start_vector.dtype),
+        "start_vector": {
+            "norm": float(np.linalg.norm(start_vector)),
+            "max_abs": float(np.max(np.abs(start_vector))),
+            "all_finite": bool(np.all(np.isfinite(start_vector))),
+        },
+        "images": images,
+        "left_env": left_env,
+        "right_env": right_env,
+        "target_i": target_i,
+        "target_j": target_j,
+        "start_raw": start_vector,
+    }
+    with open(path, "wb") as handle:
+        pickle.dump(payload, handle)
 
 
 def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
@@ -46,6 +103,47 @@ def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
     if np.isfinite(norm) and norm > 0.0:
         return guess
     return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=guess.dtype)
+
+
+def _restart_from_operator_range(
+    operator: scipy.sparse.linalg.LinearOperator,
+    start_vector: np.ndarray,
+    mode: str,
+    attempts: int = 8,
+):
+    """Retry the eigensolve from a vector inside the operator's range.
+
+    ARPACK reports "error -9: Starting vector is zero" when ``A @ v0`` is exactly
+    zero, which happens when v0 lies in the operator's nullspace -- the operator
+    itself can be perfectly healthy. That is the case this recovers: ``A @ x`` is
+    in the range by construction, so it cannot be annihilated unless ``A`` is
+    zero everywhere.
+
+    Returns the eigenvectors, or None if no usable restart exists (the operator
+    annihilates or corrupts every probe). Deciding which of those two it is is
+    left to the caller.
+    """
+    generator = np.random.default_rng(0)
+    dimension = operator.shape[0]
+    for _ in range(attempts):
+        probe = generator.normal(size=dimension).astype(start_vector.dtype)
+        candidate = operator.matvec(probe)
+        norm = float(np.linalg.norm(candidate))
+        if not np.isfinite(norm) or norm == 0.0:
+            continue
+        try:
+            _, eigenvectors = eigsh(
+                operator,
+                k=1,
+                which=mode,
+                return_eigenvectors=True,
+                v0=candidate / norm,
+                tol=1e-8,
+            )
+            return eigenvectors
+        except ArpackError:
+            continue
+    return None
 
 
 def _operator_is_numerically_zero(
@@ -335,6 +433,10 @@ class DephasingDMRG:
                 tol=1e-8,
             )
         except ArpackError:
+            # Opt-in forensics: set MDOPT_ARPACK_DUMP to a path and the failing
+            # operator is written there before any interpretation of it. Four
+            # hypotheses about this error have been wrong, so capture the object
+            # rather than reason about it from a distance.
             # "ARPACK error -9: Starting vector is zero" has two causes and names
             # only one. v0 is guarded above, which leaves an operator that
             # annihilates whatever it is given: the effective density operator is
@@ -342,20 +444,38 @@ class DephasingDMRG:
             # numerically zero and the Krylov space collapses however the
             # iteration starts. That ended full-scale classical_ldpc runs twice.
             #
-            # Only skip once the operator is confirmed zero. A single probe
-            # proves nothing -- a perfectly good operator can have that one
-            # vector in its nullspace -- so re-raise unless several disagree.
-            if not _operator_is_numerically_zero(
-                effective_density_operator, start_vector
-            ):
-                raise
-            # A zero operator says nothing about this bond, so leave the tensors
-            # alone. The environments must still advance: the sweep reads
-            # left_environments[i + 1] on the next bond, and skipping the updates
-            # would leave it at the placeholder built in __init__.
-            self.update_left_environment(i)
-            self.update_right_environment(j)
-            return
+            # The usual cause is v0 sitting exactly in the operator's
+            # nullspace -- _snap_to_computational_basis pins the state to one
+            # basis configuration, and if that configuration has no amplitude in
+            # the target at this bond, the effective operator annihilates it
+            # exactly while remaining perfectly healthy elsewhere. Restarting
+            # from inside the operator's range recovers those.
+            eigenvectors = _restart_from_operator_range(
+                effective_density_operator, start_vector, self.mode
+            )
+            if eigenvectors is None:
+                # No restart worked. Either the operator is genuinely zero, in
+                # which case there is nothing to optimise here, or it is
+                # corrupted -- and corruption must not be skipped silently.
+                if not _operator_is_numerically_zero(
+                    effective_density_operator, start_vector
+                ):
+                    _dump_arpack_failure(
+                        effective_density_operator,
+                        start_vector,
+                        self.left_environments[i],
+                        self.right_environments[j],
+                        self.mps_target.tensors[i],
+                        self.mps_target.tensors[j],
+                        i,
+                    )
+                    raise
+                # The environments must still advance: the sweep reads
+                # left_environments[i + 1] on the next bond, and skipping the
+                # updates would leave it at the placeholder built in __init__.
+                self.update_left_environment(i)
+                self.update_right_environment(j)
+                return
         x = eigenvectors[:, 0].reshape(effective_density_operator.x_shape)
 
         # Enforce the search domain: computational-basis bitstrings only.
