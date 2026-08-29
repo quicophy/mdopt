@@ -44,7 +44,7 @@ Every dataset lives under `decoding/data/`: the per-experiment runs in
 | `5qubit-correction-histograms.pdf` | `gen_hist_5qubit.py` | SIM | — |
 | `shor-correction-histograms.pdf` | `gen_hist_shor.py` | SIM | — |
 | `bb-qubit-ordering.pdf` | `gen_qubit_order_bb.py` | SIM | writes `data/cache/qubit_order_bb_data.pkl` |
-| `ldpc-heatmaps-n16.pdf` | `gen_classical_heatmaps.py` | SIM | writes into `data/classical-ldpc/` |
+| `ldpc-heatmaps-n16.pdf` | `gen_classical_heatmaps.py` | SIM | — (computes in memory) |
 | `ldpc-bdim-scaling-n24.pdf` | `gen_classical_bond_dim.py` | SIM | `data/classical-ldpc/` |
 | `ldpc-mps-vs-bp-n20.pdf` | `gen_classical_mps_n20.py` | SIM | `data/classical-ldpc/` |
 | `ldpc-bp-failure-rate.pdf` | `classical_ldpc_bp.py` | SIM | writes into `data/classical-ldpc/` |

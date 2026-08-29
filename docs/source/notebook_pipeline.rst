@@ -42,22 +42,24 @@ Regenerating the results
 ``--inplace`` writes the executed outputs back into the notebook. Commit the
 notebook afterwards and the docs follow on the next push to ``main``.
 
-Expect this to take hours. Approximate wall times on a laptop:
+Expect this to take hours. Measured on an M-series laptop, one notebook at a
+time (``classical_ldpc`` is the one estimate here -- it has not yet completed
+a full run):
 
-============================  ==========
-notebook                      full run
-============================  ==========
-``main_component``            seconds
-``quantum_five_qubit``        under a minute
-``ground_state``              under a minute
-``shor``                      ~3 min
-``mps-rand-circ``             ~2 min
-``dephasing_dmrg_debug_bb``   ~2 min
-``quantum_three_qubit``       ~1.6 h
-``maxbonddim``                ~1.2 h
-``quantum_surface``           ~5 h
-``classical_ldpc``            ~2.5 h
-============================  ==========
+===========================  =================
+notebook                     full run
+===========================  =================
+``main_component``           4 s
+``ground_state``             11 s
+``mps-rand-circ``            26 s
+``dephasing_dmrg_debug_bb``  39 s
+``shor``                     39 s
+``quantum_five_qubit``       43 s
+``maxbonddim``               1.2 h
+``quantum_three_qubit``      1.6 h
+``quantum_surface``          4.9 h
+``classical_ldpc``           ~2.5 h (estimate)
+===========================  =================
 
 The shot counts in the four expensive notebooks were chosen to land in that
 range. They were once far larger -- ``quantum_surface`` alone needed 33 hours,
