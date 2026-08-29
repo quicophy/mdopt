@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 import qecstruct as qec
+from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
@@ -1071,3 +1072,60 @@ def test_readout_survives_a_failing_eigensolver(caplog):
 
     assert float(success) in (0.0, 1.0)
     assert any("Dephasing DMRG failed" in r.getMessage() for r in caplog.records)
+
+
+def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
+    """decode_custom must be gauge-invariant when fed honest Pauli strings.
+
+    Regression test for issue #531. The stabiliser strings here spell an X-type
+    generator as "X..X" -- the contract any external caller assumes. Before the
+    fix, ``css_code_stabilisers`` emitted the letters crossed and
+    ``custom_code_checks`` carried a component swap that silently expected
+    that, so honest strings mirrored the constraint wiring and the logical
+    readout stopped being gauge-invariant. Self-dual codes (Steane) and codes
+    whose logicals happen to align (Shor, [[4,2,2]]) mask this; the rotated
+    surface code does not: three of its weight-one errors -- sitting on the
+    logical supports -- decoded to the wrong class deterministically at every
+    bond dimension.
+
+    A distance-3 code must correct every weight-one error under MAP decoding.
+    """
+    surface = SurfaceCode(3, rotated=True)
+    num_qubits = surface.num_qubits
+
+    def rows_to_paulis(matrix, letter):
+        return [
+            "".join(letter if v else "I" for v in row) for row in np.asarray(matrix)
+        ]
+
+    stabilisers = rows_to_paulis(surface.matrix_x, "X") + rows_to_paulis(
+        surface.matrix_z, "Z"
+    )
+    logicals = np.asarray(surface.get_logical_ops())
+
+    def symplectic_to_pauli(row):
+        x_part, z_part = row[:num_qubits], row[num_qubits:]
+        return "".join(
+            "Y" if x and z else "X" if x else "Z" if z else "I"
+            for x, z in zip(x_part, z_part)
+        )
+
+    x_logicals = [symplectic_to_pauli(logicals[0])]
+    z_logicals = [symplectic_to_pauli(logicals[1])]
+
+    for qubit in range(num_qubits):
+        for pauli in "XZY":
+            error = "I" * qubit + pauli + "I" * (num_qubits - qubit - 1)
+            _, success = decode_custom(
+                stabilisers,
+                x_logicals,
+                z_logicals,
+                error,
+                chi_max=64,
+                bias_type="Depolarising",
+                bias_prob=0.05,
+                renormalise=True,
+                silent=True,
+                tolerance=0,
+            )
+            assert success, f"weight-1 error {error} decoded to the wrong class"

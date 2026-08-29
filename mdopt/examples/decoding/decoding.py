@@ -487,7 +487,10 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     -------
     stabilisers : Tuple[List[str], List[str]]
         A tuple of two lists, where the first one corresponds to X stabilisers and
-        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli string.
+        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli
+        string with its honest letters: an X-type generator reads "X..X". (It used
+        to emit the letters crossed, which the component swap then in
+        ``custom_code_checks`` silently expected -- issue #531.)
     """
 
     def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
@@ -509,7 +512,7 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
+        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "X"))
 
     # Z stabilisers
     parity_matrix_z = code.z_stabs_binary()
@@ -518,7 +521,7 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "X"))
+        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
 
     return stabilisers_x, stabilisers_z
 
@@ -793,6 +796,21 @@ def create_bb_code(
     return CssCode(x_code=x_code, z_code=z_code)
 
 
+def _cross_pauli_letters(pauli_string: str) -> str:
+    """Exchange X and Z letters in a Pauli string (Y, I and E unchanged).
+
+    The decoders' internal convention couples each operator's parity check to
+    its *own* component (an X-type check constrains the first component of
+    every qubit pair, which is where :func:`pauli_to_mps` records an input
+    ``X``). ``decode_css``'s stabiliser-multiplication retry was written
+    against the letter-crossed strings ``css_code_stabilisers`` used to emit,
+    so it crosses the honest strings back locally to keep its behaviour
+    -- verified invariant to 1e-14 -- unchanged (issue #531).
+    """
+    table = {"X": "Z", "Z": "X"}
+    return "".join(table.get(letter, letter) for letter in pauli_string)
+
+
 def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
     """
     Given a list of stabilizers and logicals, returns a list of checks,
@@ -813,17 +831,14 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
-        # A stabiliser's syndrome is a symplectic product: its Z part detects X
-        # errors and its X part detects Z errors. The parity check therefore acts
-        # on the *opposite* component to the one pauli_to_mps would assign, so
-        # the two bits of every qubit are swapped here. (A Y acts on both and is
-        # unaffected; for a self-dual code such as Steane the swap is invisible,
-        # which is why it went unnoticed.)
+        # Each operator's parity check lands on its own components -- the same
+        # convention css_code_checks uses. The former component swap here only
+        # compensated the letter-crossed strings css_code_stabilisers used to
+        # emit; with honest Pauli strings it mirrored the constraint wiring and
+        # broke gauge invariance of the readout on non-self-dual codes
+        # (issue #531).
         bitstring = pauli_to_mps(stabilizer)
-        swapped = "".join(
-            bitstring[i + 1] + bitstring[i] for i in range(0, len(bitstring), 2)
-        )
-        check = len(logicals) + np.nonzero([int(bit) for bit in swapped])[0]
+        check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
         checks.append(list(check))
 
     return checks
@@ -893,7 +908,12 @@ def custom_code_logicals(
     logicals_x = []
     logicals_z = []
 
-    # Transform X logical operators
+    # Each class is read off its own operator's components, matching the
+    # constraint convention above: with checks on their own components, the
+    # deformation space of a qubit's first component is null(H_X), whose gauge
+    # directions all overlap supp(X-bar) evenly (they commute), while the
+    # Z-bar direction overlaps it oddly -- so this labelling is exactly the
+    # gauge-invariant one (issue #531).
     for logical in x_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
@@ -902,7 +922,6 @@ def custom_code_logicals(
         x_sites += len(x_logicals) + len(z_logicals)
         logicals_x.append(list(x_sites))
 
-    # Transform Z logical operators
     for logical in z_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
@@ -1608,7 +1627,14 @@ def decode_css(
         # path could not be reproduced from its seed.
         generator = np.random.default_rng() if rng is None else rng
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
-        stabilisers = stabilisers_x + stabilisers_z
+        # decode_css's constraint wiring couples each check to its own
+        # component, so the invariant retry direction is the letter-crossed
+        # string -- see _cross_pauli_letters. This preserves the behaviour the
+        # invariance test pins to 1e-9 (and chi-convergence measured at 1e-14).
+        stabilisers = [
+            _cross_pauli_letters(stabiliser)
+            for stabiliser in stabilisers_x + stabilisers_z
+        ]
         error = multiply_pauli_strings(error, str(generator.choice(stabilisers)))
 
     # Compute qubit permutation that minimises MPO bandwidth.
