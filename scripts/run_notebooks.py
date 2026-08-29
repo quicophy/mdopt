@@ -15,7 +15,10 @@ for ten months:
 Executed output is deliberately **discarded**. CI runs with ``MDOPT_NB_FAST=1``,
 which shrinks the workloads to a token size, so its outputs are not the numbers
 the documentation should show. The committed outputs come from a full-scale run
-and reach the docs through ``generate_docs.sh``.
+(``--inplace``) and reach the docs automatically: on every push to ``main``,
+``.github/workflows/docs-sync.yml`` copies them into ``docs/source/notebooks``,
+where readthedocs renders them. ``generate_docs.sh`` performs the same copy for
+a local docs build.
 
 Usage::
 
