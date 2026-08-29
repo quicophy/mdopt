@@ -46,6 +46,11 @@ if compgen -G "examples/*/*.ipynb" > /dev/null; then
             cp "$nb" "$NOTEBOOKS_DEST_DIR/"
         fi
     done
+    # The notebooks reference their illustrations relatively, so the images
+    # must travel with them -- same rule as docs-sync.yml.
+    for img in examples/*/*.png; do
+        cp "$img" "$NOTEBOOKS_DEST_DIR/"
+    done
     shopt -u nullglob
 else
     echo "    (No notebooks found under examples/*/*.ipynb)"

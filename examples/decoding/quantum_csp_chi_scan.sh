@@ -10,7 +10,7 @@
 # size already holds chi ∈ {4,8,16,32,64,128,256} in data/quantum-csp-batch-9,
 # so re-running them would only duplicate work. Add them back to NS if that
 # data is ever discarded.
-# Results go into data/quantum-csp-chi-scan/ alongside existing batch-9 data.
+# Results go into data/quantum-csp-batch-9/ alongside the existing data there.
 #
 # Fixed parameters:
 #   error_rate = 0.001  (clearest TN vs BP-OSD signal)

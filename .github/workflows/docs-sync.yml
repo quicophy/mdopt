@@ -18,6 +18,9 @@ on:
     branches: [main]
     paths:
       - "examples/**/*.ipynb"
+      # The illustrations travel with the notebooks, so updating one without
+      # touching its notebook must still re-sync.
+      - "examples/**/*.png"
       - "generate_docs.sh"
       - ".github/workflows/docs-sync.yml"
   workflow_dispatch:
@@ -84,4 +87,18 @@ jobs:
           # one thing this workflow must not do: the site would keep serving the
           # pre-sync notebooks, which is the whole point of the sync.
           git commit -m "docs: sync notebooks from examples/ [skip actions]"
-          git push
+          # main can advance between checkout and here; a plain push would then
+          # be rejected and, since the interleaving push may not touch notebook
+          # paths, nothing would re-trigger this sync. Rebase and retry -- our
+          # commit only touches docs/source/notebooks, so the rebase is trivial
+          # unless another docs-sync ran concurrently (prevented by the
+          # concurrency group above).
+          for attempt in 1 2 3; do
+              if git push; then
+                  exit 0
+              fi
+              git fetch origin main
+              git rebase origin/main
+          done
+          echo "could not push after 3 attempts" >&2
+          exit 1
