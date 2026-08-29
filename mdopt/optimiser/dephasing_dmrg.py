@@ -102,7 +102,10 @@ def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
     norm = float(np.linalg.norm(guess))
     if np.isfinite(norm) and norm > 0.0:
         return guess
-    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=guess.dtype)
+    # Promote integer guesses: keeping their dtype would truncate the uniform
+    # entries to zero, handing ARPACK exactly the vector this guards against.
+    dtype = np.result_type(guess.dtype, np.float64)
+    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=dtype)
 
 
 def _restart_from_operator_range(
@@ -125,8 +128,11 @@ def _restart_from_operator_range(
     """
     generator = np.random.default_rng(0)
     dimension = operator.shape[0]
+    # Same promotion as _nonzero_start_vector: an integer dtype would truncate
+    # the Gaussian probes to lattice points, mostly zeros.
+    dtype = np.result_type(start_vector.dtype, np.float64)
     for _ in range(attempts):
-        probe = generator.normal(size=dimension).astype(start_vector.dtype)
+        probe = generator.normal(size=dimension).astype(dtype)
         candidate = operator.matvec(probe)
         norm = float(np.linalg.norm(candidate))
         if not np.isfinite(norm) or norm == 0.0:

@@ -30,7 +30,10 @@ def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
     norm = float(np.linalg.norm(guess))
     if np.isfinite(norm) and norm > 0.0:
         return guess
-    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=guess.dtype)
+    # Promote integer guesses: keeping their dtype would truncate the uniform
+    # entries to zero, handing ARPACK exactly the vector this guards against.
+    dtype = np.result_type(guess.dtype, np.float64)
+    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=dtype)
 
 
 class EffectiveOperator(scipy.sparse.linalg.LinearOperator):

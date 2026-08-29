@@ -138,6 +138,12 @@ def test_nonzero_start_vector_replaces_a_zero_guess():
     nan = np.full(dimension, np.nan)
     assert np.all(np.isfinite(_nonzero_start_vector(nan, dimension)))
 
+    # An integer-typed guess must not truncate the fallback to zeros -- that
+    # would hand ARPACK exactly the vector this function exists to avoid.
+    fallback = _nonzero_start_vector(np.zeros(dimension, dtype=np.int64), dimension)
+    assert np.isclose(np.linalg.norm(fallback), 1.0)
+    assert np.issubdtype(fallback.dtype, np.inexact)
+
 
 def test_eigsh_rejects_a_zero_start_vector():
     """Pin the failure mode the guard exists for.
