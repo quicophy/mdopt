@@ -1129,3 +1129,41 @@ def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
                 tolerance=0,
             )
             assert success, f"weight-1 error {error} decoded to the wrong class"
+
+
+@pytest.mark.parametrize(
+    "error, should_succeed",
+    [
+        ("III", True),  # no error
+        ("XII", True),  # weight-1: a distance-3 repetition code corrects it
+        ("IXI", True),
+        ("IIX", True),
+        ("XXI", False),  # weight-2: past half the distance, MAP must fail
+        ("XIX", False),
+    ],
+)
+def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
+    error, should_succeed
+):
+    """The 3-qubit pipeline must reproduce the textbook repetition code.
+
+    Regression test for the compensating-convention bug behind issue #531: with
+    the mirrored wiring the swap in ``custom_code_checks`` produced, weight-one
+    flips decoded to the logical class and weight-two flips to identity --
+    exactly backwards -- so the notebook's logical error rate ran at
+    ~1-(1-p)^3 instead of the analytic 3p^2 - 2p^3 it is validated against
+    (measured 0.404 vs 0.104 at p = 0.2).
+    """
+    _, success = decode_custom(
+        ["XXI", "IXX"],
+        ["XXX"],
+        ["ZZZ"],
+        error,
+        chi_max=64,
+        bias_type="Bitflip",
+        bias_prob=0.2,
+        renormalise=True,
+        silent=True,
+        tolerance=0,
+    )
+    assert bool(success) == should_succeed
