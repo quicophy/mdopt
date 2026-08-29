@@ -456,9 +456,22 @@ class DephasingDMRG:
             # the target at this bond, the effective operator annihilates it
             # exactly while remaining perfectly healthy elsewhere. Restarting
             # from inside the operator's range recovers those.
-            eigenvectors = _restart_from_operator_range(
-                effective_density_operator, start_vector, self.mode
-            )
+            image = effective_density_operator.matvec(start_vector)
+            if (
+                self.mode in ("SA", "SM")
+                and np.all(np.isfinite(image))
+                and float(np.linalg.norm(image)) == 0.0
+            ):
+                # The effective density operator is positive semidefinite, so a
+                # start vector it annihilates exactly is already an exact
+                # zero-eigenvalue eigenvector -- the very thing SA/SM ask for.
+                # The range restart would exclude the nullspace and hand back
+                # the smallest *nonzero* eigenvector instead.
+                eigenvectors = start_vector.reshape(-1, 1)
+            else:
+                eigenvectors = _restart_from_operator_range(
+                    effective_density_operator, start_vector, self.mode
+                )
             if eigenvectors is None:
                 # No restart worked. Either the operator is genuinely zero, in
                 # which case there is nothing to optimise here, or it is

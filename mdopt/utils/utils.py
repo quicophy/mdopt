@@ -29,7 +29,7 @@ def _to_numpy(a):
 def svd(
     mat: np.ndarray,
     cut: float = float(1e-12),
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
@@ -42,8 +42,10 @@ def svd(
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
     cut : float
         Singular values smaller than this will be discarded.
-    chi_max : int
-        Maximum number of singular values to keep.
+    chi_max : float
+        Maximum number of singular values to keep. ``np.inf`` disables the
+        bound, keeping every value above ``cut`` -- the untruncated-reference
+        idiom the example notebooks use.
     renormalise : bool
         Whether to renormalise the singular value spectrum after the cut.
     return_truncation_error : bool
@@ -143,7 +145,7 @@ def svd(
 def qr(
     mat: np.ndarray,
     cut: float = float(1e-12),
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[float]]:
@@ -156,7 +158,7 @@ def qr(
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
     cut : float
         Threshold below which the diagonal values of R are discarded.
-    chi_max : int
+    chi_max : float
         Maximum number of columns/rows to keep after truncation.
     renormalise : bool
         Whether to renormalise the matrix after truncation.
@@ -291,7 +293,7 @@ def kron_tensors(
 
 def split_two_site_tensor(
     tensor: np.ndarray,
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     cut: float = float(1e-12),
     renormalise: bool = False,
     strategy: str = "svd",
@@ -310,7 +312,7 @@ def split_two_site_tensor(
     ----------
     tensor : np.ndarray
         Two-site tensor ``(i, j, k, l)``.
-    chi_max : int
+    chi_max : float
         Maximum number of singular/diagonal values to keep.
     cut : float
         Discard any singular/diagonal values smaller than this.

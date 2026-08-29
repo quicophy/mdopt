@@ -510,7 +510,7 @@ class ExplicitMPS:
     def compress_bond(
         self,
         bond: int,
-        chi_max: int = int(1e4),
+        chi_max: float = int(1e4),
         cut: float = float(1e-17),
         renormalise: bool = False,
         return_truncation_error: bool = False,
@@ -523,7 +523,7 @@ class ExplicitMPS:
         ----------
         bond : int
             The index of the bond to compress.
-        chi_max : int
+        chi_max : float
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.
@@ -593,7 +593,7 @@ class ExplicitMPS:
 
     def compress(
         self,
-        chi_max: int = int(1e4),
+        chi_max: float = int(1e4),
         cut: float = float(1e-17),
         renormalise: bool = False,
         return_truncation_errors: bool = False,
@@ -603,7 +603,7 @@ class ExplicitMPS:
 
         Parameters
         ----------
-        chi_max : int
+        chi_max : float
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.

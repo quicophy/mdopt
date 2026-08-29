@@ -730,3 +730,46 @@ def test_update_bond_recovers_when_the_guess_is_in_the_nullspace(monkeypatch):
 
     # And must not have been skipped: a skip leaves the tensor untouched.
     assert not np.array_equal(before, after)
+
+
+def test_sa_mode_keeps_the_annihilated_start_vector(monkeypatch):
+    """For SA/SM on a PSD operator, an annihilated guess IS the answer.
+
+    Eigenvalue zero is the smallest the operator has, so the nullspace vector
+    must be used directly; a range restart would exclude the nullspace and
+    silently return the smallest nonzero eigenvector instead.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="SA", copy=True, silent=True
+    )
+
+    real_operator = dephasing_dmrg_module.EffectiveDensityOperator
+
+    class NullspaceOperator(real_operator):
+        def _matvec(self, x):
+            flat = np.asarray(x).reshape(-1)
+            guess = np.ones(self.shape[0], dtype=complex)
+            guess /= np.linalg.norm(guess)
+            direction = np.zeros(self.shape[0], dtype=complex)
+            direction[0] = 1.0
+            direction -= guess * (guess.conj() @ direction)
+            direction /= np.linalg.norm(direction)
+            return direction * (direction.conj() @ flat)
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "EffectiveDensityOperator", NullspaceOperator
+    )
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("SA must not go through the range restart")
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "_restart_from_operator_range", forbidden
+    )
+
+    engine.update_bond(0)  # must complete using the annihilated guess directly

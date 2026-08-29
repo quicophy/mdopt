@@ -47,7 +47,9 @@ if compgen -G "examples/*/*.ipynb" > /dev/null; then
         fi
     done
     # The notebooks reference their illustrations relatively, so the images
-    # must travel with them -- same rule as docs-sync.yml.
+    # must travel with them -- same rule as docs-sync.yml. Clean first so a
+    # renamed or deleted illustration does not linger.
+    find "$NOTEBOOKS_DEST_DIR" -mindepth 1 -maxdepth 1 -type f -name "*.png" -exec rm -f {} +
     for img in examples/*/*.png; do
         cp "$img" "$NOTEBOOKS_DEST_DIR/"
     done
