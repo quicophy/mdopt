@@ -4,13 +4,13 @@
 #
 # Compute Canada submission script for the chi(N) scaling experiment.
 # Sweeps bond dimension chi across {4,8,16,32,64,128,256} for each
-# (N, code_id) pair that has TN data in data-quantum-csp-batch-9.
+# (N, code_id) pair that has TN data in data/quantum-csp-batch-9.
 # N ∈ {60,70,80,90} -- see NS below. get_code_ids() still carries ids for
 # 30, 40 and 50 because their sweeps were collected in an earlier run; every
-# size already holds chi ∈ {4,8,16,32,64,128,256} in data-quantum-csp-batch-9,
+# size already holds chi ∈ {4,8,16,32,64,128,256} in data/quantum-csp-batch-9,
 # so re-running them would only duplicate work. Add them back to NS if that
 # data is ever discarded.
-# Results go into data-quantum-csp-chi-scan/ alongside existing batch-9 data.
+# Results go into data/quantum-csp-batch-9/ alongside the existing data there.
 #
 # Fixed parameters:
 #   error_rate = 0.001  (clearest TN vs BP-OSD signal)
@@ -56,12 +56,12 @@ SILENT=true
 # Project root: SLURM sets SLURM_SUBMIT_DIR to the directory where sbatch was
 # called. For local testing, falls back to $PWD (run from project root).
 PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$PWD}"
-OUTPUT_DIR="${PROJECT_ROOT}/examples/decoding/data-quantum-csp-batch-9"
+OUTPUT_DIR="${PROJECT_ROOT}/examples/decoding/data/quantum-csp-batch-9"
 
 # Bond dimensions to scan (chi=400 already exists in batch-9; reused by analysis)
 BOND_DIMS=(4 8 16 32 64 128 256)
 
-# Code IDs matching data-quantum-csp-batch-9 exactly
+# Code IDs matching data/quantum-csp-batch-9 exactly
 # (case statement used instead of declare -A for bash 3.x compatibility)
 get_code_ids() {
     case $1 in

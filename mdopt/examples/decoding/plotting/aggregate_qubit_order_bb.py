@@ -40,8 +40,9 @@ mpl.rcParams.update(
     }
 )
 
-DATA_DIR = "data-quantum-bivariate-bicycle/qubit_order_data"
-PICKLE_OUT = "qubit_order_bb_data.pkl"
+DATA_DIR = "data/quantum-bivariate-bicycle/qubit_order_data"
+PICKLE_OUT = "data/cache/qubit_order_bb_data.pkl"
+os.makedirs(os.path.dirname(PICKLE_OUT), exist_ok=True)
 PLOT_OUT = _fig("bb-qubit-ordering.pdf")
 CHI_LIST = [8, 16, 24, 32, 40]
 P_LIST = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]

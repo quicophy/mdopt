@@ -29,7 +29,7 @@ def _to_numpy(a):
 def svd(
     mat: np.ndarray,
     cut: float = float(1e-12),
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
@@ -42,8 +42,10 @@ def svd(
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
     cut : float
         Singular values smaller than this will be discarded.
-    chi_max : int
-        Maximum number of singular values to keep.
+    chi_max : float
+        Maximum number of singular values to keep. ``np.inf`` disables the
+        bound, keeping every value above ``cut`` -- the untruncated-reference
+        idiom the example notebooks use.
     renormalise : bool
         Whether to renormalise the singular value spectrum after the cut.
     return_truncation_error : bool
@@ -116,7 +118,9 @@ def svd(
     v_h = _to_numpy(v_h)
 
     # Truncate by cut and chi_max
-    max_num = min(int(chi_max), int(np.sum(s > cut)))
+    # int(chi_max) first would raise OverflowError on the chi_max=np.inf
+    # idiom the notebooks use to mean "no truncation"; take the min first.
+    max_num = int(min(chi_max, int(np.sum(s > cut))))
     residual = s[max_num:]
     truncation_error = float(np.linalg.norm(residual) ** 2)
     u_l = u_l[:, :max_num]
@@ -141,7 +145,7 @@ def svd(
 def qr(
     mat: np.ndarray,
     cut: float = float(1e-12),
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[float]]:
@@ -154,7 +158,7 @@ def qr(
         Matrix provided as a ``np.ndarray`` with 2 dimensions.
     cut : float
         Threshold below which the diagonal values of R are discarded.
-    chi_max : int
+    chi_max : float
         Maximum number of columns/rows to keep after truncation.
     renormalise : bool
         Whether to renormalise the matrix after truncation.
@@ -191,7 +195,7 @@ def qr(
 
     # Determine effective rank and truncate
     abs_diag_r = np.abs(np.diag(r_r))
-    effective_rank = min(int(chi_max), int(np.sum(abs_diag_r > cut)))
+    effective_rank = int(min(chi_max, int(np.sum(abs_diag_r > cut))))
     trunc_idx = list(range(effective_rank))
 
     # Undo column pivoting without building a dense permutation matrix
@@ -289,7 +293,7 @@ def kron_tensors(
 
 def split_two_site_tensor(
     tensor: np.ndarray,
-    chi_max: int = int(1e4),
+    chi_max: float = int(1e4),
     cut: float = float(1e-12),
     renormalise: bool = False,
     strategy: str = "svd",
@@ -308,7 +312,7 @@ def split_two_site_tensor(
     ----------
     tensor : np.ndarray
         Two-site tensor ``(i, j, k, l)``.
-    chi_max : int
+    chi_max : float
         Maximum number of singular/diagonal values to keep.
     cut : float
         Discard any singular/diagonal values smaller than this.

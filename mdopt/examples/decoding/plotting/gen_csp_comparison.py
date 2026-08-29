@@ -62,13 +62,13 @@ print("Loading TN data...")
     lattice_sizes=LATTICE_SIZES,
     max_bond_dims=[CHI_MAX],
     error_model="Bitflip",
-    directory="data-quantum-csp-batch-9",
+    directory="data/quantum-csp-batch-9",
     equalize=True,
 )
 
 # ── Load BP-OSD data ──────────────────────────────────────────────────────────
 print("Loading BP-OSD data...")
-with open("bp_results.pkl", "rb") as f:
+with open("data/cache/bp_results.pkl", "rb") as f:
     bp_results = pickle.load(f)
 
 bp_ps, bp_ler, bp_err, bp_num_codes = process_bp_statistics(

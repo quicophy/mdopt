@@ -1,0 +1,107 @@
+name: docs-sync
+
+# Keeps docs/source/notebooks in step with examples/.
+#
+# readthedocs builds with nbsphinx_execute = "never", so the site renders
+# whatever outputs are committed under docs/source/notebooks. That directory is
+# a copy of examples/, refreshed by generate_docs.sh, and the two had already
+# drifted. This runs the copy step on every push to main and commits the
+# difference, so results a notebook was committed with reach the docs without
+# anyone remembering to run the script.
+#
+# It copies; it does not execute. Notebook outputs come from a full-scale run
+# committed alongside the notebook -- see .github/workflows/notebooks.yml for
+# why CI cannot produce them itself.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**/*.ipynb"
+      # The illustrations travel with the notebooks, so updating one without
+      # touching its notebook must still re-sync.
+      - "examples/**/*.png"
+      - "generate_docs.sh"
+      - ".github/workflows/docs-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: sync notebooks into docs
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # A token that can push back to the branch.
+          persist-credentials: true
+
+      - name: Copy notebooks into docs/source/notebooks
+        run: |
+          set -euo pipefail
+          dest="docs/source/notebooks"
+          mkdir -p "$dest"
+          # Mirrors step 2 of generate_docs.sh. gpu_example.ipynb is excluded
+          # from both the clean-out and the copy: it is kept exactly as
+          # committed.
+          find "$dest" -mindepth 1 -maxdepth 1 -type f -name "*.ipynb" \
+              ! -name "gpu_example.ipynb" -exec rm -f {} +
+          shopt -s nullglob
+          for nb in examples/*/*.ipynb; do
+              base="$(basename "$nb")"
+              if [[ "$base" != tmp* && "$base" != plotting* && "$base" != gpu_example.ipynb ]]; then
+                  cp "$nb" "$dest/"
+              fi
+          done
+          # Notebooks reference their illustrations relatively, so the images have
+          # to travel with them or the site renders a broken image. This is how
+          # 5qubit-decoder.png came to be missing while shor-decoder.png was not.
+          # Clean first, same as the notebooks above: a renamed or deleted
+          # illustration must not linger in the destination.
+          find "$dest" -mindepth 1 -maxdepth 1 -type f -name "*.png" -exec rm -f {} +
+          for img in examples/*/*.png; do
+              cp "$img" "$dest/"
+          done
+
+      - name: Commit any drift
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Stage first, then test the index: git diff on the worktree does not
+          # see untracked files, so a newly added notebook would look like "no
+          # change" and never be committed.
+          git add docs/source/notebooks
+          if git diff --cached --quiet -- docs/source/notebooks; then
+              echo "docs/source/notebooks already matches examples/ -- nothing to do."
+              exit 0
+          fi
+          # [skip actions], not [skip ci]. Both stop GitHub Actions, and this
+          # commit only copies notebooks, so there is no reason to spend a full
+          # test matrix plus lint and mypy on it -- ci.yml, tests.yml, lint.yml
+          # and mypy.yml all trigger on any push with no path filter. But Read
+          # the Docs also honours [skip ci], and skipping the docs build is the
+          # one thing this workflow must not do: the site would keep serving the
+          # pre-sync notebooks, which is the whole point of the sync.
+          git commit -m "docs: sync notebooks from examples/ [skip actions]"
+          # main can advance between checkout and here; a plain push would then
+          # be rejected and, since the interleaving push may not touch notebook
+          # paths, nothing would re-trigger this sync. Rebase and retry -- our
+          # commit only touches docs/source/notebooks, so the rebase is trivial
+          # unless another docs-sync ran concurrently (prevented by the
+          # concurrency group above).
+          for attempt in 1 2 3; do
+              if git push; then
+                  exit 0
+              fi
+              git fetch origin main
+              git rebase origin/main
+          done
+          echo "could not push after 3 attempts" >&2
+          exit 1

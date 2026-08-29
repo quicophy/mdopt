@@ -39,7 +39,7 @@ from mdopt.examples.decoding.decoding import (
 from mdopt.optimiser.utils import optimise_qubit_order
 
 LATTICE_SIZE = 5
-PICKLE = f"vert_horiz_surface_L{LATTICE_SIZE}_data.pkl"
+PICKLE = f"data/cache/vert_horiz_surface_L{LATTICE_SIZE}_data.pkl"
 SEED = 42
 NUM_WORKERS = 8
 chi_max_list = [4, 8, 16, 32]
@@ -187,6 +187,7 @@ def main():
                 "per_decode_t": per_decode_t,
             }
 
+    os.makedirs(os.path.dirname(PICKLE), exist_ok=True)
     with open(PICKLE, "wb") as fh:
         pickle.dump(
             {

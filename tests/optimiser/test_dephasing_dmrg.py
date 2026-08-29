@@ -2,10 +2,16 @@
 
 import pytest
 import numpy as np
+from scipy.sparse.linalg import ArpackError, LinearOperator, eigsh
 
 from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
 from mdopt.optimiser.dmrg import DMRG as dmrg
-from mdopt.optimiser.dephasing_dmrg import EffectiveDensityOperator
+import mdopt.optimiser.dephasing_dmrg as dephasing_dmrg_module
+from mdopt.optimiser.dephasing_dmrg import (
+    EffectiveDensityOperator,
+    _operator_is_numerically_zero,
+    _restart_from_operator_range,
+)
 from mdopt.mps.utils import (
     create_state_vector,
     create_simple_product_state,
@@ -492,3 +498,278 @@ def test_dephasing_dmrg_deterministic_snap_in_degeneracy_LA():
     # Both solutions must be valid computational-basis product states and keep bond dims at 1.
     assert engine.mps.bond_dimensions == [1 for _ in range(engine.mps.num_bonds)]
     assert engine2.mps.bond_dimensions == [1 for _ in range(engine2.mps.num_bonds)]
+
+
+def test_arpack_rejects_a_zero_operator_even_with_a_valid_start_vector():
+    """Pin the real trigger behind "ARPACK error -9: Starting vector is zero".
+
+    The message names the starting vector, which is misleading: the same error
+    is raised when the *operator* annihilates whatever it is handed, however
+    valid that vector is. Guarding v0 alone left a full-scale classical_ldpc run
+    failing here twice, 4.6 h and 2.2 h in.
+    """
+    dimension = 8
+    zero_operator = LinearOperator(
+        (dimension, dimension), matvec=lambda v: np.zeros(dimension), dtype=float
+    )
+    unit_v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+    assert np.isclose(np.linalg.norm(unit_v0), 1.0)
+
+    with pytest.raises(ArpackError):
+        eigsh(zero_operator, k=1, which="LA", v0=unit_v0, return_eigenvectors=True)
+
+
+def test_dephasing_dmrg_skips_a_bond_whose_operator_underflowed():
+    """A zeroed target must leave the sweep running, not raise.
+
+    The effective density operator is built from the target MPS tensors, so once
+    those underflow it is numerically zero on every bond.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start,
+        target,
+        chi_max=64,
+        cut=1e-12,
+        mode="LA",
+        copy=True,
+        silent=True,
+    )
+
+    # Drive the operator to zero the way an underflowed run does.
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.zeros_like(tensor)
+
+    engine.update_bond(0)  # must return quietly rather than raising ArpackError
+
+
+def test_operator_is_numerically_zero_rejects_a_mere_nullspace_hit():
+    """A single probe landing in the nullspace must not read as a zero operator.
+
+    Skipping on one zero image would silently abandon a real optimisation
+    whenever the starting vector happened to be annihilated.
+    """
+    dimension = 8
+    # Rank-deficient but far from zero: kills e0, leaves everything else.
+    diagonal = np.ones(dimension)
+    diagonal[0] = 0.0
+    operator = LinearOperator(
+        (dimension, dimension), matvec=lambda v: diagonal * v, dtype=float
+    )
+
+    in_nullspace = np.zeros(dimension)
+    in_nullspace[0] = 1.0
+    assert np.linalg.norm(operator.matvec(in_nullspace)) == 0.0
+    assert not _operator_is_numerically_zero(operator, in_nullspace)
+
+    truly_zero = LinearOperator(
+        (dimension, dimension), matvec=lambda v: np.zeros(dimension), dtype=float
+    )
+    assert _operator_is_numerically_zero(truly_zero, in_nullspace)
+
+
+def test_skipped_bond_still_advances_the_environments():
+    """Skipping the eigensolve must not leave a placeholder environment behind.
+
+    The next bond reads ``left_environments[i + 1]``; if the skip returns early
+    it stays at the one-dimensional placeholder from ``__init__`` and the sweep
+    breaks on the following bond.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.zeros_like(tensor)
+
+    engine.update_bond(0)
+
+    # The requirement is that the sweep survives the skipped bond: the bonds
+    # after it read the environments this one was supposed to advance.
+    engine.sweep()
+
+
+def test_non_finite_operator_is_not_reported_as_zero():
+    """NaN in the operator is corruption, not an empty bond.
+
+    Reading it as zero would skip the bond and swallow the ArpackError, leaving a
+    corrupted run to continue silently.
+    """
+    dimension = 8
+    nan_operator = LinearOperator(
+        (dimension, dimension),
+        matvec=lambda v: np.full(dimension, np.nan),
+        dtype=float,
+    )
+    probe = np.full(dimension, 1.0 / np.sqrt(dimension))
+
+    assert not _operator_is_numerically_zero(nan_operator, probe)
+
+
+def test_non_finite_operator_lets_the_arpack_error_through():
+    """End to end: a NaN operator must raise, not be skipped."""
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+    for index, tensor in enumerate(engine.mps_target.tensors):
+        engine.mps_target.tensors[index] = np.full_like(tensor, np.nan)
+
+    with pytest.raises((ArpackError, ValueError, FloatingPointError)):
+        engine.update_bond(0)
+
+
+def test_restart_recovers_a_start_vector_in_the_nullspace():
+    """The real cause of "ARPACK error -9" in this code base.
+
+    ARPACK reports a nullspace start vector with the same message it uses for a
+    zero one. The operator here is a healthy rank-1 projector; only ``v0`` is
+    annihilated. Treating that as "nothing to optimise" would silently discard a
+    bond whose dominant eigenvector is perfectly well defined.
+    """
+    dimension, generator = 256, np.random.default_rng(1)
+    # One-hot v0 and a basis whose first component is exactly zero: the
+    # annihilation is then exact by construction on every BLAS. The float
+    # variant (project v0 out of a random vector) leaves ~1e-18 residue on
+    # OpenBLAS while being exactly zero on Accelerate, which made this test
+    # pass on macOS and fail on the Linux CI runners.
+    v0 = np.zeros(dimension)
+    v0[0] = 1.0
+
+    raw = generator.normal(size=(dimension, 1))
+    raw[0, 0] = 0.0  # range orthogonal to v0, exactly
+    basis = np.linalg.qr(raw)[0]
+    assert basis[0, 0] == 0.0  # QR only rescales a single column
+    operator = LinearOperator(
+        (dimension, dimension),
+        matvec=lambda x: basis @ (basis.T @ x),
+        dtype=float,
+    )
+
+    # Precondition: the operator kills v0 exactly, but is not itself zero.
+    assert np.linalg.norm(operator.matvec(v0)) == 0.0
+    assert not _operator_is_numerically_zero(operator, v0)
+    with pytest.raises(ArpackError):
+        eigsh(operator, k=1, which="LA", v0=v0, return_eigenvectors=True)
+
+    # The restart finds the projector's eigenvector anyway.
+    eigenvectors = _restart_from_operator_range(operator, v0, "LA")
+    assert eigenvectors is not None
+    recovered = eigenvectors[:, 0]
+    assert np.isclose(abs(recovered @ basis[:, 0]), 1.0, atol=1e-6)
+
+
+def test_restart_gives_up_on_a_genuinely_zero_operator():
+    """A zero operator has no range to restart from, so None is correct."""
+    dimension = 64
+    zero = LinearOperator(
+        (dimension, dimension), matvec=lambda x: np.zeros(dimension), dtype=float
+    )
+    v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+
+    assert _restart_from_operator_range(zero, v0, "LA") is None
+    assert _operator_is_numerically_zero(zero, v0)
+
+
+def test_update_bond_recovers_when_the_guess_is_in_the_nullspace(monkeypatch):
+    """The restart has to be wired into update_bond, not merely available.
+
+    Substitutes an operator that annihilates whatever guess it is handed while
+    staying a healthy projector elsewhere -- the situation that took down three
+    full-scale classical_ldpc runs. update_bond must solve the bond rather than
+    raise or quietly skip it.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="LA", copy=True, silent=True
+    )
+
+    real_operator = dephasing_dmrg_module.EffectiveDensityOperator
+
+    class NullspaceOperator(real_operator):
+        """Healthy projector whose range is orthogonal to the initial guess."""
+
+        def _matvec(self, x):
+            flat = np.asarray(x).reshape(-1)
+            guess = np.ones(self.shape[0], dtype=complex)
+            guess /= np.linalg.norm(guess)
+            direction = np.zeros(self.shape[0], dtype=complex)
+            direction[0] = 1.0
+            direction -= guess * (guess.conj() @ direction)
+            direction /= np.linalg.norm(direction)
+            return direction * (direction.conj() @ flat)
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "EffectiveDensityOperator", NullspaceOperator
+    )
+
+    before = engine.mps.tensors[0].copy()
+    engine.update_bond(0)  # must not raise
+    after = engine.mps.tensors[0]
+
+    # And must not have been skipped: a skip leaves the tensor untouched.
+    assert not np.array_equal(before, after)
+
+
+def test_sa_mode_keeps_the_annihilated_start_vector(monkeypatch):
+    """For SA/SM on a PSD operator, an annihilated guess IS the answer.
+
+    Eigenvalue zero is the smallest the operator has, so the nullspace vector
+    must be used directly; a range restart would exclude the nullspace and
+    silently return the smallest nonzero eigenvector instead.
+    """
+    num_sites = 6
+    psi = np.zeros(2**num_sites, dtype=complex)
+    psi[0] = 1.0
+    target = mps_from_dense(psi, form="Right-canonical").right_canonical()
+    start = create_simple_product_state(num_sites, which="+", form="Explicit")
+    engine = deph_dmrg(
+        start, target, chi_max=64, cut=1e-12, mode="SA", copy=True, silent=True
+    )
+
+    real_operator = dephasing_dmrg_module.EffectiveDensityOperator
+
+    class NullspaceOperator(real_operator):
+        def _matvec(self, x):
+            flat = np.asarray(x).reshape(-1)
+            guess = np.ones(self.shape[0], dtype=complex)
+            guess /= np.linalg.norm(guess)
+            direction = np.zeros(self.shape[0], dtype=complex)
+            direction[0] = 1.0
+            direction -= guess * (guess.conj() @ direction)
+            direction /= np.linalg.norm(direction)
+            return direction * (direction.conj() @ flat)
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "EffectiveDensityOperator", NullspaceOperator
+    )
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("SA must not go through the range restart")
+
+    monkeypatch.setattr(
+        dephasing_dmrg_module, "_restart_from_operator_range", forbidden
+    )
+
+    engine.update_bond(0)  # must complete using the annihilated guess directly

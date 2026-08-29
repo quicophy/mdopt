@@ -33,7 +33,7 @@ mpl.rcParams.update(
     }
 )
 
-PICKLE = "failure_rate_5qubit_erasure_data.pkl"
+PICKLE = "data/cache/failure_rate_5qubit_erasure_data.pkl"
 
 with open(PICKLE, "rb") as fh:
     data = pickle.load(fh)

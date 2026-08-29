@@ -3,11 +3,12 @@
 import pytest
 import numpy as np
 from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import ArpackError
 
 from mdopt.examples.ising.ising import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
 from mdopt.optimiser.dmrg import DMRG as dmrg
-from mdopt.optimiser.dmrg import EffectiveOperator
+from mdopt.optimiser.dmrg import EffectiveOperator, _nonzero_start_vector
 
 
 def test_optimiser_effective_operator():
@@ -114,3 +115,55 @@ def test_optimiser_ground_states():
             ),
             atol=1e-3,
         )
+
+
+def test_nonzero_start_vector_replaces_a_zero_guess():
+    """ARPACK refuses a zero v0; the fallback must be a valid unit vector.
+
+    An underflowed two-site tensor produced "ARPACK error -9: Starting vector is
+    zero" 4.6 hours into a full-scale classical_ldpc run at chi_max=128, so this
+    is not limited to the very small bond dimensions where it was first seen.
+    """
+    dimension = 8
+
+    zero = np.zeros(dimension, dtype=float)
+    replaced = _nonzero_start_vector(zero, dimension)
+    assert np.isclose(np.linalg.norm(replaced), 1.0)
+
+    # A usable guess is handed back untouched.
+    good = np.arange(1.0, dimension + 1.0)
+    assert _nonzero_start_vector(good, dimension) is good
+
+    # Non-finite guesses are replaced too: ARPACK cannot start from NaN either.
+    nan = np.full(dimension, np.nan)
+    assert np.all(np.isfinite(_nonzero_start_vector(nan, dimension)))
+
+    # An integer-typed guess must not truncate the fallback to zeros -- that
+    # would hand ARPACK exactly the vector this function exists to avoid.
+    fallback = _nonzero_start_vector(np.zeros(dimension, dtype=np.int64), dimension)
+    assert np.isclose(np.linalg.norm(fallback), 1.0)
+    assert np.issubdtype(fallback.dtype, np.inexact)
+
+
+def test_eigsh_rejects_a_zero_start_vector():
+    """Pin the failure mode the guard exists for.
+
+    If scipy ever stops raising on a zero v0 this test goes green for the wrong
+    reason, so it asserts the error explicitly rather than trusting the guard.
+    """
+    matrix = np.diag(np.arange(1.0, 9.0))
+    dimension = matrix.shape[0]
+    zero = np.zeros(dimension)
+
+    with pytest.raises(ArpackError):
+        eigsh(matrix, k=1, which="SA", v0=zero, return_eigenvectors=True)
+
+    # The same call succeeds once the guess is routed through the guard.
+    _, vectors = eigsh(
+        matrix,
+        k=1,
+        which="SA",
+        v0=_nonzero_start_vector(zero, dimension),
+        return_eigenvectors=True,
+    )
+    assert vectors.shape == (dimension, 1)

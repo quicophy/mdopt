@@ -754,3 +754,29 @@ def test_entanglement_entropy_matches_dense_schmidt_decomposition():
         assert np.allclose(
             mps.right_canonical().entanglement_entropy(), expected, atol=1e-8
         )
+
+
+def test_compress_bond_accepts_infinite_chi_max(rng):
+    """``ExplicitMPS.compress_bond`` has its own truncation site.
+
+    It coerced ``int(chi_max)`` like the others, so np.inf raised there too;
+    the svd-level tests do not reach this code path.
+    """
+    mps = create_state_vector(6, rng=rng)
+    mps = mps_from_dense(mps, form="Explicit")
+
+    # compress_bond(bond=b) acts on singular_values[b + 1]; the spectra use a
+    # different numbering from the tensors, as its docstring notes.
+    bond = 3
+    spectrum = bond + 1
+
+    # np.inf must behave exactly like a bound too large to bite.
+    unbounded, _ = mps.compress_bond(bond=bond, chi_max=np.inf, cut=1e-16)
+    huge, _ = mps.compress_bond(bond=bond, chi_max=10**6, cut=1e-16)
+    assert np.allclose(
+        unbounded.singular_values[spectrum], huge.singular_values[spectrum]
+    )
+
+    # A finite bound does truncate that bond.
+    truncated, _ = mps.compress_bond(bond=bond, chi_max=2, cut=1e-16)
+    assert len(truncated.singular_values[spectrum]) <= 2

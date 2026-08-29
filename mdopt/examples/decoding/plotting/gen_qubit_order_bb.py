@@ -62,7 +62,8 @@ ORDER_Y = 6
 POLY_A = "x**3 + y + y**2"
 POLY_B = "y**3 + x + x**2"
 
-PICKLE = "qubit_order_bb_data.pkl"
+PICKLE = "data/cache/qubit_order_bb_data.pkl"
+os.makedirs(os.path.dirname(PICKLE), exist_ok=True)
 PLOT = _fig("bb-qubit-ordering.pdf")
 NUM_EXPERIMENTS = 10000
 SEED = 42

@@ -16,7 +16,6 @@ _os.chdir(_DECODING)
 import sys
 
 
-import os
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -113,7 +112,6 @@ for ax, data, label in zip(
     ax.set_yticklabels(range(n_steps))
     ax.xaxis.set_major_locator(ticker.MaxNLocator(integer=True))
 
-os.makedirs("data-classical-ldpc", exist_ok=True)
-out = _fig("data-classical-ldpc/ldpc-heatmaps-n16.pdf")
+out = _fig("ldpc-heatmaps-n16.pdf")
 fig.savefig(out, dpi=300, bbox_inches="tight")
 print(f"Saved {out}")

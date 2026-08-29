@@ -22,7 +22,9 @@ from typing import Optional
 __all__ = [
     "assets_root",
     "decoding_assets",
+    "data_root",
     "data_dir",
+    "cache_file",
     "figures_dir",
     "figure",
 ]
@@ -80,9 +82,19 @@ def decoding_assets() -> Path:
     return assets_root() / "decoding"
 
 
+def data_root() -> Path:
+    """Directory holding every dataset, i.e. ``examples/decoding/data``."""
+    return decoding_assets() / "data"
+
+
 def data_dir(name: str, required: bool = True) -> Path:
-    """Path to a decoding dataset directory such as ``data-quantum-surface``."""
-    path = decoding_assets() / name
+    """Path to one dataset, e.g. ``data_dir("quantum-surface")``.
+
+    The datasets all live under a single ``data/`` directory rather than being
+    scattered as ``data-*`` siblings of the scripts, so the name here is the bare
+    one -- ``quantum-surface``, not ``data/quantum-surface``.
+    """
+    path = data_root() / name
     if required and not path.is_dir():
         raise FileNotFoundError(
             f"Dataset {name!r} not found at {path!s}. The datasets are large and "
@@ -90,6 +102,17 @@ def data_dir(name: str, required: bool = True) -> Path:
             f"{_ENV_VAR} at a directory that holds them."
         )
     return path
+
+
+def cache_file(name: str) -> Path:
+    """Path to a plotting cache pickle under ``data/cache``.
+
+    These are the small re-plot caches the FAST scripts read; they used to sit
+    loose beside the scripts.
+    """
+    path = data_root() / "cache"
+    path.mkdir(parents=True, exist_ok=True)
+    return path / os.path.basename(name)
 
 
 def figures_dir() -> Path:

@@ -15,6 +15,27 @@ from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
 
 
+def _nonzero_start_vector(guess: np.ndarray, dimension: int) -> np.ndarray:
+    """Return a starting vector ARPACK will accept.
+
+    ``eigsh`` raises "ARPACK error -9: Starting vector is zero" when ``v0`` is
+    all zeros, and the two-site tensor can underflow to zero on a hard instance.
+    Any unit vector is a valid place for the iteration to start, so fall back to
+    a uniform one rather than failing.
+
+    Note that the same ARPACK error has a second, more common cause that this
+    does not address: an operator that annihilates whatever it is handed. See
+    ``dephasing_dmrg.DephasingDMRG.update_bond``, which guards that case.
+    """
+    norm = float(np.linalg.norm(guess))
+    if np.isfinite(norm) and norm > 0.0:
+        return guess
+    # Promote integer guesses: keeping their dtype would truncate the uniform
+    # entries to zero, handing ARPACK exactly the vector this guards against.
+    dtype = np.result_type(guess.dtype, np.float64)
+    return np.full(dimension, 1.0 / np.sqrt(dimension), dtype=dtype)
+
+
 class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     r"""Class to store an effective two-site operator.
 
@@ -196,7 +217,7 @@ class DMRG:
             k=1,
             which=self.mode,
             return_eigenvectors=True,
-            v0=initial_guess,
+            v0=_nonzero_start_vector(initial_guess, effective_hamiltonian.shape[0]),
             tol=1e-8,
         )
         x = eigenvectors[:, 0].reshape(effective_hamiltonian.x_shape)
