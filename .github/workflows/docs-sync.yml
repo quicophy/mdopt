@@ -56,6 +56,12 @@ jobs:
                   cp "$nb" "$dest/"
               fi
           done
+          # Notebooks reference their illustrations relatively, so the images have
+          # to travel with them or the site renders a broken image. This is how
+          # 5qubit-decoder.png came to be missing while shor-decoder.png was not.
+          for img in examples/*/*.png; do
+              cp "$img" "$dest/"
+          done
 
       - name: Commit any drift
         run: |

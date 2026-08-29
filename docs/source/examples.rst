@@ -45,6 +45,18 @@ Examples
 
 
 .. toctree::
+   :maxdepth: 1
+   :caption: How these are built
+
+   notebook_pipeline
+
+- :doc:`notebook_pipeline` — How a notebook's results reach this site: run it
+  with ``--inplace``, commit, and ``docs-sync`` copies it into
+  ``docs/source/notebooks``. Also lists the wall time each notebook takes and
+  what CI checks instead.
+
+
+.. toctree::
    :hidden:
 
    examples_auto

@@ -25,7 +25,6 @@ For a curated overview of notebooks, see :doc:`examples`.
    :caption: Examples
 
    examples
-   notebook_pipeline
 
 .. toctree::
    :maxdepth: 2

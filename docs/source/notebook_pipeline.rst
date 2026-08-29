@@ -53,9 +53,9 @@ notebook                      full run
 ``shor``                      ~3 min
 ``mps-rand-circ``             ~2 min
 ``dephasing_dmrg_debug_bb``   ~2 min
-``quantum_three_qubit``       ~1.5 h
-``maxbonddim``                ~3 h
-``quantum_surface``           ~3.3 h
+``quantum_three_qubit``       ~1.6 h
+``maxbonddim``                ~1.2 h
+``quantum_surface``           ~5 h
 ``classical_ldpc``            ~2.5 h
 ============================  ==========
 
