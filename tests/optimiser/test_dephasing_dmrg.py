@@ -645,11 +645,18 @@ def test_restart_recovers_a_start_vector_in_the_nullspace():
     bond whose dominant eigenvector is perfectly well defined.
     """
     dimension, generator = 256, np.random.default_rng(1)
-    v0 = np.full(dimension, 1.0 / np.sqrt(dimension))
+    # One-hot v0 and a basis whose first component is exactly zero: the
+    # annihilation is then exact by construction on every BLAS. The float
+    # variant (project v0 out of a random vector) leaves ~1e-18 residue on
+    # OpenBLAS while being exactly zero on Accelerate, which made this test
+    # pass on macOS and fail on the Linux CI runners.
+    v0 = np.zeros(dimension)
+    v0[0] = 1.0
 
     raw = generator.normal(size=(dimension, 1))
-    raw -= np.outer(v0, v0 @ raw)  # range orthogonal to v0
+    raw[0, 0] = 0.0  # range orthogonal to v0, exactly
     basis = np.linalg.qr(raw)[0]
+    assert basis[0, 0] == 0.0  # QR only rescales a single column
     operator = LinearOperator(
         (dimension, dimension),
         matvec=lambda x: basis @ (basis.T @ x),
