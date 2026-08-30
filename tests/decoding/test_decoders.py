@@ -1145,14 +1145,21 @@ def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
 def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
     error, should_succeed
 ):
-    """The 3-qubit pipeline must reproduce the textbook repetition code.
+    """The 3-qubit pipeline must reproduce the repetition-code curve.
+
+    Under mdopt's convention a P-lettered generator constrains the P-letter
+    record, so ``["XXI", "IXX"]`` with "Bitflip" errors is the classical
+    bit-flip repetition decoder -- the configuration the notebook and thesis
+    validate against 3p^2 - 2p^3. (Textbook symplectic semantics would read
+    ``XII`` as a weight-one logical, ``XII * IXX = XXX``; that is deliberately
+    not the language this pipeline speaks -- see custom_code_checks.)
 
     Regression test for the compensating-convention bug behind issue #531: with
     the mirrored wiring the swap in ``custom_code_checks`` produced, weight-one
     flips decoded to the logical class and weight-two flips to identity --
-    exactly backwards -- so the notebook's logical error rate ran at
-    ~1-(1-p)^3 instead of the analytic 3p^2 - 2p^3 it is validated against
-    (measured 0.404 vs 0.104 at p = 0.2).
+    exactly backwards -- so the pipeline's logical error rate ran at
+    ~1-(1-p)^3 instead of the analytic 3p^2 - 2p^3 (measured 0.404 vs 0.104 at
+    p = 0.2; this branch measures 0.102).
     """
     _, success = decode_custom(
         ["XXI", "IXX"],

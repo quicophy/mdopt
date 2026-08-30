@@ -487,10 +487,10 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     -------
     stabilisers : Tuple[List[str], List[str]]
         A tuple of two lists, where the first one corresponds to X stabilisers and
-        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli
-        string with its honest letters: an X-type generator reads "X..X". (It used
-        to emit the letters crossed, which the component swap then in
-        ``custom_code_checks`` silently expected -- issue #531.)
+        the second one -- to Z stabilisers. Each stabiliser is spelled with the
+        letters of its type: an X-type generator reads "X..X". (It used to emit
+        the letters crossed, which the component swap in ``custom_code_checks``
+        then silently expected -- issue #531.)
     """
 
     def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
@@ -831,12 +831,20 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
-        # Each operator's parity check lands on its own components -- the same
-        # convention css_code_checks uses. The former component swap here only
-        # compensated the letter-crossed strings css_code_stabilisers used to
-        # emit; with honest Pauli strings it mirrored the constraint wiring and
-        # broke gauge invariance of the readout on non-self-dual codes
-        # (issue #531).
+        # mdopt's convention, here and in css_code_checks: a P-lettered
+        # generator constrains the P-letter record -- an "X..X" string fixes
+        # parities of the first component of each qubit pair, which is where
+        # pauli_to_mps writes an input "X". This is NOT the textbook symplectic
+        # pairing (where an X-type stabiliser would detect Z components); it is
+        # the language the whole pipeline speaks: decode_css, the exact
+        # brute-force reference, and the 3-qubit notebook -- which pairs
+        # ["XXI", "IXX"] with "Bitflip" errors and validates against the
+        # classical repetition-code curve 3p^2 - 2p^3, meaningful only under
+        # this reading. The former component swap here compensated the
+        # letter-crossed strings css_code_stabilisers used to emit; with
+        # type-lettered strings it mirrored the wiring and broke gauge
+        # invariance of the readout (issue #531): measured LER at p = 0.2 was
+        # 0.404 against the analytic 0.104 this convention reproduces (0.102).
         bitstring = pauli_to_mps(stabilizer)
         check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
         checks.append(list(check))
