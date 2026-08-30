@@ -1244,3 +1244,43 @@ def test_custom_code_checks_rejects_a_single_site_stabiliser():
     """Weight-one strings cannot form a parity-check constraint."""
     with pytest.raises(ValueError, match="fewer than two"):
         custom_code_checks(["XIII"], ["XXXX", "ZZZZ"])
+
+
+def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+    """decode_css's retry direction must preserve the posterior on Shor.
+
+    The Steane invariance test is masked (crossed and uncrossed string sets
+    coincide on a self-dual code), and the Shor test above exercises
+    decode_custom only -- so the crossing inside decode_css itself was pinned
+    by nothing: removing it passed the whole suite.
+    """
+    code = qec.shor_code()
+    error = "XZ" + "I" * (len(code) - 2)
+
+    def posterior(**kwargs):
+        return np.asarray(
+            decode_css(
+                code,
+                error,
+                chi_max=1000,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+                **kwargs,
+            )[0],
+            dtype=float,
+        )
+
+    base = posterior()
+    for seed in range(4):
+        retried = posterior(
+            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+        )
+        assert np.allclose(retried, base, atol=1e-9)
+
+
+def test_decode_custom_rejects_an_empty_stabiliser_list():
+    """An empty list used to surface as an opaque IndexError."""
+    with pytest.raises(ValueError, match="At least one stabiliser"):
+        decode_custom([], ["XX"], ["ZZ"], "II", silent=True)

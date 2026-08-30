@@ -1577,7 +1577,13 @@ def decode_css(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error by a random stabiliser before decoding.
+        Whether to multiply the error, before decoding, by the letter-crossed
+        image (X and Z letters exchanged) of a randomly chosen stabiliser.
+        The crossed string is the gauge-preserving retry direction under the
+        decoder's same-component checks -- it leaves every enforced parity,
+        and therefore the posterior, unchanged; multiplying by the generator
+        itself would alter the parities whenever same-type generators overlap
+        oddly.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -2027,7 +2033,13 @@ def decode_custom(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error by a random stabilizer before decoding.
+        Whether to multiply the error, before decoding, by the letter-crossed
+        image (X and Z letters exchanged) of a randomly chosen stabiliser.
+        The crossed string is the gauge-preserving retry direction under the
+        decoder's same-component checks -- it leaves every enforced parity,
+        and therefore the posterior, unchanged; multiplying by the generator
+        itself would alter the parities whenever same-type generators overlap
+        oddly.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -2055,6 +2067,8 @@ def decode_custom(
     # A wrong-length operator string does not fail loudly downstream: its sites
     # simply cover a prefix of the qubits and the decoder returns a
     # plausible-looking posterior for a different code. Refuse instead.
+    if not stabilizers:
+        raise ValueError("At least one stabiliser is required.")
     expected_length = len(stabilizers[0])
     for name, strings in (
         ("stabilizers", stabilizers),

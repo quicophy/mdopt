@@ -92,7 +92,10 @@ jobs:
               # A bot PR opened for earlier drift is now stale: merging it would
               # reintroduce copies whose source has since been reverted or
               # synchronised another way. Close it rather than leave it mergeable.
-              stale="$(gh pr list --head docs-sync-bot --state open --json number --jq '.[0].number' || true)"
+              # No || true: an empty list already exits 0, so a failure here is
+              # an auth/API error, and swallowing it would leave the stale PR
+              # open while the job reports success.
+              stale="$(gh pr list --head docs-sync-bot --state open --json number --jq '.[0].number')"
               if [ -n "$stale" ]; then
                   gh pr close "$stale" --comment "The drift this PR carried no longer exists; closing." --delete-branch
               fi
