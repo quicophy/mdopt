@@ -72,6 +72,37 @@ than a cluster campaign would give. The thesis figures come from the scripts in
 ``mdopt/examples/decoding/plotting/`` and their cluster datasets, not from these
 notebooks.
 
+The sync PR
+-----------
+
+The copy from ``examples/`` to ``docs/source/notebooks`` is delivered by a bot
+pull request from the rolling ``docs-sync-bot`` branch, because ``main`` is
+protected and rejects direct pushes. Its full contract:
+
+* **It opens (or updates) automatically** when a push to ``main`` touches
+  ``examples/**/*.ipynb``, ``examples/**/*.png``, ``docs/source/notebooks/**``,
+  ``generate_docs.sh`` or the workflow itself -- *and* the copy step finds real
+  drift. No drift, no PR.
+* **There is only ever one.** Consecutive drifts force-push the same branch,
+  updating the open PR in place.
+* **It cleans up after itself.** If the drift disappears (a notebook reverted,
+  or synchronised another way), the next run closes the stale PR and deletes
+  the branch, so outdated copies cannot be merged.
+* **Merging it does not loop.** The merge triggers a run that finds no drift
+  and exits without committing.
+* **Its checks need a nudge.** GitHub does not start CI for pull requests
+  opened with the default workflow token, so close and reopen the PR (or push
+  any commit to it) before a checks-gated merge. The PR body says so too.
+* **Manual dispatch:** ``gh workflow run docs-sync.yml --ref main`` runs the
+  sync on demand.
+
+One trap to know: GitHub honours CI-skip markers (such as ``[skip ci]``)
+anywhere in a commit message, and a squash merge concatenates every branch
+commit's title and body into one message. A commit that merely *quotes* such a
+marker therefore silences all workflows on the merge push -- including this
+sync. If a merge to ``main`` starts no workflows, check the squash message
+first, then dispatch the sync manually.
+
 What CI does instead
 --------------------
 

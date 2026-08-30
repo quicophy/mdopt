@@ -10,6 +10,10 @@ name: docs-sync
 # pull request" -- the first live run failed exactly there), delivers the
 # difference as a pull request on the docs-sync-bot branch.
 #
+# The full contract of the PR this opens -- triggers, rolling branch, stale
+# cleanup, the checks nudge -- is documented for contributors in
+# docs/source/notebook_pipeline.rst ("The sync PR").
+#
 # It copies; it does not execute. Notebook outputs come from a full-scale run
 # committed alongside the notebook -- see .github/workflows/notebooks.yml for
 # why CI cannot produce them itself.
