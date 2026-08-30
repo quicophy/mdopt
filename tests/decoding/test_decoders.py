@@ -1230,6 +1230,15 @@ def test_decode_custom_rejects_wrong_length_operators():
     with pytest.raises(ValueError, match="length"):
         decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "IIII", silent=True)
 
+    # Nor may a wrong-length error ride the fast path: it matches any
+    # all-identity string regardless of length.
+    with pytest.raises(ValueError, match="error acts on 3"):
+        decode_custom(["XXII", "IZZI"], ["XXXX"], ["ZZZZ"], "III", silent=True)
+
+    # decode_css shared the same fast-path pattern and the same hole.
+    with pytest.raises(ValueError, match="error acts on 3"):
+        decode_css(qec.steane_code(), "III", silent=True)
+
 
 def test_custom_code_checks_rejects_a_single_site_stabiliser():
     """Weight-one strings cannot form a parity-check constraint."""

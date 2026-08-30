@@ -1613,6 +1613,13 @@ def decode_css(
     if not silent:
         logging.info("Starting the decoding.")
 
+    # Validate before the fast path below: it matches any all-identity string
+    # regardless of length, so the later length check never sees one.
+    if len(error) != len(code):
+        raise ValueError(
+            f"The error acts on {len(error)} qubits, expected {len(code)}."
+        )
+
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
@@ -2060,6 +2067,13 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+    # The error is validated here too: the fast path below matches any
+    # all-identity string regardless of its length, so the later (post-mps)
+    # length check never sees it.
+    if len(error) != expected_length:
+        raise ValueError(
+            f"The error acts on {len(error)} qubits, expected {expected_length}."
+        )
 
     if error == "I" * len(error):
         if not silent:
