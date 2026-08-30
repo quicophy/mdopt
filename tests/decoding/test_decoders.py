@@ -25,6 +25,7 @@ from mdopt.mps.utils import inner_product
 from mdopt.examples.decoding.decoding import (
     str_to_bool,
     css_code_stabilisers,
+    custom_code_checks,
     decode_css,
     decode_custom,
     depolarising_bias,
@@ -1212,3 +1213,20 @@ def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
             multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
         )
         assert np.allclose(retried, base, atol=1e-9)
+
+
+def test_decode_custom_rejects_wrong_length_operators():
+    """A wrong-length operator must fail loudly, not decode a different code.
+
+    Found by fuzzing decode_custom against an exact oracle: a logical shorter
+    than the stabilisers silently covered a prefix of the qubits and returned a
+    plausible-looking posterior.
+    """
+    with pytest.raises(ValueError, match="length"):
+        decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "XIII", silent=True)
+
+
+def test_custom_code_checks_rejects_a_single_site_stabiliser():
+    """Weight-one strings cannot form a parity-check constraint."""
+    with pytest.raises(ValueError, match="fewer than two"):
+        custom_code_checks(["XIII"], ["XXXX", "ZZZZ"])

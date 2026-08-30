@@ -847,6 +847,14 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
         # 0.404 against the analytic 0.104 this convention reproduces (0.102).
         bitstring = pauli_to_mps(stabilizer)
         check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
+        if len(check) < 2:
+            # The [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] constraint spans at
+            # least two sites; a single X or Z touches only one and used to
+            # surface as an opaque "Non-unique sites" error much deeper down.
+            raise ValueError(
+                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                "and cannot be represented as a parity-check constraint."
+            )
         checks.append(list(check))
 
     return checks
@@ -2046,6 +2054,22 @@ def decode_custom(
         # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
         # skip. Callers here consume only the success flag.
         return [1.0, 0.0, 0.0, 0.0], 1
+
+    # A wrong-length operator string does not fail loudly downstream: its sites
+    # simply cover a prefix of the qubits and the decoder returns a
+    # plausible-looking posterior for a different code. Refuse instead.
+    expected_length = len(stabilizers[0])
+    for name, strings in (
+        ("stabilizers", stabilizers),
+        ("x_logicals", x_logicals),
+        ("z_logicals", z_logicals),
+    ):
+        for string in strings:
+            if len(string) != expected_length:
+                raise ValueError(
+                    f"Every operator must act on {expected_length} qubits; "
+                    f"{name} contains {string!r} of length {len(string)}."
+                )
 
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
