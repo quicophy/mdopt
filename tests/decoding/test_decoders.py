@@ -175,10 +175,12 @@ def test_decode_css_matches_exact_posterior(name, bias):
 def test_decode_custom_matches_exact_posterior(name, bias):
     """decode_custom agrees with the same reference.
 
-    A stabiliser's syndrome is a symplectic product, so its Z part must be
-    checked against the X components of the error and vice versa. Getting that
-    backwards is invisible for a self-dual code such as Steane and wrong for
-    Shor, so both are exercised here.
+    mdopt's convention (see custom_code_checks): a P-lettered generator
+    constrains the P-letter record -- not the textbook symplectic pairing.
+    Getting the pairing inconsistent with decode_css and the reference is
+    invisible for a self-dual code such as Steane and wrong for Shor, so both
+    are exercised here. The strings come from css_code_stabilisers, whose
+    letters match each generator's type since issue #531.
     """
     code = CODES[name]()
     stabs = sum(css_code_stabilisers(code), [])
