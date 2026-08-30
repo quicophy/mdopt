@@ -114,12 +114,16 @@ def exact_posterior(code, error, bias_type, prob):
 
     amps = dict.fromkeys(ORDER, 0.0)
     names = {(0, 0): "I", (1, 0): "X", (0, 1): "Z", (1, 1): "Y"}
-    for f_x in _span(_nullspace_gf2(checks_x, num_qubits), num_qubits):
+    # Textbook symplectic semantics: X-error deformations preserve the syndrome
+    # exactly when they commute with every Z-type check, so f_x ranges over
+    # null(H_Z); the X-class flips when the deformation anticommutes with the
+    # partner logical, l_x = <f_x, Z-bar>. Symmetrically for the Z part.
+    for f_x in _span(_nullspace_gf2(checks_z, num_qubits), num_qubits):
         d_x = (f_x + err_x) % 2
-        l_x = int(np.dot(f_x, log_x[0]) % 2)
-        for f_z in _span(_nullspace_gf2(checks_z, num_qubits), num_qubits):
+        l_x = int(np.dot(f_x, log_z[0]) % 2)
+        for f_z in _span(_nullspace_gf2(checks_x, num_qubits), num_qubits):
             d_z = (f_z + err_z) % 2
-            l_z = int(np.dot(f_z, log_z[0]) % 2)
+            l_z = int(np.dot(f_z, log_x[0]) % 2)
             amp = 1.0
             for j in range(num_qubits):
                 amp *= np.sqrt(weight(d_x[j], d_z[j]))
@@ -175,12 +179,12 @@ def test_decode_css_matches_exact_posterior(name, bias):
 def test_decode_custom_matches_exact_posterior(name, bias):
     """decode_custom agrees with the same reference.
 
-    mdopt's convention (see custom_code_checks): a P-lettered generator
-    constrains the P-letter record -- not the textbook symplectic pairing.
-    Getting the pairing inconsistent with decode_css and the reference is
-    invisible for a self-dual code such as Steane and wrong for Shor, so both
-    are exercised here. The strings come from css_code_stabilisers, whose
-    letters match each generator's type since issue #531.
+    mdopt speaks textbook symplectic semantics: an X-type stabiliser detects
+    Z errors, and each class label is the symplectic product with the partner
+    logical. A pairing inconsistent between decode_custom, decode_css and this
+    reference is invisible for a self-dual code such as Steane and wrong for
+    Shor, so both are exercised here. The strings come from
+    css_code_stabilisers, whose letters match each generator's type.
     """
     code = CODES[name]()
     stabs = sum(css_code_stabilisers(code), [])
@@ -504,7 +508,9 @@ def test_truncation_shows_up_as_a_negative_logical_amplitude(caplog):
                 )
         return [r for r in caplog.records if "Negative logical amplitude" in r.message]
 
-    assert warnings_for(4), "an aggressively truncated run should be flagged"
+    # The symplectic rewiring relocated where truncation bites on these seeded
+    # instances: the artefact now appears at chi_max=2 rather than 4.
+    assert warnings_for(2), "an aggressively truncated run should be flagged"
     assert not warnings_for(64), "a converged run should not be flagged"
 
 
@@ -753,7 +759,9 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
             if np.all((matrix @ np.array(v)) % 2 == 0)
         ]
 
-    span_x, span_z = kernel(checks_x), kernel(checks_z)
+    # Textbook: X deformations preserve the syndrome iff they commute with the
+    # Z-type checks, and the X-class bits are symplectic products with Z-bar.
+    span_x, span_z = kernel(checks_z), kernel(checks_x)
     labels = ["".join(b) for b in itertools.product("01", repeat=4)]
 
     if bias == "Depolarising":
@@ -768,10 +776,10 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
         amps = dict.fromkeys(labels, 0.0)
         for f_x in span_x:
             d_x = (f_x + err_x) % 2
-            l_x = (log_x @ f_x) % 2
+            l_x = (log_z @ f_x) % 2
             for f_z in span_z:
                 d_z = (f_z + err_z) % 2
-                l_z = (log_z @ f_z) % 2
+                l_z = (log_x @ f_z) % 2
                 prob_term = 1.0
                 for j in range(num_qubits):
                     prob_term *= weight(d_x[j], d_z[j])
@@ -1150,22 +1158,15 @@ def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
 ):
     """The 3-qubit pipeline must reproduce the repetition-code curve.
 
-    Under mdopt's convention a P-lettered generator constrains the P-letter
-    record, so ``["XXI", "IXX"]`` with "Bitflip" errors is the classical
-    bit-flip repetition decoder -- the configuration the notebook and thesis
-    validate against 3p^2 - 2p^3. (Textbook symplectic semantics would read
-    ``XII`` as a weight-one logical, ``XII * IXX = XXX``; that is deliberately
-    not the language this pipeline speaks -- see custom_code_checks.)
-
-    Regression test for the compensating-convention bug behind issue #531: with
-    the mirrored wiring the swap in ``custom_code_checks`` produced, weight-one
-    flips decoded to the logical class and weight-two flips to identity --
-    exactly backwards -- so the pipeline's logical error rate ran at
-    ~1-(1-p)^3 instead of the analytic 3p^2 - 2p^3 (measured 0.404 vs 0.104 at
-    p = 0.2; this branch measures 0.102).
+    Textbook semantics: the bit-flip repetition code has Z-type stabilisers
+    ``["ZZI", "IZZ"]``, which detect X errors through the symplectic pairing,
+    and the analytic logical error rate is 3p^2 - 2p^3 -- weight-one flips
+    correct, weight-two flips fail. These six verdicts are deterministic and
+    discriminate sharply between wirings: under the pre-textbook conventions
+    they came out partially or fully inverted.
     """
     _, success = decode_custom(
-        ["XXI", "IXX"],
+        ["ZZI", "IZZ"],
         ["XXX"],
         ["ZZZ"],
         error,

@@ -569,18 +569,23 @@ def css_code_checks(
 
     offset = code.num_x_logicals() + code.num_z_logicals()
 
+    # Textbook symplectic pairing: an X-type stabiliser detects Z errors, so
+    # its parity check constrains the Z components (odd MPS sites), and a
+    # Z-type stabiliser constrains the X components. The enforced parity is
+    # then the symplectic product with the stabiliser, which makes multiplying
+    # the error by any commuting stabiliser a gauge move.
     if qubit_perm is not None:
         inv_perm = np.argsort(qubit_perm)
         checks_x = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
+            for row in array_x
         ]
         checks_z = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
-            for row in array_z
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_z
         ]
     else:
-        checks_x = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
-        checks_z = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
+        checks_x = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_x]
+        checks_z = [list(2 * np.nonzero(row)[0] + offset) for row in array_z]
 
     return checks_x, checks_z
 
@@ -672,18 +677,22 @@ def css_code_logicals(
 
     offset = code.num_x_logicals() + code.num_z_logicals()
 
+    # Textbook class labels are symplectic products with the PARTNER logical:
+    # the X-class of a residual is <e, Z-bar_i> -- the parity of its X
+    # components over the support of Z-bar -- and the Z-class is <e, X-bar_i>.
+    # Reading each class off its own operator instead is not gauge-invariant.
     if qubit_perm is not None:
         inv_perm = np.argsort(qubit_perm)
         x_logicals = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_z
         ]
         z_logicals = [
             sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
-            for row in array_z
+            for row in array_x
         ]
     else:
-        x_logicals = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
-        z_logicals = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
+        x_logicals = [list(2 * np.nonzero(row)[0] + offset) for row in array_z]
+        z_logicals = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_x]
 
     return x_logicals, z_logicals
 
@@ -796,19 +805,16 @@ def create_bb_code(
     return CssCode(x_code=x_code, z_code=z_code)
 
 
-def _cross_pauli_letters(pauli_string: str) -> str:
-    """Exchange X and Z letters in a Pauli string (Y, I and E unchanged).
+def _swap_pauli_components(bitstring: str) -> str:
+    """Swap the two component bits of every qubit in a two-bit-per-qubit string.
 
-    The decoders' internal convention couples each operator's parity check to
-    its *own* component (an X-type check constrains the first component of
-    every qubit pair, which is where :func:`pauli_to_mps` records an input
-    ``X``). ``decode_css``'s stabiliser-multiplication retry was written
-    against the letter-crossed strings ``css_code_stabilisers`` used to emit,
-    so it crosses the honest strings back locally to keep its behaviour
-    -- verified invariant to 1e-14 -- unchanged (issue #531).
+    Textbook symplectic pairing: an operator's X part detects Z errors and its
+    Z part detects X errors, so a parity check (or class label) built from the
+    operator acts on the *opposite* component to the one
+    :func:`pauli_to_mps` assigns. The Euclidean parity over the swapped sites
+    is then exactly the symplectic product with the operator.
     """
-    table = {"X": "Z", "Z": "X"}
-    return "".join(table.get(letter, letter) for letter in pauli_string)
+    return "".join(bitstring[i + 1] + bitstring[i] for i in range(0, len(bitstring), 2))
 
 
 def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
@@ -831,21 +837,11 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
-        # mdopt's convention, here and in css_code_checks: a P-lettered
-        # generator constrains the P-letter record -- an "X..X" string fixes
-        # parities of the first component of each qubit pair, which is where
-        # pauli_to_mps writes an input "X". This is NOT the textbook symplectic
-        # pairing (where an X-type stabiliser would detect Z components); it is
-        # the language the whole pipeline speaks: decode_css, the exact
-        # brute-force reference, and the 3-qubit notebook -- which pairs
-        # ["XXI", "IXX"] with "Bitflip" errors and validates against the
-        # classical repetition-code curve 3p^2 - 2p^3, meaningful only under
-        # this reading. The former component swap here compensated the
-        # letter-crossed strings css_code_stabilisers used to emit; with
-        # type-lettered strings it mirrored the wiring and broke gauge
-        # invariance of the readout (issue #531): measured LER at p = 0.2 was
-        # 0.404 against the analytic 0.104 this convention reproduces (0.102).
-        bitstring = pauli_to_mps(stabilizer)
+        # Textbook symplectic pairing (see _swap_pauli_components): the check
+        # constrains the opposite component of every qubit, so the enforced
+        # parity is the symplectic product with the stabiliser and multiplying
+        # the error by any commuting stabiliser is a gauge move.
+        bitstring = _swap_pauli_components(pauli_to_mps(stabilizer))
         check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
         if len(check) < 2:
             # The [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] constraint spans at
@@ -924,22 +920,25 @@ def custom_code_logicals(
     logicals_x = []
     logicals_z = []
 
-    # Each class is read off its own operator's components, matching the
-    # constraint convention above: with checks on their own components, the
-    # deformation space of a qubit's first component is null(H_X), whose gauge
-    # directions all overlap supp(X-bar) evenly (they commute), while the
-    # Z-bar direction overlaps it oddly -- so this labelling is exactly the
-    # gauge-invariant one (issue #531).
-    for logical in x_logicals:
-        bitstring = pauli_to_mps(logical)
+    # Textbook class labels are symplectic products with the PARTNER logical:
+    # the X-class of a residual is <e, Z-bar_i>, read from the swapped sites of
+    # Z-bar, and the Z-class is <e, X-bar_i>. This requires the logical bases
+    # to come in symplectic pairs, X-bar_i with Z-bar_i.
+    if len(x_logicals) != len(z_logicals):
+        raise ValueError(
+            "x_logicals and z_logicals must come in symplectic pairs; got "
+            f"{len(x_logicals)} and {len(z_logicals)}."
+        )
+    for logical in z_logicals:
+        bitstring = _swap_pauli_components(pauli_to_mps(logical))
         # Find positions of non-zero entries
         x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for X logicals
         x_sites += len(x_logicals) + len(z_logicals)
         logicals_x.append(list(x_sites))
 
-    for logical in z_logicals:
-        bitstring = pauli_to_mps(logical)
+    for logical in x_logicals:
+        bitstring = _swap_pauli_components(pauli_to_mps(logical))
         # Find positions of non-zero entries
         z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for Z logicals
@@ -1577,13 +1576,10 @@ def decode_css(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error, before decoding, by the letter-crossed
-        image (X and Z letters exchanged) of a randomly chosen stabiliser.
-        The crossed string is the gauge-preserving retry direction under the
-        decoder's same-component checks -- it leaves every enforced parity,
-        and therefore the posterior, unchanged; multiplying by the generator
-        itself would alter the parities whenever same-type generators overlap
-        oddly.
+        Whether to multiply the error by a randomly chosen stabiliser before
+        decoding. Under the symplectic checks this is a gauge move: it maps
+        the error to another representative of the same coset and leaves the
+        posterior unchanged.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -1656,14 +1652,10 @@ def decode_css(
         # path could not be reproduced from its seed.
         generator = np.random.default_rng() if rng is None else rng
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
-        # decode_css's constraint wiring couples each check to its own
-        # component, so the invariant retry direction is the letter-crossed
-        # string -- see _cross_pauli_letters. This preserves the behaviour the
-        # invariance test pins to 1e-9 (and chi-convergence measured at 1e-14).
-        stabilisers = [
-            _cross_pauli_letters(stabiliser)
-            for stabiliser in stabilisers_x + stabilisers_z
-        ]
+        # Under symplectic checks, multiplying by any commuting stabiliser
+        # preserves every enforced parity, so the honest string is the gauge
+        # move.
+        stabilisers = stabilisers_x + stabilisers_z
         error = multiply_pauli_strings(error, str(generator.choice(stabilisers)))
 
     # Compute qubit permutation that minimises MPO bandwidth.
@@ -2033,13 +2025,10 @@ def decode_custom(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error, before decoding, by the letter-crossed
-        image (X and Z letters exchanged) of a randomly chosen stabiliser.
-        The crossed string is the gauge-preserving retry direction under the
-        decoder's same-component checks -- it leaves every enforced parity,
-        and therefore the posterior, unchanged; multiplying by the generator
-        itself would alter the parities whenever same-type generators overlap
-        oddly.
+        Whether to multiply the error by a randomly chosen stabiliser before
+        decoding. Under the symplectic checks this is a gauge move: it maps
+        the error to another representative of the same coset and leaves the
+        posterior unchanged.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -2116,18 +2105,11 @@ def decode_custom(
 
     if multiply_by_stabiliser and not erased_qubits:
         # See decode_css: the choice must come from the passed-in generator so
-        # the run stays reproducible from its seed. And as there, the
-        # gauge-preserving direction is the letter-CROSSED string: crossing
-        # flips the first component over the Z-part of the stabiliser and the
-        # second over its X-part, so the enforced parities are preserved exactly
-        # when the symplectic product with every generator vanishes -- which is
-        # stabiliser commutation itself, so this holds for non-CSS codes too.
-        # Multiplying by the uncrossed string instead requires the Euclidean
-        # products to vanish, which non-self-orthogonal generators (Shor's
-        # X-type rows overlap in three positions) do not satisfy.
+        # the run stays reproducible from its seed. Under symplectic checks the
+        # honest stabiliser is the gauge move -- the parities it flips vanish
+        # exactly when it commutes with every generator, for non-CSS codes too.
         generator = np.random.default_rng() if rng is None else rng
-        chosen_stabiliser = str(generator.choice(stabilizers))
-        error = multiply_pauli_strings(error, _cross_pauli_letters(chosen_stabiliser))
+        error = multiply_pauli_strings(error, str(generator.choice(stabilizers)))
 
     error = pauli_to_mps(error)
 

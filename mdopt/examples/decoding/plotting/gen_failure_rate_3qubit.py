@@ -35,7 +35,9 @@ mpl.rcParams.update(
     }
 )
 
-stabilizer_generators = ["XXI", "IXX"]
+# Bit-flip repetition code: Z-type stabilisers detect the X errors
+# (textbook symplectic pairing).
+stabilizer_generators = ["ZZI", "IZZ"]
 x_logical_operators = ["XXX"]
 z_logical_operators = ["ZZZ"]
 num_qubits = 3
