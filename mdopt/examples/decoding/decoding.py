@@ -487,7 +487,10 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     -------
     stabilisers : Tuple[List[str], List[str]]
         A tuple of two lists, where the first one corresponds to X stabilisers and
-        the second one -- to Z stabilisers. Each stabiliser is represented as a Pauli string.
+        the second one -- to Z stabilisers. Each stabiliser is spelled with the
+        letters of its type: an X-type generator reads "X..X". (It used to emit
+        the letters crossed, which the component swap in ``custom_code_checks``
+        then silently expected -- issue #531.)
     """
 
     def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
@@ -509,7 +512,7 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
+        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "X"))
 
     # Z stabilisers
     parity_matrix_z = code.z_stabs_binary()
@@ -518,7 +521,7 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "X"))
+        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
 
     return stabilisers_x, stabilisers_z
 
@@ -793,6 +796,21 @@ def create_bb_code(
     return CssCode(x_code=x_code, z_code=z_code)
 
 
+def _cross_pauli_letters(pauli_string: str) -> str:
+    """Exchange X and Z letters in a Pauli string (Y, I and E unchanged).
+
+    The decoders' internal convention couples each operator's parity check to
+    its *own* component (an X-type check constrains the first component of
+    every qubit pair, which is where :func:`pauli_to_mps` records an input
+    ``X``). ``decode_css``'s stabiliser-multiplication retry was written
+    against the letter-crossed strings ``css_code_stabilisers`` used to emit,
+    so it crosses the honest strings back locally to keep its behaviour
+    -- verified invariant to 1e-14 -- unchanged (issue #531).
+    """
+    table = {"X": "Z", "Z": "X"}
+    return "".join(table.get(letter, letter) for letter in pauli_string)
+
+
 def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
     """
     Given a list of stabilizers and logicals, returns a list of checks,
@@ -813,17 +831,30 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
-        # A stabiliser's syndrome is a symplectic product: its Z part detects X
-        # errors and its X part detects Z errors. The parity check therefore acts
-        # on the *opposite* component to the one pauli_to_mps would assign, so
-        # the two bits of every qubit are swapped here. (A Y acts on both and is
-        # unaffected; for a self-dual code such as Steane the swap is invisible,
-        # which is why it went unnoticed.)
+        # mdopt's convention, here and in css_code_checks: a P-lettered
+        # generator constrains the P-letter record -- an "X..X" string fixes
+        # parities of the first component of each qubit pair, which is where
+        # pauli_to_mps writes an input "X". This is NOT the textbook symplectic
+        # pairing (where an X-type stabiliser would detect Z components); it is
+        # the language the whole pipeline speaks: decode_css, the exact
+        # brute-force reference, and the 3-qubit notebook -- which pairs
+        # ["XXI", "IXX"] with "Bitflip" errors and validates against the
+        # classical repetition-code curve 3p^2 - 2p^3, meaningful only under
+        # this reading. The former component swap here compensated the
+        # letter-crossed strings css_code_stabilisers used to emit; with
+        # type-lettered strings it mirrored the wiring and broke gauge
+        # invariance of the readout (issue #531): measured LER at p = 0.2 was
+        # 0.404 against the analytic 0.104 this convention reproduces (0.102).
         bitstring = pauli_to_mps(stabilizer)
-        swapped = "".join(
-            bitstring[i + 1] + bitstring[i] for i in range(0, len(bitstring), 2)
-        )
-        check = len(logicals) + np.nonzero([int(bit) for bit in swapped])[0]
+        check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
+        if len(check) < 2:
+            # The [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] constraint spans at
+            # least two sites; a single X or Z touches only one and used to
+            # surface as an opaque "Non-unique sites" error much deeper down.
+            raise ValueError(
+                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                "and cannot be represented as a parity-check constraint."
+            )
         checks.append(list(check))
 
     return checks
@@ -893,7 +924,12 @@ def custom_code_logicals(
     logicals_x = []
     logicals_z = []
 
-    # Transform X logical operators
+    # Each class is read off its own operator's components, matching the
+    # constraint convention above: with checks on their own components, the
+    # deformation space of a qubit's first component is null(H_X), whose gauge
+    # directions all overlap supp(X-bar) evenly (they commute), while the
+    # Z-bar direction overlaps it oddly -- so this labelling is exactly the
+    # gauge-invariant one (issue #531).
     for logical in x_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
@@ -902,7 +938,6 @@ def custom_code_logicals(
         x_sites += len(x_logicals) + len(z_logicals)
         logicals_x.append(list(x_sites))
 
-    # Transform Z logical operators
     for logical in z_logicals:
         bitstring = pauli_to_mps(logical)
         # Find positions of non-zero entries
@@ -1542,7 +1577,13 @@ def decode_css(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error by a random stabiliser before decoding.
+        Whether to multiply the error, before decoding, by the letter-crossed
+        image (X and Z letters exchanged) of a randomly chosen stabiliser.
+        The crossed string is the gauge-preserving retry direction under the
+        decoder's same-component checks -- it leaves every enforced parity,
+        and therefore the posterior, unchanged; multiplying by the generator
+        itself would alter the parities whenever same-type generators overlap
+        oddly.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -1578,6 +1619,13 @@ def decode_css(
     if not silent:
         logging.info("Starting the decoding.")
 
+    # Validate before the fast path below: it matches any all-identity string
+    # regardless of length, so the later length check never sees one.
+    if len(error) != len(code):
+        raise ValueError(
+            f"The error acts on {len(error)} qubits, expected {len(code)}."
+        )
+
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
@@ -1608,7 +1656,14 @@ def decode_css(
         # path could not be reproduced from its seed.
         generator = np.random.default_rng() if rng is None else rng
         stabilisers_x, stabilisers_z = css_code_stabilisers(code)
-        stabilisers = stabilisers_x + stabilisers_z
+        # decode_css's constraint wiring couples each check to its own
+        # component, so the invariant retry direction is the letter-crossed
+        # string -- see _cross_pauli_letters. This preserves the behaviour the
+        # invariance test pins to 1e-9 (and chi-convergence measured at 1e-14).
+        stabilisers = [
+            _cross_pauli_letters(stabiliser)
+            for stabiliser in stabilisers_x + stabilisers_z
+        ]
         error = multiply_pauli_strings(error, str(generator.choice(stabilisers)))
 
     # Compute qubit permutation that minimises MPO bandwidth.
@@ -1978,7 +2033,13 @@ def decode_custom(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error by a random stabilizer before decoding.
+        Whether to multiply the error, before decoding, by the letter-crossed
+        image (X and Z letters exchanged) of a randomly chosen stabiliser.
+        The crossed string is the gauge-preserving retry direction under the
+        decoder's same-component checks -- it leaves every enforced parity,
+        and therefore the posterior, unchanged; multiplying by the generator
+        itself would alter the parities whenever same-type generators overlap
+        oddly.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -2001,6 +2062,42 @@ def decode_custom(
     if not silent:
         logging.info("Starting the decoding.")
 
+    # Validate BEFORE the trivial-error fast path below, or a malformed code
+    # paired with an all-identity error would still report success.
+    # A wrong-length operator string does not fail loudly downstream: its sites
+    # simply cover a prefix of the qubits and the decoder returns a
+    # plausible-looking posterior for a different code. Refuse instead.
+    if not stabilizers:
+        raise ValueError("At least one stabiliser is required.")
+    expected_length = len(stabilizers[0])
+    for name, strings in (
+        ("stabilizers", stabilizers),
+        ("x_logicals", x_logicals),
+        ("z_logicals", z_logicals),
+    ):
+        for string in strings:
+            if len(string) != expected_length:
+                raise ValueError(
+                    f"Every operator must act on {expected_length} qubits; "
+                    f"{name} contains {string!r} of length {len(string)}."
+                )
+    # Representability is validated here too, or the fast path below would
+    # accept a malformed code whenever the error happens to be trivial: a
+    # parity-check constraint spans at least two MPS sites.
+    for stabilizer in stabilizers:
+        if sum(2 if letter == "Y" else letter in "XZ" for letter in stabilizer) < 2:
+            raise ValueError(
+                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                "and cannot be represented as a parity-check constraint."
+            )
+    # The error is validated here too: the fast path below matches any
+    # all-identity string regardless of its length, so the later (post-mps)
+    # length check never sees it.
+    if len(error) != expected_length:
+        raise ValueError(
+            f"The error acts on {len(error)} qubits, expected {expected_length}."
+        )
+
     if error == "I" * len(error):
         if not silent:
             logging.info("No error detected.")
@@ -2019,10 +2116,18 @@ def decode_custom(
 
     if multiply_by_stabiliser and not erased_qubits:
         # See decode_css: the choice must come from the passed-in generator so
-        # the run stays reproducible from its seed.
+        # the run stays reproducible from its seed. And as there, the
+        # gauge-preserving direction is the letter-CROSSED string: crossing
+        # flips the first component over the Z-part of the stabiliser and the
+        # second over its X-part, so the enforced parities are preserved exactly
+        # when the symplectic product with every generator vanishes -- which is
+        # stabiliser commutation itself, so this holds for non-CSS codes too.
+        # Multiplying by the uncrossed string instead requires the Euclidean
+        # products to vanish, which non-self-orthogonal generators (Shor's
+        # X-type rows overlap in three positions) do not satisfy.
         generator = np.random.default_rng() if rng is None else rng
         chosen_stabiliser = str(generator.choice(stabilizers))
-        error = multiply_pauli_strings(error, chosen_stabiliser)
+        error = multiply_pauli_strings(error, _cross_pauli_letters(chosen_stabiliser))
 
     error = pauli_to_mps(error)
 

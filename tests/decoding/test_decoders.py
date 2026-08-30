@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 import qecstruct as qec
+from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
@@ -24,6 +25,7 @@ from mdopt.mps.utils import inner_product
 from mdopt.examples.decoding.decoding import (
     str_to_bool,
     css_code_stabilisers,
+    custom_code_checks,
     decode_css,
     decode_custom,
     depolarising_bias,
@@ -173,10 +175,12 @@ def test_decode_css_matches_exact_posterior(name, bias):
 def test_decode_custom_matches_exact_posterior(name, bias):
     """decode_custom agrees with the same reference.
 
-    A stabiliser's syndrome is a symplectic product, so its Z part must be
-    checked against the X components of the error and vice versa. Getting that
-    backwards is invisible for a self-dual code such as Steane and wrong for
-    Shor, so both are exercised here.
+    mdopt's convention (see custom_code_checks): a P-lettered generator
+    constrains the P-letter record -- not the textbook symplectic pairing.
+    Getting the pairing inconsistent with decode_css and the reference is
+    invisible for a self-dual code such as Steane and wrong for Shor, so both
+    are exercised here. The strings come from css_code_stabilisers, whose
+    letters match each generator's type since issue #531.
     """
     code = CODES[name]()
     stabs = sum(css_code_stabilisers(code), [])
@@ -1071,3 +1075,219 @@ def test_readout_survives_a_failing_eigensolver(caplog):
 
     assert float(success) in (0.0, 1.0)
     assert any("Dephasing DMRG failed" in r.getMessage() for r in caplog.records)
+
+
+def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
+    """decode_custom must be gauge-invariant when fed honest Pauli strings.
+
+    Regression test for issue #531. The stabiliser strings here spell an X-type
+    generator as "X..X" -- the contract any external caller assumes. Before the
+    fix, ``css_code_stabilisers`` emitted the letters crossed and
+    ``custom_code_checks`` carried a component swap that silently expected
+    that, so honest strings mirrored the constraint wiring and the logical
+    readout stopped being gauge-invariant. Self-dual codes (Steane) and codes
+    whose logicals happen to align (Shor, [[4,2,2]]) mask this; the rotated
+    surface code does not: three of its weight-one errors -- sitting on the
+    logical supports -- decoded to the wrong class deterministically at every
+    bond dimension.
+
+    A distance-3 code must correct every weight-one error under MAP decoding.
+    """
+    surface = SurfaceCode(3, rotated=True)
+    num_qubits = surface.num_qubits
+
+    def rows_to_paulis(matrix, letter):
+        return [
+            "".join(letter if v else "I" for v in row) for row in np.asarray(matrix)
+        ]
+
+    stabilisers = rows_to_paulis(surface.matrix_x, "X") + rows_to_paulis(
+        surface.matrix_z, "Z"
+    )
+    logicals = np.asarray(surface.get_logical_ops())
+
+    def symplectic_to_pauli(row):
+        x_part, z_part = row[:num_qubits], row[num_qubits:]
+        return "".join(
+            "Y" if x and z else "X" if x else "Z" if z else "I"
+            for x, z in zip(x_part, z_part)
+        )
+
+    x_logicals = [symplectic_to_pauli(logicals[0])]
+    z_logicals = [symplectic_to_pauli(logicals[1])]
+
+    for qubit in range(num_qubits):
+        for pauli in "XZY":
+            error = "I" * qubit + pauli + "I" * (num_qubits - qubit - 1)
+            _, success = decode_custom(
+                stabilisers,
+                x_logicals,
+                z_logicals,
+                error,
+                chi_max=64,
+                bias_type="Depolarising",
+                bias_prob=0.05,
+                renormalise=True,
+                silent=True,
+                tolerance=0,
+            )
+            assert success, f"weight-1 error {error} decoded to the wrong class"
+
+
+@pytest.mark.parametrize(
+    "error, should_succeed",
+    [
+        ("III", True),  # no error
+        ("XII", True),  # weight-1: a distance-3 repetition code corrects it
+        ("IXI", True),
+        ("IIX", True),
+        ("XXI", False),  # weight-2: past half the distance, MAP must fail
+        ("XIX", False),
+    ],
+)
+def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
+    error, should_succeed
+):
+    """The 3-qubit pipeline must reproduce the repetition-code curve.
+
+    Under mdopt's convention a P-lettered generator constrains the P-letter
+    record, so ``["XXI", "IXX"]`` with "Bitflip" errors is the classical
+    bit-flip repetition decoder -- the configuration the notebook and thesis
+    validate against 3p^2 - 2p^3. (Textbook symplectic semantics would read
+    ``XII`` as a weight-one logical, ``XII * IXX = XXX``; that is deliberately
+    not the language this pipeline speaks -- see custom_code_checks.)
+
+    Regression test for the compensating-convention bug behind issue #531: with
+    the mirrored wiring the swap in ``custom_code_checks`` produced, weight-one
+    flips decoded to the logical class and weight-two flips to identity --
+    exactly backwards -- so the pipeline's logical error rate ran at
+    ~1-(1-p)^3 instead of the analytic 3p^2 - 2p^3 (measured 0.404 vs 0.104 at
+    p = 0.2; this branch measures 0.102).
+    """
+    _, success = decode_custom(
+        ["XXI", "IXX"],
+        ["XXX"],
+        ["ZZZ"],
+        error,
+        chi_max=64,
+        bias_type="Bitflip",
+        bias_prob=0.2,
+        renormalise=True,
+        silent=True,
+        tolerance=0,
+    )
+    assert bool(success) == should_succeed
+
+
+def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+    """decode_custom's retry direction must preserve the posterior on Shor.
+
+    Self-dual codes mask a wrong retry direction (the crossed and uncrossed
+    string sets coincide), so this pins the invariance on Shor, whose X-type
+    generators overlap in three positions: multiplying by the uncrossed string
+    changes the enforced parities and moves the posterior.
+    """
+    code = qec.shor_code()
+    stabs = sum(css_code_stabilisers(code), [])
+    log_x, log_z = _logicals_as_pauli(code)
+    error = "XZ" + "I" * (len(code) - 2)
+
+    def posterior(**kwargs):
+        return np.asarray(
+            decode_custom(
+                stabs,
+                log_x,
+                log_z,
+                error,
+                chi_max=1000,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+                **kwargs,
+            )[0],
+            dtype=float,
+        )
+
+    base = posterior()
+    for seed in range(4):
+        retried = posterior(
+            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+        )
+        assert np.allclose(retried, base, atol=1e-9)
+
+
+def test_decode_custom_rejects_wrong_length_operators():
+    """A wrong-length operator must fail loudly, not decode a different code.
+
+    Found by fuzzing decode_custom against an exact oracle: a logical shorter
+    than the stabilisers silently covered a prefix of the qubits and returned a
+    plausible-looking posterior.
+    """
+    with pytest.raises(ValueError, match="length"):
+        decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "XIII", silent=True)
+
+    # The trivial-error fast path must not bypass the validation: a malformed
+    # code with an all-identity error used to return success anyway.
+    with pytest.raises(ValueError, match="length"):
+        decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "IIII", silent=True)
+
+    # Nor may a wrong-length error ride the fast path: it matches any
+    # all-identity string regardless of length.
+    with pytest.raises(ValueError, match="error acts on 3"):
+        decode_custom(["XXII", "IZZI"], ["XXXX"], ["ZZZZ"], "III", silent=True)
+
+    # decode_css shared the same fast-path pattern and the same hole.
+    with pytest.raises(ValueError, match="error acts on 3"):
+        decode_css(qec.steane_code(), "III", silent=True)
+
+
+def test_custom_code_checks_rejects_a_single_site_stabiliser():
+    """Weight-one strings cannot form a parity-check constraint."""
+    with pytest.raises(ValueError, match="fewer than two"):
+        custom_code_checks(["XIII"], ["XXXX", "ZZZZ"])
+
+    # And the trivial-error fast path must not bypass that either: a weight-one
+    # stabiliser with an all-identity error used to return success.
+    with pytest.raises(ValueError, match="fewer than two"):
+        decode_custom(["XIII"], ["XXXX"], ["ZZZZ"], "IIII", silent=True)
+
+
+def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+    """decode_css's retry direction must preserve the posterior on Shor.
+
+    The Steane invariance test is masked (crossed and uncrossed string sets
+    coincide on a self-dual code), and the Shor test above exercises
+    decode_custom only -- so the crossing inside decode_css itself was pinned
+    by nothing: removing it passed the whole suite.
+    """
+    code = qec.shor_code()
+    error = "XZ" + "I" * (len(code) - 2)
+
+    def posterior(**kwargs):
+        return np.asarray(
+            decode_css(
+                code,
+                error,
+                chi_max=1000,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+                **kwargs,
+            )[0],
+            dtype=float,
+        )
+
+    base = posterior()
+    for seed in range(4):
+        retried = posterior(
+            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+        )
+        assert np.allclose(retried, base, atol=1e-9)
+
+
+def test_decode_custom_rejects_an_empty_stabiliser_list():
+    """An empty list used to surface as an opaque IndexError."""
+    with pytest.raises(ValueError, match="At least one stabiliser"):
+        decode_custom([], ["XX"], ["ZZ"], "II", silent=True)

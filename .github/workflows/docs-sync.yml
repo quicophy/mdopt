@@ -5,9 +5,10 @@ name: docs-sync
 # readthedocs builds with nbsphinx_execute = "never", so the site renders
 # whatever outputs are committed under docs/source/notebooks. That directory is
 # a copy of examples/, refreshed by generate_docs.sh, and the two had already
-# drifted. This runs the copy step on every push to main and commits the
-# difference, so results a notebook was committed with reach the docs without
-# anyone remembering to run the script.
+# drifted. This runs the copy step on every push to main and, because main is a
+# protected branch that rejects direct pushes ("Changes must be made through a
+# pull request" -- the first live run failed exactly there), delivers the
+# difference as a pull request on the docs-sync-bot branch.
 #
 # It copies; it does not execute. Notebook outputs come from a full-scale run
 # committed alongside the notebook -- see .github/workflows/notebooks.yml for
@@ -21,12 +22,18 @@ on:
       # The illustrations travel with the notebooks, so updating one without
       # touching its notebook must still re-sync.
       - "examples/**/*.png"
+      # Destination changes must trigger too: a merged sync PR (or any PR that
+      # edits the copies directly) produces a no-drift run whose job is to
+      # close a now-stale docs-sync-bot PR. Without this, that PR would stay
+      # open and mergeable, reintroducing files whose drift no longer exists.
+      - "docs/source/notebooks/**"
       - "generate_docs.sh"
       - ".github/workflows/docs-sync.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: docs-sync
@@ -69,7 +76,9 @@ jobs:
               cp "$img" "$dest/"
           done
 
-      - name: Commit any drift
+      - name: Deliver any drift as a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -80,28 +89,25 @@ jobs:
           git add docs/source/notebooks
           if git diff --cached --quiet -- docs/source/notebooks; then
               echo "docs/source/notebooks already matches examples/ -- nothing to do."
+              # A bot PR opened for earlier drift is now stale: merging it would
+              # reintroduce copies whose source has since been reverted or
+              # synchronised another way. Close it rather than leave it mergeable.
+              # No || true: an empty list already exits 0, so a failure here is
+              # an auth/API error, and swallowing it would leave the stale PR
+              # open while the job reports success.
+              stale="$(gh pr list --head docs-sync-bot --state open --json number --jq '.[0].number')"
+              if [ -n "$stale" ]; then
+                  gh pr close "$stale" --comment "The drift this PR carried no longer exists; closing." --delete-branch
+              fi
               exit 0
           fi
-          # [skip actions], not [skip ci]. Both stop GitHub Actions, and this
-          # commit only copies notebooks, so there is no reason to spend a full
-          # test matrix plus lint and mypy on it -- ci.yml, tests.yml, lint.yml
-          # and mypy.yml all trigger on any push with no path filter. But Read
-          # the Docs also honours [skip ci], and skipping the docs build is the
-          # one thing this workflow must not do: the site would keep serving the
-          # pre-sync notebooks, which is the whole point of the sync.
-          git commit -m "docs: sync notebooks from examples/ [skip actions]"
-          # main can advance between checkout and here; a plain push would then
-          # be rejected and, since the interleaving push may not touch notebook
-          # paths, nothing would re-trigger this sync. Rebase and retry -- our
-          # commit only touches docs/source/notebooks, so the rebase is trivial
-          # unless another docs-sync ran concurrently (prevented by the
-          # concurrency group above).
-          for attempt in 1 2 3; do
-              if git push; then
-                  exit 0
-              fi
-              git fetch origin main
-              git rebase origin/main
-          done
-          echo "could not push after 3 attempts" >&2
-          exit 1
+          git checkout -B docs-sync-bot
+          git commit -m "docs: sync notebooks from examples/"
+          git push -f origin docs-sync-bot
+          # One rolling PR; force-pushing the branch updates it in place.
+          if ! gh pr list --head docs-sync-bot --state open --json number --jq '.[0].number' | grep -q .; then
+              gh pr create \
+                  --head docs-sync-bot \
+                  --title "docs: sync notebooks from examples/" \
+                  --body "$(printf 'Automated sync of docs/source/notebooks from examples/, so readthedocs renders the outputs the notebooks were committed with.\n\nNote: pull requests opened with the default GITHUB_TOKEN do not trigger CI checks; close and reopen this PR (or push any commit to it) to run them before merging.')"
+          fi

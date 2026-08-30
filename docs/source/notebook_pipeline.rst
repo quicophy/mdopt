@@ -16,9 +16,11 @@ The path a result takes
              |
              |  git commit + push to main
              v
-   docs/source/notebooks/<notebook>.ipynb   docs-sync.yml copies it
-             |
-             |  readthedocs build
+   docs/source/notebooks/<notebook>.ipynb   docs-sync.yml copies it and opens
+             |                               a small sync PR (main is protected,
+             |  sync PR merged               so it cannot push directly); until
+             |                               that PR merges, the site still
+             |  readthedocs build            serves the previous outputs
              v
    this website                             nbsphinx renders the stored outputs
 
@@ -26,8 +28,9 @@ Three consequences worth knowing:
 
 * **A notebook committed without outputs shows nothing on the site.** The cells
   appear, the results do not.
-* **You never edit** ``docs/source/notebooks/`` **by hand.** It is overwritten
-  from ``examples/`` on every push to ``main``.
+* **You never edit** ``docs/source/notebooks/`` **by hand.** Every relevant
+  push to ``main`` opens (or updates) a small sync PR that overwrites it from
+  ``examples/``; the copies change when that PR is merged.
 * ``examples/misc/gpu_example.ipynb`` is excluded from the sync and kept exactly
   as committed. It targets Colab with a GPU and cannot run in CI.
 
@@ -40,7 +43,8 @@ Regenerating the results
    python scripts/run_notebooks.py --inplace examples/decoding/shor.ipynb
 
 ``--inplace`` writes the executed outputs back into the notebook. Commit the
-notebook afterwards and the docs follow on the next push to ``main``.
+notebook afterwards; the next push to ``main`` opens the sync PR, and the docs
+follow once it is merged.
 
 Expect this to take hours. Measured on an M-series laptop, one notebook at a
 time (``classical_ldpc`` is the one estimate here -- it has not yet completed
