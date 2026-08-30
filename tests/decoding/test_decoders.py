@@ -1247,6 +1247,11 @@ def test_custom_code_checks_rejects_a_single_site_stabiliser():
     with pytest.raises(ValueError, match="fewer than two"):
         custom_code_checks(["XIII"], ["XXXX", "ZZZZ"])
 
+    # And the trivial-error fast path must not bypass that either: a weight-one
+    # stabiliser with an all-identity error used to return success.
+    with pytest.raises(ValueError, match="fewer than two"):
+        decode_custom(["XIII"], ["XXXX"], ["ZZZZ"], "IIII", silent=True)
+
 
 def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
     """decode_css's retry direction must preserve the posterior on Shor.

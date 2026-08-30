@@ -2081,6 +2081,15 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+    # Representability is validated here too, or the fast path below would
+    # accept a malformed code whenever the error happens to be trivial: a
+    # parity-check constraint spans at least two MPS sites.
+    for stabilizer in stabilizers:
+        if sum(2 if letter == "Y" else letter in "XZ" for letter in stabilizer) < 2:
+            raise ValueError(
+                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                "and cannot be represented as a parity-check constraint."
+            )
     # The error is validated here too: the fast path below matches any
     # all-identity string regardless of its length, so the later (post-mps)
     # length check never sees it.
