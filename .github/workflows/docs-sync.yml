@@ -84,6 +84,13 @@ jobs:
           git add docs/source/notebooks
           if git diff --cached --quiet -- docs/source/notebooks; then
               echo "docs/source/notebooks already matches examples/ -- nothing to do."
+              # A bot PR opened for earlier drift is now stale: merging it would
+              # reintroduce copies whose source has since been reverted or
+              # synchronised another way. Close it rather than leave it mergeable.
+              stale="$(gh pr list --head docs-sync-bot --state open --json number --jq '.[0].number' || true)"
+              if [ -n "$stale" ]; then
+                  gh pr close "$stale" --comment "The drift this PR carried no longer exists; closing." --delete-branch
+              fi
               exit 0
           fi
           git checkout -B docs-sync-bot

@@ -18,7 +18,9 @@ The path a result takes
              v
    docs/source/notebooks/<notebook>.ipynb   docs-sync.yml copies it and opens
              |                               a small sync PR (main is protected,
-             |  readthedocs build            so it cannot push directly)
+             |  sync PR merged               so it cannot push directly); until
+             |                               that PR merges, the site still
+             |  readthedocs build            serves the previous outputs
              v
    this website                             nbsphinx renders the stored outputs
 
