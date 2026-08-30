@@ -1174,3 +1174,41 @@ def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
         tolerance=0,
     )
     assert bool(success) == should_succeed
+
+
+def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+    """decode_custom's retry direction must preserve the posterior on Shor.
+
+    Self-dual codes mask a wrong retry direction (the crossed and uncrossed
+    string sets coincide), so this pins the invariance on Shor, whose X-type
+    generators overlap in three positions: multiplying by the uncrossed string
+    changes the enforced parities and moves the posterior.
+    """
+    code = qec.shor_code()
+    stabs = sum(css_code_stabilisers(code), [])
+    log_x, log_z = _logicals_as_pauli(code)
+    error = "XZ" + "I" * (len(code) - 2)
+
+    def posterior(**kwargs):
+        return np.asarray(
+            decode_custom(
+                stabs,
+                log_x,
+                log_z,
+                error,
+                chi_max=1000,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+                **kwargs,
+            )[0],
+            dtype=float,
+        )
+
+    base = posterior()
+    for seed in range(4):
+        retried = posterior(
+            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+        )
+        assert np.allclose(retried, base, atol=1e-9)

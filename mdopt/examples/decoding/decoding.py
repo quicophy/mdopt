@@ -2053,10 +2053,18 @@ def decode_custom(
 
     if multiply_by_stabiliser and not erased_qubits:
         # See decode_css: the choice must come from the passed-in generator so
-        # the run stays reproducible from its seed.
+        # the run stays reproducible from its seed. And as there, the
+        # gauge-preserving direction is the letter-CROSSED string: crossing
+        # flips the first component over the Z-part of the stabiliser and the
+        # second over its X-part, so the enforced parities are preserved exactly
+        # when the symplectic product with every generator vanishes -- which is
+        # stabiliser commutation itself, so this holds for non-CSS codes too.
+        # Multiplying by the uncrossed string instead requires the Euclidean
+        # products to vanish, which non-self-orthogonal generators (Shor's
+        # X-type rows overlap in three positions) do not satisfy.
         generator = np.random.default_rng() if rng is None else rng
         chosen_stabiliser = str(generator.choice(stabilizers))
-        error = multiply_pauli_strings(error, chosen_stabiliser)
+        error = multiply_pauli_strings(error, _cross_pauli_letters(chosen_stabiliser))
 
     error = pauli_to_mps(error)
 
