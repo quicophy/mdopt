@@ -488,9 +488,9 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     stabilisers : Tuple[List[str], List[str]]
         A tuple of two lists, where the first one corresponds to X stabilisers and
         the second one -- to Z stabilisers. Each stabiliser is spelled with the
-        letters of its type: an X-type generator reads "X..X". (It used to emit
-        the letters crossed, which the component swap in ``custom_code_checks``
-        then silently expected -- issue #531.)
+        letters of its type: an X-type generator reads "X..X".
+        ``custom_code_checks`` derives the symplectic parity check from these
+        strings, acting on the opposite component of each qubit.
     """
 
     def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:

@@ -1292,3 +1292,92 @@ def test_decode_custom_rejects_an_empty_stabiliser_list():
     """An empty list used to surface as an opaque IndexError."""
     with pytest.raises(ValueError, match="At least one stabiliser"):
         decode_custom([], ["XX"], ["ZZ"], "II", silent=True)
+
+
+def test_logical_multiplication_permutes_the_class_posterior():
+    """Implementation-independent identities of textbook class labels.
+
+    Multiplying the error by X-bar must exchange the I and X class amplitudes
+    (and Z with Y); by Z-bar, I with Z (and X with Y); by any stabiliser,
+    nothing. These pin the group action of the logical algebra on the readout
+    without reference to any enumerator.
+    """
+    code = qec.shor_code()
+    x_bar, z_bar = "XXXIIIIII", "ZIIZIIZII"
+    stabilisers = sum(css_code_stabilisers(code), [])
+
+    def posterior(err):
+        raw = np.abs(
+            np.asarray(
+                decode_css(
+                    code,
+                    err,
+                    chi_max=512,
+                    bias_type="Depolarising",
+                    bias_prob=0.1,
+                    renormalise=True,
+                    silent=True,
+                )[0],
+                dtype=float,
+            )
+        )
+        return raw / np.linalg.norm(raw)
+
+    base = posterior("XZIIIIIII")
+    swap_ix = np.array([1, 0, 3, 2])
+    swap_iz = np.array([2, 3, 0, 1])
+    assert np.allclose(
+        posterior(multiply_pauli_strings("XZIIIIIII", x_bar)), base[swap_ix], atol=1e-8
+    )
+    assert np.allclose(
+        posterior(multiply_pauli_strings("XZIIIIIII", z_bar)), base[swap_iz], atol=1e-8
+    )
+    for stabiliser in stabilisers[:3]:
+        assert np.allclose(
+            posterior(multiply_pauli_strings("XZIIIIIII", stabiliser)), base, atol=1e-8
+        )
+
+
+def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
+    """The unified decode_css must equal decode_custom on a k = 2 code.
+
+    The equality battery that proved the adapter behaviour-preserving only had
+    k = 1 code objects; this pins the k = 2 string rendering and pairing.
+    """
+    linear = qec.LinearCode(qec.BinaryMatrix(4, [[0, 1, 2, 3]]))
+    code = qec.CssCode(linear, linear)
+
+    via_adapter = np.abs(
+        np.asarray(
+            decode_css(
+                code,
+                "XZII",
+                chi_max=512,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+            )[0],
+            dtype=float,
+        )
+    )
+    via_strings = np.abs(
+        np.asarray(
+            decode_custom(
+                ["XXXX", "ZZZZ"],
+                ["XIIX", "IIXX"],
+                ["ZZII", "ZIIZ"],
+                "XZII",
+                chi_max=512,
+                bias_type="Depolarising",
+                bias_prob=0.1,
+                renormalise=True,
+                silent=True,
+                tolerance=0,
+                dense_readout_max_sites=30,
+            )[0],
+            dtype=float,
+        )
+    )
+    assert via_adapter.shape == (16,)
+    assert np.allclose(via_adapter, via_strings, atol=1e-12)
