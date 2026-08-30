@@ -2043,18 +2043,8 @@ def decode_custom(
     if not silent:
         logging.info("Starting the decoding.")
 
-    if error == "I" * len(error):
-        if not silent:
-            logging.info("No error detected.")
-        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
-        # shots, and the identity class is provably the MAP answer for a
-        # trivial error (verified by exact enumeration up to p = 0.49). The
-        # returned vector is a k = 1-shaped STUB, not a real posterior -- do
-        # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
-        # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
-        # skip. Callers here consume only the success flag.
-        return [1.0, 0.0, 0.0, 0.0], 1
-
+    # Validate BEFORE the trivial-error fast path below, or a malformed code
+    # paired with an all-identity error would still report success.
     # A wrong-length operator string does not fail loudly downstream: its sites
     # simply cover a prefix of the qubits and the decoder returns a
     # plausible-looking posterior for a different code. Refuse instead.
@@ -2070,6 +2060,18 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+
+    if error == "I" * len(error):
+        if not silent:
+            logging.info("No error detected.")
+        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
+        # shots, and the identity class is provably the MAP answer for a
+        # trivial error (verified by exact enumeration up to p = 0.49). The
+        # returned vector is a k = 1-shaped STUB, not a real posterior -- do
+        # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
+        # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
+        # skip. Callers here consume only the success flag.
+        return [1.0, 0.0, 0.0, 0.0], 1
 
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"

@@ -22,6 +22,11 @@ on:
       # The illustrations travel with the notebooks, so updating one without
       # touching its notebook must still re-sync.
       - "examples/**/*.png"
+      # Destination changes must trigger too: a merged sync PR (or any PR that
+      # edits the copies directly) produces a no-drift run whose job is to
+      # close a now-stale docs-sync-bot PR. Without this, that PR would stay
+      # open and mergeable, reintroducing files whose drift no longer exists.
+      - "docs/source/notebooks/**"
       - "generate_docs.sh"
       - ".github/workflows/docs-sync.yml"
   workflow_dispatch:

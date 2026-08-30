@@ -1225,6 +1225,11 @@ def test_decode_custom_rejects_wrong_length_operators():
     with pytest.raises(ValueError, match="length"):
         decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "XIII", silent=True)
 
+    # The trivial-error fast path must not bypass the validation: a malformed
+    # code with an all-identity error used to return success anyway.
+    with pytest.raises(ValueError, match="length"):
+        decode_custom(["XXII", "IZZI"], ["XX"], ["ZZZZ"], "IIII", silent=True)
+
 
 def test_custom_code_checks_rejects_a_single_site_stabiliser():
     """Weight-one strings cannot form a parity-check constraint."""
