@@ -1381,3 +1381,22 @@ def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
     )
     assert via_adapter.shape == (16,)
     assert np.allclose(via_adapter, via_strings, atol=1e-12)
+
+
+def test_adapter_rejects_wrong_length_errors_under_optimised_ordering():
+    """The permutation indexes the error string, so length must be checked first.
+
+    A long error was silently truncated to num_qubits by the permutation and
+    then decoded; a short one raised IndexError instead of the documented
+    ValueError.
+    """
+    code = qec.steane_code()
+    for bad in ("XIIIIIII", "XII"):
+        with pytest.raises(ValueError, match="error acts on"):
+            decode_css(code, bad, silent=True, qubit_order_strategy="Optimised")
+
+
+def test_unpaired_logicals_are_rejected_even_for_a_trivial_error():
+    """The fourth validation the identity fast path used to bypass."""
+    with pytest.raises(ValueError, match="symplectic pairs"):
+        decode_custom(["ZZII", "IZZI"], ["XXXX"], [], "IIII", silent=True)

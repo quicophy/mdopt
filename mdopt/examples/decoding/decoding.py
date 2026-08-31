@@ -1630,12 +1630,23 @@ def decode_css(
             strings.append("".join(chars))
         return strings
 
+    # Validate the raw error length before anything else: the permutation
+    # below indexes error[qubit_perm[i]], which would raise IndexError for a
+    # short string and silently truncate a long one.
+    if len(error) != num_qubits:
+        raise ValueError(
+            f"The error acts on {len(error)} qubits, expected {num_qubits}."
+        )
+
     stabilisers_x, stabilisers_z = css_code_stabilisers(code)
     stabilizers = stabilisers_x + stabilisers_z
     x_logicals = _rows_as_pauli(code.x_logicals_binary(), "X")
     z_logicals = _rows_as_pauli(code.z_logicals_binary(), "Z")
 
-    if qubit_order_strategy == "Optimised":
+    # The ordering optimisation builds dense check matrices and runs a search;
+    # pointless when decode_custom's no-error fast path will return
+    # immediately, and that path dominates low-error-rate Monte Carlo.
+    if qubit_order_strategy == "Optimised" and error != "I" * num_qubits:
         pm_x = code.x_stabs_binary()
         H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
         for r, cols in enumerate(pm_x.rows()):
@@ -1775,6 +1786,13 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+    # The pairing requirement is validated here too -- the fourth check the
+    # trivial-error fast path below would otherwise bypass.
+    if len(x_logicals) != len(z_logicals):
+        raise ValueError(
+            "x_logicals and z_logicals must come in symplectic pairs; got "
+            f"{len(x_logicals)} and {len(z_logicals)}."
+        )
     # Representability is validated here too, or the fast path below would
     # accept a malformed code whenever the error happens to be trivial: a
     # parity-check constraint spans at least two MPS sites.
