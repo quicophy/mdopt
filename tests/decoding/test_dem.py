@@ -243,3 +243,53 @@ def test_surface_code_circuit_level_matches_brute_force():
         masses, _ = decode_dem(problem, syndrome.astype(int), chi_max=int(1e4))
         exact = _exact_class_masses(problem, syndrome.astype(int))
         assert np.allclose(masses / masses.sum(), exact / exact.sum(), atol=1e-9), key
+
+
+def test_ordering_leaves_the_posterior_invariant():
+    """Reordering mechanisms relabels the chain; the class masses must not move."""
+    from mdopt.examples.decoding.dem import order_mechanisms
+
+    circuit, problem = _repetition_problem(distance=3, rounds=2)
+    sampler = circuit.compile_detector_sampler(seed=9)
+    detections, _ = sampler.sample(5, separate_observables=True)
+    reordered, _ = order_mechanisms(problem, "bandwidth")
+    for syndrome in detections:
+        a, fa = decode_dem(problem, syndrome.astype(int))
+        b, fb = decode_dem(reordered, syndrome.astype(int))
+        assert np.allclose(a / a.sum(), b / b.sum(), atol=1e-10)
+        assert np.array_equal(fa, fb)
+
+
+def test_natural_order_spans_scale_with_a_round_not_the_chain():
+    """stim's time order is already near the time-locality floor.
+
+    Measured finding, locked in as a scaling property rather than a wish: RCM
+    bandwidth ordering makes circuit-DEM spans WORSE (the high-degree
+    detectors form cliques that defeat it), while the native order keeps the
+    mean span at roughly one round's worth of mechanisms regardless of how
+    many rounds run. What grows the floor is mechanisms-per-round, not
+    duration.
+    """
+    from mdopt.examples.decoding.dem import constraint_spans
+
+    spans = {}
+    for rounds in (3, 9):
+        circuit = stim.Circuit.generated(
+            "surface_code:rotated_memory_z",
+            distance=3,
+            rounds=rounds,
+            after_clifford_depolarization=0.005,
+            before_measure_flip_probability=0.005,
+            after_reset_flip_probability=0.005,
+        )
+        problem = dem_to_problem(
+            circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+        )
+        spans[rounds] = (
+            constraint_spans(problem).mean(),
+            problem.num_mechanisms / rounds,
+        )
+    for rounds, (mean_span, per_round) in spans.items():
+        assert mean_span < 2.5 * per_round, (rounds, mean_span, per_round)
+    # Tripling the number of rounds must not triple the span floor.
+    assert spans[9][0] < 2 * spans[3][0], spans

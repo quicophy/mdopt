@@ -36,7 +36,7 @@ from mdopt.optimiser.utils import (
     XOR_LEFT,
     XOR_RIGHT,
 )
-from mdopt.optimiser.utils import apply_constraints
+from mdopt.optimiser.utils import apply_constraints, optimise_qubit_order
 
 
 @dataclass
@@ -314,3 +314,72 @@ def _detector_parities(problem: DemProblem, mechanisms: np.ndarray) -> np.ndarra
         ],
         dtype=int,
     )
+
+
+def constraint_spans(problem: DemProblem) -> np.ndarray:
+    """Span of every detector constraint under the current mechanism order.
+
+    The span (last site minus first site) counts the SWAP tensors the
+    constraint drags along the chain, which is what governs the bond dimension
+    a finite-``chi_max`` contraction needs. Ordering the mechanisms to shrink
+    these is the central performance lever of the DEM decoder.
+    """
+    return np.array(
+        [max(row) - min(row) for row in problem.detector_rows if len(row) >= 2],
+        dtype=int,
+    )
+
+
+def order_mechanisms(
+    problem: DemProblem, strategy: str = "bandwidth"
+) -> Tuple[DemProblem, np.ndarray]:
+    """Reorder the mechanisms to shrink the constraint spans.
+
+    Returns the reordered problem and ``perm``, where ``perm[i]`` is the
+    original mechanism index placed at chain position ``i``. The class
+    posterior is invariant under this relabelling (pinned by
+    ``test_ordering_leaves_the_posterior_invariant``); only the contraction
+    cost changes.
+
+    Strategies
+    ----------
+    "natural"
+        Keep stim's order (a no-op, for comparison).
+    "bandwidth"
+        Reverse Cuthill-McKee on the mechanism interaction graph, where two
+        mechanisms interact when some detector or observable contains both --
+        the same bandwidth minimiser the code decoders use for qubit order.
+
+    Measured caveat: on circuit-level DEMs, RCM makes the spans WORSE (at
+    surface d=3, 9 rounds: mean span 111 natural vs 415 reordered). The
+    high-degree detectors form cliques the minimiser cannot break, while
+    stim's native order is time-ordered and already sits near the
+    time-locality floor of roughly one round's worth of mechanisms per
+    constraint. Bandwidth ordering is kept for DEMs without time structure
+    (code-capacity models), where it reduces to the qubit ordering that works
+    for the code decoders.
+    """
+    if strategy == "natural":
+        return problem, np.arange(problem.num_mechanisms)
+    if strategy != "bandwidth":
+        raise ValueError(f"Unknown ordering strategy {strategy!r}.")
+
+    rows = [row for row in problem.detector_rows + problem.observable_rows if row]
+    incidence = np.zeros((len(rows), problem.num_mechanisms), dtype=np.uint8)
+    for r, row in enumerate(rows):
+        incidence[r, row] = 1
+    perm = optimise_qubit_order(incidence)
+
+    inverse = np.argsort(perm)
+    reordered = DemProblem(
+        probs=[problem.probs[perm[i]] for i in range(problem.num_mechanisms)],
+        detector_rows=[
+            sorted(int(inverse[m]) for m in row) for row in problem.detector_rows
+        ],
+        observable_rows=[
+            sorted(int(inverse[m]) for m in row) for row in problem.observable_rows
+        ],
+        num_detectors=problem.num_detectors,
+        num_observables=problem.num_observables,
+    )
+    return reordered, perm
