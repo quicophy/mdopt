@@ -488,9 +488,9 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
     stabilisers : Tuple[List[str], List[str]]
         A tuple of two lists, where the first one corresponds to X stabilisers and
         the second one -- to Z stabilisers. Each stabiliser is spelled with the
-        letters of its type: an X-type generator reads "X..X". (It used to emit
-        the letters crossed, which the component swap in ``custom_code_checks``
-        then silently expected -- issue #531.)
+        letters of its type: an X-type generator reads "X..X".
+        ``custom_code_checks`` derives the symplectic parity check from these
+        strings, acting on the opposite component of each qubit.
     """
 
     def _binary_to_pauli(binary_row, num_qubits, pauli) -> str:
@@ -569,18 +569,23 @@ def css_code_checks(
 
     offset = code.num_x_logicals() + code.num_z_logicals()
 
+    # Textbook symplectic pairing: an X-type stabiliser detects Z errors, so
+    # its parity check constrains the Z components (odd MPS sites), and a
+    # Z-type stabiliser constrains the X components. The enforced parity is
+    # then the symplectic product with the stabiliser, which makes multiplying
+    # the error by any commuting stabiliser a gauge move.
     if qubit_perm is not None:
         inv_perm = np.argsort(qubit_perm)
         checks_x = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
+            for row in array_x
         ]
         checks_z = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
-            for row in array_z
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_z
         ]
     else:
-        checks_x = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
-        checks_z = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
+        checks_x = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_x]
+        checks_z = [list(2 * np.nonzero(row)[0] + offset) for row in array_z]
 
     return checks_x, checks_z
 
@@ -672,18 +677,22 @@ def css_code_logicals(
 
     offset = code.num_x_logicals() + code.num_z_logicals()
 
+    # Textbook class labels are symplectic products with the PARTNER logical:
+    # the X-class of a residual is <e, Z-bar_i> -- the parity of its X
+    # components over the support of Z-bar -- and the Z-class is <e, X-bar_i>.
+    # Reading each class off its own operator instead is not gauge-invariant.
     if qubit_perm is not None:
         inv_perm = np.argsort(qubit_perm)
         x_logicals = [
-            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_x
+            sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset)) for row in array_z
         ]
         z_logicals = [
             sorted(list(2 * inv_perm[np.nonzero(row)[0]] + offset + 1))
-            for row in array_z
+            for row in array_x
         ]
     else:
-        x_logicals = [list(2 * np.nonzero(row)[0] + offset) for row in array_x]
-        z_logicals = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_z]
+        x_logicals = [list(2 * np.nonzero(row)[0] + offset) for row in array_z]
+        z_logicals = [list(2 * np.nonzero(row)[0] + offset + 1) for row in array_x]
 
     return x_logicals, z_logicals
 
@@ -796,19 +805,16 @@ def create_bb_code(
     return CssCode(x_code=x_code, z_code=z_code)
 
 
-def _cross_pauli_letters(pauli_string: str) -> str:
-    """Exchange X and Z letters in a Pauli string (Y, I and E unchanged).
+def _swap_pauli_components(bitstring: str) -> str:
+    """Swap the two component bits of every qubit in a two-bit-per-qubit string.
 
-    The decoders' internal convention couples each operator's parity check to
-    its *own* component (an X-type check constrains the first component of
-    every qubit pair, which is where :func:`pauli_to_mps` records an input
-    ``X``). ``decode_css``'s stabiliser-multiplication retry was written
-    against the letter-crossed strings ``css_code_stabilisers`` used to emit,
-    so it crosses the honest strings back locally to keep its behaviour
-    -- verified invariant to 1e-14 -- unchanged (issue #531).
+    Textbook symplectic pairing: an operator's X part detects Z errors and its
+    Z part detects X errors, so a parity check (or class label) built from the
+    operator acts on the *opposite* component to the one
+    :func:`pauli_to_mps` assigns. The Euclidean parity over the swapped sites
+    is then exactly the symplectic product with the operator.
     """
-    table = {"X": "Z", "Z": "X"}
-    return "".join(table.get(letter, letter) for letter in pauli_string)
+    return "".join(bitstring[i + 1] + bitstring[i] for i in range(0, len(bitstring), 2))
 
 
 def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List[int]]:
@@ -831,21 +837,11 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     checks = []
 
     for stabilizer in stabilizers:
-        # mdopt's convention, here and in css_code_checks: a P-lettered
-        # generator constrains the P-letter record -- an "X..X" string fixes
-        # parities of the first component of each qubit pair, which is where
-        # pauli_to_mps writes an input "X". This is NOT the textbook symplectic
-        # pairing (where an X-type stabiliser would detect Z components); it is
-        # the language the whole pipeline speaks: decode_css, the exact
-        # brute-force reference, and the 3-qubit notebook -- which pairs
-        # ["XXI", "IXX"] with "Bitflip" errors and validates against the
-        # classical repetition-code curve 3p^2 - 2p^3, meaningful only under
-        # this reading. The former component swap here compensated the
-        # letter-crossed strings css_code_stabilisers used to emit; with
-        # type-lettered strings it mirrored the wiring and broke gauge
-        # invariance of the readout (issue #531): measured LER at p = 0.2 was
-        # 0.404 against the analytic 0.104 this convention reproduces (0.102).
-        bitstring = pauli_to_mps(stabilizer)
+        # Textbook symplectic pairing (see _swap_pauli_components): the check
+        # constrains the opposite component of every qubit, so the enforced
+        # parity is the symplectic product with the stabiliser and multiplying
+        # the error by any commuting stabiliser is a gauge move.
+        bitstring = _swap_pauli_components(pauli_to_mps(stabilizer))
         check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
         if len(check) < 2:
             # The [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] constraint spans at
@@ -924,22 +920,25 @@ def custom_code_logicals(
     logicals_x = []
     logicals_z = []
 
-    # Each class is read off its own operator's components, matching the
-    # constraint convention above: with checks on their own components, the
-    # deformation space of a qubit's first component is null(H_X), whose gauge
-    # directions all overlap supp(X-bar) evenly (they commute), while the
-    # Z-bar direction overlaps it oddly -- so this labelling is exactly the
-    # gauge-invariant one (issue #531).
-    for logical in x_logicals:
-        bitstring = pauli_to_mps(logical)
+    # Textbook class labels are symplectic products with the PARTNER logical:
+    # the X-class of a residual is <e, Z-bar_i>, read from the swapped sites of
+    # Z-bar, and the Z-class is <e, X-bar_i>. This requires the logical bases
+    # to come in symplectic pairs, X-bar_i with Z-bar_i.
+    if len(x_logicals) != len(z_logicals):
+        raise ValueError(
+            "x_logicals and z_logicals must come in symplectic pairs; got "
+            f"{len(x_logicals)} and {len(z_logicals)}."
+        )
+    for logical in z_logicals:
+        bitstring = _swap_pauli_components(pauli_to_mps(logical))
         # Find positions of non-zero entries
         x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for X logicals
         x_sites += len(x_logicals) + len(z_logicals)
         logicals_x.append(list(x_sites))
 
-    for logical in z_logicals:
-        bitstring = pauli_to_mps(logical)
+    for logical in x_logicals:
+        bitstring = _swap_pauli_components(pauli_to_mps(logical))
         # Find positions of non-zero entries
         z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for Z logicals
@@ -1577,13 +1576,10 @@ def decode_css(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error, before decoding, by the letter-crossed
-        image (X and Z letters exchanged) of a randomly chosen stabiliser.
-        The crossed string is the gauge-preserving retry direction under the
-        decoder's same-component checks -- it leaves every enforced parity,
-        and therefore the posterior, unchanged; multiplying by the generator
-        itself would alter the parities whenever same-type generators overlap
-        oddly.
+        Whether to multiply the error by a randomly chosen stabiliser before
+        decoding. Under the symplectic checks this is a gauge move: it maps
+        the error to another representative of the same coset and leaves the
+        posterior unchanged.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -1616,58 +1612,41 @@ def decode_css(
         If the error string length does not correspond to the code.
     """
 
-    if not silent:
-        logging.info("Starting the decoding.")
+    # decode_css is a thin adapter over decode_custom: it renders the code's
+    # stabilisers and logicals as Pauli strings (letters matching each
+    # operator's type), applies the optimised qubit ordering at the string
+    # level when asked, and delegates. The two decoders used to be parallel
+    # ~450-line pipelines, which is how the symplectic-pairing bug (issue
+    # #531), the retry-direction gap and three fast-path validation bypasses
+    # each managed to live in exactly one of them.
+    num_qubits = len(code)
 
-    # Validate before the fast path below: it matches any all-identity string
-    # regardless of length, so the later length check never sees one.
-    if len(error) != len(code):
+    def _rows_as_pauli(binary_matrix, letter):
+        strings = []
+        for row in binary_matrix.rows():
+            chars = ["I"] * num_qubits
+            for col in row:
+                chars[col] = letter
+            strings.append("".join(chars))
+        return strings
+
+    # Validate the raw error length before anything else: the permutation
+    # below indexes error[qubit_perm[i]], which would raise IndexError for a
+    # short string and silently truncate a long one.
+    if len(error) != num_qubits:
         raise ValueError(
-            f"The error acts on {len(error)} qubits, expected {len(code)}."
+            f"The error acts on {len(error)} qubits, expected {num_qubits}."
         )
 
-    if error == "I" * len(error):
-        if not silent:
-            logging.info("No error detected.")
-        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
-        # shots, and the identity class is provably the MAP answer for a
-        # trivial error (verified by exact enumeration up to p = 0.49). The
-        # returned vector is a k = 1-shaped STUB, not a real posterior -- do
-        # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
-        # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
-        # skip. Callers here consume only the success flag.
-        return [1.0, 0.0, 0.0, 0.0], 1
+    stabilisers_x, stabilisers_z = css_code_stabilisers(code)
+    stabilizers = stabilisers_x + stabilisers_z
+    x_logicals = _rows_as_pauli(code.x_logicals_binary(), "X")
+    z_logicals = _rows_as_pauli(code.z_logicals_binary(), "Z")
 
-    # Both sectors always carry a live degree of freedom: the bias channel
-    # spreads amplitude onto every physical site regardless of which Paulis the
-    # input error happens to contain, so a sector whose constraints are skipped
-    # keeps its logical site in |+> and marginalises to a uniform -- and
-    # therefore meaningless -- distribution over that sector's classes.
-    error_contains_x = True
-    error_contains_z = True
-
-    erased_qubits = [
-        index for index, single_error in enumerate(error) if single_error == "E"
-    ]
-
-    if multiply_by_stabiliser and not erased_qubits:
-        # Draw from the generator that was passed in. Reaching for np.random
-        # here would make the choice depend on global state, so a run using this
-        # path could not be reproduced from its seed.
-        generator = np.random.default_rng() if rng is None else rng
-        stabilisers_x, stabilisers_z = css_code_stabilisers(code)
-        # decode_css's constraint wiring couples each check to its own
-        # component, so the invariant retry direction is the letter-crossed
-        # string -- see _cross_pauli_letters. This preserves the behaviour the
-        # invariance test pins to 1e-9 (and chi-convergence measured at 1e-14).
-        stabilisers = [
-            _cross_pauli_letters(stabiliser)
-            for stabiliser in stabilisers_x + stabilisers_z
-        ]
-        error = multiply_pauli_strings(error, str(generator.choice(stabilisers)))
-
-    # Compute qubit permutation that minimises MPO bandwidth.
-    if qubit_order_strategy == "Optimised":
+    # The ordering optimisation builds dense check matrices and runs a search;
+    # pointless when decode_custom's no-error fast path will return
+    # immediately, and that path dominates low-error-rate Monte Carlo.
+    if qubit_order_strategy == "Optimised" and error != "I" * num_qubits:
         pm_x = code.x_stabs_binary()
         H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
         for r, cols in enumerate(pm_x.rows()):
@@ -1679,309 +1658,38 @@ def decode_css(
             for c in cols:
                 H_z[r, c] = 1
         qubit_perm = optimise_qubit_order(np.vstack([H_x, H_z]))
-        # Rearrange the error string so that MPS site i carries the Pauli
-        # of original qubit qubit_perm[i].
-        error = "".join(error[qubit_perm[i]] for i in range(len(error)))
+
+        def _permute(string):
+            return "".join(string[qubit_perm[i]] for i in range(num_qubits))
+
+        stabilizers = [_permute(string) for string in stabilizers]
+        x_logicals = [_permute(string) for string in x_logicals]
+        z_logicals = [_permute(string) for string in z_logicals]
+        error = _permute(error)
         if not silent:
             logging.info("Applied optimised qubit ordering.")
-    else:
-        qubit_perm = None
 
-    # Recompute the erased positions in the MPS frame: the reordering above
-    # moves qubits along the chain, so the indices collected from the original
-    # error string no longer point at the right sites.
-    erased_qubits = [
-        index for index, single_error in enumerate(error) if single_error == "E"
-    ]
-
-    error = pauli_to_mps(error)
-
-    num_sites = 2 * len(code) + code.num_x_logicals() + code.num_z_logicals()
-    num_logicals = code.num_x_logicals() + code.num_z_logicals()
-
-    if not silent:
-        logging.info(f"The total number of sites: {num_sites}.")
-    if len(error) != num_sites - num_logicals:
-        raise ValueError(
-            f"The error length is {len(error)}, expected {num_sites - num_logicals}."
-        )
-
-    logicals_state = "+" * num_logicals
-    state_string = logicals_state + error
-    error_mps = create_custom_product_state(
-        string=state_string, tolerance=tolerance, form="Right-canonical"
+    return decode_custom(
+        stabilizers,
+        x_logicals,
+        z_logicals,
+        error,
+        num_runs=num_runs,
+        chi_max=chi_max,
+        cut=cut,
+        bias_type=bias_type,
+        bias_prob=bias_prob,
+        renormalise=renormalise,
+        multiply_by_stabiliser=multiply_by_stabiliser,
+        silent=silent,
+        contraction_strategy=contraction_strategy,
+        optimiser=optimiser,
+        tolerance=tolerance,
+        dense_readout_max_sites=dense_readout_max_sites,
+        num_restarts=num_restarts,
+        tie_policy=tie_policy,
+        rng=rng,
     )
-
-    constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
-    logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
-
-    constraint_sites = css_code_constraint_sites(code, qubit_perm=qubit_perm)
-    logicals_sites = css_code_logicals_sites(code, qubit_perm=qubit_perm)
-
-    # Exclude erased qubits from the bias: they are initialised as |+>, which
-    # already represents complete ignorance, so biasing them would corrupt that
-    # state. Physical qubit q occupies MPS sites (num_logicals + 2q) and
-    # (num_logicals + 2q + 1).
-    #
-    # The bit-flip bias is a one-site MPO, so it wants every site. The
-    # depolarising bias is a two-site MPO acting jointly on a qubit's pair, so
-    # it wants only the first site of each pair -- passing both would apply it
-    # to overlapping pairs and the result would not be a depolarising channel.
-    unerased = [q for q in range(len(code)) if q not in erased_qubits]
-    if bias_type == "Bitflip":
-        sites_to_bias = [
-            s
-            for q in unerased
-            for s in (num_logicals + 2 * q, num_logicals + 2 * q + 1)
-        ]
-    else:
-        sites_to_bias = [num_logicals + 2 * q for q in unerased]
-
-    if sites_to_bias:
-        if bias_type == "Bitflip":
-            if not silent:
-                logging.info("Applying bitflip bias.")
-            error_mps = apply_bitflip_bias(
-                mps=error_mps,
-                sites_to_bias=sites_to_bias,
-                prob_bias_list=bias_prob,
-            )
-        else:
-            if not silent:
-                logging.info("Applying depolarising bias.")
-            error_mps = apply_depolarising_bias(
-                mps=error_mps,
-                sites_to_bias=sites_to_bias,
-                prob_bias_list=bias_prob,
-                renormalise=renormalise,
-            )
-
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying X logicals' constraints.")
-        error_mps = apply_constraints(
-            error_mps,
-            logicals_sites[0],
-            logicals_tensors,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-        )
-
-    if error_contains_z:
-        if not silent:
-            logging.info("Applying Z logicals' constraints.")
-        error_mps = apply_constraints(
-            error_mps,
-            logicals_sites[1],
-            logicals_tensors,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-        )
-
-    if error_contains_x:
-        if not silent:
-            logging.info("Applying X checks' constraints.")
-        error_mps = apply_constraints(
-            error_mps,
-            constraint_sites[0],
-            constraints_tensors,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-        )
-
-    if error_contains_z:
-        if not silent:
-            logging.info("Applying Z checks' constraints.")
-        error_mps = apply_constraints(
-            error_mps,
-            constraint_sites[1],
-            constraints_tensors,
-            chi_max=chi_max,
-            cut=cut,
-            renormalise=renormalise,
-            silent=silent,
-            strategy=contraction_strategy,
-        )
-
-    if not silent:
-        logging.info("Marginalising the error MPS.")
-    # Marginalise ALL physical qubit sites in one pass.  Erased qubits are
-    # already in |+> and are naturally included here -- no separate
-    # intermediate marginalisation is needed.
-    sites_to_marginalise = list(range(num_logicals, num_sites))
-    logical_mps = error_mps.marginal(
-        sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
-    ).reverse()
-
-    num_logical_sites = len(logical_mps)
-    if not silent:
-        logging.info(f"The number of logical sites: {num_logical_sites}.")
-
-    if num_logical_sites <= dense_readout_max_sites:
-        logical_signed = logical_mps.dense(
-            flatten=True, renormalise=renormalise, norm=2
-        )
-        logical_dense = abs(logical_signed)
-
-        # An exact run cannot produce a negative amplitude: every tensor in the
-        # pipeline is non-negative and marginalisation traces against all-ones.
-        # A negative one is therefore a truncation artefact and a direct signal
-        # that chi_max is too small for this instance -- the cheapest
-        # convergence diagnostic available, since the vector is already here.
-        most_negative = float(np.min(np.real(np.asarray(logical_signed))))
-        peak = float(np.max(logical_dense))
-
-        # A collapsed posterior carries no information. Truncation is what
-        # destroys it: at low chi_max a whole site tensor can be driven to zero.
-        if not np.isfinite(peak) or peak == 0.0:
-            # Scoring must stop here. Every entry of an all-zero vector is within
-            # eps of the maximum, so the identity would be "among the maximisers"
-            # and the shot would score a success -- turning numerical collapse
-            # into a correctly decoded shot and biasing the failure rate
-            # downward, invisibly when silent=True. Report the failure instead.
-            if not silent:
-                logging.warning(
-                    "The logical posterior collapsed to zero at chi_max=%d; this "
-                    "shot carries no information and is scored as a failure.",
-                    chi_max,
-                )
-            return logical_dense, 0.0
-        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
-            logging.warning(
-                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
-                "is not converged for this instance.",
-                most_negative,
-                100.0 * abs(most_negative) / peak,
-                chi_max,
-            )
-
-        # Normalise to the peak so that tie tolerances are scale-independent.
-        # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
-        # collapse guard but have every entry within the fixed 1e-12 absolute
-        # tolerance of the maximum, marking all classes as tied.
-        logical_normed = logical_dense / peak
-
-        # Global maximum amplitude (always 1.0 after normalisation)
-        max_amp = np.max(logical_normed)
-
-        # Machine-precision–level tolerance (relative + absolute)
-        rel_tol = 1e-9
-        abs_tol = 1e-12
-        eps = max(rel_tol * max_amp, abs_tol)
-
-        # Success <=> the identity logical is in the MAP set (degeneracy allowed).
-        #
-        # Note the asymmetry with the Dephasing DMRG branch below: when several
-        # classes tie for the maximum this counts as a success, whereas DMRG
-        # returns whichever tied class its sweep lands on and so usually scores
-        # the same shot as a failure. Small codes read out densely and large ones
-        # by DMRG, so the two regimes apply different conventions to degenerate
-        # posteriors; a fully uniform posterior always reads as success here.
-        is_map_identity = logical_normed[0] >= max_amp - eps
-        degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
-        score = _score_tie(is_map_identity, degeneracy, tie_policy)
-
-        if degeneracy > 1 and not silent:
-            logging.warning(
-                "The MAP set is %d-fold degenerate; scored under the '%s' "
-                "policy as %.4f.",
-                degeneracy,
-                tie_policy,
-                score,
-            )
-
-        result = logical_dense, score
-        return result
-        # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
-
-    if optimiser == "Optima TT":
-        raise NotImplementedError("Optima TT is not implemented yet.")
-    if optimiser != "Dephasing DMRG":
-        raise ValueError("Invalid optimiser chosen.")
-    if tie_policy != "optimistic":
-        raise NotImplementedError(
-            f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "
-            "path; the DMRG readout does not enumerate all tied classes and "
-            "therefore cannot implement 'fractional' or 'pessimistic' scoring. "
-            "Use tie_policy='optimistic' or reduce dense_readout_max_sites so "
-            "that the dense branch is taken instead."
-        )
-
-    if not silent:
-        logging.info("Reading out the logical class.")
-    engine, amplitude_found, certified = _logical_readout(
-        logical_mps,
-        num_logical_sites,
-        chi_max,
-        cut,
-        num_runs,
-        num_restarts,
-        silent,
-    )
-
-    # DMRG returns a single basis state, so on a degenerate posterior it lands on
-    # whichever tied class its sweep reached first. Comparing only that state
-    # with the identity would then score a tie as a failure, while the dense
-    # branch above scores the same shot as a success. Instead ask the question
-    # dense readout asks -- is the identity among the maximisers? -- by pulling
-    # both amplitudes out of the logical MPS directly, which costs O(k chi^2) and
-    # needs no enumeration of the 4^k classes.
-    mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
-    amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
-
-    # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
-    # mirroring the dense branch.
-    if not np.isfinite(amplitude_found) or amplitude_found == 0.0:
-        if not silent:
-            logging.warning(
-                "The logical posterior collapsed to zero at chi_max=%d; this shot "
-                "carries no information and is scored as a failure.",
-                chi_max,
-            )
-        return engine, 0
-
-    # Compare amplitudes on a unit scale (normalised by the DMRG maximum) so
-    # that the fixed tolerance is meaningful regardless of overall scale.
-    normed_identity = amplitude_identity / amplitude_found
-    eps = 1e-9
-    is_map_identity = normed_identity >= 1.0 - eps
-
-    bound = max_amplitude_bound(logical_mps)
-    if not silent and not certified:
-        if amplitude_found < bound * (1 - 1e-6):
-            logging.warning(
-                "Dephasing DMRG reached %.6e but the maximum is at most %.6e; "
-                "the sweep may have stopped at a local optimum. Consider raising "
-                "num_restarts or num_runs.",
-                amplitude_found,
-                bound,
-            )
-        if is_map_identity and amplitude_identity < bound * (1 - 1e-6):
-            logging.warning(
-                "Success here rests on DMRG's estimate: the identity amplitude "
-                "%.6e clears |<s*|psi>| but not the upper bound %.6e.",
-                amplitude_identity,
-                bound,
-            )
-
-    if not silent:
-        logging.info(
-            "Dephasing DMRG finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
-            "identity in the MAP set: %s",
-            amplitude_found,
-            amplitude_identity,
-            bool(is_map_identity),
-        )
-    return engine, int(is_map_identity)
 
 
 def decode_custom(
@@ -2033,13 +1741,10 @@ def decode_custom(
     renormalise : bool
         Whether to renormalise the MPS during decoding.
     multiply_by_stabiliser : bool
-        Whether to multiply the error, before decoding, by the letter-crossed
-        image (X and Z letters exchanged) of a randomly chosen stabiliser.
-        The crossed string is the gauge-preserving retry direction under the
-        decoder's same-component checks -- it leaves every enforced parity,
-        and therefore the posterior, unchanged; multiplying by the generator
-        itself would alter the parities whenever same-type generators overlap
-        oddly.
+        Whether to multiply the error by a randomly chosen stabiliser before
+        decoding. Under the symplectic checks this is a gauge move: it maps
+        the error to another representative of the same coset and leaves the
+        posterior unchanged.
     silent : bool
         Whether to show the progress bars or not.
     contraction_strategy : str
@@ -2081,6 +1786,13 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+    # The pairing requirement is validated here too -- the fourth check the
+    # trivial-error fast path below would otherwise bypass.
+    if len(x_logicals) != len(z_logicals):
+        raise ValueError(
+            "x_logicals and z_logicals must come in symplectic pairs; got "
+            f"{len(x_logicals)} and {len(z_logicals)}."
+        )
     # Representability is validated here too, or the fast path below would
     # accept a malformed code whenever the error happens to be trivial: a
     # parity-check constraint spans at least two MPS sites.
@@ -2116,18 +1828,11 @@ def decode_custom(
 
     if multiply_by_stabiliser and not erased_qubits:
         # See decode_css: the choice must come from the passed-in generator so
-        # the run stays reproducible from its seed. And as there, the
-        # gauge-preserving direction is the letter-CROSSED string: crossing
-        # flips the first component over the Z-part of the stabiliser and the
-        # second over its X-part, so the enforced parities are preserved exactly
-        # when the symplectic product with every generator vanishes -- which is
-        # stabiliser commutation itself, so this holds for non-CSS codes too.
-        # Multiplying by the uncrossed string instead requires the Euclidean
-        # products to vanish, which non-self-orthogonal generators (Shor's
-        # X-type rows overlap in three positions) do not satisfy.
+        # the run stays reproducible from its seed. Under symplectic checks the
+        # honest stabiliser is the gauge move -- the parities it flips vanish
+        # exactly when it commutes with every generator, for non-CSS codes too.
         generator = np.random.default_rng() if rng is None else rng
-        chosen_stabiliser = str(generator.choice(stabilizers))
-        error = multiply_pauli_strings(error, _cross_pauli_letters(chosen_stabiliser))
+        error = multiply_pauli_strings(error, str(generator.choice(stabilizers)))
 
     error = pauli_to_mps(error)
 
