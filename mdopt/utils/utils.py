@@ -14,15 +14,18 @@ except (ImportError, ModuleNotFoundError):
     import numpy as xp  # type: ignore
 
 
+try:
+    # Resolved once at import time: attempting this inside _to_numpy made every
+    # call pay a full (failing) module search, ~18% of a decoding run.
+    import cupy as _cupy  # type: ignore
+except Exception:  # pylint: disable=broad-except
+    _cupy = None
+
+
 def _to_numpy(a):
     """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
-    try:
-        import cupy as cp  # type: ignore
-
-        if isinstance(a, cp.ndarray):
-            return cp.asnumpy(a)
-    except Exception:
-        pass
+    if _cupy is not None and isinstance(a, _cupy.ndarray):
+        return _cupy.asnumpy(a)
     return np.asarray(a)
 
 
@@ -79,7 +82,21 @@ def svd(
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
             if attempt == "xp":
-                u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)  # returns U, S, Vh
+                # For strongly rectangular inputs, a QR/LQ reduction first and
+                # an SVD of the small square factor is ~1.2-2x faster than a
+                # direct gesdd, and exact (agreement ~1e-14). The MPO zip-up
+                # produces (chi*d, d*chi*w) matrices, so the wide case is hot.
+                rows, cols = a.shape
+                if cols >= 2 * rows:
+                    q_f, r_f = xp.linalg.qr(a.T)
+                    u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
+                    v_h = v_h @ q_f.T
+                elif rows >= 2 * cols:
+                    q_f, r_f = xp.linalg.qr(a)
+                    u_l, s, v_h = xp.linalg.svd(r_f, full_matrices=False)
+                    u_l = q_f @ u_l
+                else:
+                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
             elif attempt == "gesdd":
                 u_l, s, v_h = scipy.linalg.svd(
                     _to_numpy(a),
