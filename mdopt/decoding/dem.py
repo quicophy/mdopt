@@ -238,6 +238,13 @@ def decode_dem(
     #     base_i = 1 ->  (p_i, 1-p_i)
     # The observable labels read off f; the representative's own observable
     # pattern is XORed back in at the end.
+    # A model with no mechanisms decodes trivially: the only consistent
+    # event is "nothing happened" (a fired detector was already rejected
+    # above), so all mass sits on the no-flip class. Building an MPS here
+    # would need at least one site.
+    if num_mech == 0 and num_obs == 0:
+        return np.array([1.0]), np.zeros(0, dtype=int)
+
     # An observable no mechanism touches is deterministically unflipped: it
     # gets |0> instead of |+>, otherwise the readout would split its mass
     # 50/50 over a flip that cannot happen.

@@ -2037,8 +2037,9 @@ def decode_custom(
             f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "
             "path; the DMRG readout does not enumerate all tied classes and "
             "therefore cannot implement 'fractional' or 'pessimistic' scoring. "
-            "Use tie_policy='optimistic' or reduce dense_readout_max_sites so "
-            "that the dense branch is taken instead."
+            "Use tie_policy='optimistic' or raise dense_readout_max_sites to "
+            "at least the number of logical sites so that the dense branch "
+            "is taken instead."
         )
 
     if not silent:

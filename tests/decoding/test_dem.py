@@ -401,3 +401,29 @@ def test_dem_error_paths_raise_precisely():
     assert natural.detector_rows == problem.detector_rows
     with pytest.raises(ValueError):
         order_mechanisms(problem, "alphabetical")
+
+
+def test_empty_and_mechanism_free_models_decode_trivially():
+    """No mechanisms means all mass on the no-flip class, never a crash.
+
+    A declared detector with no error mechanisms previously reached
+    create_custom_product_state("") and raised IndexError; a declared
+    observable with no mechanisms must come out deterministically unflipped.
+    """
+    empty = dem_to_problem(stim.DetectorErrorModel("detector D0"))
+    masses, flips = decode_dem(empty, np.array([0]))
+    assert masses.tolist() == [1.0]
+    assert flips.size == 0
+    with pytest.raises(ValueError, match="fired"):
+        decode_dem(empty, np.array([1]))
+
+    obs_only = DemProblem(
+        probs=[],
+        detector_rows=[[]],
+        observable_rows=[[], []],
+        num_detectors=1,
+        num_observables=2,
+    )
+    masses, flips = decode_dem(obs_only, np.array([0]))
+    assert np.array_equal(masses, [1.0, 0.0, 0.0, 0.0])
+    assert np.array_equal(flips, [0, 0])
