@@ -656,18 +656,21 @@ def test_svd_rectangular_reduction_matches_direct_svd():
                 mat = mat + 1j * rng.standard_normal(shape)
             u_l, s, v_h, _ = svd(mat, cut=0.0, chi_max=int(1e4))
             u_ref, s_ref, v_ref = np.linalg.svd(mat, full_matrices=False)
-            assert np.allclose(s, s_ref, atol=1e-12), (label, complex_case)
-            assert np.allclose((u_l * s) @ v_h, mat, atol=1e-11), (label, complex_case)
+            assert np.allclose(s, s_ref, rtol=0.0, atol=1e-11), (label, complex_case)
+            assert np.allclose((u_l * s) @ v_h, mat, rtol=0.0, atol=1e-11), (
+                label,
+                complex_case,
+            )
             eye = np.eye(u_l.shape[1])
-            assert np.allclose(u_l.conj().T @ u_l, eye, atol=1e-12), label
-            assert np.allclose(v_h @ v_h.conj().T, eye, atol=1e-12), label
+            assert np.allclose(u_l.conj().T @ u_l, eye, rtol=0.0, atol=1e-12), label
+            assert np.allclose(v_h @ v_h.conj().T, eye, rtol=0.0, atol=1e-12), label
 
             chi = 5
             u_t, s_t, v_t, err = svd(
                 mat, cut=0.0, chi_max=chi, return_truncation_error=True
             )
             assert s_t.shape == (chi,)
-            assert np.allclose(s_t, s_ref[:chi], atol=1e-12), label
+            assert np.allclose(s_t, s_ref[:chi], rtol=0.0, atol=1e-11), label
             assert np.isclose(
                 err, float(np.linalg.norm(s_ref[chi:]) ** 2), atol=1e-12
             ), label

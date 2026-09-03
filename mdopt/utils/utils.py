@@ -90,7 +90,9 @@ def svd(
                 # QR of a non-finite matrix returns garbage instead of
                 # raising like svd does, so only take the reduced path for
                 # finite input; the direct call raises into the fallbacks.
-                if not np.isfinite(a).all():
+                # The check goes through the backend: np.isfinite rejects
+                # CuPy arrays, which would silently disable the GPU path.
+                if not bool(xp.isfinite(a).all()):
                     u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
                 elif cols >= 2 * rows:
                     q_f, r_f = xp.linalg.qr(a.T)

@@ -38,7 +38,7 @@ def wl_surface_bitflip():
         error = generate_pauli_error_string(
             len(code), 0.05, rng=rng, error_model="Bitflip"
         )
-        _, success = decode_css(
+        dense, success = decode_css(
             code,
             error,
             chi_max=64,
@@ -48,7 +48,9 @@ def wl_surface_bitflip():
             silent=True,
             contraction_strategy="Optimised",
         )
-        outputs.append(float(success))
+        # The full posterior, not just the verdict: a wrong posterior
+        # with an unmoved argmax must still move the fingerprint.
+        outputs.append([float(success)] + [round(float(x), 10) for x in dense])
     return outputs
 
 
@@ -64,7 +66,7 @@ def wl_shor_depolarising():
     outputs = []
     for _ in range(40):
         error = generate_pauli_error_string(len(code), 0.1, rng=rng)
-        _, success = decode_css(
+        dense, success = decode_css(
             code,
             error,
             chi_max=128,
@@ -73,7 +75,9 @@ def wl_shor_depolarising():
             renormalise=True,
             silent=True,
         )
-        outputs.append(float(success))
+        # The full posterior, not just the verdict: a wrong posterior
+        # with an unmoved argmax must still move the fingerprint.
+        outputs.append([float(success)] + [round(float(x), 10) for x in dense])
     return outputs
 
 
