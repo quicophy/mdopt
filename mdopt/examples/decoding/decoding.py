@@ -1692,6 +1692,77 @@ def decode_css(
     )
 
 
+def _score_dense_posterior(logical_signed, chi_max, tie_policy, silent):
+    """Score a densified logical posterior; emit the convergence diagnostics.
+
+    Split out of :func:`decode_custom` so the diagnostics are testable
+    deterministically: whether a real decode produces a negative amplitude at
+    a given ``chi_max`` is BLAS-dependent numerical noise, but this function's
+    contract on a vector that HAS one is not.
+    """
+    logical_dense = abs(logical_signed)
+
+    # An exact run cannot produce a negative amplitude: every tensor in the
+    # pipeline is non-negative and marginalisation traces against all-ones.
+    # A negative one is therefore a truncation artefact and a direct signal
+    # that chi_max is too small for this instance -- the cheapest
+    # convergence diagnostic available, since the vector is already here.
+    most_negative = float(np.min(np.real(np.asarray(logical_signed))))
+    peak = float(np.max(logical_dense))
+
+    # A collapsed posterior carries no information. Truncation is what
+    # destroys it: at low chi_max a whole site tensor can be driven to zero.
+    if not np.isfinite(peak) or peak == 0.0:
+        # Scoring must stop here. Every entry of an all-zero vector is within
+        # eps of the maximum, so the identity would be "among the maximisers"
+        # and the shot would score a success -- turning numerical collapse
+        # into a correctly decoded shot and biasing the failure rate
+        # downward, invisibly when silent=True. Report the failure instead.
+        if not silent:
+            logging.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this "
+                "shot carries no information and is scored as a failure.",
+                chi_max,
+            )
+        return logical_dense, 0.0
+    if most_negative < -1e-12 * max(peak, 1.0) and not silent:
+        logging.warning(
+            "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+            "is not converged for this instance.",
+            most_negative,
+            100.0 * abs(most_negative) / peak,
+            chi_max,
+        )
+
+    # Normalise to the peak so that tie tolerances are scale-independent.
+    # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
+    # collapse guard but have every entry within the fixed 1e-12 absolute
+    # tolerance of the maximum, marking all classes as tied.
+    logical_normed = logical_dense / peak
+
+    # find global maximum amplitude (always 1.0 after normalisation)
+    max_amp = np.max(logical_normed)
+
+    # treat identity logical as success if it is among the maximisers
+    # (within some numerical tolerance)
+    # Same tolerance as decode_css, so both decoders call a tie the same way.
+    eps = max(1e-9 * max_amp, 1e-12)
+    is_map_identity = logical_normed[0] >= max_amp - eps
+    degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
+    score = _score_tie(is_map_identity, degeneracy, tie_policy)
+
+    if degeneracy > 1 and not silent:
+        logging.warning(
+            "The MAP set is %d-fold degenerate; scored under the '%s' "
+            "policy as %.4f.",
+            degeneracy,
+            tie_policy,
+            score,
+        )
+
+    return logical_dense, score
+
+
 def decode_custom(
     stabilizers: List[str],
     x_logicals: List[str],
@@ -1954,68 +2025,9 @@ def decode_custom(
         logical_signed = logical_mps.dense(
             flatten=True, renormalise=renormalise, norm=2
         )
-        logical_dense = abs(logical_signed)
-
-        # An exact run cannot produce a negative amplitude: every tensor in the
-        # pipeline is non-negative and marginalisation traces against all-ones.
-        # A negative one is therefore a truncation artefact and a direct signal
-        # that chi_max is too small for this instance -- the cheapest
-        # convergence diagnostic available, since the vector is already here.
-        most_negative = float(np.min(np.real(np.asarray(logical_signed))))
-        peak = float(np.max(logical_dense))
-
-        # A collapsed posterior carries no information. Truncation is what
-        # destroys it: at low chi_max a whole site tensor can be driven to zero.
-        if not np.isfinite(peak) or peak == 0.0:
-            # Scoring must stop here. Every entry of an all-zero vector is within
-            # eps of the maximum, so the identity would be "among the maximisers"
-            # and the shot would score a success -- turning numerical collapse
-            # into a correctly decoded shot and biasing the failure rate
-            # downward, invisibly when silent=True. Report the failure instead.
-            if not silent:
-                logging.warning(
-                    "The logical posterior collapsed to zero at chi_max=%d; this "
-                    "shot carries no information and is scored as a failure.",
-                    chi_max,
-                )
-            return logical_dense, 0.0
-        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
-            logging.warning(
-                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
-                "is not converged for this instance.",
-                most_negative,
-                100.0 * abs(most_negative) / peak,
-                chi_max,
-            )
-
-        # Normalise to the peak so that tie tolerances are scale-independent.
-        # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
-        # collapse guard but have every entry within the fixed 1e-12 absolute
-        # tolerance of the maximum, marking all classes as tied.
-        logical_normed = logical_dense / peak
-
-        # find global maximum amplitude (always 1.0 after normalisation)
-        max_amp = np.max(logical_normed)
-
-        # treat identity logical as success if it is among the maximisers
-        # (within some numerical tolerance)
-        # Same tolerance as decode_css, so both decoders call a tie the same way.
-        eps = max(1e-9 * max_amp, 1e-12)
-        is_map_identity = logical_normed[0] >= max_amp - eps
-        degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
-        score = _score_tie(is_map_identity, degeneracy, tie_policy)
-
-        if degeneracy > 1 and not silent:
-            logging.warning(
-                "The MAP set is %d-fold degenerate; scored under the '%s' "
-                "policy as %.4f.",
-                degeneracy,
-                tie_policy,
-                score,
-            )
-
-        result = logical_dense, score
-        return result
+        return _score_dense_posterior(
+            logical_signed, chi_max=chi_max, tie_policy=tie_policy, silent=silent
+        )
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
     if optimiser == "Optima TT":
