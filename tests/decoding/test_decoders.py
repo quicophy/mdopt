@@ -1,4 +1,4 @@
-"""End-to-end checks on the decoders in ``examples.decoding.decoding``.
+"""End-to-end checks on the decoders in ``mdopt.decoding``.
 
 The reference posterior is computed by brute force: the decoder enforces even
 parity on every check, so the surviving configurations f are exactly those with
@@ -22,7 +22,7 @@ from qldpc.codes import SurfaceCode
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import inner_product
 
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     str_to_bool,
     css_code_stabilisers,
     custom_code_checks,
@@ -955,8 +955,10 @@ def test_gauge_seeds_are_independent_of_the_error_seeds():
     """
     import importlib
 
-    package = decode_css.__module__.rsplit(".", 1)[0]
-    quantum_csp = importlib.import_module(f"{package}.quantum_csp")
+    # The decoders moved to mdopt.decoding but the experiment scripts stayed
+    # in mdopt.examples.decoding, so the package can no longer be derived
+    # from decode_css.__module__.
+    quantum_csp = importlib.import_module("mdopt.examples.decoding.quantum_csp")
 
     num_shots, seed = 8, 0
     error_children = np.random.SeedSequence(seed).spawn(num_shots)

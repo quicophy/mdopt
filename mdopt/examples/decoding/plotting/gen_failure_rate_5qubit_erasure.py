@@ -33,7 +33,7 @@ from matplotlib.colors import Normalize
 from scipy.stats import sem
 from tqdm import tqdm
 
-from mdopt.examples.decoding.decoding import decode_custom, generate_pauli_error_string
+from mdopt.decoding.decoding import decode_custom, generate_pauli_error_string
 
 mpl.rcParams.update(
     {

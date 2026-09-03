@@ -45,12 +45,12 @@ try:
     from mdopt.mps.utils import create_custom_product_state
     from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
     from mdopt.examples.paths import data_dir
-    from mdopt.examples.decoding.decoding import (
+    from mdopt.decoding.decoding import (
         linear_code_parity_matrix_dense,
         linear_code_constraint_sites,
         linear_code_prepare_message,
     )
-    from mdopt.examples.decoding.decoding import (
+    from mdopt.decoding.decoding import (
         apply_bitflip_bias,
         apply_constraints,
         decode_message,

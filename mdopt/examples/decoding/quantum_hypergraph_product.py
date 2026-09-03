@@ -46,7 +46,7 @@ sys.path.append(project_root_beluga)
 sys.path.append(examples_path_beluga)
 
 try:
-    from mdopt.examples.decoding.decoding import (
+    from mdopt.decoding.decoding import (
         str_to_bool,
         decode_css,
         css_code_stabilisers,

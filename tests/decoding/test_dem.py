@@ -14,7 +14,7 @@ import pymatching
 import pytest
 import stim
 
-from mdopt.examples.decoding.dem import (
+from mdopt.decoding.dem import (
     DemProblem,
     decode_dem,
     dem_to_problem,
@@ -247,7 +247,7 @@ def test_surface_code_circuit_level_matches_brute_force():
 
 def test_ordering_leaves_the_posterior_invariant():
     """Reordering mechanisms relabels the chain; the class masses must not move."""
-    from mdopt.examples.decoding.dem import order_mechanisms
+    from mdopt.decoding.dem import order_mechanisms
 
     circuit, problem = _repetition_problem(distance=3, rounds=2)
     sampler = circuit.compile_detector_sampler(seed=9)
@@ -270,7 +270,7 @@ def test_natural_order_spans_scale_with_a_round_not_the_chain():
     many rounds run. What grows the floor is mechanisms-per-round, not
     duration.
     """
-    from mdopt.examples.decoding.dem import constraint_spans
+    from mdopt.decoding.dem import constraint_spans
 
     spans = {}
     for rounds in (3, 9):
