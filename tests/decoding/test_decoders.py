@@ -1654,3 +1654,39 @@ def test_small_helpers_and_operator_validations():
 
     with pytest.raises(argparse.ArgumentTypeError):
         str_to_bool("maybe")
+
+
+def test_identity_fast_path_is_gated_on_low_bias():
+    """At bias >= 0.5 a trivial error need not decode to the identity class.
+
+    On the 3-qubit repetition code under bit-flip bias 0.9, the all-flip
+    logical XXX carries mass 0.9^3 against the identity's 0.1^3, so MAP on
+    the empty syndrome is a logical error and the shot must score 0. The
+    old fast path returned success for any all-identity error string.
+    """
+    stabs = ["ZZI", "IZZ"]
+    log_x, log_z = ["XXX"], ["ZII"]
+    _, high = decode_custom(
+        stabs,
+        log_x,
+        log_z,
+        "III",
+        chi_max=128,
+        bias_type="Bitflip",
+        bias_prob=0.9,
+        renormalise=True,
+        silent=True,
+    )
+    assert high == 0.0, "MAP at bias 0.9 is XXX, not identity"
+    _, low = decode_custom(
+        stabs,
+        log_x,
+        log_z,
+        "III",
+        chi_max=128,
+        bias_type="Bitflip",
+        bias_prob=0.1,
+        renormalise=True,
+        silent=True,
+    )
+    assert low == 1.0

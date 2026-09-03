@@ -1810,12 +1810,14 @@ def decode_custom(
             f"The error acts on {len(error)} qubits, expected {expected_length}."
         )
 
-    if error == "I" * len(error):
+    if error == "I" * len(error) and bias_prob < 0.5:
         if not silent:
             LOGGER.info("No error detected.")
-        # Deliberate fast path: low-p Monte Carlo is dominated by no-error
-        # shots, and the identity class is provably the MAP answer for a
-        # trivial error (verified by exact enumeration up to p = 0.49). The
+        # Deliberate fast path, gated on bias_prob < 0.5: below that the
+        # identity class is provably the MAP answer for a trivial error
+        # (verified by exact enumeration up to p = 0.49), while at stronger
+        # bias a heavy nonidentity class can dominate a trivial syndrome, so
+        # those (valid, if unusual) calls take the full pipeline. The
         # returned vector is a k = 1-shaped STUB, not a real posterior -- do
         # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
         # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
