@@ -87,7 +87,12 @@ def svd(
                 # direct gesdd, and exact (agreement ~1e-14). The MPO zip-up
                 # produces (chi*d, d*chi*w) matrices, so the wide case is hot.
                 rows, cols = a.shape
-                if cols >= 2 * rows:
+                # QR of a non-finite matrix returns garbage instead of
+                # raising like svd does, so only take the reduced path for
+                # finite input; the direct call raises into the fallbacks.
+                if not np.isfinite(a).all():
+                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
+                elif cols >= 2 * rows:
                     q_f, r_f = xp.linalg.qr(a.T)
                     u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
                     v_h = v_h @ q_f.T
