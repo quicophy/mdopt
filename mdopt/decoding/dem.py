@@ -209,14 +209,17 @@ def decode_dem(
     num_mech = problem.num_mechanisms
     offset = num_obs
 
+    # A detector touched by a single mechanism pins it: in the f = m XOR base
+    # variables every detector constrains f to even parity, so a one-mechanism
+    # row forces f_i = 0. The site stays in |0> (weighted by its prior below)
+    # and the constraint itself is dropped (detector_strings keeps rows of
+    # weight >= 2 only).
+    pinned = set()
     for det, row in enumerate(problem.detector_rows):
         if len(row) == 0 and int(syndrome[det]) % 2 == 1:
             raise ValueError(f"Detector {det} fired but no mechanism flips it.")
         if len(row) == 1:
-            raise NotImplementedError(
-                "A detector touched by a single mechanism pins that mechanism "
-                "outright; eliminate it from the model before decoding."
-            )
+            pinned.add(row[0])
 
     base = (
         solve_representative(problem, syndrome)
@@ -235,7 +238,12 @@ def decode_dem(
     #     base_i = 1 ->  (p_i, 1-p_i)
     # The observable labels read off f; the representative's own observable
     # pattern is XORed back in at the end.
-    state_string = "+" * num_obs + "0" * num_mech
+    # An observable no mechanism touches is deterministically unflipped: it
+    # gets |0> instead of |+>, otherwise the readout would split its mass
+    # 50/50 over a flip that cannot happen.
+    state_string = (
+        "".join("+" if row else "0" for row in problem.observable_rows) + "0" * num_mech
+    )
     mps = cast(
         CanonicalMPS,
         create_custom_product_state(
@@ -244,6 +252,10 @@ def decode_dem(
     )
     for i, probability in enumerate(problem.probs):
         q = probability if base[i] == 0 else 1.0 - probability
+        if i in pinned:
+            # f_i is forced to 0; only its prior's f=0 branch contributes.
+            mps.tensors[offset + i] = mps.tensors[offset + i] * (1.0 - q)
+            continue
         weight_matrix = np.array([[1.0 - q, q], [q, 1.0 - q]])
         mps.tensors[offset + i] = np.einsum(
             "ab, ibj -> iaj", weight_matrix, mps.tensors[offset + i]

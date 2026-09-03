@@ -293,3 +293,60 @@ def test_natural_order_spans_scale_with_a_round_not_the_chain():
         assert mean_span < 2.5 * per_round, (rounds, mean_span, per_round)
     # Tripling the number of rounds must not triple the span floor.
     assert spans[9][0] < 2 * spans[3][0], spans
+
+
+def test_degree_one_detectors_pin_their_mechanism():
+    """A one-mechanism detector fixes f_i = 0; masses must stay exact.
+
+    The model mixes a pinned mechanism that also carries an observable with
+    ordinary weight-2+ detectors, and every syndrome is checked against coset
+    enumeration -- including syndromes where the pinned detector fired.
+    """
+    dem = stim.DetectorErrorModel("""
+        error(0.1) D0 L0
+        error(0.2) D1 D2
+        error(0.15) D1 D2 L1
+        error(0.05) D2
+        error(0.3) D1 L1
+        """)
+    problem = dem_to_problem(dem)
+    for s0 in (0, 1):
+        for s1 in (0, 1):
+            for s2 in (0, 1):
+                syndrome = np.array([s0, s1, s2])
+                masses, flips = decode_dem(problem, syndrome)
+                exact = _exact_class_masses(problem, syndrome)
+                assert np.allclose(
+                    masses / masses.sum(), exact / exact.sum(), atol=1e-9
+                ), (s0, s1, s2)
+                assert np.array_equal(
+                    flips,
+                    [(int(np.argmax(exact)) >> j) & 1 for j in range(2)],
+                ), (s0, s1, s2)
+
+
+def test_untouched_observable_is_deterministically_unflipped():
+    """A declared observable no mechanism touches must carry flip 0.
+
+    Initialising it as |+> would split its mass 50/50 over an impossible
+    flip; the L1 slot here is declared (via L2's existence... the gap) but
+    never referenced by any error.
+    """
+    dem = stim.DetectorErrorModel("""
+        error(0.3) D0 L0
+        error(0.1) D0 D1 L2
+        error(0.2) D1
+        """)
+    problem = dem_to_problem(dem)
+    assert problem.num_observables == 3
+    assert problem.observable_rows[1] == []
+    for syndrome in ([0, 0], [1, 0], [0, 1], [1, 1]):
+        masses, flips = decode_dem(problem, np.array(syndrome))
+        exact = _exact_class_masses(problem, np.array(syndrome))
+        assert np.allclose(
+            masses / masses.sum(), exact / exact.sum(), atol=1e-9
+        ), syndrome
+        assert flips[1] == 0, syndrome
+        # No mass may sit on any class with the untouched bit set.
+        norm = masses / masses.sum()
+        assert norm[np.array([i for i in range(8) if (i >> 1) & 1])].max() < 1e-12

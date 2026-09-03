@@ -1,8 +1,8 @@
 """
-Here, we define some decoding-specific functions over the MPS/MPO entities
-we encounter during the decoding process as well as the functions we use
-to generate and operate over both classical and quantum error correcting codes.
-Note, this is example code which isn't included into the library and thus provided as is.
+Decoding of classical and quantum error-correcting codes with MPS/MPO tools:
+error-based decoders for CSS and custom stabiliser codes, plus the functions
+used to generate and operate on the codes themselves. Part of the installed
+:mod:`mdopt.decoding` package (moved here from the examples tree).
 """
 
 import argparse
@@ -45,10 +45,8 @@ from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
 from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 
-# Setting up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# A library must not configure the root logger; consumers attach handlers.
+LOGGER = logging.getLogger(__name__)
 
 
 def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
@@ -1341,7 +1339,7 @@ def _logical_readout(
 
     if amplitude >= bound * (1 - 1e-9):
         if not silent:
-            logging.info(
+            LOGGER.info(
                 "Readout settled by beam search: |<s*|psi>| = %.6e matches the "
                 "upper bound, so no basis state can do better.",
                 amplitude,
@@ -1353,7 +1351,7 @@ def _logical_readout(
         )
 
     if not silent:
-        logging.info(
+        LOGGER.info(
             "Beam search reached %.6e against an upper bound of %.6e; "
             "falling back to Dephasing DMRG.",
             amplitude,
@@ -1379,7 +1377,7 @@ def _logical_readout(
         # solver failure can degrade to that instead of taking the shot down
         # and being recorded as a decoding failure by the experiment drivers.
         if not silent:
-            logging.warning(
+            LOGGER.warning(
                 "Dephasing DMRG failed (%s: %s); keeping the beam-search "
                 "result |<s*|psi>| = %.6e, which is not certified optimal.",
                 type(error).__name__,
@@ -1458,7 +1456,7 @@ def _dmrg_readout(
             best_engine, best_amplitude = engine, amplitude
 
     if not silent:
-        logging.info(
+        LOGGER.info(
             "Dephasing DMRG: best of %d restart(s), |<s*|psi>| = %.6e",
             max(1, num_restarts),
             best_amplitude,
@@ -1670,7 +1668,7 @@ def decode_css(
         z_logicals = [_permute(string) for string in z_logicals]
         error = _permute(error)
         if not silent:
-            logging.info("Applied optimised qubit ordering.")
+            LOGGER.info("Applied optimised qubit ordering.")
 
     return decode_custom(
         stabilizers,
@@ -1768,7 +1766,7 @@ def decode_custom(
         Decoding results, depending on the chosen optimiser.
     """
     if not silent:
-        logging.info("Starting the decoding.")
+        LOGGER.info("Starting the decoding.")
 
     # Validate BEFORE the trivial-error fast path below, or a malformed code
     # paired with an all-identity error would still report success.
@@ -1815,7 +1813,7 @@ def decode_custom(
 
     if error == "I" * len(error):
         if not silent:
-            logging.info("No error detected.")
+            LOGGER.info("No error detected.")
         # Deliberate fast path: low-p Monte Carlo is dominated by no-error
         # shots, and the identity class is provably the MAP answer for a
         # trivial error (verified by exact enumeration up to p = 0.49). The
@@ -1843,7 +1841,7 @@ def decode_custom(
     num_logicals = len(x_logicals) + len(z_logicals)
 
     if not silent:
-        logging.info(f"The total number of sites: {num_sites}.")
+        LOGGER.info(f"The total number of sites: {num_sites}.")
     if len(error) != num_sites - num_logicals:
         raise ValueError(
             f"The error length is {len(error)}, expected {num_sites - num_logicals}."
@@ -1885,7 +1883,7 @@ def decode_custom(
     if sites_to_bias:
         if bias_type == "Bitflip":
             if not silent:
-                logging.info("Applying bitflip bias.")
+                LOGGER.info("Applying bitflip bias.")
             error_mps = apply_bitflip_bias(
                 mps=error_mps,
                 sites_to_bias=sites_to_bias,
@@ -1893,7 +1891,7 @@ def decode_custom(
             )
         else:
             if not silent:
-                logging.info("Applying depolarising bias.")
+                LOGGER.info("Applying depolarising bias.")
             error_mps = apply_depolarising_bias(
                 mps=error_mps,
                 sites_to_bias=sites_to_bias,
@@ -1902,7 +1900,7 @@ def decode_custom(
             )
 
     if not silent:
-        logging.info("Applying X logicals' constraints.")
+        LOGGER.info("Applying X logicals' constraints.")
     error_mps = cast(
         CanonicalMPS,
         apply_constraints(
@@ -1918,7 +1916,7 @@ def decode_custom(
     )
 
     if not silent:
-        logging.info("Applying Z logicals' constraints.")
+        LOGGER.info("Applying Z logicals' constraints.")
     error_mps = cast(
         CanonicalMPS,
         apply_constraints(
@@ -1934,7 +1932,7 @@ def decode_custom(
     )
 
     if not silent:
-        logging.info("Applying X and Z checks' constraints.")
+        LOGGER.info("Applying X and Z checks' constraints.")
     error_mps = cast(
         CanonicalMPS,
         apply_constraints(
@@ -1950,7 +1948,7 @@ def decode_custom(
     )
 
     if not silent:
-        logging.info("Marginalising the error MPS.")
+        LOGGER.info("Marginalising the error MPS.")
     # Marginalise ALL physical qubit sites in one pass.  Erased qubits are
     # already in |+> and are naturally included here — no separate
     # intermediate marginalization is needed.
@@ -1961,7 +1959,7 @@ def decode_custom(
 
     num_logical_sites = len(logical_mps)
     if not silent:
-        logging.info(f"The number of logical sites: {num_logical_sites}.")
+        LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= dense_readout_max_sites:
         logical_signed = logical_mps.dense(
@@ -1986,14 +1984,14 @@ def decode_custom(
             # into a correctly decoded shot and biasing the failure rate
             # downward, invisibly when silent=True. Report the failure instead.
             if not silent:
-                logging.warning(
+                LOGGER.warning(
                     "The logical posterior collapsed to zero at chi_max=%d; this "
                     "shot carries no information and is scored as a failure.",
                     chi_max,
                 )
             return logical_dense, 0.0
         if most_negative < -1e-12 * max(peak, 1.0) and not silent:
-            logging.warning(
+            LOGGER.warning(
                 "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
                 "is not converged for this instance.",
                 most_negative,
@@ -2019,7 +2017,7 @@ def decode_custom(
         score = _score_tie(is_map_identity, degeneracy, tie_policy)
 
         if degeneracy > 1 and not silent:
-            logging.warning(
+            LOGGER.warning(
                 "The MAP set is %d-fold degenerate; scored under the '%s' "
                 "policy as %.4f.",
                 degeneracy,
@@ -2045,7 +2043,7 @@ def decode_custom(
         )
 
     if not silent:
-        logging.info("Reading out the logical class.")
+        LOGGER.info("Reading out the logical class.")
     engine, amplitude_found, certified = _logical_readout(
         logical_mps,
         num_logical_sites,
@@ -2070,7 +2068,7 @@ def decode_custom(
     # mirroring the dense branch.
     if not np.isfinite(amplitude_found) or amplitude_found == 0.0:
         if not silent:
-            logging.warning(
+            LOGGER.warning(
                 "The logical posterior collapsed to zero at chi_max=%d; this shot "
                 "carries no information and is scored as a failure.",
                 chi_max,
@@ -2086,7 +2084,7 @@ def decode_custom(
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:
         if amplitude_found < bound * (1 - 1e-6):
-            logging.warning(
+            LOGGER.warning(
                 "Dephasing DMRG reached %.6e but the maximum is at most %.6e; "
                 "the sweep may have stopped at a local optimum. Consider raising "
                 "num_restarts or num_runs.",
@@ -2094,7 +2092,7 @@ def decode_custom(
                 bound,
             )
         if is_map_identity and amplitude_identity < bound * (1 - 1e-6):
-            logging.warning(
+            LOGGER.warning(
                 "Success here rests on DMRG's estimate: the identity amplitude "
                 "%.6e clears |<s*|psi>| but not the upper bound %.6e.",
                 amplitude_identity,
@@ -2102,7 +2100,7 @@ def decode_custom(
             )
 
     if not silent:
-        logging.info(
+        LOGGER.info(
             "Dephasing DMRG finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
             "identity in the MAP set: %s",
             amplitude_found,
