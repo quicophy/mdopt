@@ -630,3 +630,53 @@ def test_qr_accepts_infinite_chi_max(rng):
     q_small, r_small, _ = qr(mat, cut=1e-16, chi_max=3)
     assert q_small.shape[1] == 3
     assert r_small.shape[0] == 3
+
+
+def test_svd_rectangular_reduction_matches_direct_svd():
+    """Deterministic coverage of the QR/LQ-reduced SVD branches.
+
+    The reduction triggers on aspect ratio >= 2 in either orientation, so
+    each fixed matrix below pins one branch (the 31-column one pins the
+    boundary's open side, staying on the direct path): singular values,
+    reconstruction, orthogonality, and chi_max truncation must all agree
+    with a direct numpy SVD.
+    """
+    rng = np.random.default_rng(20240903)
+    shapes_and_paths = [
+        ((16, 32), "wide, reduced"),
+        ((16, 31), "wide, direct boundary"),
+        ((32, 16), "tall, reduced"),
+        ((31, 16), "tall, direct boundary"),
+        ((16, 16), "square, direct"),
+    ]
+    for complex_case in (False, True):
+        for shape, label in shapes_and_paths:
+            mat = rng.standard_normal(shape)
+            if complex_case:
+                mat = mat + 1j * rng.standard_normal(shape)
+            u_l, s, v_h, _ = svd(mat, cut=0.0, chi_max=int(1e4))
+            u_ref, s_ref, v_ref = np.linalg.svd(mat, full_matrices=False)
+            assert np.allclose(s, s_ref, atol=1e-12), (label, complex_case)
+            assert np.allclose((u_l * s) @ v_h, mat, atol=1e-11), (label, complex_case)
+            eye = np.eye(u_l.shape[1])
+            assert np.allclose(u_l.conj().T @ u_l, eye, atol=1e-12), label
+            assert np.allclose(v_h @ v_h.conj().T, eye, atol=1e-12), label
+
+            chi = 5
+            u_t, s_t, v_t, err = svd(
+                mat, cut=0.0, chi_max=chi, return_truncation_error=True
+            )
+            assert s_t.shape == (chi,)
+            assert np.allclose(s_t, s_ref[:chi], atol=1e-12), label
+            assert np.isclose(
+                err, float(np.linalg.norm(s_ref[chi:]) ** 2), atol=1e-12
+            ), label
+
+
+def test_svd_nonfinite_input_takes_the_fallback_chain():
+    """qr on a non-finite matrix returns garbage silently, so the reduced
+    path must not see one; the direct call raises into the fallbacks, whose
+    jitter attempt cannot rescue a NaN either -- the whole call must raise."""
+    mat = np.full((8, 32), np.nan)
+    with pytest.raises(RuntimeError, match="All SVD methods failed"):
+        svd(mat)

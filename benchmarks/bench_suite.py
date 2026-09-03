@@ -142,10 +142,19 @@ def wl_dmrg_ground_state():
             mpo.append(tensor[:, 2:3, :, :])
         else:
             mpo.append(tensor)
+    from mdopt.contractor.contractor import mps_mpo_contract
+    from mdopt.mps.utils import inner_product
+
     mps = create_simple_product_state(num_sites, which="+")
     engine = DMRG(mps, mpo, chi_max=48, cut=1e-12, mode="SA", silent=True)
     engine.run(2)
-    return [float(engine.mps.norm())]
+    # The energy depends on the optimised state everywhere the norm does not:
+    # renormalised bond updates make norm() ~ 1.0 for any state, correct or
+    # not, so it cannot serve as the correctness fingerprint.
+    ground = engine.mps
+    h_ground = mps_mpo_contract(ground, mpo, chi_max=int(1e4), renormalise=False)
+    energy = float(np.real(inner_product(ground, h_ground)))
+    return [round(energy, 10)]
 
 
 WORKLOADS = {
