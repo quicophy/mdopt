@@ -11,7 +11,7 @@ try:
     # expected to export a NumPy-like API (e.g., NumPy or CuPy)
     from mdopt.backend import array as xp  # type: ignore
 except (ImportError, ModuleNotFoundError):
-    import numpy as xp  # type: ignore
+    import numpy as xp  # type: ignore  # pragma: no cover
 
 
 try:
@@ -24,8 +24,8 @@ except Exception:  # pylint: disable=broad-except
 
 def _to_numpy(a):
     """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
-    if _cupy is not None and isinstance(a, _cupy.ndarray):
-        return _cupy.asnumpy(a)
+    if _cupy is not None and isinstance(a, _cupy.ndarray):  # pragma: no cover
+        return _cupy.asnumpy(a)  # cupy exists only on GPU runners
     return np.asarray(a)
 
 
