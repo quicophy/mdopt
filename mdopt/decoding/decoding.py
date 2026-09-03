@@ -852,7 +852,7 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
                 f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
                 "and cannot be represented as a parity-check constraint."
             )
-        checks.append(list(check))
+        checks.append([int(site) for site in check])
 
     return checks
 
@@ -936,7 +936,7 @@ def custom_code_logicals(
         x_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for X logicals
         x_sites += len(x_logicals) + len(z_logicals)
-        logicals_x.append(list(x_sites))
+        logicals_x.append([int(site) for site in x_sites])
 
     for logical in x_logicals:
         bitstring = _swap_pauli_components(pauli_to_mps(logical))
@@ -944,7 +944,7 @@ def custom_code_logicals(
         z_sites = np.nonzero([int(bit) for bit in bitstring])[0]
         # Offset for Z logicals
         z_sites += len(x_logicals) + len(z_logicals)
-        logicals_z.append(list(z_sites))
+        logicals_z.append([int(site) for site in z_sites])
 
     return logicals_x, logicals_z
 
