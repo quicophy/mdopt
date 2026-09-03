@@ -87,12 +87,15 @@ def svd(
                 # direct gesdd, and exact (agreement ~1e-14). The MPO zip-up
                 # produces (chi*d, d*chi*w) matrices, so the wide case is hot.
                 rows, cols = a.shape
-                # QR of a non-finite matrix returns garbage instead of
-                # raising like svd does, so only take the reduced path for
-                # finite input; the direct call raises into the fallbacks.
-                # The check goes through the backend: np.isfinite rejects
-                # CuPy arrays, which would silently disable the GPU path.
-                if not bool(xp.isfinite(a).all()):
+                # Aspect ratio decides first, so the direct path pays no
+                # extra scan. A reduction additionally requires finite
+                # input: QR of a non-finite matrix returns garbage instead
+                # of raising like svd does, and the direct call raises into
+                # the fallbacks. The check goes through the backend, since
+                # np.isfinite rejects CuPy arrays (and bool() would force a
+                # device sync on every call if run unconditionally).
+                reduce = cols >= 2 * rows or rows >= 2 * cols
+                if reduce and not bool(xp.isfinite(a).all()):
                     u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
                 elif cols >= 2 * rows:
                     q_f, r_f = xp.linalg.qr(a.T)

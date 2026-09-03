@@ -20,17 +20,33 @@ from pathlib import Path
 import numpy as np
 import qecstruct as qec
 
+# Imported once here, not inside the workloads: function-local imports made
+# the first-run wall time and profile depend on invocation order (a workload
+# run alone paid cold-import cost that a full sorted suite had already paid).
+from mdopt.contractor.contractor import mps_mpo_contract
+from mdopt.examples.decoding.decoding import (
+    apply_bitflip_bias,
+    apply_constraints,
+    decode_css,
+    decode_message,
+    generate_pauli_error_string,
+    linear_code_constraint_sites,
+    linear_code_prepare_message,
+)
+from mdopt.mps.utils import (
+    create_custom_product_state,
+    create_simple_product_state,
+    inner_product,
+)
+from mdopt.optimiser.dmrg import DMRG
+from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+
 HERE = Path(__file__).parent
 RESULTS = HERE / "results"
 
 
 def wl_surface_bitflip():
     """Code-capacity surface-code decode: the quantum_surface workload."""
-    from mdopt.examples.decoding.decoding import (
-        decode_css,
-        generate_pauli_error_string,
-    )
-
     code = qec.hypergraph_product(qec.repetition_code(5), qec.repetition_code(5))
     rng = np.random.default_rng(51)
     outputs = []
@@ -56,11 +72,6 @@ def wl_surface_bitflip():
 
 def wl_shor_depolarising():
     """Small-code depolarising decode: dense readout path end to end."""
-    from mdopt.examples.decoding.decoding import (
-        decode_css,
-        generate_pauli_error_string,
-    )
-
     code = qec.shor_code()
     rng = np.random.default_rng(7)
     outputs = []
@@ -83,16 +94,6 @@ def wl_shor_depolarising():
 
 def wl_classical_ldpc():
     """Classical LDPC pipeline: constraints + Dephasing DMRG readout."""
-    from mdopt.examples.decoding.decoding import (
-        apply_bitflip_bias,
-        apply_constraints,
-        decode_message,
-        linear_code_constraint_sites,
-        linear_code_prepare_message,
-    )
-    from mdopt.mps.utils import create_custom_product_state
-    from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
-
     outputs = []
     for seed in (11, 12, 13):
         code = qec.random_regular_code(48, 36, 3, 4, qec.Rng(seed))
@@ -125,9 +126,6 @@ def wl_classical_ldpc():
 
 def wl_dmrg_ground_state():
     """Plain DMRG on a transverse-field Ising chain (optimiser hot path)."""
-    from mdopt.mps.utils import create_simple_product_state
-    from mdopt.optimiser.dmrg import DMRG
-
     num_sites = 24
     identity = np.eye(2)
     pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
@@ -146,9 +144,6 @@ def wl_dmrg_ground_state():
             mpo.append(tensor[:, 2:3, :, :])
         else:
             mpo.append(tensor)
-    from mdopt.contractor.contractor import mps_mpo_contract
-    from mdopt.mps.utils import inner_product
-
     mps = create_simple_product_state(num_sites, which="+")
     engine = DMRG(mps, mpo, chi_max=48, cut=1e-12, mode="SA", silent=True)
     engine.run(2)
