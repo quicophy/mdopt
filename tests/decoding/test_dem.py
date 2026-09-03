@@ -350,3 +350,54 @@ def test_untouched_observable_is_deterministically_unflipped():
         # No mass may sit on any class with the untouched bit set.
         norm = masses / masses.sum()
         assert norm[np.array([i for i in range(8) if (i >> 1) & 1])].max() < 1e-12
+
+
+def test_dem_error_paths_raise_precisely():
+    """The guard rails: inconsistent syndromes, dead detectors, bad
+    representatives, chi collapse, and unknown ordering strategies."""
+    from mdopt.decoding.dem import order_mechanisms
+
+    problem = DemProblem(
+        probs=[0.1, 0.2, 0.15],
+        detector_rows=[[0, 1], [1, 2]],
+        observable_rows=[[0]],
+        num_detectors=2,
+        num_observables=1,
+    )
+
+    # Two identical detector rows with conflicting syndrome bits: no solve.
+    conflicted = DemProblem(
+        probs=[0.1],
+        detector_rows=[[0], [0]],
+        observable_rows=[[]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError):
+        solve_representative(conflicted, np.array([1, 0]))
+
+    # A declared detector no mechanism touches cannot fire.
+    dead = DemProblem(
+        probs=[0.1, 0.2],
+        detector_rows=[[], [0, 1]],
+        observable_rows=[[0]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="fired"):
+        decode_dem(dead, np.array([1, 0]))
+
+    # A representative that does not reproduce the syndrome is rejected.
+    with pytest.raises(ValueError, match="representative"):
+        decode_dem(problem, np.array([1, 0]), representative=np.array([0, 0, 0]))
+
+    # chi_max=1 destroys the class-mass vector, which must be loud.
+    with pytest.raises(ArithmeticError, match="collapsed"):
+        decode_dem(problem, np.array([1, 0]), chi_max=1)
+
+    # Ordering: natural is the identity, unknown strategies are rejected.
+    natural, perm = order_mechanisms(problem, "natural")
+    assert np.array_equal(perm, np.arange(3))
+    assert natural.detector_rows == problem.detector_rows
+    with pytest.raises(ValueError):
+        order_mechanisms(problem, "alphabetical")

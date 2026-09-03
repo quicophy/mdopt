@@ -29,7 +29,7 @@ from sympy.abc import x, y
 
 try:
     from qldpc.codes import BBCode
-except ModuleNotFoundError:  # only needed for BB-code specific functions
+except ModuleNotFoundError:  # pragma: no cover - qldpc is a hard test dep
     BBCode = None  # type: ignore[assignment,misc]
 
 from mdopt.mps.explicit import ExplicitMPS
@@ -1112,8 +1112,7 @@ def generate_pauli_error_string(
         elif error_model == "Amplitude Damping":
             error = rng.choice(["I", "X"], p=[1 - error_rate, error_rate])
         elif error_model == "Erasure":
-            if erasure_rate is None:
-                raise ValueError("The Erasure error model requires erasure_rate.")
+            assert erasure_rate is not None  # validated on entry
             if rng.random() < erasure_rate:
                 error = "E"
             elif rng.random() < error_rate:
