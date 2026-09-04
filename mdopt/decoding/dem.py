@@ -313,10 +313,21 @@ def decode_dem(
         renormalise=renormalise,
     ).reverse()
     dense = np.real(np.asarray(logical_mps.dense(flatten=True, renormalise=False)))
-    dense = np.abs(dense)
 
-    if not np.isfinite(dense).all() or float(np.max(dense)) == 0.0:
+    # Every tensor in the exact contraction is non-negative, so a materially
+    # negative class mass can only be a truncation artefact; taking abs()
+    # would convert it into posterior weight that could even win the argmax.
+    # Reject it loudly and clamp only round-off-scale negatives.
+    if not np.isfinite(dense).all() or float(np.max(dense)) <= 0.0:
         raise ArithmeticError(f"The class-mass vector collapsed at chi_max={chi_max}.")
+    peak = float(np.max(dense))
+    most_negative = float(np.min(dense))
+    if most_negative < -1e-12 * peak:
+        raise ArithmeticError(
+            f"Negative class mass {most_negative:.3e} at chi_max={chi_max}: "
+            "the contraction is not converged; raise chi_max."
+        )
+    dense = np.clip(dense, 0.0, None)
 
     # Relabel from f-classes to m-classes: XOR in the representative's own
     # observable pattern.

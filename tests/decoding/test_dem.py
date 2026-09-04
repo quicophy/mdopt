@@ -391,8 +391,10 @@ def test_dem_error_paths_raise_precisely():
     with pytest.raises(ValueError, match="representative"):
         decode_dem(problem, np.array([1, 0]), representative=np.array([0, 0, 0]))
 
-    # chi_max=1 destroys the class-mass vector, which must be loud.
-    with pytest.raises(ArithmeticError, match="collapsed"):
+    # chi_max=1 destroys the class-mass vector, which must be loud --
+    # either as a collapse or as a materially negative mass, never as a
+    # silently abs()'d posterior.
+    with pytest.raises(ArithmeticError, match="collapsed|not converged"):
         decode_dem(problem, np.array([1, 0]), chi_max=1)
 
     # Ordering: natural is the identity, unknown strategies are rejected.
