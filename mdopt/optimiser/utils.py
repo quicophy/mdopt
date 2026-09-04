@@ -215,7 +215,7 @@ class ConstraintString:
 
 def apply_constraints(
     mps: CanonicalMPS,
-    strings: List[List[int]],
+    strings: List[List[List[int]]],
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     cut: float = float(1e-17),

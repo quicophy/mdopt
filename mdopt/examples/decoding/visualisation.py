@@ -4,7 +4,7 @@ import numpy as np
 from matrex import msro
 from qecstruct import CssCode  # pylint: disable=E0611
 import matplotlib.pyplot as plt
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     css_code_logicals_sites,
     css_code_constraint_sites,
 )

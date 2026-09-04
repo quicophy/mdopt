@@ -580,7 +580,7 @@ version = "1.2.1"
 description = "Python library for calculating contours of 2D quadrilateral grids"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "contourpy-1.2.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:bd7c23df857d488f418439686d3b10ae2fbf9bc256cd045b37a8c16575ea1040"},
     {file = "contourpy-1.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:5b9eb0ca724a241683c9685a484da9d35c872fd42756574a7cfbf58af26677fd"},
@@ -844,7 +844,7 @@ version = "0.12.1"
 description = "Composable style cycles"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"},
     {file = "cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c"},
@@ -990,7 +990,7 @@ version = "4.55.3"
 description = "Tools to manipulate font files"
 optional = false
 python-versions = ">=3.8"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "fonttools-4.55.3-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:1dcc07934a2165ccdc3a5a608db56fb3c24b609658a5b340aee4ecf3ba679dc0"},
     {file = "fonttools-4.55.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:f7d66c15ba875432a2d2fb419523f5d3d347f91f48f57b8b08a2dfc3c39b8a3f"},
@@ -1708,7 +1708,7 @@ version = "1.4.8"
 description = "A fast implementation of the Cassowary constraint solver"
 optional = false
 python-versions = ">=3.10"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "kiwisolver-1.4.8-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:88c6f252f6816a73b1f8c904f7bbe02fd67c09a69f7cb8a0eecdbf5ce78e63db"},
     {file = "kiwisolver-1.4.8-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c72941acb7b67138f35b879bbe85be0f6c6a70cab78fe3ef6db9c024d9223e5b"},
@@ -1973,7 +1973,7 @@ version = "3.11.1"
 description = "Python plotting package"
 optional = false
 python-versions = ">=3.11"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "matplotlib-3.11.1-cp311-cp311-macosx_10_12_x86_64.whl", hash = "sha256:b7cf158e7add54a8d51ac9b5a84abd6d4e13ed4951b4f25f1c5139f41c2addb2"},
     {file = "matplotlib-3.11.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:d2ace7273b9a5061a3b420918a16fae1f2dc5dfee1abcc13aba71b5d94b1820c"},
@@ -2359,7 +2359,7 @@ version = "3.4.2"
 description = "Python package for creating and manipulating graphs and networks"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["main", "test"]
 files = [
     {file = "networkx-3.4.2-py3-none-any.whl", hash = "sha256:df5d4365b724cf81b8c6a7312509d0c22386097011ad1abe274afd5e9d3bbc5f"},
     {file = "networkx-3.4.2.tar.gz", hash = "sha256:307c3669428c5362aab27c8a1260aa8f47c4e91d3891f48be0141738d8d053e1"},
@@ -2460,7 +2460,7 @@ version = "2.4.6"
 description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.11"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "numpy-2.4.6-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:0280e0356c0829a18d9de1cb7eee50ec22ca639878d7240307ca0943d73cd2c4"},
     {file = "numpy-2.4.6-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:110f8b71aacb688ec69062bb7f6938a0f8acb01b7c1c4beb453c65b6d234584d"},
@@ -2774,7 +2774,7 @@ version = "11.1.0"
 description = "Python Imaging Library (Fork)"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "pillow-11.1.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:e1abe69aca89514737465752b4bcaf8016de61b3be1397a8fc260ba33321b3a8"},
     {file = "pillow-11.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c640e5a06869c75994624551f45e5506e4256562ead981cce820d5ab39ae2192"},
@@ -3175,41 +3175,40 @@ testutils = ["gitpython (>3)"]
 
 [[package]]
 name = "pymatching"
-version = "2.2.2"
+version = "2.4.0"
 description = "A package for decoding quantum error correcting codes using minimum-weight perfect matching."
 optional = false
-python-versions = ">=3.7"
-groups = ["main"]
+python-versions = ">=3.8"
+groups = ["main", "test"]
 files = [
-    {file = "PyMatching-2.2.2-cp37-cp37m-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7172c73f8772b00749668d32be45f850e9b517d23d0e1348641169c5a49b7bbb"},
-    {file = "PyMatching-2.2.2-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6ef593712ab2bdb2e4f2095f540b0d613028c0fbcb61a6937767084e0d66e7e7"},
-    {file = "PyMatching-2.2.2-cp37-cp37m-win32.whl", hash = "sha256:99aa1c8da8d1ec2784e33cbc60fd233ab10730e8dc7957aba1143934804a6671"},
-    {file = "PyMatching-2.2.2-cp37-cp37m-win_amd64.whl", hash = "sha256:7c5dad21c1d7420b07be63a25efa3059bb6285d4ca3cb0c733152e91758edd94"},
-    {file = "pymatching-2.2.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:dc602a3c437b41a19e3fb65d48b776c63f0bfbeaa053cfa26ab2233aea6458bf"},
-    {file = "pymatching-2.2.2-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:502c0871d5d92b23ce7bd37efa65537222f409fcaa6ee0a4f591a9ce91cfcc46"},
-    {file = "pymatching-2.2.2-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:878c0c490511736438c9b14f31e93f3396310687796d853888d0a444a93aae00"},
-    {file = "pymatching-2.2.2-cp310-cp310-win_amd64.whl", hash = "sha256:0f19e38bc06b2f1f184137299ddc04533114416b776976ad7b32d000cfb80439"},
-    {file = "pymatching-2.2.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:64a86a2c17f98c111da186775024fb26c21d82b7ebbb244570074bc2483020b0"},
-    {file = "pymatching-2.2.2-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:fc9a5cff53559b6a605eb099ee73f4f3043bf0f4098d227331f10f7751d35607"},
-    {file = "pymatching-2.2.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:166abeb45525cbbcb656e66e4400ff24a11b2cf29495dc7b213885809f45d237"},
-    {file = "pymatching-2.2.2-cp311-cp311-win_amd64.whl", hash = "sha256:e4a6931a13aa413cd2820d2239b8fe141e685d8de550385d032535b3a7963bbd"},
-    {file = "pymatching-2.2.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f35326c45c062f21ade7c8e2c9871fd56811dd01fdd951dbfd51d199daebfe58"},
-    {file = "pymatching-2.2.2-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:52bc990e7373403f12e021259f9525c0a849e8f044c1ce2f56696721e264b2af"},
-    {file = "pymatching-2.2.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7ffc778d3cc689acaf65de74898d1ac90215c5e4455599fdcda833695bcd5509"},
-    {file = "pymatching-2.2.2-cp312-cp312-win_amd64.whl", hash = "sha256:a24ebb291d6252384928283308707f1ccbc2ee9343a15640c1a60e1fb35ad3db"},
-    {file = "pymatching-2.2.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:efde929996872d087ba0ca4c90516361a3d74472c3333a8cfb95c51d743baadd"},
-    {file = "pymatching-2.2.2-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:becb7f90e1c3a7456d60c89f384e88a532a42069e868d20ef4f671f17a7ec64f"},
-    {file = "pymatching-2.2.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3d37810c6475540518a147ddfef5fd7d8b5579936b455c9eed0bf7dd6cacbd8b"},
-    {file = "pymatching-2.2.2-cp313-cp313-win_amd64.whl", hash = "sha256:f6a93a67145e54b663ae7397cb2ff7626ec4d4d1d9bd62ae40f5f15613ec4982"},
-    {file = "pymatching-2.2.2-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:0dcfb02a76b7fda9b00975490b435b964e239ae676003d2ecfdd136bb3bc2667"},
-    {file = "pymatching-2.2.2-cp38-cp38-macosx_11_0_x86_64.whl", hash = "sha256:1a4a2846e3db9bf1f35b3648d7b22b440bfc5b797ebba991f7df00263af06861"},
-    {file = "pymatching-2.2.2-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a78a512d91d9518e053210f1986421d59aba3ce66829b394fd879c812ad283df"},
-    {file = "pymatching-2.2.2-cp38-cp38-win_amd64.whl", hash = "sha256:f91e750797aeb4cc9c926b9d7bf30a467cf265a708d3a0ad98b05848a9a15dab"},
-    {file = "pymatching-2.2.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:3d2fcf66592c9276b97073df87f0e87f0aaebbe93800874c75b4122d29a40523"},
-    {file = "pymatching-2.2.2-cp39-cp39-macosx_11_0_x86_64.whl", hash = "sha256:312977149f2e7a97ad9aca1df3a8295758577f2abb81d7f505f8f424ee879226"},
-    {file = "pymatching-2.2.2-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:42c348fc0e99b126f87edc4bca52d407a3d525fdb01820b608e946a51b09d119"},
-    {file = "pymatching-2.2.2-cp39-cp39-win_amd64.whl", hash = "sha256:a00332d86bd6296594aadce50aeed4cb9df53f87155d6a27badc1f98aa953a97"},
-    {file = "pymatching-2.2.2.tar.gz", hash = "sha256:66857ecc58913326938de812fcd878793f6f9e2cca2ffc9fd88693629e026684"},
+    {file = "pymatching-2.4.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:c51ee0ffa161f35ae6b887a0bebdf85e3fa456139e56d5e070823ef0434f692f"},
+    {file = "pymatching-2.4.0-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:8778d0a06b606b169f8517279f01d4c0f9bf1725085f7a3d1ddcb24a53952fdd"},
+    {file = "pymatching-2.4.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fd8699227cda0d9c95152ee67ce2e5119fc845ff7951bfd8ed34dab9628733c1"},
+    {file = "pymatching-2.4.0-cp310-cp310-win_amd64.whl", hash = "sha256:4683b652ba3983bc26405107382d666d8ccf68f53ea50fc5fb274251871177ec"},
+    {file = "pymatching-2.4.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:133168b1fec946bfc992a9e5abbdbbc7eebc672b04d27cfd060ea153eb6cf576"},
+    {file = "pymatching-2.4.0-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:df8c9229c5265d71f871fba3fbdbd27cda71ca81969275eefeb64688ee2f59f4"},
+    {file = "pymatching-2.4.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ac25684a41ab859cbb0f2ea34d86485aa89d4d22f97df684f9579c167c7d560a"},
+    {file = "pymatching-2.4.0-cp311-cp311-win_amd64.whl", hash = "sha256:1a1b831f8ebf47f5e2a865d1bcc250da208c57ff881a37177ee548248da447c2"},
+    {file = "pymatching-2.4.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:881f3410975b5a2d393561d44fa4513c878653d0e718e55930b08f52e9a04fc5"},
+    {file = "pymatching-2.4.0-cp312-cp312-macosx_11_0_x86_64.whl", hash = "sha256:af03cdd7389e7b9f93069f1dd1bb9931c3836a2bfc0d01952993f394b0bfa10d"},
+    {file = "pymatching-2.4.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:15e6d73153713a8f383f44ba4497d478fb4c4d765fbdd30f9fc1e1d47af75760"},
+    {file = "pymatching-2.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:eb4428581a2578a8cc77f695ab267c184f444d9de5cb25301fe9f3f893214ea4"},
+    {file = "pymatching-2.4.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:fe3baa498155a227f5ce1ee6fe07f40524d9fb9961ac299a2050e69f7de50dba"},
+    {file = "pymatching-2.4.0-cp313-cp313-macosx_11_0_x86_64.whl", hash = "sha256:a49db8f20d01523c9e12fc8207a5831ed261b53fb8e629c78e45b0081fcd5199"},
+    {file = "pymatching-2.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6450797ca5001449fcf5b43a68181a783f4ca50650f880a02ef5bf91b13aa359"},
+    {file = "pymatching-2.4.0-cp313-cp313-win_amd64.whl", hash = "sha256:a14022ecf4e810152db998d14429d430630433b9ed1edc2abe53494753b0a0ca"},
+    {file = "pymatching-2.4.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:0e071c90c108daf1c6f8cefcac9ad4989a1a1694fe7433ee413cef7b65f4207e"},
+    {file = "pymatching-2.4.0-cp314-cp314-macosx_11_0_x86_64.whl", hash = "sha256:f2390db2679b5009509b6ea1b0838187966c2d8fd1ab8050e5d9b6c908a3ea7e"},
+    {file = "pymatching-2.4.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:70869b2a4a8fab2f1e54cc0b68fd050b7556133b5ce8c2d2d5d4f4d1319c14d3"},
+    {file = "pymatching-2.4.0-cp314-cp314-win_amd64.whl", hash = "sha256:5c5ce4ed245d3670ea7d62b09f8a29b105533b032a3d21fdf6df04c9b6441ff1"},
+    {file = "pymatching-2.4.0-cp38-cp38-macosx_11_0_x86_64.whl", hash = "sha256:9e9486118f37f20c4631e9471218a8c05df8f1e254b6b95cda6b319211218c17"},
+    {file = "pymatching-2.4.0-cp38-cp38-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1fb6717d7b42876d46e07708510bbe30044293200a776deb20b7532b94ba55da"},
+    {file = "pymatching-2.4.0-cp38-cp38-win_amd64.whl", hash = "sha256:d8889c54d8daaea52ec80b35aa43f812eb944632e57531f14c06253c033a22dc"},
+    {file = "pymatching-2.4.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:633f52c4486e86bb4c6fe1acbb9e87a5a9d4c3a6176bb7417ff21ce196f38072"},
+    {file = "pymatching-2.4.0-cp39-cp39-macosx_11_0_x86_64.whl", hash = "sha256:f24dad954a5425e53d587e5cb88010c172061f59650ba2cb900acc4b3d28a6ef"},
+    {file = "pymatching-2.4.0-cp39-cp39-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fabeaf35310805e0e4b36c8650e80152a02d854a802ec05b84655e82c9e45cbf"},
+    {file = "pymatching-2.4.0-cp39-cp39-win_amd64.whl", hash = "sha256:51a3f98ca3a0b94df33d2142e55be819fe7b5060498231277282e1c517c099bd"},
+    {file = "pymatching-2.4.0.tar.gz", hash = "sha256:0c30dafa506b086f50d15530debd7b7b39228597d22c52d5ccd114bcbb0a2326"},
 ]
 
 [package.dependencies]
@@ -3227,7 +3226,7 @@ version = "3.2.1"
 description = "pyparsing module - Classes and methods to define and execute parsing grammars"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "pyparsing-3.2.1-py3-none-any.whl", hash = "sha256:506ff4f4386c4cec0590ec19e6302d3aedb992fdc02c761e90416f158dacf8e1"},
     {file = "pyparsing-3.2.1.tar.gz", hash = "sha256:61980854fd66de3a90028d679a954d5f2623e83144b5afe5ee86f43d762e5f0a"},
@@ -3284,7 +3283,7 @@ version = "2.9.0.post0"
 description = "Extensions to the standard Python datetime module"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3"},
     {file = "python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427"},
@@ -3883,7 +3882,7 @@ version = "1.15.3"
 description = "Fundamental algorithms for scientific computing in Python"
 optional = false
 python-versions = ">=3.10"
-groups = ["main"]
+groups = ["main", "test"]
 files = [
     {file = "scipy-1.15.3-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:a345928c86d535060c9c2b25e71e87c39ab2f22fc96e9636bd74d1dbf9de448c"},
     {file = "scipy-1.15.3-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:ad3432cb0f9ed87477a8d97f03b763fd1d57709f1bbde3c9369b1dff5503b253"},
@@ -4079,7 +4078,7 @@ version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
-groups = ["main", "dev", "docs"]
+groups = ["main", "dev", "docs", "test"]
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -4295,46 +4294,33 @@ tests = ["cython", "littleutils", "pygments", "pytest", "typeguard"]
 
 [[package]]
 name = "stim"
-version = "1.15.0"
+version = "1.16.0"
 description = "A fast library for analyzing with quantum stabilizer circuits."
 optional = false
 python-versions = ">=3.6.0"
 groups = ["main"]
 files = [
-    {file = "stim-1.15.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:4c10d2022b3c4c245f5f421dbf01b012a4d04901df697d9aca69eaea329c8532"},
-    {file = "stim-1.15.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:6f240c196f23126bfed79bd78de5baa1fdde9c8fbfe56de032a12657fc42da37"},
-    {file = "stim-1.15.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:31c55fad7529d6ee508f268534eeca1433017f2e83082f88275bea362b94f30f"},
-    {file = "stim-1.15.0-cp310-cp310-win_amd64.whl", hash = "sha256:d94638feaac9d037690779c383592bb898eda9db460d23fc0652d10030d570c9"},
-    {file = "stim-1.15.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:48525d92965cc65b61399a9e1fe1d7a8925981bb4430ef69866d4e5c67a77d16"},
-    {file = "stim-1.15.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:0bb3757c69c9b16fd24ff7400b5cddb22017c4cae84fc4b7b73f84373cb03c00"},
-    {file = "stim-1.15.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f0fb249f1a2897a22cbe4e0c2627abf49188cbbf19b942d4749972d1c3bdf12c"},
-    {file = "stim-1.15.0-cp311-cp311-win_amd64.whl", hash = "sha256:6e3b61a2d9dc4b4312f5cf2ccf9c9f7175fe13a12e5c08df99835c5275680919"},
-    {file = "stim-1.15.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:d426e00afe21478828369df3aaa82905e710c5b1f72582ec45244e3739d6183d"},
-    {file = "stim-1.15.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:fc613f78bc88b4318d7f34f9fddacec52638c11b72cc618f911bdd7ca153f938"},
-    {file = "stim-1.15.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fdd9e5ab85ba2fb113b8834422518f6e46a4aea2e0f6f7305cfc2ad0fcd07086"},
-    {file = "stim-1.15.0-cp312-cp312-win_amd64.whl", hash = "sha256:e92d5be90f6c92bada6b5aea64dfe9c80813a06e1316a71d5a36203dd24492f5"},
-    {file = "stim-1.15.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:673a323402c266b1a1225565d69d31816c3d4a4c259383ed4fa9c15cacd12411"},
-    {file = "stim-1.15.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:35e36d0479015b4dcb4261b8b68be85067cbd4bac5632bdfdb3ee3f8671d05a9"},
-    {file = "stim-1.15.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:fb9465ab120837ecbd26b5af216a00715f04da087ddcfa09646892c8de720d09"},
-    {file = "stim-1.15.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:93fab5d7a113f9c0e8dd78a77ef083c654f3638fc9d160067fcdac1bb52af9ac"},
-    {file = "stim-1.15.0-cp36-cp36m-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:32a1b3d25c5154d17ee1e2f6c0051cbf8a1ea3babc12571231b8aa7191a5c82c"},
-    {file = "stim-1.15.0-cp36-cp36m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bc55de6dca511a77dc5fc4ece750ae9afe8ab840455da60a119a61eb1269e338"},
-    {file = "stim-1.15.0-cp36-cp36m-win32.whl", hash = "sha256:f6f7cd19a2a3bb3e494bb14e23a23c8c51afccf9f630d422c4242d2ed4917c2f"},
-    {file = "stim-1.15.0-cp36-cp36m-win_amd64.whl", hash = "sha256:a1e8ee222b112f9df1b8fdc4a9d500957a5a6ccd789b34e955a05862aa211f9d"},
-    {file = "stim-1.15.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:c5504454a7158c009e9270a9fce90f6e4b6007a5f62e0c30c5d750ce845db407"},
-    {file = "stim-1.15.0-cp37-cp37m-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:1f8ed62c8b257c1d6ae63f0611f49771b2aaa8986a276f94c2c607467bd5587e"},
-    {file = "stim-1.15.0-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:614e042645a7a6af65942f610538b166205635e5eedeac2f41ecb589cd7bd40c"},
-    {file = "stim-1.15.0-cp37-cp37m-win32.whl", hash = "sha256:6aadcdfb6f0f900bf7d66e815201ace8509926d1213019a2b87831d0eaef8362"},
-    {file = "stim-1.15.0-cp37-cp37m-win_amd64.whl", hash = "sha256:6940dbab42507281dddc8dd7992e7ec36a2a2c4b5eaa340bfc577143251d1dc5"},
-    {file = "stim-1.15.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:c095ba13da95223e6b55f5c3493d48a1c04926827b6d89ae4af426044633d710"},
-    {file = "stim-1.15.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:3aa9ab2c82e111207515976b0561fb5a44a9834bcb7769cfd6c8fc66005e82c6"},
-    {file = "stim-1.15.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:41fa67434e9d841dbee785639b2766265753eec31cabaf7e6f47fbe3b06a1d9c"},
-    {file = "stim-1.15.0-cp38-cp38-win_amd64.whl", hash = "sha256:810383267ed94091dd3f49c3bd45061dbdc4e0f7a766de6a8f0e62bee2edc494"},
-    {file = "stim-1.15.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a49af2ffc5f18178cddb1ef0014568a7114f97fe9a12f2b905ab8e2158d40558"},
-    {file = "stim-1.15.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:190c5a3c9cecdfae3302d02057d1ed6d9ce7910d2bcc2ff375807d8f8ec5494d"},
-    {file = "stim-1.15.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2f64ab075e856040c3b4157a4f2caa329204d579cbd7c0c02c7247e5a78da5db"},
-    {file = "stim-1.15.0-cp39-cp39-win_amd64.whl", hash = "sha256:d6d409d42899bf35cd949806231d382ee3e4f679dd0e960910b39207d2fbe62e"},
-    {file = "stim-1.15.0.tar.gz", hash = "sha256:95236006859d6754be99629d4fb44788e742e962ac8c59caad421ca088f7350e"},
+    {file = "stim-1.16.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d467b5599de7e171651a1ff7fac353dd64d78df75d9c63e7d870d576eb0fd64b"},
+    {file = "stim-1.16.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:84b777678cc12e808b3d6747d57e07eed951f8ec18047a936dfa25dbc950a2e2"},
+    {file = "stim-1.16.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:41c02d52af847e0ab886c35751e8f7e17e2e0d055e390ece93a50a12dcf87e56"},
+    {file = "stim-1.16.0-cp310-cp310-win_amd64.whl", hash = "sha256:609666b77197d45705e1579a9840123a53cebe614e8bf1d496c0df24f797e653"},
+    {file = "stim-1.16.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:8d44f858f3d5d1107e674886facbb011ed85438f0888278d6aa3c1f42d9e5a5f"},
+    {file = "stim-1.16.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:1890bda08adfd6daa875d1d5e41039c5ae8c58faabc7cd1813f8d8de9f1536a2"},
+    {file = "stim-1.16.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bd2d28093818f981f8dedb2be160b62d818279b81748d72dc4fca6cdd160291d"},
+    {file = "stim-1.16.0-cp311-cp311-win_amd64.whl", hash = "sha256:b367f90826e796417932ea46c0e53d80e3c5bebac0c6633c0aa07a8fcaa4298b"},
+    {file = "stim-1.16.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:3e2883216fb4f57411531c99dfa1838c0d8201c619ccd01b197b9afd54d326cf"},
+    {file = "stim-1.16.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:b8580dfbe5ff27594dd15a83b24262630b82cf089d1463d29dbee90ffbc6898b"},
+    {file = "stim-1.16.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:883b24c3c95fa69818e931e8b60daf4fc8195d159d321e7548d8706dbac16558"},
+    {file = "stim-1.16.0-cp312-cp312-win_amd64.whl", hash = "sha256:85b9c544c65377a42c6b5c9a57616a5ed5580e1cabb286a604800a045c7a12fb"},
+    {file = "stim-1.16.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:1822adb4920f4616b253792fe1893ad07a9bea8cbc45b2f4cdf7c75a8083cd00"},
+    {file = "stim-1.16.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:66dbc6532169df84d127ceede353b15445e845a94aa008c5d0a4062b51cc2b02"},
+    {file = "stim-1.16.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f22a009bad1e7816aeb70bdeafb6789e4840710da070f69cde91e2ac6cf1e800"},
+    {file = "stim-1.16.0-cp313-cp313-win_amd64.whl", hash = "sha256:55231457b5897b0ef798059aae01d9e8247fc8b2089e8a27f9f4bb13b0342af2"},
+    {file = "stim-1.16.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:1e78fe10ab4c28af9ceb57ac8ed895f3efcde9607d851ef931c53d1f6f80bc8e"},
+    {file = "stim-1.16.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:1fa60a13ef921d6e6aea420e2fe7551d71a4a07b513d86da89e39259dd3739f9"},
+    {file = "stim-1.16.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f94040cbeeff786e7fb8860249e54d9ba3f777b5b098d21f1eccd072d3a3c32a"},
+    {file = "stim-1.16.0-cp314-cp314-win_amd64.whl", hash = "sha256:ed3aa70f82690946ba6f70abb9dad448d49ab9499fa5161de5f286da87c30ab1"},
+    {file = "stim-1.16.0.tar.gz", hash = "sha256:9092a996429dcf616d8d4ca01fec886b7b310caf9425a39fcfe499005636bd52"},
 ]
 
 [package.dependencies]
@@ -4618,4 +4604,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "0a23c759dc132de517bbc033af52f504234feb620aac86632ecab4bf45fab964"
+content-hash = "cec47b12669604d7fe96a235d8faa43ff1ae1d9e143b53e5c815bffed2d94029"

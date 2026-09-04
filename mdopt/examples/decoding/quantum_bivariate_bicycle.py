@@ -45,7 +45,7 @@ sys.path.append(project_root_narval)
 sys.path.append(examples_path_narval)
 
 try:
-    from mdopt.examples.decoding.decoding import (
+    from mdopt.decoding.decoding import (
         str_to_bool,
         decode_css,
         create_bb_code,

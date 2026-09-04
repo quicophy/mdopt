@@ -27,7 +27,7 @@ import numpy as np
 from tqdm import tqdm
 
 
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     create_bb_code,
     generate_pauli_error_string,
     css_code_checks,

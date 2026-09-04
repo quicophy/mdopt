@@ -33,7 +33,7 @@ import numpy as np
 import qecstruct as qec
 from tqdm import tqdm
 
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     decode_css,
     generate_pauli_error_string,
 )

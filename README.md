@@ -37,7 +37,7 @@ poetry install
 ```python
 import numpy as np
 import qecstruct as qec
-from mdopt.examples.decoding.decoding import decode_css
+from mdopt.decoding import decode_css
 
 # Define a small instance of the surface code
 LATTICE_SIZE = 3
