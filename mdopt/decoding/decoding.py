@@ -1810,6 +1810,16 @@ def decode_custom(
             f"The error acts on {len(error)} qubits, expected {expected_length}."
         )
 
+    # Channel validation must precede the shortcut: an invalid probability
+    # with a trivial error would otherwise "succeed", and a misspelled bias
+    # type would silently decode as depolarising.
+    if not 0 <= bias_prob <= 1:
+        raise ValueError(f"bias_prob should be a probability, given {bias_prob}.")
+    if bias_type not in ("Bitflip", "Depolarising"):
+        raise ValueError(
+            f"Unknown bias_type {bias_type!r}; expected 'Bitflip' or " "'Depolarising'."
+        )
+
     if error == "I" * len(error) and bias_prob < 0.5:
         if not silent:
             LOGGER.info("No error detected.")

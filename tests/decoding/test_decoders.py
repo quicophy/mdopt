@@ -1690,3 +1690,14 @@ def test_identity_fast_path_is_gated_on_low_bias():
         silent=True,
     )
     assert low == 1.0
+
+
+def test_channel_arguments_are_validated_before_the_shortcut():
+    """An invalid channel must raise even when the error is trivial."""
+    stabs, log_x, log_z = ["ZZI", "IZZ"], ["XXX"], ["ZII"]
+    with pytest.raises(ValueError, match="probability"):
+        decode_custom(stabs, log_x, log_z, "III", bias_prob=-0.1, silent=True)
+    with pytest.raises(ValueError, match="bias_type"):
+        decode_custom(stabs, log_x, log_z, "III", bias_type="Depol", silent=True)
+    with pytest.raises(ValueError, match="bias_type"):
+        decode_custom(stabs, log_x, log_z, "XII", bias_type="Depol", silent=True)
