@@ -671,8 +671,11 @@ def test_svd_rectangular_reduction_matches_direct_svd():
             )
             assert s_t.shape == (chi,)
             assert np.allclose(s_t, s_ref[:chi], rtol=0.0, atol=1e-11), label
+            # rtol=0 so the bound is genuinely absolute; the discarded
+            # spectrum's norm-square is O(100) here, where the default
+            # relative tolerance would hide errors of order 1e-3.
             assert np.isclose(
-                err, float(np.linalg.norm(s_ref[chi:]) ** 2), atol=1e-12
+                err, float(np.linalg.norm(s_ref[chi:]) ** 2), rtol=0.0, atol=1e-9
             ), label
 
 
