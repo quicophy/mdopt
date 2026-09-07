@@ -886,3 +886,25 @@ def test_marginal_does_not_produce_nans_when_the_centre_underflows():
     marginalised = mps.marginal(sites_to_marginalise=list(range(10)), renormalise=True)
 
     assert np.all(np.isfinite(marginalised.dense(flatten=True)))
+
+
+def test_move_orth_centre_carries_a_collapsed_bond_through():
+    """A bond of dimension 0 (a truncation that emptied the spectrum) must
+    move through the pivoted-QR path without raising.
+
+    Three example notebooks hit this in CI: the QR branch forced rank 1 on
+    a site with no columns. Such a bond has no pivot, so it must take the
+    SVD branch, which carries the degenerate shape through unchanged.
+    """
+    from mdopt.mps.canonical import CanonicalMPS
+
+    tensors = [
+        np.zeros((1, 2, 0)),
+        np.zeros((0, 2, 1)),
+        np.zeros((1, 2, 1)),
+    ]
+    mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+    moved = mps.move_orth_centre(2, renormalise=False)
+    assert [t.shape for t in moved.tensors][0][2] == 0
+    back = moved.move_orth_centre(0, renormalise=False)
+    assert len(back) == 3

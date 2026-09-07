@@ -406,9 +406,12 @@ class CanonicalMPS:
         use_qr = not return_singular_values and not renormalise
 
         for i in range(begin, final):
-            if use_qr:
-                centre = mps.tensors[i]
-                chi_l, phys, chi_r = centre.shape
+            centre = mps.tensors[i]
+            chi_l, phys, chi_r = centre.shape
+            # A collapsed bond (dimension 0, produced when a truncation cut
+            # empties the spectrum) has no pivot to reveal rank from; the
+            # SVD branch carries that degenerate shape through unchanged.
+            if use_qr and chi_l * phys > 0 and chi_r > 0:
                 q_f, r_f, piv = scipy.linalg.qr(
                     centre.reshape(chi_l * phys, chi_r),
                     mode="economic",
