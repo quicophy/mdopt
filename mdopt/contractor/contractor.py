@@ -2,15 +2,36 @@
 This module contains the MPS-MPO contractor functions.
 """
 
+from functools import lru_cache
 from typing import Union, List, Tuple, cast
 
 import numpy as np
-from opt_einsum import contract
+from opt_einsum import contract, contract_expression
 
 from mdopt.backend import array as A
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
+
+
+@lru_cache(maxsize=512)
+def _cached_expression(subscripts, path, *shapes):
+    """A reusable opt_einsum expression for one (subscripts, shapes) pair.
+
+    The sweep in :func:`mps_mpo_contract` evaluates the same two einsums
+    thousands of times per decode; ``contract`` re-parses the subscripts and
+    rebuilds path metadata on every call even when ``optimize`` is explicit
+    (~5% of a decoding run). Expressions are cached per shape tuple, and MPS
+    bond dimensions cycle through a small set, so the cache stays tiny.
+    """
+    return contract_expression(subscripts, *shapes, optimize=list(path))
+
+
+def _contract_cached(subscripts, path, backend, *tensors):
+    expression = _cached_expression(
+        subscripts, path, *(tensor.shape for tensor in tensors)
+    )
+    return expression(*tensors, backend=backend)
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
@@ -57,8 +78,12 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
             f"while the one given has {operator.ndim}."
         )
 
-    tensor_updated = contract(
-        "ijk, jl -> ilk", tensor, operator, optimize=[(0, 1)], backend=backend
+    tensor_updated = _contract_cached(
+        "ijk, jl -> ilk",
+        ((0, 1),),
+        backend,
+        tensor,
+        operator,
     )
     return A.to_device(np.asarray(tensor_updated))
 
@@ -139,17 +164,35 @@ def apply_two_site_unitary(
     b1_scaled = b_1 * (lam[:, None, None])
 
     # with lambda_0
-    t_with = contract(
-        "ijk, klm -> ijlm", b1_scaled, b_2, optimize=[(0, 1)], backend=backend
+    t_with = _contract_cached(
+        "ijk, klm -> ijlm",
+        ((0, 1),),
+        backend,
+        b1_scaled,
+        b_2,
     )
-    t_with = contract(
-        "ijkl, jkmn -> imnl", t_with, unitary, optimize=[(0, 1)], backend=backend
+    t_with = _contract_cached(
+        "ijkl, jkmn -> imnl",
+        ((0, 1),),
+        backend,
+        t_with,
+        unitary,
     )
 
     # without lambda_0 (for back-substitution)
-    t_wo = contract("ijk, klm -> ijlm", b_1, b_2, optimize=[(0, 1)], backend=backend)
-    t_wo = contract(
-        "ijkl, jkmn -> imnl", t_wo, unitary, optimize=[(0, 1)], backend=backend
+    t_wo = _contract_cached(
+        "ijk, klm -> ijlm",
+        ((0, 1),),
+        backend,
+        b_1,
+        b_2,
+    )
+    t_wo = _contract_cached(
+        "ijkl, jkmn -> imnl",
+        ((0, 1),),
+        backend,
+        t_wo,
+        unitary,
     )
 
     # split and back-substitute
@@ -160,12 +203,12 @@ def apply_two_site_unitary(
         renormalise=False,
         return_truncation_error=True,
     )
-    b_1_updated = contract(
+    b_1_updated = _contract_cached(
         "ijkl, mkl -> ijm",
+        ((0, 1),),
+        backend,
         t_wo,
         np.conjugate(b_2_updated),
-        optimize=[(0, 1)],
-        backend=backend,
     )
 
     if A.GPU:
@@ -273,14 +316,14 @@ def mps_mpo_contract(
 
         orth_centre_index = start_site
 
-        two_site_mps_mpo_tensor = contract(
+        two_site_mps_mpo_tensor = _contract_cached(
             "ijk, klm, nojp, oqlr -> iprqm",
+            ((0, 1), (1, 2), (0, 1)),
+            backend,
             mps.tensors[start_site],
             mps.tensors[start_site + 1],
             mpo[0],
             mpo[1],
-            optimize=[(0, 1), (1, 2), (0, 1)],
-            backend=backend,
         ).reshape(
             (
                 mps.tensors[start_site].shape[0],
@@ -325,13 +368,13 @@ def mps_mpo_contract(
                 )
             )
 
-            two_site_mps_mpo_tensor = contract(
+            two_site_mps_mpo_tensor = _contract_cached(
                 "ijkl, lmn, komp -> ijpon",
+                ((0, 1), (0, 1)),
+                backend,
                 mps.tensors[orth_centre_index],
                 mps.tensors[orth_centre_index + 1],
                 mpo[i + 2],
-                optimize=[(0, 1), (0, 1)],
-                backend=backend,
             ).reshape(
                 (
                     len(singular_values),
