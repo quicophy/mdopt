@@ -121,6 +121,21 @@ def dem_to_problem(dem: stim.DetectorErrorModel) -> DemProblem:
     )
 
 
+def _validated_syndrome(problem: DemProblem, syndrome) -> np.ndarray:
+    """One bit per detector, as a 1-D int array; anything else is rejected.
+
+    A scalar or length-one syndrome would otherwise broadcast across every
+    detector and silently solve an all-equal syndrome.
+    """
+    array = np.asarray(syndrome)
+    if array.ndim != 1 or array.shape[0] != problem.num_detectors:
+        raise ValueError(
+            f"The syndrome must have exactly one bit per detector "
+            f"({problem.num_detectors}), given shape {array.shape}."
+        )
+    return array.astype(int) % 2
+
+
 def solve_representative(problem: DemProblem, syndrome: np.ndarray) -> np.ndarray:
     """Any mechanism set with the observed syndrome, by GF(2) elimination.
 
@@ -132,7 +147,7 @@ def solve_representative(problem: DemProblem, syndrome: np.ndarray) -> np.ndarra
     matrix = np.zeros((problem.num_detectors, num_mech + 1), dtype=int)
     for det, row in enumerate(problem.detector_rows):
         matrix[det, row] = 1
-    matrix[:, num_mech] = np.asarray(syndrome, dtype=int) % 2
+    matrix[:, num_mech] = _validated_syndrome(problem, syndrome)
 
     pivots: List[Tuple[int, int]] = []
     row_index = 0
@@ -205,6 +220,9 @@ def decode_dem(
         is observable ``j``), and ``predicted_flips`` is the argmax pattern as
         a bit array.
     """
+    # A supplied representative bypasses solve_representative, so the
+    # shape check must live here too.
+    syndrome = _validated_syndrome(problem, syndrome)
     num_obs = problem.num_observables
     num_mech = problem.num_mechanisms
     offset = num_obs

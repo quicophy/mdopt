@@ -14,12 +14,12 @@ cell's error stream is seeded as seed + distance * 1000 + int(p * 1e5).
 
 import json, time
 from pathlib import Path
-import numpy as np, psutil, pymatching
+import resource
+import numpy as np, pymatching
 from qldpc.codes import SurfaceCode
 from mdopt.decoding.dem import DemProblem, decode_dem
 
 RESULTS = Path(__file__).parent / "dem_results"
-PROC = psutil.Process()
 
 
 def bitflip_problem(distance, p):
@@ -69,7 +69,7 @@ def run(distance, p, shots, chi=128, seed=0):
             if (i + 1) % 500 == 0:
                 sink.flush()
                 print(
-                    f"[{tag}] {i+1}/{shots} rss={PROC.memory_info().rss/2**30:.2f}GB",
+                    f"[{tag}] {i+1}/{shots} rss={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/2**30:.2f}GB",
                     flush=True,
                 )
     rows = [json.loads(l) for l in open(path)]

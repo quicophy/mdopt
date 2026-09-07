@@ -232,8 +232,9 @@ def apply_constraints(
     ----------
     mps : CanonicalMPS
         The MPS to which the logical constraints are being applied.
-    strings : List[List[int]]
-        The list of arguments for :class:`ConstraintString`.
+    strings : List[List[List[int]]]
+        The list of arguments for :class:`ConstraintString`, one
+        ``[xor_left, xor_bulk, swap, xor_right]`` site list per constraint.
     logical_tensors : List[np.ndarray]
         List of logical tensors for :class:`ConstraintString`.
     chi_max : int

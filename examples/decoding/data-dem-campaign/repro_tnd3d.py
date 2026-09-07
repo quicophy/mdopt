@@ -11,12 +11,9 @@ plus escalation replaces their fixed simple-update/MPS bond dimensions.
 
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(
-    0,
-    "/private/tmp/claude-501/-Users-aberezutskii-mdopt/"
-    "b9b561b4-5eff-4867-9b51-811a4f705d17/scratchpad",
-)
+sys.path.insert(0, str(Path(__file__).parent))
 import stim
 
 import dem_rerun

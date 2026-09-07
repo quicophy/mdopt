@@ -429,3 +429,19 @@ def test_empty_and_mechanism_free_models_decode_trivially():
     masses, flips = decode_dem(obs_only, np.array([0]))
     assert np.array_equal(masses, [1.0, 0.0, 0.0, 0.0])
     assert np.array_equal(flips, [0, 0])
+
+
+def test_malformed_syndromes_are_rejected():
+    """A scalar or wrong-length syndrome must raise, never broadcast."""
+    problem = DemProblem(
+        probs=[0.1, 0.2, 0.15],
+        detector_rows=[[0, 1], [1, 2]],
+        observable_rows=[[0]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    for bad in (1, [1], [1, 0, 1], np.zeros((2, 1))):
+        with pytest.raises(ValueError, match="one bit per detector"):
+            solve_representative(problem, bad)
+        with pytest.raises(ValueError, match="one bit per detector"):
+            decode_dem(problem, bad, representative=np.array([1, 0, 0]))
