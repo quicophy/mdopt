@@ -414,11 +414,17 @@ class CanonicalMPS:
                     mode="economic",
                     pivoting=True,
                 )
+                # Prune on the same ABSOLUTE cut the SVD path applies to its
+                # singular values (split_two_site_tensor's default), not on
+                # a scale-relative one: the contractor moves with
+                # renormalise=False, so norms drift far from 1 and the two
+                # criteria would otherwise diverge. Pivoting guarantees each
+                # |R_ii| bounds every trailing column norm, so directions
+                # dropped here have singular values below the cut up to a
+                # sqrt(n) factor -- never a direction the SVD would keep as
+                # significant -- while exact zeros (product states) still go.
                 diagonal = np.abs(np.diag(r_f))
-                scale = float(diagonal[0]) if diagonal.size else 0.0
-                rank = (
-                    max(1, int(np.sum(diagonal > 1e-14 * scale))) if scale > 0.0 else 1
-                )
+                rank = max(1, int(np.sum(diagonal > 1e-12)))
                 if rank <= self.chi_max:
                     r_unpivoted = np.zeros((rank, chi_r), dtype=r_f.dtype)
                     r_unpivoted[:, piv] = r_f[:rank, :]
