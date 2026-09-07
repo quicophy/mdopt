@@ -44,6 +44,7 @@ from functools import reduce
 from copy import deepcopy
 from typing import Optional, Literal, Iterable, Tuple, Union, List, cast
 import numpy as np
+import scipy.linalg
 from opt_einsum import contract
 
 import mdopt
@@ -394,7 +395,42 @@ class CanonicalMPS:
         else:
             return self
 
+        # A pure repositioning (no singular values requested, no
+        # renormalisation) uses a single-site column-pivoted QR instead of the
+        # two-site SVD: the factorisation is ~d times smaller and QR is
+        # cheaper than gesdd, while the pivoted form still reveals rank, so
+        # the numerically-dead Schmidt directions that a plain QR would have
+        # kept (inflating every downstream bond) are pruned exactly as the
+        # SVD moves prune them. The state is untouched -- only the gauge
+        # moves -- so dense() before and after agree to machine precision.
+        use_qr = not return_singular_values and not renormalise
+
         for i in range(begin, final):
+            if use_qr:
+                centre = mps.tensors[i]
+                chi_l, phys, chi_r = centre.shape
+                q_f, r_f, piv = scipy.linalg.qr(
+                    centre.reshape(chi_l * phys, chi_r),
+                    mode="economic",
+                    pivoting=True,
+                )
+                diagonal = np.abs(np.diag(r_f))
+                scale = float(diagonal[0]) if diagonal.size else 0.0
+                rank = (
+                    max(1, int(np.sum(diagonal > 1e-14 * scale))) if scale > 0.0 else 1
+                )
+                if rank <= self.chi_max:
+                    r_unpivoted = np.zeros((rank, chi_r), dtype=r_f.dtype)
+                    r_unpivoted[:, piv] = r_f[:rank, :]
+                    mps.tensors[i] = q_f[:, :rank].reshape(chi_l, phys, rank)
+                    mps.tensors[i + 1] = np.tensordot(
+                        r_unpivoted, mps.tensors[i + 1], axes=(1, 0)
+                    )
+                    mps.orth_centre = i + 1
+                    continue
+                # rank above chi_max cannot arise from a pure gauge move on a
+                # chain already within chi_max, but if it ever does, the SVD
+                # branch below truncates it optimally instead.
             two_site_tensor = mps.two_site_tensor_next(i)
             u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,
