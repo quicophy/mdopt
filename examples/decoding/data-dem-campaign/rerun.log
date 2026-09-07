@@ -1,0 +1,20 @@
+[D2_d5r5_p0.005] ladder=(16, 32, 64) escalate=128 resuming at 0/2000
+[D2_d5r5_p0.005] 200/2000 calib: predicted 1.1 observed 2 z=+0.85 escalations=0
+[D2_d5r5_p0.005] 400/2000 calib: predicted 1.4 observed 2 z=+0.55 escalations=0
+[D2_d5r5_p0.005] 600/2000 calib: predicted 1.4 observed 2 z=+0.46 escalations=0
+[D2_d5r5_p0.005] 800/2000 calib: predicted 1.6 observed 2 z=+0.36 escalations=0
+[D2_d5r5_p0.005] 1000/2000 calib: predicted 2.5 observed 4 z=+0.98 escalations=0
+[D2_d5r5_p0.005] 1200/2000 calib: predicted 3.4 observed 5 z=+0.84 escalations=0
+[D2_d5r5_p0.005] 1400/2000 calib: predicted 4.5 observed 7 z=+1.17 escalations=1
+[D2_d5r5_p0.005] 1600/2000 calib: predicted 5.4 observed 8 z=+1.11 escalations=2
+[D2_d5r5_p0.005] 1800/2000 calib: predicted 6.0 observed 9 z=+1.21 escalations=2
+[D2_d5r5_p0.005] 2000/2000 calib: predicted 6.4 observed 9 z=+1.03 escalations=2
+[D2_d5r5_p0.005] map: fails=9 (0.0045)
+[D2_d5r5_p0.005] mwpm: fails=16 (0.0080)
+[D2_d5r5_p0.005] bm: fails=7 (0.0035)
+[D2_d5r5_p0.005] ladder LER(chi=16): 0.0120
+[D2_d5r5_p0.005] ladder LER(chi=32): 0.0055
+[D2_d5r5_p0.005] ladder LER(chi=64): 0.0045
+[D2_d5r5_p0.005] final calibration: predicted 6.4 observed 9 z=+1.03
+[D2_d5r5_p0.005] complete (2000)
+RERUN DONE
