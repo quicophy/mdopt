@@ -1757,3 +1757,62 @@ def test_hardening_did_not_break_the_experiment_scripts_contract():
         silent=True,
     )
     assert high[1] == naive[1]
+
+
+def test_generate_pauli_error_string_validates_rates_and_model_up_front():
+    """Out-of-range rates and unknown models raise before any sampling."""
+    rng = np.random.default_rng(0)
+    for bad_rate in (-0.1, 1.5):
+        with pytest.raises(ValueError, match="error_rate"):
+            generate_pauli_error_string(10, bad_rate, rng=rng)
+    for bad_rate in (-0.1, 1.5):
+        with pytest.raises(ValueError, match="erasure_rate"):
+            generate_pauli_error_string(
+                10, 0.1, error_model="Erasure", rng=rng, erasure_rate=bad_rate
+            )
+    # The model is validated independently of the qubit count: previously an
+    # unknown model on zero qubits returned an empty string.
+    with pytest.raises(ValueError, match="Unknown error model"):
+        generate_pauli_error_string(0, 0.1, error_model="Nonsense", rng=rng)
+
+
+def test_decode_css_rejects_unknown_qubit_order_strategy():
+    """A misspelled strategy must not fall through to the natural ordering."""
+    code = qec.steane_code()
+    for error in ("I" * 7, "X" + "I" * 6):
+        with pytest.raises(ValueError, match="qubit_order_strategy"):
+            decode_css(code, error, silent=True, qubit_order_strategy="Optimized")
+
+
+def test_decode_custom_rejects_unknown_tie_policy_on_trivial_error():
+    """The tie policy is validated before the identity shortcut fires."""
+    code = qec.steane_code()
+    with pytest.raises(ValueError, match="tie_policy"):
+        decode_css(code, "I" * 7, silent=True, tie_policy="unknown")
+
+
+def test_negative_logical_amplitudes_are_clamped_not_folded():
+    """A truncation-induced negative amplitude can never become the MAP class.
+
+    Folding with ``abs`` let an unconverged negative component win; clamping to
+    zero keeps it out of the maximiser set, and a negative identity entry is
+    scored as a failure instead of a spurious success.
+    """
+    from mdopt.mps.explicit import ExplicitMPS
+
+    code = qec.shor_code()
+    error = "X" + "I" * 8  # nontrivial, so the identity shortcut does not fire
+
+    def _decode_with_readout(vector):
+        with (
+            patch.object(CanonicalMPS, "dense", return_value=np.array(vector)),
+            patch.object(ExplicitMPS, "dense", return_value=np.array(vector)),
+        ):
+            return decode_css(code, error, silent=True)
+
+    posterior, success = _decode_with_readout([0.2, -1.0, 0.1, 0.05])
+    assert success == 1.0
+    assert posterior[1] == 0.0
+    posterior, success = _decode_with_readout([-1.0, 0.3, 0.1, 0.0])
+    assert success == 0.0
+    assert posterior[0] == 0.0

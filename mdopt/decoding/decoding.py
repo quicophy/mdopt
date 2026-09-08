@@ -1059,6 +1059,8 @@ def map_distribution_to_pauli(distribution):
 KNOWN_ERROR_MODELS = frozenset(
     {"Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure"}
 )
+TIE_POLICIES = ("optimistic", "fractional", "pessimistic")
+QUBIT_ORDER_STRATEGIES = ("Natural", "Optimised")
 
 
 def generate_pauli_error_string(
@@ -1096,8 +1098,21 @@ def generate_pauli_error_string(
         rng = np.random.default_rng()
     error_string = []
 
-    if error_model == "Erasure" and erasure_rate is None:
-        raise ValueError("Erasure rate must be specified for the erasure channel.")
+    # Validate before sampling, and independently of num_qubits: a negative
+    # rate would silently produce identities for several models, a rate above
+    # one would always produce errors, and an unknown model on zero qubits
+    # would return an empty string instead of raising.
+    if error_model not in KNOWN_ERROR_MODELS:
+        raise ValueError(f"Unknown error model: {error_model}")
+    if not 0 <= error_rate <= 1:
+        raise ValueError(f"error_rate should be a probability, given {error_rate}.")
+    if error_model == "Erasure":
+        if erasure_rate is None:
+            raise ValueError("Erasure rate must be specified for the erasure channel.")
+        if not 0 <= erasure_rate <= 1:
+            raise ValueError(
+                f"erasure_rate should be a probability, given {erasure_rate}."
+            )
 
     for _ in range(num_qubits):
         if error_model == "Depolarising":
@@ -1228,8 +1243,7 @@ def _score_tie(is_map_identity: bool, degeneracy: int, tie_policy: str) -> float
     if tie_policy == "pessimistic":
         return 1.0 if degeneracy == 1 else 0.0
     raise ValueError(
-        f"Unknown tie_policy {tie_policy!r}; expected 'optimistic', "
-        "'fractional' or 'pessimistic'."
+        f"Unknown tie_policy {tie_policy!r}; expected one of {TIE_POLICIES}."
     )
 
 
@@ -1652,6 +1666,14 @@ def decode_css(
             f"The error acts on {len(error)} qubits, expected {num_qubits}."
         )
 
+    # A misspelled strategy must not fall through to the natural ordering:
+    # "Optimized" would silently disable the requested optimisation.
+    if qubit_order_strategy not in QUBIT_ORDER_STRATEGIES:
+        raise ValueError(
+            f"Unknown qubit_order_strategy {qubit_order_strategy!r}; expected "
+            f"one of {QUBIT_ORDER_STRATEGIES}."
+        )
+
     stabilisers_x, stabilisers_z = css_code_stabilisers(code)
     stabilizers = stabilisers_x + stabilisers_z
     x_logicals = _rows_as_pauli(code.x_logicals_binary(), "X")
@@ -1840,6 +1862,12 @@ def decode_custom(
             f"{sorted(KNOWN_ERROR_MODELS)} ('Bitflip' selects the bit-flip "
             "bias, every other model the depolarising bias)."
         )
+    # The tie policy is validated here too, so that the public API rejects a
+    # bad selector regardless of whether the sampled error is trivial.
+    if tie_policy not in TIE_POLICIES:
+        raise ValueError(
+            f"Unknown tie_policy {tie_policy!r}; expected one of {TIE_POLICIES}."
+        )
 
     if _identity_fast_path_fires(error, bias_prob):
         if not silent:
@@ -1994,18 +2022,33 @@ def decode_custom(
         LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
     if num_logical_sites <= dense_readout_max_sites:
-        logical_signed = logical_mps.dense(
-            flatten=True, renormalise=renormalise, norm=2
+        logical_signed = np.real(
+            np.asarray(logical_mps.dense(flatten=True, renormalise=renormalise, norm=2))
         )
-        logical_dense = abs(logical_signed)
 
         # An exact run cannot produce a negative amplitude: every tensor in the
         # pipeline is non-negative and marginalisation traces against all-ones.
         # A negative one is therefore a truncation artefact and a direct signal
         # that chi_max is too small for this instance -- the cheapest
         # convergence diagnostic available, since the vector is already here.
-        most_negative = float(np.min(np.real(np.asarray(logical_signed))))
+        # Negative entries are clamped to zero, never folded with abs: an
+        # unconverged negative component must not be able to become the
+        # reported MAP class, and a negative identity entry scores as a
+        # failure rather than as a spurious success.
+        most_negative = float(np.min(logical_signed))
+        logical_dense = np.maximum(logical_signed, 0.0)
         peak = float(np.max(logical_dense))
+
+        # Reported before the collapse guard: a vector driven entirely negative
+        # is both unconverged and, once clamped, collapsed.
+        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
+            LOGGER.warning(
+                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+                "is not converged for this instance.",
+                most_negative,
+                100.0 * abs(most_negative) / max(peak, 1e-300),
+                chi_max,
+            )
 
         # A collapsed posterior carries no information. Truncation is what
         # destroys it: at low chi_max a whole site tensor can be driven to zero.
@@ -2022,14 +2065,6 @@ def decode_custom(
                     chi_max,
                 )
             return logical_dense, 0.0
-        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
-            LOGGER.warning(
-                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
-                "is not converged for this instance.",
-                most_negative,
-                100.0 * abs(most_negative) / peak,
-                chi_max,
-            )
 
         # Normalise to the peak so that tie tolerances are scale-independent.
         # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
