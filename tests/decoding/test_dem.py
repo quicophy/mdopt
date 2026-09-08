@@ -459,3 +459,33 @@ def test_malformed_representatives_are_rejected():
     for bad in ([1, 0], [1, 0, 0, 0], np.zeros((1, 3))):
         with pytest.raises(ValueError, match="one bit per mechanism"):
             decode_dem(problem, np.array([1, 0]), representative=bad)
+
+
+def test_unsorted_rows_decode_like_sorted_rows():
+    """The XOR boundary tensors are directional; row order must not matter.
+
+    A hand-built DemProblem may list a detector's or observable's mechanisms
+    in any order. Both orders must give the exact enumeration masses.
+    """
+    sorted_problem = DemProblem(
+        probs=[0.1, 0.2, 0.15, 0.05],
+        detector_rows=[[0, 1, 2], [1, 3]],
+        observable_rows=[[0, 2, 3]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    shuffled_problem = DemProblem(
+        probs=sorted_problem.probs,
+        detector_rows=[[2, 0, 1], [3, 1]],
+        observable_rows=[[3, 0, 2]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    for syndrome in ([0, 0], [1, 0], [0, 1], [1, 1]):
+        exact = _exact_class_masses(sorted_problem, np.array(syndrome))
+        for problem in (sorted_problem, shuffled_problem):
+            masses, flips = decode_dem(problem, np.array(syndrome))
+            assert np.allclose(
+                masses / masses.sum(), exact / exact.sum(), atol=1e-9
+            ), syndrome
+            assert flips[0] == int(np.argmax(exact)), syndrome

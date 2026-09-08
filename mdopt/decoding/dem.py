@@ -177,12 +177,18 @@ def solve_representative(problem: DemProblem, syndrome: np.ndarray) -> np.ndarra
 
 
 def _constraint_sites(mechanisms: List[int], offset: int) -> List[List[int]]:
-    """[XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] site lists for one detector."""
-    sites = [m + offset for m in mechanisms]
+    """[XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] site lists for one detector.
+
+    The boundary tensors are directional, so the sites are sorted here
+    rather than trusting the caller: dem_to_problem emits sorted rows, but a
+    hand-built DemProblem need not.
+    """
+    sites = sorted(m + offset for m in mechanisms)
+    bulk = set(sites[1:-1])
     return [
         [sites[0]],
         sites[1:-1],
-        [s for s in range(sites[0] + 1, sites[-1]) if s not in sites[1:-1]],
+        [s for s in range(sites[0] + 1, sites[-1]) if s not in bulk],
         [sites[-1]],
     ]
 
@@ -191,11 +197,12 @@ def _logical_sites(
     mechanisms: List[int], logical_site: int, offset: int
 ) -> List[List[int]]:
     """[COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT] for one observable readout."""
-    sites = [m + offset for m in mechanisms]
+    sites = sorted(m + offset for m in mechanisms)
+    bulk = set(sites[:-1])
     return [
         [logical_site],
         sites[:-1],
-        [s for s in range(logical_site + 1, sites[-1]) if s not in sites[:-1]],
+        [s for s in range(logical_site + 1, sites[-1]) if s not in bulk],
         [sites[-1]],
     ]
 
