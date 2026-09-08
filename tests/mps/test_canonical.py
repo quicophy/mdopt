@@ -930,3 +930,44 @@ def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
     )[0]
     assert via_qr.tensors[0].shape[2] == 0
     assert via_qr.tensors[0].shape[2] == via_svd.tensors[0].shape[2]
+
+
+def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
+    """The QR+SVD(R) move must reproduce the two-site SVD path exactly.
+
+    Real and complex random states, moves in both directions, with a
+    chi_max below the full Schmidt rank so the finite truncation is
+    exercised too: dense() and every bond dimension must agree between the
+    fast path (no singular values requested) and the SVD path
+    (return_singular_values=True).
+    """
+    from mdopt.mps.utils import mps_from_dense
+
+    for seed, complex_case in ((11, False), (12, True), (13, False), (14, True)):
+        rng = np.random.default_rng(seed)
+        vec = rng.standard_normal(2**8)
+        if complex_case:
+            vec = vec + 1j * rng.standard_normal(2**8)
+        vec = vec / np.linalg.norm(vec)
+        for chi_max in (int(1e4), 3):
+            base = mps_from_dense(vec, form="Right-canonical", chi_max=chi_max)
+            for targets in ((7, 0), (0, 7), (4, 1, 6)):
+                fast, slow = base.copy(), base.copy()
+                for target in targets:
+                    fast = fast.move_orth_centre(target, renormalise=False)
+                    # A no-op move returns the MPS itself rather than a tuple.
+                    moved = slow.move_orth_centre(
+                        target, renormalise=False, return_singular_values=True
+                    )
+                    slow = moved[0] if isinstance(moved, tuple) else moved
+                assert list(fast.bond_dimensions) == list(slow.bond_dimensions), (
+                    seed,
+                    chi_max,
+                    targets,
+                )
+                assert np.allclose(
+                    fast.dense(flatten=True),
+                    slow.dense(flatten=True),
+                    rtol=0.0,
+                    atol=1e-11,
+                ), (seed, chi_max, targets)
