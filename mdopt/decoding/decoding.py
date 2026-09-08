@@ -1079,9 +1079,9 @@ def generate_pauli_error_string(
         Physical error rate for generating Pauli errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarising", "Bitflip", "Phaseflip", "Amplitudedamping", "Erasure".
-    seed : Optional[int]
-        Seed for the random number generator.
+        Options are "Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure".
+    rng : Optional[np.random.Generator]
+        Random generator to draw from; a fresh default generator if None.
     erasure_rate : Optional[float]
         Probability of erasure for the erasure channel. Only used if `error_model` is "Erasure".
 

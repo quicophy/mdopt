@@ -120,6 +120,9 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
             if not flips_by_chi:
                 rec["error"] = "every rung raised; scored as a failure"
                 rec["map"], rec["margin"], rec["chi"] = 1 - truth, 0.0, ladder[-1]
+                # Keep the online calibration consistent: margin 0 predicts a
+                # failure with probability 1, and one is observed.
+                pred_fail += 1.0
                 rec["flips"], rec["margins"] = {}, {}
                 rec["t"] = round(time.perf_counter() - t0, 3)
                 rec["mwpm"] = int(matcher.decode(syn)[0]) % 2
