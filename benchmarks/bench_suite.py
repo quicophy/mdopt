@@ -166,10 +166,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", action="store_true")
     parser.add_argument("--workload", choices=sorted(WORKLOADS), default=None)
-    parser.add_argument(
+    # Mutually exclusive: writing the baseline first and then checking against
+    # it would compare every fingerprint with itself and always pass.
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--check", action="store_true", help="compare against baseline.json"
     )
-    parser.add_argument("--write-baseline", action="store_true")
+    mode.add_argument(
+        "--write-baseline",
+        action="store_true",
+        help="record the fingerprints of the workloads run by this invocation",
+    )
     args = parser.parse_args()
     RESULTS.mkdir(exist_ok=True)
 
@@ -202,9 +209,13 @@ def main():
         print(f"{name:>20}: {wall:7.2f} s  fingerprint={fingerprint}", flush=True)
     (RESULTS / "summary.json").write_text(json.dumps(summary, indent=2))
     if args.write_baseline:
-        BASELINE.write_text(
-            json.dumps({k: v["fingerprint"] for k, v in summary.items()}, indent=2)
-        )
+        # Update only the workloads this invocation ran: a targeted run must
+        # neither shrink the committed baseline to the selected workload nor
+        # promote stale cached fingerprints of the others.
+        baseline = json.loads(BASELINE.read_text()) if BASELINE.exists() else {}
+        for name in names:
+            baseline[name] = summary[name]["fingerprint"]
+        BASELINE.write_text(json.dumps(baseline, indent=2))
         print(f"baseline written: {BASELINE}")
     if args.check:
         baseline = json.loads(BASELINE.read_text())
