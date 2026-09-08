@@ -971,3 +971,29 @@ def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
                     rtol=0.0,
                     atol=1e-11,
                 ), (seed, chi_max, targets)
+
+
+def test_move_orth_centre_matches_svd_path_on_non_canonical_chains():
+    """Behind a biased pair the neighbours are not isometries, so a move
+    that must truncate at chi_max has to take the two-site SVD; the fast
+    path may only handle moves that truncate nothing."""
+    from mdopt.mps.utils import mps_from_dense
+    from mdopt.examples.decoding.decoding import apply_depolarising_bias
+
+    rng = np.random.default_rng(5)
+    vec = rng.standard_normal(2**8)
+    vec = vec / np.linalg.norm(vec)
+    for chi_max in (2, 4, int(1e4)):
+        base = mps_from_dense(vec, form="Right-canonical", chi_max=chi_max)
+        biased = apply_depolarising_bias(
+            base, sites_to_bias=[0, 2, 4, 6], prob_bias_list=0.3
+        )
+        fast = biased.copy().move_orth_centre(0, renormalise=False)
+        moved = biased.copy().move_orth_centre(
+            0, renormalise=False, return_singular_values=True
+        )
+        slow = moved[0] if isinstance(moved, tuple) else moved
+        assert list(fast.bond_dimensions) == list(slow.bond_dimensions), chi_max
+        assert np.allclose(
+            fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
+        ), chi_max

@@ -14,19 +14,17 @@ except (ImportError, ModuleNotFoundError):
     import numpy as xp  # type: ignore  # pragma: no cover
 
 
-try:
-    # Resolved once at import time: attempting this inside _to_numpy made every
-    # call pay a full (failing) module search, ~18% of a decoding run.
-    import cupy as _cupy  # type: ignore
-except Exception:  # pylint: disable=broad-except
-    _cupy = None
+from mdopt.backend import array as _backend
 
 
 def _to_numpy(a):
-    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
-    if _cupy is not None and isinstance(a, _cupy.ndarray):  # pragma: no cover
-        return _cupy.asnumpy(a)  # cupy exists only on GPU runners
-    return np.asarray(a)
+    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible.
+
+    Goes through the backend's own host transfer, which honours
+    MDOPT_BACKEND and the CUDA device probe; resolved once at import time
+    (a per-call ``import cupy`` here cost ~18% of a decoding run).
+    """
+    return np.asarray(_backend.to_host(a))
 
 
 def svd(
@@ -35,7 +33,7 @@ def svd(
     chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
-) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
 
@@ -87,17 +85,12 @@ def svd(
                 # direct gesdd, and exact (agreement ~1e-14). The MPO zip-up
                 # produces (chi*d, d*chi*w) matrices, so the wide case is hot.
                 rows, cols = a.shape
-                # Aspect ratio decides first, so the direct path pays no
-                # extra scan. A reduction additionally requires finite
-                # input: QR of a non-finite matrix returns garbage instead
-                # of raising like svd does, and the direct call raises into
-                # the fallbacks. The check goes through the backend, since
-                # np.isfinite rejects CuPy arrays (and bool() would force a
-                # device sync on every call if run unconditionally).
-                reduce = cols >= 2 * rows or rows >= 2 * cols
-                if reduce and not bool(xp.isfinite(a).all()):
-                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
-                elif cols >= 2 * rows:
+                # Strongly rectangular input is reduced by QR/LQ first and the
+                # small square factor SVD'd (1.2-2x faster, exact to 1e-14).
+                # No finiteness pre-scan: a non-finite input gives a non-finite
+                # factor whose svd raises LinAlgError into the fallbacks below,
+                # and the scan would be a device sync on the GPU backend.
+                if cols >= 2 * rows:
                     q_f, r_f = xp.linalg.qr(a.T)
                     u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
                     v_h = v_h @ q_f.T

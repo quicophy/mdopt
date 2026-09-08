@@ -46,6 +46,8 @@ from typing import Optional, Literal, Iterable, Tuple, Union, List, cast
 import numpy as np
 from opt_einsum import contract
 
+from mdopt.backend import array as _backend
+
 import mdopt
 from mdopt.utils.utils import svd, kron_tensors, split_two_site_tensor
 
@@ -412,18 +414,31 @@ class CanonicalMPS:
             # A collapsed bond (dimension 0) has nothing to factor; the SVD
             # branch carries that degenerate shape through unchanged.
             if use_qr and chi_l * phys > 0 and chi_r > 0:
-                q_f, r_f = np.linalg.qr(centre.reshape(chi_l * phys, chi_r))
-                u_r, s_list, v_h, _ = svd(r_f, cut=1e-12, chi_max=self.chi_max)
-                s_bond = np.asarray(
-                    s_list
-                )  # svd's annotation says list; it is an array
-                keep = s_bond.shape[0]
-                mps.tensors[i] = (q_f @ u_r).reshape(chi_l, phys, keep)
-                mps.tensors[i + 1] = np.tensordot(
-                    s_bond[:, None] * v_h, mps.tensors[i + 1], axes=(1, 0)
+                # Factor the centre alone (utils.svd does the QR/LQ-reduced
+                # SVD with the finiteness guard, backend routing and
+                # fallbacks). This is an exact gauge move -- whatever the
+                # neighbours are -- as long as nothing is truncated at
+                # chi_max: only sub-cut directions go, as on the SVD path.
+                # When the revealed rank exceeds chi_max the centre's
+                # spectrum is the bond's Schmidt spectrum only if the right
+                # neighbour is an isometry, which the bias appliers do not
+                # guarantee, so that case takes the two-site SVD below, whose
+                # truncation accounts for the neighbour. On a canonical chain
+                # the rank never exceeds the existing bond, so the fast path
+                # always applies there.
+                u_l, s_bond, v_h, _ = svd(
+                    centre.reshape(chi_l * phys, chi_r), cut=1e-12, chi_max=np.inf
                 )
-                mps.orth_centre = i + 1
-                continue
+                keep = len(s_bond)
+                if keep <= self.chi_max:
+                    mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
+                    mps.tensors[i + 1] = np.tensordot(
+                        np.asarray(s_bond)[:, None] * v_h,
+                        _backend.to_host(mps.tensors[i + 1]),
+                        axes=(1, 0),
+                    )
+                    mps.orth_centre = i + 1
+                    continue
             two_site_tensor = mps.two_site_tensor_next(i)
             u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,

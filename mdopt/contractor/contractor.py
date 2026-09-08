@@ -2,35 +2,37 @@
 This module contains the MPS-MPO contractor functions.
 """
 
-from functools import lru_cache
 from typing import Union, List, Tuple, cast
 
 import numpy as np
-from opt_einsum import contract, contract_expression
+from opt_einsum import contract_expression
 
 from mdopt.backend import array as A
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
 
-
-@lru_cache(maxsize=512)
-def _cached_expression(subscripts, path, *shapes):
-    """A reusable opt_einsum expression for one (subscripts, shapes) pair.
-
-    The sweep in :func:`mps_mpo_contract` evaluates the same two einsums
-    thousands of times per decode; ``contract`` re-parses the subscripts and
-    rebuilds path metadata on every call even when ``optimize`` is explicit
-    (~5% of a decoding run). Expressions are cached per shape tuple, and MPS
-    bond dimensions cycle through a small set, so the cache stays tiny.
-    """
-    return contract_expression(subscripts, *shapes, optimize=list(path))
+_EXPRESSIONS: dict = {}
 
 
 def _contract_cached(subscripts, path, backend, *tensors):
-    expression = _cached_expression(
-        subscripts, path, *(tensor.shape for tensor in tensors)
-    )
+    """Evaluate a fixed einsum through a reusable opt_einsum expression.
+
+    The sweep in :func:`mps_mpo_contract` evaluates the same few einsums
+    thousands of times per decode; ``contract`` re-parses the subscripts and
+    rebuilds path metadata on every call even when ``optimize`` is explicit.
+    An expression with an explicit path is shape-independent, so it is
+    cached per (subscripts, path) only -- keying on operand shapes made
+    truncation's data-dependent bond dimensions miss 7-14% of calls on
+    large codes -- and built from whatever shapes the first call carries.
+    """
+    key = (subscripts, path)
+    expression = _EXPRESSIONS.get(key)
+    if expression is None:
+        expression = contract_expression(
+            subscripts, *(tensor.shape for tensor in tensors), optimize=list(path)
+        )
+        _EXPRESSIONS[key] = expression
     return expression(*tensors, backend=backend)
 
 

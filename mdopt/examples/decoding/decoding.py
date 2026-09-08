@@ -2028,7 +2028,6 @@ def decode_custom(
         return _score_dense_posterior(
             logical_signed, chi_max=chi_max, tie_policy=tie_policy, silent=silent
         )
-        # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
     if optimiser == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
