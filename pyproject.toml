@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "scipy>=1.9.2,<2.0.0",
+    "scipy>=1.17.1,<2.0.0",
     "opt-einsum>=3.3.0,<4.0.0",
     "more-itertools>=8.12,<11.0",
     "threadpoolctl>=3.1.0,<4.0.0",
