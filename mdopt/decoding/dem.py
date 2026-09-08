@@ -347,7 +347,9 @@ def decode_dem(
         sites_to_marginalise=list(range(num_obs, num_obs + num_mech)),
         renormalise=renormalise,
     ).reverse()
-    dense = np.real(np.asarray(logical_mps.dense(flatten=True, renormalise=False)))
+    dense = np.atleast_1d(
+        np.real(np.asarray(logical_mps.dense(flatten=True, renormalise=False)))
+    )
 
     # Every tensor in the exact contraction is non-negative, so a materially
     # negative class mass can only be a truncation artefact; taking abs()
