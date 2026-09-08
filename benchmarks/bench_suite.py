@@ -173,7 +173,11 @@ def main():
     RESULTS.mkdir(exist_ok=True)
 
     names = [args.workload] if args.workload else sorted(WORKLOADS)
+    # Merge into the previous summary so a --workload run does not discard the
+    # other entries; profiled runs are marked, since cProfile inflates wall time.
     summary = {}
+    if (RESULTS / "summary.json").exists():
+        summary = json.loads((RESULTS / "summary.json").read_text())
     for name in names:
         func = WORKLOADS[name]
         started = time.perf_counter()
@@ -189,7 +193,11 @@ def main():
         else:
             fingerprint = func()
             wall = time.perf_counter() - started
-        summary[name] = {"wall_s": round(wall, 3), "fingerprint": fingerprint}
+        summary[name] = {
+            "wall_s": round(wall, 3),
+            "fingerprint": fingerprint,
+            "profiled": bool(args.profile),
+        }
         print(f"{name:>20}: {wall:7.2f} s  fingerprint={fingerprint}", flush=True)
     (RESULTS / "summary.json").write_text(json.dumps(summary, indent=2))
     if args.write_baseline:

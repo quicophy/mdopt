@@ -407,7 +407,10 @@ class CanonicalMPS:
             chi_l, phys, chi_r = centre.shape
             # A collapsed bond (dimension 0) has nothing to factor; the SVD
             # branch carries that degenerate shape through unchanged.
-            if factor_centre_only and chi_l * phys > 0 and chi_r > 0:
+            # chi_r <= chi_max: with an isometric neighbour the revealed rank
+            # is at most chi_r, so this integer check rules out any move that
+            # would have to truncate before the factorisation is attempted.
+            if factor_centre_only and 0 < chi_r <= self.chi_max and chi_l * phys > 0:
                 # The single-site spectrum is the bond's Schmidt spectrum
                 # only if the right neighbour is an isometry. The bias
                 # appliers break that on every site they touch, so it is
