@@ -890,11 +890,11 @@ def test_marginal_does_not_produce_nans_when_the_centre_underflows():
 
 def test_move_orth_centre_carries_a_collapsed_bond_through():
     """A bond of dimension 0 (a truncation that emptied the spectrum) must
-    move through the pivoted-QR path without raising.
+    move through the centre-only path without raising.
 
-    Three example notebooks hit this in CI: the QR branch forced rank 1 on
-    a site with no columns. Such a bond has no pivot, so it must take the
-    SVD branch, which carries the degenerate shape through unchanged.
+    Three example notebooks hit this in CI: a zero-width centre has nothing
+    to factor, so such a bond must take the two-site SVD branch, which
+    carries the degenerate shape through unchanged.
     """
     from mdopt.mps.canonical import CanonicalMPS
 

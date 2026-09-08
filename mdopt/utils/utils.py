@@ -6,25 +6,19 @@ import numpy as np
 import scipy
 from opt_einsum import contract
 
-# --- Backend shim: prefer your GPU/array backend if available, else NumPy ---
-try:
-    # expected to export a NumPy-like API (e.g., NumPy or CuPy)
-    from mdopt.backend import array as xp  # type: ignore
-except (ImportError, ModuleNotFoundError):
-    import numpy as xp  # type: ignore  # pragma: no cover
-
-
-from mdopt.backend import array as _backend
+# The backend module exposes a NumPy-like API (NumPy, or CuPy when
+# MDOPT_BACKEND=cupy and a CUDA device is usable) plus host/device transfer.
+from mdopt.backend import array as xp
 
 
 def _to_numpy(a):
-    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible.
+    """Bring a backend array to the host as a NumPy array (no copy on NumPy).
 
-    Goes through the backend's own host transfer, which honours
-    MDOPT_BACKEND and the CUDA device probe; resolved once at import time
-    (a per-call ``import cupy`` here cost ~18% of a decoding run).
+    Resolved through the backend's own transfer, which honours MDOPT_BACKEND
+    and the CUDA device probe; a per-call ``import cupy`` here once cost
+    ~18% of a decoding run.
     """
-    return np.asarray(_backend.to_host(a))
+    return np.asarray(xp.to_host(a))
 
 
 def svd(
@@ -80,13 +74,11 @@ def svd(
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
             if attempt == "xp":
-                # For strongly rectangular inputs, a QR/LQ reduction first and
-                # an SVD of the small square factor is ~1.2-2x faster than a
-                # direct gesdd, and exact (agreement ~1e-14). The MPO zip-up
-                # produces (chi*d, d*chi*w) matrices, so the wide case is hot.
                 rows, cols = a.shape
                 # Strongly rectangular input is reduced by QR/LQ first and the
-                # small square factor SVD'd (1.2-2x faster, exact to 1e-14).
+                # small square factor SVD'd (1.2-2x faster, exact to 1e-14);
+                # the MPO zip-up produces (chi*d, d*chi*w) matrices, so the
+                # wide case is hot.
                 # No finiteness pre-scan: a non-finite input gives a non-finite
                 # factor whose svd raises LinAlgError into the fallbacks below,
                 # and the scan would be a device sync on the GPU backend.

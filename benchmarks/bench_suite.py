@@ -24,6 +24,7 @@ import qecstruct as qec
 # the first-run wall time and profile depend on invocation order (a workload
 # run alone paid cold-import cost that a full sorted suite had already paid).
 from mdopt.contractor.contractor import mps_mpo_contract
+from mdopt.examples.ising.ising import IsingMPO
 from mdopt.examples.decoding.decoding import (
     apply_bitflip_bias,
     apply_constraints,
@@ -127,23 +128,7 @@ def wl_classical_ldpc():
 def wl_dmrg_ground_state():
     """Plain DMRG on a transverse-field Ising chain (optimiser hot path)."""
     num_sites = 24
-    identity = np.eye(2)
-    pauli_x = np.array([[0.0, 1.0], [1.0, 0.0]])
-    pauli_z = np.array([[1.0, 0.0], [0.0, -1.0]])
-    mpo = []
-    for site in range(num_sites):
-        tensor = np.zeros((3, 3, 2, 2))
-        tensor[0, 0] = identity
-        tensor[2, 2] = identity
-        tensor[0, 1] = pauli_z
-        tensor[1, 2] = pauli_z
-        tensor[0, 2] = pauli_x
-        if site == 0:
-            mpo.append(tensor[0:1, :, :, :])
-        elif site == num_sites - 1:
-            mpo.append(tensor[:, 2:3, :, :])
-        else:
-            mpo.append(tensor)
+    mpo = IsingMPO(num_sites=num_sites, h_magnetic=1.0).hamiltonian_mpo()
     mps = create_simple_product_state(num_sites, which="+")
     engine = DMRG(mps, mpo, chi_max=48, cut=1e-12, mode="SA", silent=True)
     engine.run(2)
