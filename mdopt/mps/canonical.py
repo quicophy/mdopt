@@ -426,8 +426,13 @@ class CanonicalMPS:
                 # dropped here have singular values below the cut up to a
                 # sqrt(n) factor -- never a direction the SVD would keep as
                 # significant -- while exact zeros (product states) still go.
+                # Rank 0 is allowed: a spectrum entirely below the cut
+                # collapses the bond exactly as it does on the SVD path
+                # (the zero-width factors propagate; later sites then take
+                # the SVD branch above). Forcing rank >= 1 would keep a
+                # sub-cut direction the SVD drops and change the state.
                 diagonal = np.abs(np.diag(r_f))
-                rank = max(1, int(np.sum(diagonal > 1e-12)))
+                rank = int(np.sum(diagonal > 1e-12))
                 if rank <= self.chi_max:
                     r_unpivoted = np.zeros((rank, chi_r), dtype=r_f.dtype)
                     r_unpivoted[:, piv] = r_f[:rank, :]

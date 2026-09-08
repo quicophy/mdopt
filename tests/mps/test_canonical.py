@@ -908,3 +908,25 @@ def test_move_orth_centre_carries_a_collapsed_bond_through():
     assert [t.shape for t in moved.tensors][0][2] == 0
     back = moved.move_orth_centre(0, renormalise=False)
     assert len(back) == 3
+
+
+def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
+    """A centre whose whole spectrum sits below the 1e-12 cut must collapse
+    to a zero-width bond on the QR path exactly as on the SVD path, rather
+    than propagating a sub-cut direction."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    def tiny_centre_mps():
+        tensors = [
+            np.array([[[1.0, 0.0], [0.0, 1.0]]]).reshape(1, 2, 2) * 5e-13,
+            np.eye(2).reshape(2, 2, 1),
+            np.array([1.0, 0.0]).reshape(1, 2, 1),
+        ]
+        return CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+
+    via_qr = tiny_centre_mps().move_orth_centre(2, renormalise=False)
+    via_svd = tiny_centre_mps().move_orth_centre(
+        2, renormalise=False, return_singular_values=True
+    )[0]
+    assert via_qr.tensors[0].shape[2] == 0
+    assert via_qr.tensors[0].shape[2] == via_svd.tensors[0].shape[2]
