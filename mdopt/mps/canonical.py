@@ -44,7 +44,6 @@ from functools import reduce
 from copy import deepcopy
 from typing import Optional, Literal, Iterable, Tuple, Union, List, cast
 import numpy as np
-import scipy.linalg
 from opt_einsum import contract
 
 import mdopt
@@ -396,55 +395,35 @@ class CanonicalMPS:
             return self
 
         # A pure repositioning (no singular values requested, no
-        # renormalisation) uses a single-site column-pivoted QR instead of the
-        # two-site SVD: the factorisation is ~d times smaller and QR is
-        # cheaper than gesdd, while the pivoted form still reveals rank, so
-        # the numerically-dead Schmidt directions that a plain QR would have
-        # kept (inflating every downstream bond) are pruned exactly as the
-        # SVD moves prune them. The state is untouched -- only the gauge
-        # moves -- so dense() before and after agree to machine precision.
+        # renormalisation) factors the centre alone instead of the two-site
+        # tensor: an economic QR of the (chi_l*d, chi_r) centre followed by an
+        # SVD of its small R factor. Because the right neighbour is an
+        # isometry, R's singular values ARE the bond's Schmidt spectrum -- the
+        # very values the two-site SVD would compute -- so the truncation is
+        # the SVD path's own (same cut, same chi_max, rank 0 included), while
+        # the work drops from an SVD of a (chi*d x d*chi) matrix to a QR of
+        # (chi*d x chi) plus an SVD of (chi x chi). The state is untouched:
+        # dense() before and after agrees to machine precision.
         use_qr = not return_singular_values and not renormalise
 
         for i in range(begin, final):
             centre = mps.tensors[i]
             chi_l, phys, chi_r = centre.shape
-            # A collapsed bond (dimension 0, produced when a truncation cut
-            # empties the spectrum) has no pivot to reveal rank from; the
-            # SVD branch carries that degenerate shape through unchanged.
+            # A collapsed bond (dimension 0) has nothing to factor; the SVD
+            # branch carries that degenerate shape through unchanged.
             if use_qr and chi_l * phys > 0 and chi_r > 0:
-                q_f, r_f, piv = scipy.linalg.qr(
-                    centre.reshape(chi_l * phys, chi_r),
-                    mode="economic",
-                    pivoting=True,
+                q_f, r_f = np.linalg.qr(centre.reshape(chi_l * phys, chi_r))
+                u_r, s_list, v_h, _ = svd(r_f, cut=1e-12, chi_max=self.chi_max)
+                s_bond = np.asarray(
+                    s_list
+                )  # svd's annotation says list; it is an array
+                keep = s_bond.shape[0]
+                mps.tensors[i] = (q_f @ u_r).reshape(chi_l, phys, keep)
+                mps.tensors[i + 1] = np.tensordot(
+                    s_bond[:, None] * v_h, mps.tensors[i + 1], axes=(1, 0)
                 )
-                # Prune on the same ABSOLUTE cut the SVD path applies to its
-                # singular values (split_two_site_tensor's default), not on
-                # a scale-relative one: the contractor moves with
-                # renormalise=False, so norms drift far from 1 and the two
-                # criteria would otherwise diverge. Pivoting guarantees each
-                # |R_ii| bounds every trailing column norm, so directions
-                # dropped here have singular values below the cut up to a
-                # sqrt(n) factor -- never a direction the SVD would keep as
-                # significant -- while exact zeros (product states) still go.
-                # Rank 0 is allowed: a spectrum entirely below the cut
-                # collapses the bond exactly as it does on the SVD path
-                # (the zero-width factors propagate; later sites then take
-                # the SVD branch above). Forcing rank >= 1 would keep a
-                # sub-cut direction the SVD drops and change the state.
-                diagonal = np.abs(np.diag(r_f))
-                rank = int(np.sum(diagonal > 1e-12))
-                if rank <= self.chi_max:
-                    r_unpivoted = np.zeros((rank, chi_r), dtype=r_f.dtype)
-                    r_unpivoted[:, piv] = r_f[:rank, :]
-                    mps.tensors[i] = q_f[:, :rank].reshape(chi_l, phys, rank)
-                    mps.tensors[i + 1] = np.tensordot(
-                        r_unpivoted, mps.tensors[i + 1], axes=(1, 0)
-                    )
-                    mps.orth_centre = i + 1
-                    continue
-                # rank above chi_max cannot arise from a pure gauge move on a
-                # chain already within chi_max, but if it ever does, the SVD
-                # branch below truncates it optimally instead.
+                mps.orth_centre = i + 1
+                continue
             two_site_tensor = mps.two_site_tensor_next(i)
             u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,
