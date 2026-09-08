@@ -1701,3 +1701,59 @@ def test_channel_arguments_are_validated_before_the_shortcut():
         decode_custom(stabs, log_x, log_z, "III", bias_type="Depol", silent=True)
     with pytest.raises(ValueError, match="bias_type"):
         decode_custom(stabs, log_x, log_z, "XII", bias_type="Depol", silent=True)
+
+
+def test_hardening_did_not_break_the_experiment_scripts_contract():
+    """Regressions found by review of the hardening commits.
+
+    - The scripts forward --error_model verbatim as bias_type, so every
+      model name the generator knows must be accepted (non-Bitflip models
+      use the depolarising bias, as always); typos still raise.
+    - The bias appliers accept any iterable of sites, not only lists.
+    - decode_css must apply the optimised ordering whenever the identity
+      fast path will NOT fire (bias >= 0.5), and stay silent about it when
+      it will.
+    """
+    from mdopt.decoding.decoding import apply_depolarising_bias
+    from mdopt.mps.utils import create_simple_product_state
+
+    stabs, log_x, log_z = ["ZZI", "IZZ"], ["XXX"], ["ZII"]
+    for model in ("Phaseflip", "Amplitude Damping", "Erasure", "Depolarising"):
+        _, verdict = decode_custom(
+            stabs, log_x, log_z, "XII", bias_type=model, bias_prob=0.1, silent=True
+        )
+        assert verdict in (0.0, 1.0), model
+    with pytest.raises(ValueError, match="bias_type"):
+        decode_custom(stabs, log_x, log_z, "XII", bias_type="Depol", silent=True)
+
+    mps = create_simple_product_state(6, which="0", form="Right-canonical")
+    for sites in ((0, 2), range(0, 4, 2), np.array([0, 2])):
+        assert (
+            len(
+                apply_depolarising_bias(
+                    mps.copy(), sites_to_bias=sites, prob_bias_list=0.1
+                )
+            )
+            == 6
+        )
+
+    code = qec.shor_code()
+    high = decode_css(
+        code,
+        "I" * 9,
+        bias_type="Bitflip",
+        bias_prob=0.9,
+        qubit_order_strategy="Optimised",
+        chi_max=128,
+        silent=True,
+    )
+    naive = decode_css(
+        code,
+        "I" * 9,
+        bias_type="Bitflip",
+        bias_prob=0.9,
+        qubit_order_strategy="Natural",
+        chi_max=128,
+        silent=True,
+    )
+    assert high[1] == naive[1]

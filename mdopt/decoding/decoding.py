@@ -24,13 +24,6 @@ from qecstruct import (
     Rng,
 )
 
-import sympy as sp
-from sympy.abc import x, y
-
-try:
-    from qldpc.codes import BBCode
-except ModuleNotFoundError:  # pragma: no cover - qldpc is a hard test dep
-    BBCode = None  # type: ignore[assignment,misc]
 
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
@@ -169,7 +162,7 @@ def apply_bitflip_bias(
         The resulting MPS.
     """
 
-    if sites_to_bias == "All":
+    if isinstance(sites_to_bias, str) and sites_to_bias == "All":
         sites_to_bias = list(range(mps.num_sites))
 
     if not isinstance(prob_bias_list, List):
@@ -234,10 +227,10 @@ def apply_depolarising_bias(
         The resulting MPS.
     """
 
-    if sites_to_bias == "All":
+    if isinstance(sites_to_bias, str) and sites_to_bias == "All":
         sites_to_bias = list(range(0, mps.num_sites, 2))
 
-    assert isinstance(sites_to_bias, list)
+    sites_to_bias = list(cast(List[int], sites_to_bias))
     if not isinstance(prob_bias_list, List):
         prob_bias_list = [prob_bias_list for _ in range(len(sites_to_bias))]
 
@@ -773,6 +766,12 @@ def create_bb_code(
     -------
         A qecstruct CssCode instance for the constructed bivariate bicycle code.
     """
+    # Imported here so that importing mdopt.decoding (and hence the DEM
+    # decoder) does not pay for sympy and qldpc, which only this helper uses.
+    import sympy as sp  # pylint: disable=import-outside-toplevel
+    from sympy.abc import x, y  # pylint: disable=import-outside-toplevel
+    from qldpc.codes import BBCode  # pylint: disable=import-outside-toplevel
+
     # Build the orders dictionary from the two integer orders using Sympy symbols
     orders = {x: order_x, y: order_y}
 
@@ -1055,6 +1054,11 @@ def map_distribution_to_pauli(distribution):
         result.append(mapping[max_index])
 
     return result
+
+
+KNOWN_ERROR_MODELS = frozenset(
+    {"Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure"}
+)
 
 
 def generate_pauli_error_string(
@@ -1646,7 +1650,8 @@ def decode_css(
     # The ordering optimisation builds dense check matrices and runs a search;
     # pointless when decode_custom's no-error fast path will return
     # immediately, and that path dominates low-error-rate Monte Carlo.
-    if qubit_order_strategy == "Optimised" and error != "I" * num_qubits:
+    fast_path_will_fire = error == "I" * num_qubits and bias_prob < 0.5
+    if qubit_order_strategy == "Optimised" and not fast_path_will_fire:
         pm_x = code.x_stabs_binary()
         H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
         for r, cols in enumerate(pm_x.rows()):
@@ -1815,9 +1820,14 @@ def decode_custom(
     # type would silently decode as depolarising.
     if not 0 <= bias_prob <= 1:
         raise ValueError(f"bias_prob should be a probability, given {bias_prob}.")
-    if bias_type not in ("Bitflip", "Depolarising"):
+    # Every error-model name generate_pauli_error_string knows is a valid
+    # bias_type (the experiment scripts forward --error_model verbatim);
+    # only "Bitflip" selects the bit-flip bias, every other model uses the
+    # depolarising bias as it always has. Typos are still rejected.
+    if bias_type not in KNOWN_ERROR_MODELS:
         raise ValueError(
-            f"Unknown bias_type {bias_type!r}; expected 'Bitflip' or " "'Depolarising'."
+            f"Unknown bias_type {bias_type!r}; expected one of "
+            f"{sorted(KNOWN_ERROR_MODELS)}."
         )
 
     if error == "I" * len(error) and bias_prob < 0.5:
