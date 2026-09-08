@@ -162,13 +162,16 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
                 flush=True,
             )
     for chi in ladder:
-        f = sum(
-            r["flips"][str(chi)] != r["truth"]
-            for r in rows
-            if str(chi) in {str(k) for k in r.get("flips", {})}
-        )
-        print(f"[{tag}] ladder LER(chi={chi}): {f/n:.4f}", flush=True)
-    pf = sum(1 - r["margin"] for r in rows)
+        # Rows from a resumed run with a different ladder lack this rung;
+        # score only the rows that carry it, in numerator and denominator.
+        scored = [r for r in rows if str(chi) in {str(k) for k in r.get("flips", {})}]
+        if scored:
+            f = sum(r["flips"][str(chi)] != r["truth"] for r in scored)
+            print(
+                f"[{tag}] ladder LER(chi={chi}): {f}/{len(scored)} "
+                f"({f/len(scored):.4f})",
+                flush=True,
+            )
     of = sum(r["map"] != r["truth"] for r in rows)
     print(
         f"[{tag}] final calibration: predicted {pf:.1f} observed {of} "
