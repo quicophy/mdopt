@@ -172,6 +172,9 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
                 f"({f/len(scored):.4f})",
                 flush=True,
             )
+    # Recomputed from every loaded row so a resumed run's summary covers the
+    # records it inherited, not just this invocation's.
+    pf = sum(1 - r["margin"] for r in rows)
     of = sum(r["map"] != r["truth"] for r in rows)
     print(
         f"[{tag}] final calibration: predicted {pf:.1f} observed {of} "
