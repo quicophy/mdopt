@@ -950,7 +950,8 @@ def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
             vec = vec + 1j * rng.standard_normal(2**8)
         vec = vec / np.linalg.norm(vec)
         for chi_max in (int(1e4), 3):
-            base = mps_from_dense(vec, form="Right-canonical", chi_max=chi_max)
+            base = mps_from_dense(vec, form="Right-canonical")
+            base.chi_max = chi_max
             for targets in ((7, 0), (0, 7), (4, 1, 6)):
                 fast, slow = base.copy(), base.copy()
                 for target in targets:
