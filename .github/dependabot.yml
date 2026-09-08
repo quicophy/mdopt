@@ -12,3 +12,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    ignore:
+      # sympy (every release up to 1.14.0) pins mpmath<1.4; drop this once
+      # a sympy release relaxes the cap.
+      - dependency-name: "mpmath"
+        versions: [">=1.4"]
