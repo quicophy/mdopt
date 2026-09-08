@@ -680,9 +680,12 @@ def test_svd_rectangular_reduction_matches_direct_svd():
 
 
 def test_svd_nonfinite_input_takes_the_fallback_chain():
-    """qr on a non-finite matrix returns garbage silently, so the reduced
-    path must not see one; the direct call raises into the fallbacks, whose
-    jitter attempt cannot rescue a NaN either -- the whole call must raise."""
+    """A non-finite input must make the whole call raise.
+
+    There is no finiteness pre-scan: the reduced path's QR of a NaN matrix
+    yields a NaN factor whose SVD raises LinAlgError (LAPACK gesdd on NaN
+    input), which sends the call through the fallback chain, and the
+    jitter attempt cannot rescue a NaN either."""
     mat = np.full((8, 32), np.nan)
     with pytest.raises(RuntimeError, match="All SVD methods failed"):
         svd(mat)

@@ -1720,14 +1720,14 @@ def _score_dense_posterior(logical_signed, chi_max, tie_policy, silent):
         # downward, invisibly when silent=True. Report the failure instead.
         if not silent:
             logging.warning(
-                "The logical posterior collapsed to zero at chi_max=%d; this "
+                "The logical posterior collapsed to zero at chi_max=%s; this "
                 "shot carries no information and is scored as a failure.",
                 chi_max,
             )
         return logical_dense, 0.0
     if most_negative < -1e-12 * max(peak, 1.0) and not silent:
         logging.warning(
-            "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+            "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%s "
             "is not converged for this instance.",
             most_negative,
             100.0 * abs(most_negative) / peak,
@@ -2069,7 +2069,7 @@ def decode_custom(
     if not np.isfinite(amplitude_found) or amplitude_found == 0.0:
         if not silent:
             logging.warning(
-                "The logical posterior collapsed to zero at chi_max=%d; this shot "
+                "The logical posterior collapsed to zero at chi_max=%s; this shot "
                 "carries no information and is scored as a failure.",
                 chi_max,
             )

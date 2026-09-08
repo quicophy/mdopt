@@ -998,3 +998,32 @@ def test_move_orth_centre_matches_svd_path_on_non_canonical_chains():
         assert np.allclose(
             fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
         ), chi_max
+
+
+def test_move_orth_centre_prunes_on_discarded_amplitude_not_on_the_centre_spectrum():
+    """Review counterexamples: a sub-cut centre direction amplified by a large
+    neighbour entry must be KEPT (its amplitude is macroscopic), and a
+    direction a null neighbour row makes worthless may go. Both cases must
+    agree with the two-site SVD path on the represented state."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    def chain(neighbour):
+        centre = np.zeros((1, 2, 2))
+        centre[0, 0, 0], centre[0, 1, 1] = 1.0, 5e-13
+        last = np.array([1.0, 0.0]).reshape(1, 2, 1)
+        return CanonicalMPS([centre, neighbour, last], orth_centre=0, chi_max=4)
+
+    amplified = np.zeros((2, 2, 1))
+    amplified[0, 0, 0], amplified[1, 1, 0] = 1.0, 1e13
+    null_row = np.zeros((2, 2, 1))
+    null_row[0, 0, 0] = 1.0
+    for neighbour in (amplified, null_row):
+        fast = chain(neighbour).move_orth_centre(2, renormalise=False)
+        slow = chain(neighbour).move_orth_centre(
+            2, renormalise=False, return_singular_values=True
+        )[0]
+        assert np.allclose(
+            fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
+        )
+    kept = chain(amplified).move_orth_centre(1, renormalise=False)
+    assert kept.tensors[0].shape[2] == 2, "the amplified direction carries amplitude 5"

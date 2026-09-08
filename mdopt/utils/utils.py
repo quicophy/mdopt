@@ -18,7 +18,14 @@ def _to_numpy(a):
     and the CUDA device probe; a per-call ``import cupy`` here once cost
     ~18% of a decoding run.
     """
-    return np.asarray(xp.to_host(a))
+    host = xp.to_host(a)
+    try:
+        return np.asarray(host)
+    except TypeError:
+        # A device array reached us while the NumPy backend is selected
+        # (CuPy installed, MDOPT_BACKEND unset); CuPy refuses the implicit
+        # conversion, so ask it explicitly.
+        return np.asarray(host.get())
 
 
 def svd(

@@ -408,21 +408,27 @@ class CanonicalMPS:
             # A collapsed bond (dimension 0) has nothing to factor; the SVD
             # branch carries that degenerate shape through unchanged.
             if factor_centre_only and chi_l * phys > 0 and chi_r > 0:
-                # Only sub-cut directions may go here. If the revealed rank
-                # exceeds chi_max the truncation would need the two-site
-                # spectrum (the bias appliers leave non-isometric neighbours
-                # behind the centre), so that case takes the SVD branch below.
-                # On a canonical chain the rank never exceeds the existing
-                # bond, so this path always applies there.
-                u_l, s_bond, v_h, _ = svd(
-                    centre.reshape(chi_l * phys, chi_r), cut=1e-12, chi_max=np.inf
-                )
-                keep = len(s_bond)
-                if keep <= self.chi_max:
+                # The single-site spectrum is the bond's Schmidt spectrum
+                # only if the right neighbour is an isometry. The bias
+                # appliers break that on every site they touch, so it is
+                # checked (a chi^2 * d * chi Gram product, cheaper than the
+                # SVD it enables) rather than assumed: with an isometric
+                # neighbour this move is exactly the two-site SVD's answer
+                # (same cut, same chi_max); otherwise the two-site SVD below
+                # runs, exactly as before. After one traversal the chain is
+                # canonical and every later move takes the fast path.
+                neighbour = mps.tensors[i + 1]
+                flat = neighbour.reshape(neighbour.shape[0], -1)
+                gram = flat @ flat.conj().T
+                if np.allclose(gram, np.eye(gram.shape[0]), rtol=0.0, atol=1e-12):
+                    u_l, s_bond, v_h, _ = svd(
+                        centre.reshape(chi_l * phys, chi_r), chi_max=self.chi_max
+                    )
+                    keep = len(s_bond)
                     mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
                     # diag(s) @ (v_h . B): same idiom as the SVD branch below.
                     mps.tensors[i + 1] = (
-                        np.tensordot(v_h, mps.tensors[i + 1], axes=(1, 0))
+                        np.tensordot(v_h, neighbour, axes=(1, 0))
                         * s_bond[:, None, None]
                     )
                     mps.orth_centre = i + 1
