@@ -239,11 +239,16 @@ def decode_dem(
         if len(row) == 1:
             pinned.add(row[0])
 
-    base = (
-        solve_representative(problem, syndrome)
-        if representative is None
-        else np.asarray(representative, dtype=int) % 2
-    )
+    if representative is None:
+        base = solve_representative(problem, syndrome)
+    else:
+        base = np.asarray(representative)
+        if base.ndim != 1 or base.shape[0] != num_mech:
+            raise ValueError(
+                f"The representative must have exactly one bit per mechanism "
+                f"({num_mech}), given shape {base.shape}."
+            )
+        base = base.astype(int) % 2
     if np.any((_detector_parities(problem, base) - np.asarray(syndrome) % 2) % 2):
         raise ValueError("The supplied representative does not match the syndrome.")
 

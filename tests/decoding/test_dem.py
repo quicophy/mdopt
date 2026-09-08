@@ -445,3 +445,17 @@ def test_malformed_syndromes_are_rejected():
             solve_representative(problem, bad)
         with pytest.raises(ValueError, match="one bit per detector"):
             decode_dem(problem, bad, representative=np.array([1, 0, 0]))
+
+
+def test_malformed_representatives_are_rejected():
+    """A representative must carry exactly one bit per mechanism."""
+    problem = DemProblem(
+        probs=[0.1, 0.2, 0.15],
+        detector_rows=[[0, 1], [1, 2]],
+        observable_rows=[[0]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    for bad in ([1, 0], [1, 0, 0, 0], np.zeros((1, 3))):
+        with pytest.raises(ValueError, match="one bit per mechanism"):
+            decode_dem(problem, np.array([1, 0]), representative=bad)

@@ -20,6 +20,7 @@ contaminated chi=8 run (and its post-mortem audit) are structural here:
 import json
 import os
 import resource
+import sys
 import time
 from pathlib import Path
 
@@ -44,7 +45,10 @@ CALIBRATION_Z_ABORT = 3.0
 
 
 def _rss_gb():
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**30
+    # ru_maxrss is bytes on macOS but KiB on Linux; a plain /2**30 would
+    # under-report 1024x on the cluster and never trip the guard.
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak / 2**30 if sys.platform == "darwin" else peak * 1024 / 2**30
 
 
 def surface(distance, rounds, p):
@@ -147,9 +151,16 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
     rows = [json.loads(l) for l in open(path)]
     n = len(rows)
     for dec in ("map", "mwpm", "bm"):
-        if any(dec in r for r in rows):
-            f = sum(r.get(dec) != r["truth"] for r in rows)
-            print(f"[{tag}] {dec}: fails={f} ({f/n:.4f})", flush=True)
+        # Only rows carrying this decoder count, in numerator and
+        # denominator: a run resumed after (un)installing beliefmatching
+        # has a bm column on part of its rows.
+        scored = [r for r in rows if dec in r]
+        if scored:
+            f = sum(r[dec] != r["truth"] for r in scored)
+            print(
+                f"[{tag}] {dec}: fails={f}/{len(scored)} ({f/len(scored):.4f})",
+                flush=True,
+            )
     for chi in ladder:
         f = sum(
             r["flips"][str(chi)] != r["truth"]

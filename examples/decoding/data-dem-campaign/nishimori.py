@@ -15,6 +15,15 @@ cell's error stream is seeded as seed + distance * 1000 + int(p * 1e5).
 import json, time
 from pathlib import Path
 import resource
+import sys
+
+
+def _rss_gb():
+    # ru_maxrss is bytes on macOS but KiB on Linux.
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak / 2**30 if sys.platform == "darwin" else peak * 1024 / 2**30
+
+
 import numpy as np, pymatching
 from qldpc.codes import SurfaceCode
 from mdopt.decoding.dem import DemProblem, decode_dem
@@ -69,7 +78,7 @@ def run(distance, p, shots, chi=128, seed=0):
             if (i + 1) % 500 == 0:
                 sink.flush()
                 print(
-                    f"[{tag}] {i+1}/{shots} rss={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/2**30:.2f}GB",
+                    f"[{tag}] {i+1}/{shots} rss={_rss_gb():.2f}GB",
                     flush=True,
                 )
     rows = [json.loads(l) for l in open(path)]
