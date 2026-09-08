@@ -1534,6 +1534,16 @@ def decode_message(
     return engine, overlap
 
 
+def _identity_fast_path_fires(error: str, bias_prob: float) -> bool:
+    """Whether decode_custom answers a trivial error without decoding.
+
+    Below bias 0.5 the identity class is provably the MAP answer for an
+    all-identity error (exact enumeration up to p = 0.49); decode_css uses
+    the same predicate to know when the optimised ordering can be skipped.
+    """
+    return error == "I" * len(error) and bias_prob < 0.5
+
+
 def decode_css(
     code: CssCode,
     error: str,
@@ -1650,7 +1660,7 @@ def decode_css(
     # The ordering optimisation builds dense check matrices and runs a search;
     # pointless when decode_custom's no-error fast path will return
     # immediately, and that path dominates low-error-rate Monte Carlo.
-    fast_path_will_fire = error == "I" * num_qubits and bias_prob < 0.5
+    fast_path_will_fire = _identity_fast_path_fires(error, bias_prob)
     if qubit_order_strategy == "Optimised" and not fast_path_will_fire:
         pm_x = code.x_stabs_binary()
         H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
@@ -1827,10 +1837,11 @@ def decode_custom(
     if bias_type not in KNOWN_ERROR_MODELS:
         raise ValueError(
             f"Unknown bias_type {bias_type!r}; expected one of "
-            f"{sorted(KNOWN_ERROR_MODELS)}."
+            f"{sorted(KNOWN_ERROR_MODELS)} ('Bitflip' selects the bit-flip "
+            "bias, every other model the depolarising bias)."
         )
 
-    if error == "I" * len(error) and bias_prob < 0.5:
+    if _identity_fast_path_fires(error, bias_prob):
         if not silent:
             LOGGER.info("No error detected.")
         # Deliberate fast path, gated on bias_prob < 0.5: below that the

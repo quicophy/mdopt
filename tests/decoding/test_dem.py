@@ -489,3 +489,32 @@ def test_unsorted_rows_decode_like_sorted_rows():
                 masses / masses.sum(), exact / exact.sum(), atol=1e-9
             ), syndrome
             assert flips[0] == int(np.argmax(exact)), syndrome
+
+
+def test_repeated_targets_toggle_like_stim():
+    """stim XORs repeated targets within one error line: `D0 D0` cancels."""
+    dem = stim.DetectorErrorModel("""
+        error(0.1) D0 D0 L0
+        error(0.2) D0 L1 L1
+        detector D0
+        """)
+    problem = dem_to_problem(dem)
+    assert problem.detector_rows == [[1]]  # first error touches no detector
+    assert problem.observable_rows == [[0], []]  # L1 L1 cancels
+    sampler = dem.compile_sampler()
+    dets, _, _ = sampler.sample(1)
+    assert dets.shape[1] == 1
+
+
+def test_bandwidth_ordering_accepts_a_mechanism_free_problem():
+    from mdopt.decoding.dem import order_mechanisms
+
+    problem = DemProblem(
+        probs=[],
+        detector_rows=[[]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    ordered, perm = order_mechanisms(problem, "bandwidth")
+    assert perm.size == 0 and ordered.num_mechanisms == 0

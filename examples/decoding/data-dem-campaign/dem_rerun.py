@@ -103,26 +103,49 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
             flips_by_chi, margins_by_chi = {}, {}
             prev_norm = None
             for chi in ladder:
-                masses, flips = decode_dem(problem, syn, chi_max=chi)
+                try:
+                    masses, flips = decode_dem(problem, syn, chi_max=chi)
+                except ArithmeticError as exc:
+                    # A truncation artefact (negative class mass or a
+                    # collapsed vector) at this rung: record it and move up
+                    # the ladder rather than abort a multi-day run.
+                    rec[f"artefact_{chi}"] = str(exc)
+                    continue
                 norm = masses / masses.sum()
                 flips_by_chi[chi] = int(flips[0])
                 margins_by_chi[chi] = float(np.max(norm))
                 if prev_norm is not None:
                     rec[f"dev_{chi}"] = float(np.max(np.abs(norm - prev_norm)))
                 prev_norm = norm
-            top, second = ladder[-1], ladder[-2]
+            if not flips_by_chi:
+                rec["error"] = "every rung raised; scored as a failure"
+                rec["map"], rec["margin"], rec["chi"] = 1 - truth, 0.0, ladder[-1]
+                rec["flips"], rec["margins"] = {}, {}
+                rec["t"] = round(time.perf_counter() - t0, 3)
+                rec["mwpm"] = int(matcher.decode(syn)[0]) % 2
+                if beliefm is not None:
+                    rec["bm"] = int(beliefm.decode(syn)[0]) % 2
+                obs_fail += 1
+                sink.write(json.dumps(rec) + "\n")
+                sink.flush()
+                continue
+            usable = [c for c in ladder if c in flips_by_chi]
+            top, second = usable[-1], (usable[-2] if len(usable) > 1 else usable[-1])
             rec["flips"] = flips_by_chi
             rec["margins"] = margins_by_chi
             rec["map"] = flips_by_chi[top]
             rec["margin"] = margins_by_chi[top]
             rec["chi"] = top
-            if flips_by_chi[top] != flips_by_chi[second]:
-                masses, flips = decode_dem(problem, syn, chi_max=escalate)
-                norm = masses / masses.sum()
-                rec["map"] = int(flips[0])
-                rec["margin"] = float(np.max(norm))
-                rec["chi"] = escalate
-                rec["dev_esc"] = float(np.max(np.abs(norm - prev_norm)))
+            if flips_by_chi[top] != flips_by_chi[second] or len(usable) < len(ladder):
+                try:
+                    masses, flips = decode_dem(problem, syn, chi_max=escalate)
+                    norm = masses / masses.sum()
+                    rec["map"] = int(flips[0])
+                    rec["margin"] = float(np.max(norm))
+                    rec["chi"] = escalate
+                    rec["dev_esc"] = float(np.max(np.abs(norm - prev_norm)))
+                except ArithmeticError as exc:
+                    rec[f"artefact_{escalate}"] = str(exc)
                 escalations += 1
             rec["t"] = round(time.perf_counter() - t0, 3)
             rec["mwpm"] = int(matcher.decode(syn)[0]) % 2

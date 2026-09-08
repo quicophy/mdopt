@@ -83,12 +83,15 @@ def dem_to_problem(dem: stim.DetectorErrorModel) -> DemProblem:
         if instruction.type != "error":
             continue
         probability = instruction.args_copy()[0]
-        detectors, observables = set(), set()
+        detectors: set = set()
+        observables: set = set()
         for target in instruction.targets_copy():
+            # stim XORs repeated targets within one error line (a doubled
+            # detector cancels), so toggle rather than collect.
             if target.is_relative_detector_id():
-                detectors.add(target.val)
+                detectors ^= {target.val}
             elif target.is_logical_observable_id():
-                observables.add(target.val)
+                observables ^= {target.val}
             elif target.is_separator():
                 raise ValueError(
                     "The DEM contains decomposed errors ('^' separators). "
@@ -247,6 +250,8 @@ def decode_dem(
             pinned.add(row[0])
 
     if representative is None:
+        # Consistent with the syndrome by construction (the solver raises
+        # otherwise), so no parity recheck is needed here.
         base = solve_representative(problem, syndrome)
     else:
         base = np.asarray(representative)
@@ -256,8 +261,8 @@ def decode_dem(
                 f"({num_mech}), given shape {base.shape}."
             )
         base = base.astype(int) % 2
-    if np.any((_detector_parities(problem, base) - np.asarray(syndrome) % 2) % 2):
-        raise ValueError("The supplied representative does not match the syndrome.")
+        if np.any((_detector_parities(problem, base) - syndrome) % 2):
+            raise ValueError("The supplied representative does not match the syndrome.")
 
     # Change of variables: the XOR constraints project onto EVEN parity, i.e.
     # the zero-syndrome sector. Writing every consistent mechanism set as
@@ -433,6 +438,9 @@ def order_mechanisms(
         return problem, np.arange(problem.num_mechanisms)
     if strategy != "bandwidth":
         raise ValueError(f"Unknown ordering strategy {strategy!r}.")
+    if problem.num_mechanisms == 0:
+        # Nothing to order; reverse Cuthill-McKee rejects an empty graph.
+        return problem, np.arange(0)
 
     rows = [row for row in problem.detector_rows + problem.observable_rows if row]
     incidence = np.zeros((len(rows), problem.num_mechanisms), dtype=np.uint8)
