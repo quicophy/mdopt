@@ -21,6 +21,7 @@ import argparse
 import cProfile
 import io
 import json
+import math
 import pstats
 import time
 from pathlib import Path
@@ -208,8 +209,10 @@ def main():
     if args.check:
         baseline = json.loads(BASELINE.read_text())
         failures = []
-        for name, entry in summary.items():
-            failures += _compare(name, entry["fingerprint"], baseline[name])
+        # Only the workloads this invocation ran; summary also carries cached
+        # entries from earlier runs, which a targeted --check must not judge.
+        for name in names:
+            failures += _compare(name, summary[name]["fingerprint"], baseline[name])
         if failures:
             print("FINGERPRINT MISMATCH:\n  " + "\n  ".join(failures))
             raise SystemExit(1)
@@ -230,7 +233,11 @@ def _compare(name, got, want, path=""):
     # the leading verdict of a posterior row is exact; the entries are not
     if name in POSTERIOR_WORKLOADS and path.endswith("[0]") and path.count("[") == 2:
         tolerance = 1e-10
-    if abs(float(got) - float(want)) > tolerance:
+    got_value, want_value = float(got), float(want)
+    # A NaN would otherwise pass: abs(nan) > tolerance is False.
+    if not (math.isfinite(got_value) and math.isfinite(want_value)):
+        return [f"{name}{path}: non-finite value {got} (baseline {want})"]
+    if abs(got_value - want_value) > tolerance:
         return [f"{name}{path}: {got} vs baseline {want}"]
     return []
 
