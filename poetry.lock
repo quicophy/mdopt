@@ -3666,14 +3666,14 @@ files = [
 
 [[package]]
 name = "qldpc"
-version = "0.1.3"
+version = "0.1.4"
 description = "Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "qldpc-0.1.3-py3-none-any.whl", hash = "sha256:72094c4e5d574ca4c86417d52faa7aa041f838f46fa4df843af115a94ccb0570"},
-    {file = "qldpc-0.1.3.tar.gz", hash = "sha256:418ab571549178c2a11340a137330bb7b073c57cc50d57e2d60a7f25b1f27806"},
+    {file = "qldpc-0.1.4-py3-none-any.whl", hash = "sha256:2fc6b8ebb17d67d532ef9c5912e497837e27259c34c37d6697c88936592e01e1"},
+    {file = "qldpc-0.1.4.tar.gz", hash = "sha256:f0354757998bf44195ae98de5d8329a7ef09548264e3a568a5d5f3cd93d25242"},
 ]
 
 [package.dependencies]
@@ -4627,4 +4627,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "6db6803fd840c3fc6e17cc6073b7967ffea25b568f784ea6bdcc7a2cc0c44f92"
+content-hash = "36a9d849202c400bdd689cd4bffc89eb989da80a17e3d2c724b89d03971407b1"
