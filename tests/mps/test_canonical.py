@@ -888,6 +888,35 @@ def test_marginal_does_not_produce_nans_when_the_centre_underflows():
     assert np.all(np.isfinite(marginalised.dense(flatten=True)))
 
 
+def _two_site_reference_move(mps, final_pos, renormalise):
+    """The two-site-SVD move spelled out: the reference for the one-site path.
+
+    move_orth_centre no longer has a flag that forces the two-site branch
+    (renormalised moves and returned spectra take the one-site path too), so
+    an old-vs-new comparison has to build the reference explicitly.
+    """
+    from mdopt.utils.utils import split_two_site_tensor
+
+    if mps.orth_centre == final_pos:
+        return mps.copy()
+    leftwards = mps.orth_centre > final_pos
+    work = mps.reverse() if leftwards else mps.copy()
+    begin = work.orth_centre
+    final = (mps.num_sites - 1 - final_pos) if leftwards else final_pos
+    for i in range(begin, final):
+        u_l, s_bond, v_r, _ = split_two_site_tensor(
+            work.two_site_tensor_next(i),
+            chi_max=mps.chi_max,
+            renormalise=renormalise,
+            strategy="svd",
+            return_truncation_error=True,
+        )
+        work.tensors[i] = u_l
+        work.tensors[i + 1] = v_r * s_bond[:, None, None]
+        work.orth_centre = i + 1
+    return work.reverse() if leftwards else work
+
+
 def test_move_orth_centre_carries_a_collapsed_bond_through():
     """A bond of dimension 0 (a truncation that emptied the spectrum) must
     move through the centre-only path without raising.
@@ -924,22 +953,19 @@ def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
         ]
         return CanonicalMPS(tensors, orth_centre=0, chi_max=4)
 
-    via_qr = tiny_centre_mps().move_orth_centre(2, renormalise=False)
-    via_svd = tiny_centre_mps().move_orth_centre(
-        2, renormalise=False, return_singular_values=True
-    )[0]
-    assert via_qr.tensors[0].shape[2] == 0
-    assert via_qr.tensors[0].shape[2] == via_svd.tensors[0].shape[2]
+    via_one_site = tiny_centre_mps().move_orth_centre(2, renormalise=False)
+    via_two_site = _two_site_reference_move(tiny_centre_mps(), 2, renormalise=False)
+    assert via_one_site.tensors[0].shape[2] == 0
+    assert via_one_site.tensors[0].shape[2] == via_two_site.tensors[0].shape[2]
 
 
 def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
-    """The QR+SVD(R) move must reproduce the two-site SVD path exactly.
+    """The one-site move must reproduce the two-site SVD move exactly.
 
     Real and complex random states, moves in both directions, with a
     chi_max below the full Schmidt rank so the finite truncation is
     exercised too: dense() and every bond dimension must agree between the
-    fast path (no singular values requested) and the SVD path
-    (return_singular_values=True).
+    one-site path and the two-site reference spelled out above.
     """
     from mdopt.mps.utils import mps_from_dense
 
@@ -956,11 +982,7 @@ def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
                 fast, slow = base.copy(), base.copy()
                 for target in targets:
                     fast = fast.move_orth_centre(target, renormalise=False)
-                    # A no-op move returns the MPS itself rather than a tuple.
-                    moved = slow.move_orth_centre(
-                        target, renormalise=False, return_singular_values=True
-                    )
-                    slow = moved[0] if isinstance(moved, tuple) else moved
+                    slow = _two_site_reference_move(slow, target, renormalise=False)
                 assert list(fast.bond_dimensions) == list(slow.bond_dimensions), (
                     seed,
                     chi_max,
@@ -990,10 +1012,7 @@ def test_move_orth_centre_matches_svd_path_on_non_canonical_chains():
             base, sites_to_bias=[0, 2, 4, 6], prob_bias_list=0.3
         )
         fast = biased.copy().move_orth_centre(0, renormalise=False)
-        moved = biased.copy().move_orth_centre(
-            0, renormalise=False, return_singular_values=True
-        )
-        slow = moved[0] if isinstance(moved, tuple) else moved
+        slow = _two_site_reference_move(biased.copy(), 0, renormalise=False)
         assert list(fast.bond_dimensions) == list(slow.bond_dimensions), chi_max
         assert np.allclose(
             fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
@@ -1019,9 +1038,7 @@ def test_move_orth_centre_prunes_on_discarded_amplitude_not_on_the_centre_spectr
     null_row[0, 0, 0] = 1.0
     for neighbour in (amplified, null_row):
         fast = chain(neighbour).move_orth_centre(2, renormalise=False)
-        slow = chain(neighbour).move_orth_centre(
-            2, renormalise=False, return_singular_values=True
-        )[0]
+        slow = _two_site_reference_move(chain(neighbour), 2, renormalise=False)
         assert np.allclose(
             fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
         )
