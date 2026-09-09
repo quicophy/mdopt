@@ -1,8 +1,9 @@
 """Phase D rerun driver: per-shot chi ladder, calibrated, triple-paired.
 
-Reconstructed from the session record after the scratchpad purge; this is
-the harness that produced D2_d5r5_p0.005.jsonl. Lessons from the
-contaminated chi=8 run (and its post-mortem audit) are structural here:
+This is the harness behind the d=5, r=5, p=0.5% circuit-level cell reported
+in PR #544 (output: data-dem-campaign/D2_d5r5_p0.005.jsonl; see README.md
+for how to regenerate it). Lessons from an earlier, contaminated chi=8 run
+and its post-mortem audit are structural here:
 - Per-shot convergence certificates are unreliable: representative spread
   is gauge-blind to truncation, and one chi-doubling can plateau (a shot
   agreed to 2e-9 between chi=16 and 32 and was wrong until chi=64). So
@@ -39,7 +40,7 @@ except ImportError:  # pragma: no cover - optional third decoder
 
 from mdopt.decoding.dem import decode_dem, dem_to_problem
 
-RESULTS = Path(__file__).parent
+RESULTS = Path(__file__).parent / "data-dem-campaign"
 RSS_LIMIT_GB = 7.0
 CALIBRATION_Z_ABORT = 3.0
 
@@ -211,6 +212,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
 
 
 if __name__ == "__main__":
+    RESULTS.mkdir(exist_ok=True)
     shots = int(os.environ.get("RERUN_SHOTS", 2000))
     run("D2_d5r5_p0.005", surface(5, 5, 0.005), shots, seed=5555)
     print("RERUN DONE", flush=True)

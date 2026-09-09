@@ -5,11 +5,10 @@ maximum-likelihood at the RBIM Nishimori point, 10.94(2)%. Code-capacity
 bit-flip noise, rotated surface code, both decoders on identical sampled
 error sets.
 
-NOTE: this file is the reconstructed record of the harness that produced the
-Nishimori campaign (the original lived in a /tmp scratchpad that macOS purged
-after three days, along with the raw per-shot data; the derived results are
-recorded in PR #544). Rerunning it reproduces the campaign exactly: every
-cell's error stream is seeded as seed + distance * 1000 + int(p * 1e5).
+The per-shot records are not versioned (see README.md); rerunning this file
+reproduces them exactly, since every cell's error stream is seeded as
+seed + distance * 1000 + int(p * 1e5) and the decoder is deterministic.
+Output: data-dem-campaign/N_d{d}_p{p:.4f}.jsonl, one JSON record per shot.
 """
 
 import json, time
@@ -28,7 +27,7 @@ import numpy as np, pymatching
 from qldpc.codes import SurfaceCode
 from mdopt.decoding.dem import DemProblem, decode_dem
 
-RESULTS = Path(__file__).parent / "dem_results"
+RESULTS = Path(__file__).parent / "data-dem-campaign"
 
 
 def bitflip_problem(distance, p):
@@ -92,10 +91,16 @@ def run(distance, p, shots, chi=128, seed=0):
 
 if __name__ == "__main__":
     RESULTS.mkdir(exist_ok=True)
-    # Near-threshold grid (d<=9 later topped up to 16000 shots), then wings.
-    for distance in (5, 7, 9, 11):
-        for p in (0.095, 0.100, 0.104, 0.108, 0.112, 0.116):
-            run(distance, p, shots=4000)
+    # The final shot counts of the campaign: 16000 per near-threshold cell for
+    # d <= 9, 4000 at d = 11 and on the three wing rates. The run is resumable
+    # (a cell with enough records is skipped), so the loop can be split across
+    # processes by distance; d = 9 near threshold is the slow block.
+    near = (0.095, 0.100, 0.104, 0.108, 0.112, 0.116)
+    for distance in (5, 7, 9):
+        for p in near:
+            run(distance, p, shots=16000)
+    for p in near:
+        run(11, p, shots=4000)
     for p in (0.070, 0.085, 0.130):
         for distance in (5, 7, 9, 11):
             run(distance, p, shots=4000)
