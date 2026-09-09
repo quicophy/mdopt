@@ -102,7 +102,7 @@ print(predicted_flips, observables[0].astype(int))
 - `mdopt.utils` — truncated SVD/QR and tensor helpers.
 - `mdopt.examples` — the runnable campaign scripts behind the example notebooks.
 
-The decoders used to live in `mdopt.examples.decoding`. That import path still works, but it emits a `DeprecationWarning` and will be removed in a future release; import from `mdopt.decoding` instead.
+The decoder modules used to live at `mdopt.examples.decoding.decoding` and `mdopt.examples.decoding.dem`. Those import paths still work, but emit a `DeprecationWarning` and will be removed in a future release; import from `mdopt.decoding` instead.
 
 ## Examples
 
