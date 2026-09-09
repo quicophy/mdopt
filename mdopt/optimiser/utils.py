@@ -282,6 +282,12 @@ def apply_constraints(
     if dense:
         mps_dense = mps.dense(flatten=True)
 
+    # One private copy up front, then every zip-up and move works in place:
+    # the contractor used to deep-copy the whole chain once per constraint,
+    # which on a 1700-site DEM chain was a measurable share of the decode.
+    if strings and not dense:
+        mps = mps.copy()
+
     for string in tqdm(strings, disable=silent):
         string = ConstraintString(logical_tensors, string)
         mpo = string.mpo()
@@ -324,7 +330,10 @@ def apply_constraints(
                 mps.orth_centre = orth_centres[0]
 
             mps = mps.move_orth_centre(
-                final_pos=start_site, renormalise=False, return_singular_values=False
+                final_pos=start_site,
+                renormalise=False,
+                return_singular_values=False,
+                inplace=True,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
@@ -335,7 +344,7 @@ def apply_constraints(
             chi_max=chi_max,
             cut=cut,
             renormalise=False,
-            inplace=False,
+            inplace=True,
         )
 
         if renormalise:

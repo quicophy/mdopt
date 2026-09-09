@@ -36,6 +36,49 @@ def _contract_cached(subscripts, path, backend, *tensors):
     return expression(*tensors, backend=backend)
 
 
+def _zip_first(left, right, mpo_left, mpo_right, backend):
+    """The zip-up's opening two-site tensor, ``ijk, klm, nojp, oqlr -> iprqm``.
+
+    On the NumPy backend the three pairwise contractions of the cached
+    opt_einsum path are issued directly: the expression machinery added
+    roughly a third of the contraction's own cost per call on the small
+    tensors of a decode, and the operands are exactly the tensordots
+    opt_einsum itself would issue, so the result is the same to rounding.
+    """
+    if backend != "numpy":
+        return _contract_cached(
+            "ijk, klm, nojp, oqlr -> iprqm",
+            ((0, 1), (1, 2), (0, 1)),
+            backend,
+            left,
+            right,
+            mpo_left,
+            mpo_right,
+        )
+    pair = np.tensordot(left, right, axes=(2, 0))  # i j l m
+    ops = np.tensordot(mpo_left, mpo_right, axes=(1, 0))  # n j p q l r
+    out = np.tensordot(pair, ops, axes=([1, 2], [1, 4]))  # i m n p q r
+    # n is the MPO's open left virtual leg (dimension 1): summed, as in the
+    # einsum where it is absent from the output.
+    return out.sum(axis=2).transpose(0, 2, 4, 3, 1)  # i p r q m
+
+
+def _zip_step(centre, right, mpo_tensor, backend):
+    """One zip-up sweep step, ``ijkl, lmn, komp -> ijpon`` (see _zip_first)."""
+    if backend != "numpy":
+        return _contract_cached(
+            "ijkl, lmn, komp -> ijpon",
+            ((0, 1), (0, 1)),
+            backend,
+            centre,
+            right,
+            mpo_tensor,
+        )
+    pair = np.tensordot(centre, right, axes=(3, 0))  # i j k m n
+    out = np.tensordot(pair, mpo_tensor, axes=([2, 3], [0, 2]))  # i j n o p
+    return out.transpose(0, 1, 4, 3, 2)  # i j p o n
+
+
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
     """
     Applies a one-site operator to a MPS as follows::
@@ -296,7 +339,12 @@ def mps_mpo_contract(
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site, renormalise=False))
+        # inplace: this function owns `mps` by now (copied above unless the
+        # caller asked for inplace, in which case it handed ownership over).
+        mps = cast(
+            CanonicalMPS,
+            mps.move_orth_centre(start_site, renormalise=False, inplace=True),
+        )
 
     for i, tensor in enumerate(mpo):
         if tensor.ndim != 4:
@@ -318,14 +366,12 @@ def mps_mpo_contract(
 
         orth_centre_index = start_site
 
-        two_site_mps_mpo_tensor = _contract_cached(
-            "ijk, klm, nojp, oqlr -> iprqm",
-            ((0, 1), (1, 2), (0, 1)),
-            backend,
+        two_site_mps_mpo_tensor = _zip_first(
             mps.tensors[start_site],
             mps.tensors[start_site + 1],
             mpo[0],
             mpo[1],
+            backend,
         ).reshape(
             (
                 mps.tensors[start_site].shape[0],
@@ -370,13 +416,11 @@ def mps_mpo_contract(
                 )
             )
 
-            two_site_mps_mpo_tensor = _contract_cached(
-                "ijkl, lmn, komp -> ijpon",
-                ((0, 1), (0, 1)),
-                backend,
+            two_site_mps_mpo_tensor = _zip_step(
                 mps.tensors[orth_centre_index],
                 mps.tensors[orth_centre_index + 1],
                 mpo[i + 2],
+                backend,
             ).reshape(
                 (
                     len(singular_values),

@@ -347,6 +347,7 @@ class CanonicalMPS:
         final_pos: int,
         return_singular_values: bool = False,
         renormalise: bool = True,
+        inplace: bool = False,
     ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[list]]]:
         """
         Moves the orthogonality centre from its current position to ``final_pos``.
@@ -363,6 +364,11 @@ class CanonicalMPS:
             Whether to return the singular values obtained at each involved bond.
         renormalise : bool
             Whether to renormalise singular values during each SVD.
+        inplace : bool
+            Whether the tensors of this instance may be overwritten instead of
+            deep-copied first. The returned object is the one to use either
+            way; with ``inplace=True`` this instance must not be used
+            afterwards (a leftward move leaves it holding stale views).
 
         Raises
         ------
@@ -386,7 +392,7 @@ class CanonicalMPS:
 
         if self.orth_centre < final_pos:
             begin, final = self.orth_centre, final_pos
-            mps = self.copy()
+            mps = self if inplace else self.copy()
         elif self.orth_centre > final_pos:
             mps = self.reverse()
             begin = cast(int, mps.orth_centre)
@@ -423,7 +429,10 @@ class CanonicalMPS:
                 neighbour = mps.tensors[i + 1]
                 flat = neighbour.reshape(neighbour.shape[0], -1)
                 gram = flat @ flat.conj().T
-                if np.allclose(gram, np.eye(gram.shape[0]), rtol=0.0, atol=1e-12):
+                # max |G - I| <= 1e-12, spelled without np.allclose: the same
+                # test, minus allclose's temporaries, on a per-site hot path.
+                gram[np.diag_indices_from(gram)] -= 1.0
+                if np.abs(gram).max() <= 1e-12:
                     u_l, s_bond, v_h, _ = svd(
                         centre.reshape(chi_l * phys, chi_r), chi_max=self.chi_max
                     )
