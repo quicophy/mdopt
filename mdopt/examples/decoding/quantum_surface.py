@@ -148,9 +148,22 @@ def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed
 
 
 def run_single_experiment(
-    lattice_size, chi_max, error, bias_prob, error_model, silent, tolerance, cut
+    lattice_size,
+    chi_max,
+    error,
+    bias_prob,
+    error_model,
+    silent,
+    tolerance,
+    cut,
+    qubit_order_strategy="Natural",
 ):
-    """Run a single experiment."""
+    """Run a single experiment.
+
+    ``qubit_order_strategy="Optimised"`` orders the qubits along the chain by
+    reverse Cuthill-McKee before decoding, which cuts the bond dimension the
+    contraction needs; the default keeps the campaign's natural order.
+    """
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
@@ -167,6 +180,7 @@ def run_single_experiment(
             contraction_strategy="Optimised",
             tolerance=tolerance,
             cut=cut,
+            qubit_order_strategy=qubit_order_strategy,
         )
     except Exception as e:
         logging.error(f"Error during decoding: {e}", exc_info=True)
@@ -184,6 +198,7 @@ def run_single_experiment(
                 contraction_strategy="Optimised",
                 tolerance=tolerance,
                 cut=cut,
+                qubit_order_strategy=qubit_order_strategy,
             )
             logging.info("Decoding finished with multiply_by_stabiliser=True.")
         except Exception as ex:
