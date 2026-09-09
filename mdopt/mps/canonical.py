@@ -401,13 +401,14 @@ class CanonicalMPS:
         else:
             return self
 
-        # A pure repositioning (no singular values requested, no
-        # renormalisation) factors the centre alone, (chi_l*d, chi_r),
-        # instead of the two-site tensor: with an isometric right neighbour
-        # its singular values ARE the bond's Schmidt spectrum, and the move
-        # is exact whenever nothing is truncated at chi_max, so it is the
-        # two-site SVD's answer at a fraction of the cost.
-        factor_centre_only = not return_singular_values and not renormalise
+        # A move factors the centre alone, (chi_l*d, chi_r), instead of the
+        # two-site tensor whenever the right neighbour is an isometry: the
+        # centre's singular values then ARE the two-site tensor's (theta =
+        # C B with B B^dag = 1 gives theta theta^dag = C C^dag), so the
+        # renormalised spectrum, the cut and the chi_max count all come out
+        # identical, and the move is the two-site SVD's answer at a fraction
+        # of the cost. That covers the DMRG sweeps' one-step moves and the
+        # explicit-form conversion, which ask for renormalised spectra.
 
         for i in range(begin, final):
             centre = mps.tensors[i]
@@ -417,7 +418,7 @@ class CanonicalMPS:
             # chi_r <= chi_max: with an isometric neighbour the revealed rank
             # is at most chi_r, so this integer check rules out any move that
             # would have to truncate before the factorisation is attempted.
-            if factor_centre_only and 0 < chi_r <= self.chi_max and chi_l * phys > 0:
+            if 0 < chi_r <= self.chi_max and chi_l * phys > 0:
                 # The single-site spectrum is the bond's Schmidt spectrum
                 # only if the right neighbour is an isometry. The bias
                 # appliers break that on every site they touch, so it is
@@ -435,8 +436,11 @@ class CanonicalMPS:
                 gram[np.diag_indices_from(gram)] -= 1.0
                 if np.abs(gram).max() <= 1e-12:
                     u_l, s_bond, v_h, _ = svd(
-                        centre.reshape(chi_l * phys, chi_r), chi_max=self.chi_max
+                        centre.reshape(chi_l * phys, chi_r),
+                        chi_max=self.chi_max,
+                        renormalise=renormalise,
                     )
+                    singular_values.append(s_bond)
                     keep = len(s_bond)
                     mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
                     # diag(s) @ (v_h . B): same idiom as the SVD branch below.

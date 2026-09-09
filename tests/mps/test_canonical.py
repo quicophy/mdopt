@@ -1027,3 +1027,47 @@ def test_move_orth_centre_prunes_on_discarded_amplitude_not_on_the_centre_spectr
         )
     kept = chain(amplified).move_orth_centre(1, renormalise=False)
     assert kept.tensors[0].shape[2] == 2, "the amplified direction carries amplitude 5"
+
+
+def test_one_site_move_matches_two_site_move_with_renormalisation():
+    """The centre-only move also covers renormalised moves and returned spectra.
+
+    With an isometric neighbour B, theta = C B has theta theta^dag = C C^dag,
+    so the spectrum, its renormalisation, the cut and the chi_max count are
+    those of the centre alone. Both DMRG sweeps (renormalise=True) and the
+    explicit-form conversion (return_singular_values=True) go through it now;
+    the reference below is the two-site formula spelled out.
+    """
+    from mdopt.utils.utils import split_two_site_tensor
+
+    rng = np.random.default_rng(11)
+    for dtype in (float, complex):
+        vector = rng.standard_normal(2**7)
+        if dtype is complex:
+            vector = vector + 1j * rng.standard_normal(2**7)
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form="Right-canonical", chi_max=5)
+        assert isinstance(mps, CanonicalMPS)
+        mps.chi_max = 5
+
+        reference = mps.copy()
+        spectra = []
+        for site in range(0, 4):
+            theta = reference.two_site_tensor_next(site)
+            u_l, s_bond, v_r, _ = split_two_site_tensor(
+                theta, chi_max=5, renormalise=True, return_truncation_error=True
+            )
+            spectra.append(s_bond)
+            reference.tensors[site] = u_l
+            reference.tensors[site + 1] = v_r * s_bond[:, None, None]
+            reference.orth_centre = site + 1
+
+        moved, singular_values = mps.move_orth_centre(
+            4, return_singular_values=True, renormalise=True
+        )
+        assert moved.orth_centre == 4
+        assert len(singular_values) == len(spectra)
+        for got, want in zip(singular_values, spectra):
+            assert np.allclose(got, want, rtol=0.0, atol=1e-12)
+        assert np.allclose(moved.dense(), reference.dense(), rtol=0.0, atol=1e-12)
+        assert moved.bond_dimensions == reference.bond_dimensions
