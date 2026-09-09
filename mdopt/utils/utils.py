@@ -77,6 +77,7 @@ def svd(
     # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
     u_l = s = v_h = None  # type: ignore
+    back_q = None
     a = xp.asarray(mat)
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
@@ -89,14 +90,19 @@ def svd(
                 # No finiteness pre-scan: a non-finite input gives a non-finite
                 # factor whose svd raises LinAlgError into the fallbacks below,
                 # and the scan would be a device sync on the GPU backend.
+                # The back-multiplication by the QR factor is deferred until
+                # after the truncation below: only the kept rows of v_h (or
+                # columns of u_l) are ever needed, and each kept row is the
+                # same product whether or not the discarded ones are formed.
+                back_q = None
                 if cols >= 2 * rows:
                     q_f, r_f = xp.linalg.qr(a.T)
                     u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
-                    v_h = v_h @ q_f.T
+                    back_q = ("right", q_f)
                 elif rows >= 2 * cols:
                     q_f, r_f = xp.linalg.qr(a)
                     u_l, s, v_h = xp.linalg.svd(r_f, full_matrices=False)
-                    u_l = q_f @ u_l
+                    back_q = ("left", q_f)
                 else:
                     u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
             elif attempt == "gesdd":
@@ -145,6 +151,12 @@ def svd(
     u_l = u_l[:, :max_num]
     s = s[:max_num]
     v_h = v_h[:max_num, :]
+    if back_q is not None:
+        side, q_f = back_q
+        if side == "right":
+            v_h = _to_numpy(v_h @ q_f.T)
+        else:
+            u_l = _to_numpy(q_f @ u_l)
 
     if renormalise and s.size > 0:
         norm = float(np.linalg.norm(s))
