@@ -28,11 +28,13 @@ from pathlib import Path
 
 import numpy as np
 import qecstruct as qec
+import stim
 
 # Imported once here, not inside the workloads: function-local imports made
 # the first-run wall time and profile depend on invocation order (a workload
 # run alone paid cold-import cost that a full sorted suite had already paid).
 from mdopt.contractor.contractor import mps_mpo_contract
+from mdopt.decoding.dem import decode_dem, dem_to_problem
 from mdopt.examples.ising.ising import IsingMPO
 from mdopt.decoding.decoding import (
     apply_bitflip_bias,
@@ -78,6 +80,77 @@ def wl_surface_bitflip():
         # with an unmoved argmax must still move the fingerprint.
         outputs.append([float(success)] + [round(float(x), 10) for x in dense])
     return outputs
+
+
+def wl_css_optimised():
+    """Surface-code decode under the RCM qubit ordering (optimise_qubit_order)."""
+    code = qec.hypergraph_product(qec.repetition_code(5), qec.repetition_code(5))
+    rng = np.random.default_rng(52)
+    outputs = []
+    for _ in range(2):
+        error = generate_pauli_error_string(
+            len(code), 0.05, rng=rng, error_model="Bitflip"
+        )
+        dense, success = decode_css(
+            code,
+            error,
+            chi_max=64,
+            bias_type="Bitflip",
+            bias_prob=0.05,
+            renormalise=True,
+            silent=True,
+            contraction_strategy="Optimised",
+            qubit_order_strategy="Optimised",
+        )
+        outputs.append([float(success)] + [round(float(x), 10) for x in dense])
+    return outputs
+
+
+def _dem_case(task, distance, rounds, p, seed, num_sampled, num_keep):
+    """A circuit-level DEM plus its busiest sampled syndromes.
+
+    The busiest syndromes (most detection events) carry nontrivial posteriors
+    and drive the slowest contractions, so they are the ones worth timing and
+    fingerprinting; a quiet syndrome decodes to (1, 1e-10) and would not move.
+    """
+    circuit = stim.Circuit.generated(
+        f"surface_code:rotated_memory_{task}",
+        distance=distance,
+        rounds=rounds,
+        after_clifford_depolarization=p,
+        before_measure_flip_probability=p,
+        after_reset_flip_probability=p,
+    )
+    problem = dem_to_problem(
+        circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+    )
+    sampler = circuit.compile_detector_sampler(seed=seed)
+    detections, _ = sampler.sample(num_sampled, separate_observables=True)
+    order = np.argsort(-detections.sum(axis=1), kind="stable")[:num_keep]
+    return problem, detections[order].astype(int)
+
+
+def _dem_rows(problem, syndromes, chi_max):
+    outputs = []
+    for syndrome in syndromes:
+        masses, flips = decode_dem(problem, syndrome, chi_max=chi_max)
+        posterior = masses / masses.sum()
+        # [verdict, *normalised class masses]: the verdict is exact, the
+        # masses are chi-truncated posterior entries.
+        outputs.append([float(flips[0])] + [round(float(x), 10) for x in posterior])
+    return outputs
+
+
+def wl_dem_d3():
+    """Circuit-level DEM decode, d=3 r=3 p=0.8% memory-X (the Fig. 1d cell)."""
+    problem, syndromes = _dem_case("x", 3, 3, 0.008, seed=3, num_sampled=64, num_keep=8)
+    return _dem_rows(problem, syndromes, chi_max=32)
+
+
+def wl_dem_d5():
+    """Circuit-level DEM decode, d=5 r=5 p=0.5% memory-Z (the campaign cell)."""
+    problem, syndromes = _dem_case("z", 5, 5, 0.005, seed=5, num_sampled=32, num_keep=1)
+    return _dem_rows(problem, syndromes, chi_max=32)
 
 
 def wl_shor_depolarising():
@@ -152,13 +225,22 @@ def wl_dmrg_ground_state():
 
 BASELINE = HERE / "baseline.json"
 # Workloads whose fingerprint rows are [verdict, *posterior entries at chi_max].
-POSTERIOR_WORKLOADS = {"surface_bitflip", "shor_depolarising"}
+POSTERIOR_WORKLOADS = {
+    "surface_bitflip",
+    "shor_depolarising",
+    "css_optimised",
+    "dem_d3",
+    "dem_d5",
+}
 
 WORKLOADS = {
     "surface_bitflip": wl_surface_bitflip,
+    "css_optimised": wl_css_optimised,
     "shor_depolarising": wl_shor_depolarising,
     "classical_ldpc": wl_classical_ldpc,
     "dmrg_ground_state": wl_dmrg_ground_state,
+    "dem_d3": wl_dem_d3,
+    "dem_d5": wl_dem_d5,
 }
 
 
