@@ -17,5 +17,6 @@ Entry points
 - :mod:`mdopt.contractor` — tensor-network contraction utilities
 - :mod:`mdopt.utils` — shared tensor utilities
 
-The decoders used to live in ``mdopt.examples.decoding``. That import path still
-works but emits a ``DeprecationWarning``; import from :mod:`mdopt.decoding`.
+The decoder modules used to live at ``mdopt.examples.decoding.decoding`` and
+``mdopt.examples.decoding.dem``. Those paths still work but emit a
+``DeprecationWarning``; import from :mod:`mdopt.decoding`.
