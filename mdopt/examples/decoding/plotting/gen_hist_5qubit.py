@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from tqdm import tqdm
 
-from mdopt.examples.decoding.decoding import decode_custom, map_distribution_to_pauli
+from mdopt.decoding.decoding import decode_custom, map_distribution_to_pauli
 
 mpl.rcParams.update(
     {

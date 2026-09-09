@@ -25,7 +25,7 @@ from collections import Counter
 
 from mdopt.mps.utils import create_custom_product_state
 from mdopt.optimiser.utils import SWAP, COPY_LEFT, XOR_BULK, XOR_LEFT, XOR_RIGHT
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     custom_code_constraint_sites,
     custom_code_logicals_sites,
     apply_bitflip_bias,
