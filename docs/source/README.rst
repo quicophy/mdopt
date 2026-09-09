@@ -102,7 +102,7 @@ class-mass vector raises an ``ArithmeticError``, but a successful contraction
 does not by itself certify convergence. For reliable results, decode at
 increasing ``chi_max`` values and require the normalized class weights and
 prediction to stabilize. The harnesses behind the decoder’s validation
-thresholds of the surface code against minimum-weight perfect matching,
+(code-capacity thresholds of the surface code against minimum-weight perfect matching,
 a d=5 circuit-level cell decoded on a per-shot bond-dimension ladder
 with a calibration audit, and a reproduction of Fig. 1d of Piveteau,
 Chubb and Renes, PRX Quantum 5, 040303) live in
