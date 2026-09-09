@@ -49,8 +49,8 @@ Campaign scripts
 
 The notebooks stop at instance sizes that run in minutes. The Monte Carlo
 campaigns behind the thesis-scale results are shell scripts in
-``examples/decoding`` of the repository, one per code family, each with a
-``*_cc.sh`` twin that submits the same sweep as Slurm jobs; they drive the
+``examples/decoding`` of the repository. They include local drivers and
+``*_cc.sh`` variants that submit selected sweeps as Slurm jobs; they drive the
 importable modules under :mod:`mdopt.examples`. The detector-error-model
 harnesses (code-capacity thresholds against minimum-weight perfect matching, a
 d=5 circuit-level cell on a per-shot bond-dimension ladder, and the Fig. 1d
