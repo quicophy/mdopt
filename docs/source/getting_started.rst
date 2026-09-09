@@ -87,11 +87,13 @@ a sampled syndrome:
     )
     print(predicted_flips, observables[0].astype(int))
 
-:func:`~mdopt.decoding.dem.decode_dem` returns the probability mass of every
-observable-flip class together with the most likely one. A class mass that turns
-materially negative, or a vector that collapses to zero, raises an
-``ArithmeticError``: the contraction is not converged at that ``chi_max`` and the
-shot should be decoded again at a larger bond dimension. The harnesses behind the
+:func:`~mdopt.decoding.dem.decode_dem` returns a non-normalized weight for every
+observable-flip class together with the most likely one; divide the returned
+vector by its sum to obtain probabilities. A materially negative, non-finite,
+or collapsed class-mass vector raises an ``ArithmeticError``, but a successful
+contraction does not certify convergence. For reliable results, decode at
+increasing ``chi_max`` values and require the normalized class weights and
+prediction to stabilize. The harnesses behind the
 decoder's validation campaigns live in ``examples/decoding/dem_campaign`` in the
 repository, with a README on how every number is regenerated.
 
