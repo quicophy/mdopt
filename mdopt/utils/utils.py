@@ -137,10 +137,10 @@ def svd(
     else:
         raise RuntimeError(f"All SVD methods failed. Last error: {last_exception}")
 
-    # Convert to NumPy for downstream consistency with the current codebase
-    u_l = _to_numpy(u_l)
+    # The spectrum comes to the host first: the truncation count is decided
+    # here, and the singular vectors are sliced (and, on the QR-reduced
+    # paths, multiplied back) while still on the backend, then converted.
     s = _to_numpy(s).astype(float, copy=False)  # singular values are real non-negative
-    v_h = _to_numpy(v_h)
 
     # Truncate by cut and chi_max
     # int(chi_max) first would raise OverflowError on the chi_max=np.inf
@@ -154,9 +154,13 @@ def svd(
     if back_q is not None:
         side, q_f = back_q
         if side == "right":
-            v_h = _to_numpy(v_h @ q_f.T)
+            v_h = v_h @ q_f.T
         else:
-            u_l = _to_numpy(q_f @ u_l)
+            u_l = q_f @ u_l
+
+    # Convert to NumPy for downstream consistency with the current codebase
+    u_l = _to_numpy(u_l)
+    v_h = _to_numpy(v_h)
 
     if renormalise and s.size > 0:
         norm = float(np.linalg.norm(s))

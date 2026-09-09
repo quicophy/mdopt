@@ -366,10 +366,10 @@ class CanonicalMPS:
         renormalise : bool
             Whether to renormalise singular values during each SVD.
         inplace : bool
-            Whether the tensors of this instance may be overwritten instead of
-            deep-copied first. The returned object is the one to use either
-            way; with ``inplace=True`` this instance must not be used
-            afterwards (a leftward move leaves it holding stale views).
+            Whether a rightward move may overwrite this instance's tensors
+            instead of deep-copying them first (a leftward move builds a new
+            object either way and leaves this instance unmoved). The returned
+            object is the one to use in both cases.
 
         Raises
         ------
