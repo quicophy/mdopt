@@ -106,7 +106,7 @@ thresholds of the surface code against minimum-weight perfect matching,
 a d=5 circuit-level cell decoded on a per-shot bond-dimension ladder
 with a calibration audit, and a reproduction of Fig. 1d of Piveteau,
 Chubb and Renes, PRX Quantum 5, 040303) live in
-```examples/decoding/dem_campaign`` <https://github.com/quicophy/mdopt/tree/main/examples/decoding/dem_campaign>`__
+``examples/decoding/dem_campaign`` (`GitHub <https://github.com/quicophy/mdopt/tree/main/examples/decoding/dem_campaign>`__)
 together with a README on how every number is regenerated.
 
 Package layout
