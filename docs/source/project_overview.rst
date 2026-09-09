@@ -7,7 +7,9 @@ Motivation
 mdopt expresses discrete optimisation tasks in the tensor-network (MPS/MPO) formalism.
 This enables controlled approximations (e.g., bond-dimension truncation) and leverages
 well-studied contraction/optimisation techniques for problems such as decoding quantum
-error-correcting codes.
+error-correcting codes. The decoders cover code-capacity noise on stabiliser codes
+(:mod:`mdopt.decoding.decoding`) and circuit-level noise through stim detector error
+models (:mod:`mdopt.decoding.dem`), with one MPS site per error mechanism.
 
 Intended users
 --------------

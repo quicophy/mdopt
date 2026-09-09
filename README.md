@@ -65,9 +65,48 @@ logicals, success = decode_css(
 )
 ```
 
+## Decoding circuit-level noise from a detector error model
+
+Circuit-level noise enters through a [stim](https://github.com/quantumlib/Stim) detector error model (DEM). Every error mechanism becomes one MPS site, each detector a parity-check (XOR) constraint and each logical observable a readout, so the same MPS-MPO machinery returns the maximum-likelihood observable flip for a sampled syndrome.
+
+```python
+import stim
+from mdopt.decoding import decode_dem, dem_to_problem
+
+circuit = stim.Circuit.generated(
+    "surface_code:rotated_memory_x",
+    distance=3,
+    rounds=3,
+    after_clifford_depolarization=0.008,
+    before_measure_flip_probability=0.008,
+    after_reset_flip_probability=0.008,
+)
+# Maximum likelihood wants the undecomposed hyperedges, so keep decompose_errors off.
+problem = dem_to_problem(
+    circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+)
+sampler = circuit.compile_detector_sampler(seed=1)
+detections, observables = sampler.sample(1, separate_observables=True)
+class_masses, predicted_flips = decode_dem(problem, detections[0].astype(int), chi_max=32)
+print(predicted_flips, observables[0].astype(int))
+```
+
+`decode_dem` returns the probability mass of every observable-flip class together with the most likely one. A class mass that turns materially negative, or a vector that collapses to zero, raises an `ArithmeticError`: the contraction is not converged at that `chi_max` and the shot should be decoded again at a larger bond dimension. The harnesses behind the decoder's validation (code-capacity thresholds of the surface code against minimum-weight perfect matching, a d=5 circuit-level cell decoded on a per-shot bond-dimension ladder with a calibration audit, and a reproduction of Fig. 1d of Piveteau, Chubb and Renes, PRX Quantum 5, 040303) live in [`examples/decoding/dem_campaign`](https://github.com/quicophy/mdopt/tree/main/examples/decoding/dem_campaign) together with a README on how every number is regenerated.
+
+## Package layout
+
+- `mdopt.mps` — matrix product states in the explicit (Vidal) and canonical forms.
+- `mdopt.contractor` — MPS-MPO zip-up contraction with truncation.
+- `mdopt.optimiser` — DMRG, dephasing DMRG, and the parity-check MPO tensors applied by `apply_constraints`.
+- `mdopt.decoding` — the decoders: `decode_css`, `decode_custom` and `decode_message` for stabiliser and classical codes, `decode_dem` for detector error models.
+- `mdopt.utils` — truncated SVD/QR and tensor helpers.
+- `mdopt.examples` — the runnable campaign scripts behind the example notebooks.
+
+The decoders used to live in `mdopt.examples.decoding`. That import path still works, but it emits a `DeprecationWarning` and will be removed in a future release; import from `mdopt.decoding` instead.
+
 ## Examples
 
-The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder contains full workflows that demonstrate typical use cases, such as quantum / classical LDPC code decoding, ground state search for the quantum Ising model and random quantum curcuit simulation. Each example is fully documented and serves as a starting point for building your own experiments.
+The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder contains full workflows that demonstrate typical use cases, such as quantum / classical LDPC code decoding, ground state search for the quantum Ising model and random quantum circuit simulation. Each example is fully documented and serves as a starting point for building your own experiments. The shell scripts in [`examples/decoding`](https://github.com/quicophy/mdopt/tree/main/examples/decoding) run the Monte Carlo campaigns behind the notebooks, locally (`*.sh`) or as Slurm jobs (`*_cc.sh`), and the detector-error-model harnesses live in `examples/decoding/dem_campaign`.
 The package has been tested on macOS and Linux (Compute Canada clusters) and does not currently support Windows.
 
 ## Cite

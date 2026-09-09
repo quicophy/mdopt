@@ -44,6 +44,20 @@ Examples
 - :doc:`notebooks/gpu_example` — Illustrates how to leverage GPU acceleration (via CuPy) for MPS/MPO operations. Compares performance between CPU and GPU backends for key tensor network routines, demonstrating speedups on compatible hardware.
 
 
+Campaign scripts
+----------------
+
+The notebooks stop at instance sizes that run in minutes. The Monte Carlo
+campaigns behind the thesis-scale results are shell scripts in
+``examples/decoding`` of the repository, one per code family, each with a
+``*_cc.sh`` twin that submits the same sweep as Slurm jobs; they drive the
+importable modules under :mod:`mdopt.examples`. The detector-error-model
+harnesses (code-capacity thresholds against minimum-weight perfect matching, a
+d=5 circuit-level cell on a per-shot bond-dimension ladder, and the Fig. 1d
+reproduction of Piveteau, Chubb and Renes) live in
+``examples/decoding/dem_campaign`` with a README on seeding, record formats,
+cost and how each reported figure derives from the records.
+
 .. toctree::
    :maxdepth: 1
    :caption: How these are built
