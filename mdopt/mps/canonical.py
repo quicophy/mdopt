@@ -152,7 +152,8 @@ class CanonicalMPS:
         Returns a reversed version of the current MPS.
         """
         reversed_tensors = [np.transpose(tensor) for tensor in reversed(self.tensors)]
-        if self.orth_centre:
+        # `is not None`, not truthiness: a centre at site 0 is a centre.
+        if self.orth_centre is not None:
             reversed_orth_centre = (self.num_sites - 1) - self.orth_centre
             return CanonicalMPS(
                 reversed_tensors, reversed_orth_centre, self.tolerance, self.chi_max
