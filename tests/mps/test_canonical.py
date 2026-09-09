@@ -895,8 +895,6 @@ def _two_site_reference_move(mps, final_pos, renormalise):
     (renormalised moves and returned spectra take the one-site path too), so
     an old-vs-new comparison has to build the reference explicitly.
     """
-    from mdopt.utils.utils import split_two_site_tensor
-
     if mps.orth_centre == final_pos:
         return mps.copy()
     leftwards = mps.orth_centre > final_pos
