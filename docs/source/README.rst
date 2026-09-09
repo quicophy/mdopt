@@ -95,12 +95,13 @@ flip for a sampled syndrome.
    class_masses, predicted_flips = decode_dem(problem, detections[0].astype(int), chi_max=32)
    print(predicted_flips, observables[0].astype(int))
 
-``decode_dem`` returns the probability mass of every observable-flip
-class together with the most likely one. A class mass that turns
-materially negative, or a vector that collapses to zero, raises an
-``ArithmeticError``: the contraction is not converged at that
-``chi_max`` and the shot should be decoded again at a larger bond
-dimension. The harnesses behind the decoder’s validation (code-capacity
+``decode_dem`` returns a non-normalized weight for every observable-flip
+class together with the most likely one; divide the returned vector by its sum
+to obtain probabilities. A materially negative, non-finite, or collapsed
+class-mass vector raises an ``ArithmeticError``, but a successful contraction
+does not by itself certify convergence. For reliable results, decode at
+increasing ``chi_max`` values and require the normalized class weights and
+prediction to stabilize. The harnesses behind the decoder’s validation
 thresholds of the surface code against minimum-weight perfect matching,
 a d=5 circuit-level cell decoded on a per-shot bond-dimension ladder
 with a calibration audit, and a reproduction of Fig. 1d of Piveteau,
