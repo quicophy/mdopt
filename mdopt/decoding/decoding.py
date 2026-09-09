@@ -1060,6 +1060,10 @@ KNOWN_ERROR_MODELS = frozenset(
     {"Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure"}
 )
 TIE_POLICIES = ("optimistic", "fractional", "pessimistic")
+# "Dense" forces the dense readout regardless of dense_readout_max_sites;
+# "Dephasing DMRG" reads out densely up to that many logical sites and by
+# DMRG beyond it; "Optima TT" is reserved and not implemented.
+OPTIMISERS = ("Dephasing DMRG", "Dense", "Optima TT")
 QUBIT_ORDER_STRATEGIES = ("Natural", "Optimised")
 
 
@@ -1619,8 +1623,12 @@ def decode_css(
         interaction graph to reduce the bandwidth of each MPO constraint string,
         lowering the required bond dimension.
     optimiser : str
-        The optimiser used to find the closest basis product state to a given MPDO.
-        Available options: "Dephasing DMRG", "Dense", "Optima TT".
+        How the logical class is read out of the logical MPS. "Dephasing DMRG"
+        reads it out densely while the logical MPS has at most
+        ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
+        "Dense" forces the dense readout regardless of the size (the caller
+        accepts the 4**k memory cost); "Optima TT" is reserved and raises
+        NotImplementedError.
     tolerance : float
         The tolerance for the MPS classes.
     dense_readout_max_sites : int
@@ -1787,8 +1795,12 @@ def decode_custom(
     contraction_strategy : str
         The contractor's strategy.
     optimiser : str
-        The optimiser used to find the closest basis product state to a given MPDO.
-        Available options: "Dephasing DMRG", "Dense", "Optima TT".
+        How the logical class is read out of the logical MPS. "Dephasing DMRG"
+        reads it out densely while the logical MPS has at most
+        ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
+        "Dense" forces the dense readout regardless of the size (the caller
+        accepts the 4**k memory cost); "Optima TT" is reserved and raises
+        NotImplementedError.
     tolerance : float
         The tolerance for the MPS classes.
     dense_readout_max_sites : int
@@ -1823,6 +1835,24 @@ def decode_custom(
                     f"Every operator must act on {expected_length} qubits; "
                     f"{name} contains {string!r} of length {len(string)}."
                 )
+    # The Pauli alphabet is validated here too: pauli_to_mps would reject a
+    # malformed operator only on the nontrivial-error path.
+    for name, strings in (
+        ("stabilizers", stabilizers),
+        ("x_logicals", x_logicals),
+        ("z_logicals", z_logicals),
+    ):
+        for string in strings:
+            if not set(string) <= set("IXYZ"):
+                raise ValueError(
+                    f"{name} contains {string!r}, which is not a Pauli string "
+                    "over 'I', 'X', 'Y', 'Z'."
+                )
+    if not set(error) <= set("IXYZE"):
+        raise ValueError(
+            f"The error {error!r} is not a Pauli string over 'I', 'X', 'Y', "
+            "'Z' (or 'E' for an erased qubit)."
+        )
     # The pairing requirement is validated here too -- the fourth check the
     # trivial-error fast path below would otherwise bypass.
     if len(x_logicals) != len(z_logicals):
@@ -1862,12 +1892,19 @@ def decode_custom(
             f"{sorted(KNOWN_ERROR_MODELS)} ('Bitflip' selects the bit-flip "
             "bias, every other model the depolarising bias)."
         )
-    # The tie policy is validated here too, so that the public API rejects a
-    # bad selector regardless of whether the sampled error is trivial.
+    # The tie policy and the optimiser are validated here too, so that the
+    # public API rejects a bad selector regardless of whether the sampled
+    # error is trivial.
     if tie_policy not in TIE_POLICIES:
         raise ValueError(
             f"Unknown tie_policy {tie_policy!r}; expected one of {TIE_POLICIES}."
         )
+    if optimiser not in OPTIMISERS:
+        raise ValueError(
+            f"Unknown optimiser {optimiser!r}; expected one of {OPTIMISERS}."
+        )
+    if optimiser == "Optima TT":
+        raise NotImplementedError("Optima TT is not implemented yet.")
 
     if _identity_fast_path_fires(error, bias_prob):
         if not silent:
@@ -2021,7 +2058,7 @@ def decode_custom(
     if not silent:
         LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if num_logical_sites <= dense_readout_max_sites:
+    if optimiser == "Dense" or num_logical_sites <= dense_readout_max_sites:
         logical_signed = np.real(
             np.asarray(logical_mps.dense(flatten=True, renormalise=renormalise, norm=2))
         )
@@ -2096,10 +2133,6 @@ def decode_custom(
         return result
         # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
 
-    if optimiser == "Optima TT":
-        raise NotImplementedError("Optima TT is not implemented yet.")
-    if optimiser != "Dephasing DMRG":
-        raise ValueError("Invalid optimiser chosen.")
     if tie_policy != "optimistic":
         raise NotImplementedError(
             f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "

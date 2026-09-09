@@ -1816,3 +1816,34 @@ def test_negative_logical_amplitudes_are_clamped_not_folded():
     posterior, success = _decode_with_readout([-1.0, 0.3, 0.1, 0.0])
     assert success == 0.0
     assert posterior[0] == 0.0
+
+
+def test_decode_custom_validates_pauli_alphabet_before_the_shortcut():
+    """Malformed operators or errors are rejected even for a trivial error."""
+    with pytest.raises(ValueError, match="not a Pauli string"):
+        decode_custom(["ZZQ"], ["XXX"], ["ZII"], "III", silent=True)
+    with pytest.raises(ValueError, match="not a Pauli string"):
+        decode_custom(["ZZI", "IZZ"], ["XXX"], ["ZII"], "IIQ", silent=True)
+    # 'E' is legal in the error (erasure) but not in an operator.
+    with pytest.raises(ValueError, match="not a Pauli string"):
+        decode_custom(["ZZE"], ["XXX"], ["ZII"], "III", silent=True)
+
+
+def test_optimiser_is_validated_before_the_shortcut_and_dense_forces_readout():
+    """The optimiser selector is checked on every call; "Dense" means dense."""
+    code = qec.shor_code()
+    trivial = "I" * 9
+    with pytest.raises(ValueError, match="optimiser"):
+        decode_css(code, trivial, optimiser="Nonsense", silent=True)
+    with pytest.raises(NotImplementedError, match="Optima TT"):
+        decode_css(code, trivial, optimiser="Optima TT", silent=True)
+    # With the dense threshold at 0 the default optimiser takes the DMRG path,
+    # while "Dense" still returns the full 4**k posterior.
+    error = "X" + "I" * 8
+    posterior, success = decode_css(
+        code, error, optimiser="Dense", dense_readout_max_sites=0, silent=True
+    )
+    assert len(posterior) == 4
+    assert success == 1.0
+    reference, _ = decode_css(code, error, silent=True)
+    assert np.allclose(posterior, reference)
