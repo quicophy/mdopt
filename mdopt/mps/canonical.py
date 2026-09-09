@@ -349,7 +349,7 @@ class CanonicalMPS:
         return_singular_values: bool = False,
         renormalise: bool = True,
         inplace: bool = False,
-    ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[list]]]:
+    ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[np.ndarray]]]:
         """
         Moves the orthogonality centre from its current position to ``final_pos``.
 
@@ -384,7 +384,7 @@ class CanonicalMPS:
                 f"from 0 to {self.num_sites-1}, given {final_pos}."
             )
 
-        singular_values = []
+        singular_values: List[np.ndarray] = []
 
         if self.orth_centre is None:
             self.orth_centre = self.check_orth_centre()  # type: ignore
