@@ -49,7 +49,7 @@ sys.path.append(project_root_fir)
 sys.path.append(examples_path_fir)
 
 try:
-    from mdopt.examples.decoding.decoding import (
+    from mdopt.decoding.decoding import (
         str_to_bool,
         decode_css,
         generate_pauli_error_string,

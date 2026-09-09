@@ -25,7 +25,7 @@ from tqdm import tqdm
 
 from mdopt.mps.utils import create_custom_product_state
 from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     linear_code_constraint_sites,
     linear_code_prepare_message,
     apply_bitflip_bias,

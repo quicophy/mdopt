@@ -25,9 +25,14 @@ Run this quick decoding example to verify your setup:
 
 .. code-block:: python
 
+    import logging
+
     import numpy as np
     import qecstruct as qec
-    from mdopt.examples.decoding.decoding import decode_css
+    from mdopt.decoding import decode_css
+
+    # The library does not configure logging; opt in to see progress with silent=False.
+    logging.basicConfig(level=logging.INFO)
 
     # Define a small instance of the surface code
     LATTICE_SIZE = 3

@@ -34,7 +34,7 @@ import qecstruct as qec
 # run alone paid cold-import cost that a full sorted suite had already paid).
 from mdopt.contractor.contractor import mps_mpo_contract
 from mdopt.examples.ising.ising import IsingMPO
-from mdopt.examples.decoding.decoding import (
+from mdopt.decoding.decoding import (
     apply_bitflip_bias,
     apply_constraints,
     decode_css,
