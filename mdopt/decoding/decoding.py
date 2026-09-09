@@ -1892,9 +1892,13 @@ def decode_custom(
             f"{sorted(KNOWN_ERROR_MODELS)} ('Bitflip' selects the bit-flip "
             "bias, every other model the depolarising bias)."
         )
-    # The tie policy and the optimiser are validated here too, so that the
-    # public API rejects a bad selector regardless of whether the sampled
-    # error is trivial.
+    # Public selectors are validated before the shortcut so malformed options
+    # fail consistently for every sampled error.
+    if contraction_strategy not in ("Naive", "Optimised"):
+        raise ValueError(
+            f"Unknown contraction_strategy {contraction_strategy!r}; expected "
+            "'Naive' or 'Optimised'."
+        )
     if tie_policy not in TIE_POLICIES:
         raise ValueError(
             f"Unknown tie_policy {tie_policy!r}; expected one of {TIE_POLICIES}."
