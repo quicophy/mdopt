@@ -138,7 +138,7 @@ as quantum / classical LDPC code decoding, ground state search for the
 quantum Ising model and random quantum circuit simulation. Each example
 is fully documented and serves as a starting point for building your own
 experiments. The shell scripts in
-```examples/decoding`` <https://github.com/quicophy/mdopt/tree/main/examples/decoding>`__
+`examples/decoding <https://github.com/quicophy/mdopt/tree/main/examples/decoding>`__
 run the Monte Carlo campaigns behind the notebooks, locally (``*.sh``)
 or as Slurm jobs (``*_cc.sh``), and the detector-error-model harnesses
 live in ``examples/decoding/dem_campaign``. The package has been tested
