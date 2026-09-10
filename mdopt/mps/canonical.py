@@ -433,7 +433,7 @@ class CanonicalMPS:
                 # An inexact dtype: integer or boolean tensors are valid input
                 # (the SVD promotes them), and the in-place subtraction below
                 # must not fail on them. No copy for float or complex.
-gram_dtype = np.result_type(flat.dtype, 1.0)
+                gram_dtype = np.result_type(flat.dtype, 1.0)
                 flat_inexact = np.asarray(flat, dtype=gram_dtype)
                 gram = flat_inexact @ flat_inexact.conj().T
                 # max |G - I| <= 1e-12, spelled without np.allclose: the same
