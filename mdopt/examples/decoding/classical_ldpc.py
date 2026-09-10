@@ -166,6 +166,34 @@ def run_single_experiment(
         return 1
 
 
+def run_single_experiment_safe(
+    chi_max,
+    error_rate,
+    initial_codeword,
+    perturbed_codeword,
+    code_constraint_sites,
+    num_dmrg_runs=10,
+):
+    """:func:`run_single_experiment` that reports a raised shot as NaN.
+
+    A worker-pool entry point: an exception inside one shot must not abort
+    the batch, and a NaN keeps the shot out of the average while the caller
+    can still count how many shots failed to decode.
+    """
+    try:
+        return run_single_experiment(
+            chi_max,
+            error_rate,
+            initial_codeword,
+            perturbed_codeword,
+            code_constraint_sites,
+            num_dmrg_runs=num_dmrg_runs,
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logging.error("A shot raised %s: %s", type(exc).__name__, exc)
+        return float("nan")
+
+
 def run_experiment(
     num_bits, chi_max, error_rate, num_experiments, seed, num_dmrg_runs=50
 ):
