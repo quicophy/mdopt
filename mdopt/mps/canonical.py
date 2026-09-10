@@ -430,7 +430,12 @@ class CanonicalMPS:
                 # canonical and every later move takes the fast path.
                 neighbour = mps.tensors[i + 1]
                 flat = neighbour.reshape(neighbour.shape[0], -1)
-                gram = flat @ flat.conj().T
+                # An inexact dtype: integer or boolean tensors are valid input
+                # (the SVD promotes them), and the in-place subtraction below
+                # must not fail on them. No copy for float or complex.
+                gram = np.asarray(
+                    flat @ flat.conj().T, dtype=np.result_type(flat.dtype, 1.0)
+                )
                 # max |G - I| <= 1e-12, spelled without np.allclose: the same
                 # test, minus allclose's temporaries, on a per-site hot path.
                 gram[np.diag_indices_from(gram)] -= 1.0

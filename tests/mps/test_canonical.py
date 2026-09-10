@@ -1086,3 +1086,19 @@ def test_one_site_move_matches_two_site_move_with_renormalisation():
             assert np.allclose(got, want, rtol=0.0, atol=1e-12)
         assert np.allclose(moved.dense(), reference.dense(), rtol=0.0, atol=1e-12)
         assert moved.bond_dimensions == reference.bond_dimensions
+
+
+def test_move_orth_centre_accepts_integer_and_boolean_tensors():
+    """Exact-arithmetic product states are valid input; the isometry gate must
+    promote its Gram matrix rather than fail on an in-place float subtraction."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    for dtype in (int, bool):
+        tensors = [np.array([1, 0], dtype=dtype).reshape(1, 2, 1) for _ in range(4)]
+        mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+        moved = mps.move_orth_centre(3, renormalise=False)
+        assert moved.orth_centre == 3
+        assert np.allclose(moved.dense(flatten=True)[0], 1.0)
+        back = moved.move_orth_centre(0, renormalise=True)
+        assert back.orth_centre == 0
+        assert list(back.bond_dimensions) == [1, 1, 1]
