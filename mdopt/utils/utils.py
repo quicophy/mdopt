@@ -83,9 +83,9 @@ def svd(
     # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
     u_l = s = v_h = None  # type: ignore
-    back_q = None
     a = xp.asarray(mat)
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
+        back_q = None
         try:
             if attempt == "xp":
                 rows, cols = a.shape
