@@ -939,8 +939,8 @@ def test_move_orth_centre_carries_a_collapsed_bond_through():
 
 def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
     """A centre whose whole spectrum sits below the 1e-12 cut must collapse
-    to a zero-width bond on the QR path exactly as on the SVD path, rather
-    than propagating a sub-cut direction."""
+    to a zero-width bond on the centre-only path exactly as on the two-site
+    SVD path, rather than propagating a sub-cut direction."""
     from mdopt.mps.canonical import CanonicalMPS
 
     def tiny_centre_mps():
