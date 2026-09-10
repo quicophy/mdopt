@@ -38,6 +38,11 @@ def svd(
     """
     Performs Singular Value Decomposition with different features.
 
+    Strongly rectangular input (one side at least twice the other) is first
+    reduced by a QR/LQ factorisation and the small square factor is
+    decomposed; the QR factor is multiplied back onto the kept singular
+    vectors only, after the truncation. The result is the same to rounding.
+
     Parameters
     ----------
     mat : np.ndarray
@@ -57,8 +62,9 @@ def svd(
     -------
     u_l : np.ndarray
         Unitary matrix having left singular vectors as columns.
-    singular_values : list
-        The singular values, sorted in non-increasing order.
+    singular_values : np.ndarray
+        The singular values kept after the cut and ``chi_max``, sorted in
+        non-increasing order, as a real one-dimensional array.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
     truncation_error : Optional[float]
