@@ -64,7 +64,15 @@ def _zip_first(left, right, mpo_left, mpo_right, backend):
 
 
 def _zip_step(centre, right, mpo_tensor, backend):
-    """One zip-up sweep step, ``ijkl, lmn, komp -> ijpon`` (see _zip_first)."""
+    """One zip-up sweep step, ``ijkl, lmn, komp -> ijpon`` (see _zip_first).
+
+    On the NumPy backend the MPO tensor is contracted with the right MPS
+    tensor first, arranged so that the final tensordot's output already has
+    the ``i j p o n`` layout: the caller's reshape to a matrix is then a view
+    instead of a copy of the two-site tensor, and only the small
+    ``mpo x right`` intermediate is transposed. Same operands, same sums;
+    the result agrees with the einsum to rounding.
+    """
     if backend != "numpy":
         return _contract_cached(
             "ijkl, lmn, komp -> ijpon",
@@ -74,9 +82,11 @@ def _zip_step(centre, right, mpo_tensor, backend):
             right,
             mpo_tensor,
         )
-    pair = np.tensordot(centre, right, axes=(3, 0))  # i j k m n
-    out = np.tensordot(pair, mpo_tensor, axes=([2, 3], [0, 2]))  # i j n o p
-    return out.transpose(0, 1, 4, 3, 2)  # i j p o n
+    # k o m p -> k p o m, so that the free legs come out as p, o.
+    ops = np.tensordot(
+        mpo_tensor.transpose(0, 3, 1, 2), right, axes=(3, 1)
+    )  # k p o l n
+    return np.tensordot(centre, ops, axes=([2, 3], [0, 3]))  # i j p o n
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
@@ -383,17 +393,16 @@ def mps_mpo_contract(
 
         # Sweep across the MPO
         for i in range(len(mpo) - 2):
-            mps.tensors[orth_centre_index], singular_values, b_r, _ = (
+            mps.tensors[orth_centre_index], singular_values, b_r = (
                 split_two_site_tensor(
                     two_site_mps_mpo_tensor,
                     chi_max=chi_max,
                     cut=cut,
                     renormalise=renormalise,
-                    return_truncation_error=True,
                 )
             )
-            with A.stream():
-                if A.GPU:
+            if A.GPU:
+                with A.stream():
                     mps.tensors[orth_centre_index] = A.to_device(
                         mps.tensors[orth_centre_index]
                     )
@@ -401,8 +410,7 @@ def mps_mpo_contract(
                     singular_values = A.to_device(np.asarray(singular_values))
 
             orth_centre_index += 1
-            if isinstance(mps, CanonicalMPS):
-                mps.orth_centre = orth_centre_index
+            mps.orth_centre = orth_centre_index
 
             # Replace diag(s) @ b_r with broadcast multiply (no diag allocation)
             mps.tensors[orth_centre_index] = (
@@ -431,15 +439,14 @@ def mps_mpo_contract(
             )
 
         # Final split and update last tensor
-        mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
+        mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
             two_site_mps_mpo_tensor,
             chi_max=chi_max,
             cut=cut,
             renormalise=renormalise,
-            return_truncation_error=True,
         )
-        with A.stream():
-            if A.GPU:
+        if A.GPU:
+            with A.stream():
                 mps.tensors[orth_centre_index] = A.to_device(
                     mps.tensors[orth_centre_index]
                 )

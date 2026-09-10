@@ -303,6 +303,13 @@ def apply_constraints(
             continue
 
         # Ensure orthogonality centre is set and moved once per string
+        if mps.orth_centre is None and all(d == 1 for d in mps.bond_dimensions):
+            # A product state (every bond of dimension 1) needs no isometry
+            # scan: whether its sites are normalised or not, the convention
+            # below lands on site 0 (all isometric, or the first
+            # non-isometric site of a biased chain), and the move from there
+            # canonicalises the sites it crosses.
+            mps.orth_centre = 0
         if mps.orth_centre is None:
             orth_centres, flags_left, flags_right = find_orth_centre(
                 mps, return_orth_flags=True
