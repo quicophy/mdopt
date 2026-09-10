@@ -177,8 +177,9 @@ def run_single_experiment_safe(
     """:func:`run_single_experiment` that reports a raised shot as NaN.
 
     A worker-pool entry point: an exception inside one shot must not abort
-    the batch, and a NaN keeps the shot out of the average while the caller
-    can still count how many shots failed to decode.
+    the batch. The NaN is a sentinel for the caller to count and handle
+    explicitly (the notebooks count such shots as failures); it is not meant
+    to be averaged over.
     """
     try:
         return run_single_experiment(
