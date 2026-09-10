@@ -166,6 +166,16 @@ def run_single_experiment(
         return 1
 
 
+def quiet_worker_logging():
+    """Pool initializer: keep a worker's per-step INFO lines out of the parent.
+
+    The module configures INFO logging at import, which every spawned worker
+    repeats; a notebook that captures child output would otherwise collect
+    thousands of progress lines per rate.
+    """
+    logging.getLogger().setLevel(logging.WARNING)
+
+
 def run_single_experiment_safe(
     chi_max,
     error_rate,
