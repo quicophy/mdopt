@@ -54,12 +54,61 @@ Run this quick decoding example to verify your setup:
         silent=False,
     )
 
+Decoding a detector error model
+-------------------------------
+
+Circuit-level noise enters through a `stim <https://github.com/quantumlib/Stim>`__
+detector error model (DEM). Every error mechanism becomes one MPS site, each
+detector a parity-check (XOR) constraint and each logical observable a readout,
+so the same MPS-MPO machinery returns the maximum-likelihood observable flip for
+a sampled syndrome:
+
+.. code-block:: python
+
+    import stim
+    from mdopt.decoding import decode_dem, dem_to_problem
+
+    circuit = stim.Circuit.generated(
+        "surface_code:rotated_memory_x",
+        distance=3,
+        rounds=3,
+        after_clifford_depolarization=0.008,
+        before_measure_flip_probability=0.008,
+        after_reset_flip_probability=0.008,
+    )
+    # Maximum likelihood wants the undecomposed hyperedges, so keep decompose_errors off.
+    problem = dem_to_problem(
+        circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+    )
+    sampler = circuit.compile_detector_sampler(seed=1)
+    detections, observables = sampler.sample(1, separate_observables=True)
+    class_masses, predicted_flips = decode_dem(
+        problem, detections[0].astype(int), chi_max=32
+    )
+    print(predicted_flips, observables[0].astype(int))
+
+:func:`~mdopt.decoding.dem.decode_dem` returns a non-normalized weight for every
+observable-flip class together with the most likely one; divide the returned
+vector by its sum to obtain probabilities. A materially negative, non-finite,
+or collapsed class-mass vector raises an ``ArithmeticError``, but a successful
+contraction does not certify convergence. For reliable results, decode at
+increasing ``chi_max`` values and require the normalized class weights and
+prediction to stabilize. The harnesses behind the
+decoder's validation campaigns live in ``examples/decoding/dem_campaign`` in the
+repository, with a README on how every number is regenerated.
+
 Workflow at a glance
 --------------------
 
 1. Formulate your optimisation problem in the MPS-MPO formalism (MPS state, MPO constraints/operators).
 2. Apply constraints/operations with a chosen contraction and truncation strategies.
 3. Optimise (e.g., DMRG-like decoding) and evaluate success metrics.
+
+For decoding, steps 1-3 are wrapped by :func:`~mdopt.decoding.decoding.decode_css`
+(CSS codes from ``qecstruct``), :func:`~mdopt.decoding.decoding.decode_custom`
+(any stabiliser code given as Pauli strings),
+:func:`~mdopt.decoding.decoding.decode_message` (classical linear codes) and
+:func:`~mdopt.decoding.dem.decode_dem` (detector error models).
 
 Platforms
 ---------

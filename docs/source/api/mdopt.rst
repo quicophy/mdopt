@@ -13,6 +13,7 @@ Subpackages
    :maxdepth: 4
 
    mdopt.contractor
+   mdopt.decoding
    mdopt.mps
    mdopt.optimiser
    mdopt.utils
