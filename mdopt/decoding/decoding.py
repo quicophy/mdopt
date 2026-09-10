@@ -66,9 +66,11 @@ def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     Notes
     -----
     This function returns a one-site bias channel MPO which
-    acts on one-qubit computational basis states as follows:
-    |0> -> √(1-p)|0> + √p|1>,
-    |1> -> √p|0>  + √(1-p)|1>,
+    acts on one-qubit computational basis states as follows::
+
+        |0> -> √(1-p)|0> + √p|1>,
+        |1> -> √p|0>  + √(1-p)|1>,
+
     Note, that this operation is not unitary, which means that it does not
     preserve the canonical form without enforcing renormalisation.
     """
@@ -109,11 +111,13 @@ def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     Notes
     -----
     This function returns a two-site bias channel MPO which
-    acts on two-qubit computational basis states as follows:
-    |00> -> √(1-p)|00> + √(p/3)|01> + √(p/3)|10> + √(p/3)|11>,
-    |01> -> √(p/3)|00> + √(1-p)|01> + √(p/3)|10> + √(p/3)|11>,
-    |10> -> √(p/3)|00> + √(p/3)|01> + √(1-p)|10> + √(p/3)|11>,
-    |11> -> √(p/3)|00> + √(p/3)|01> + √(p/3)|10> + √(1-p)|11>,
+    acts on two-qubit computational basis states as follows::
+
+        |00> -> √(1-p)|00> + √(p/3)|01> + √(p/3)|10> + √(p/3)|11>,
+        |01> -> √(p/3)|00> + √(1-p)|01> + √(p/3)|10> + √(p/3)|11>,
+        |10> -> √(p/3)|00> + √(p/3)|01> + √(1-p)|10> + √(p/3)|11>,
+        |11> -> √(p/3)|00> + √(p/3)|01> + √(p/3)|10> + √(1-p)|11>,
+
     Note, that this operation is not unitary, which means that it does not
     preserve the canonical form without enforcing renormalisation.
     Following our convention, the operator has legs ``(pUL, pUR, pDL, pDR)``,
@@ -1524,7 +1528,7 @@ def decode_message(
         see :class:`mdopt.optimiser.DephasingDMRG`.
     overlap : float
         The overlap between the decoded message and a given codeword,
-        computed as the following inner product |<decoded_message|codeword>|.
+        computed as the inner product ``|<decoded_message|codeword>|``.
     """
 
     # Creating an all-plus state to start the DMRG with.
@@ -1601,8 +1605,10 @@ def decode_css(
     cut : float
         Singular value cut-off for the SVD.
     bias_type : str
-        The type of the bias applied before checks.
-        Available options: "Bitflip" and "Depolarising".
+        The type of the bias applied before checks. Any name in
+        ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
+        bit-flip bias, every other model ("Depolarising", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarising bias.
     bias_prob : float
         The probability of the depolarising bias applied before checks.
     renormalise : bool
@@ -1779,8 +1785,10 @@ def decode_custom(
     cut : float
         Singular value cut-off for the SVD.
     bias_type : str
-        The type of the bias applied before the parity checks.
-        Available options: "Bitflip" and "Depolarising".
+        The type of the bias applied before the parity checks. Any name in
+        ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
+        bit-flip bias, every other model ("Depolarising", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarising bias.
     bias_prob : float
         The probability of the depolarising bias applied before the parity checks.
     renormalise : bool
