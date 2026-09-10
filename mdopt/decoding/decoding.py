@@ -1605,8 +1605,10 @@ def decode_css(
     cut : float
         Singular value cut-off for the SVD.
     bias_type : str
-        The type of the bias applied before checks.
-        Available options: "Bitflip" and "Depolarising".
+        The type of the bias applied before checks. Any name in
+        ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
+        bit-flip bias, every other model ("Depolarising", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarising bias.
     bias_prob : float
         The probability of the depolarising bias applied before checks.
     renormalise : bool
@@ -1783,8 +1785,10 @@ def decode_custom(
     cut : float
         Singular value cut-off for the SVD.
     bias_type : str
-        The type of the bias applied before the parity checks.
-        Available options: "Bitflip" and "Depolarising".
+        The type of the bias applied before the parity checks. Any name in
+        ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
+        bit-flip bias, every other model ("Depolarising", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarising bias.
     bias_prob : float
         The probability of the depolarising bias applied before the parity checks.
     renormalise : bool
