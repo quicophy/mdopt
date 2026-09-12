@@ -689,3 +689,30 @@ def test_svd_nonfinite_input_takes_the_fallback_chain():
     mat = np.full((8, 32), np.nan)
     with pytest.raises(RuntimeError, match="All SVD methods failed"):
         svd(mat)
+
+
+def test_svd_pre_reduction_reconstructs_graded_rank_deficient_matrices(rng):
+    """The QR pre-reduction must not corrupt rank-deficient, wide-spectrum input.
+
+    NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
+    intermittently returns a factorisation whose product is not the input
+    (whole columns off by order one, depending on allocator state) on tall
+    rank-deficient matrices whose spectrum spans many orders of magnitude --
+    the shape the decoders' centre tensors take, which flipped the verdict
+    of a [[72,12,6]] bivariate-bicycle decode at ``chi_max=400``. The
+    pre-reduction therefore goes through SciPy's QR. Repeated calls with a
+    churning allocator give a high chance of hitting the fault if it is
+    ever reintroduced; on other BLAS builds the test simply passes.
+    """
+    rows, cols, rank = 636, 304, 237
+    spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
+    junk = []
+    for _ in range(150):
+        left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+        right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+        mat = (left * spectrum) @ right
+        junk.append(rng.normal(size=rng.integers(1, 200_000)))
+        junk = junk[-10:]
+        u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
+        assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
+        assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10

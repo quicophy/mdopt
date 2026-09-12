@@ -28,6 +28,25 @@ def _to_numpy(a):
         return np.asarray(host.get())
 
 
+def _qr_reduced(a):
+    """The reduced QR factorisation used by :func:`svd`'s pre-reduction.
+
+    On the NumPy backend this goes through SciPy's LAPACK, not NumPy's:
+    NumPy's ``linalg.qr`` on the Accelerate framework (the macOS arm64
+    wheels) intermittently returns a factorisation whose product is not the
+    input -- whole columns off by order one, depending on the state of the
+    allocator -- on rank-deficient matrices whose spectrum spans many
+    orders of magnitude, which is exactly what the decoders' tensors look
+    like (a 636x304 matrix from a [[72,12,6]] bivariate-bicycle decode at
+    chi_max=400 failed in 9 of 30 calls, and the decode's verdict with it).
+    SciPy's ``qr`` and every SVD driver reconstruct the same matrices to
+    1e-15 every time. A device array keeps the backend's own ``qr``.
+    """
+    if xp.GPU and not isinstance(a, np.ndarray):
+        return xp.linalg.qr(a)
+    return scipy.linalg.qr(np.asarray(a), mode="economic")
+
+
 def svd(
     mat: np.ndarray,
     cut: float = float(1e-12),
@@ -102,11 +121,11 @@ def svd(
                 # same product whether or not the discarded ones are formed.
                 back_q = None
                 if cols >= 2 * rows:
-                    q_f, r_f = xp.linalg.qr(a.T)
+                    q_f, r_f = _qr_reduced(a.T)
                     u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
                     back_q = ("right", q_f)
                 elif rows >= 2 * cols:
-                    q_f, r_f = xp.linalg.qr(a)
+                    q_f, r_f = _qr_reduced(a)
                     u_l, s, v_h = xp.linalg.svd(r_f, full_matrices=False)
                     back_q = ("left", q_f)
                 else:
