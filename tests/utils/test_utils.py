@@ -1,10 +1,13 @@
 """Tests for the ``mdopt.utils.utils`` module."""
 
+import os
+
 import pytest
 import scipy
 import numpy as np
 from opt_einsum import contract
 
+import mdopt.utils.utils as utils_module
 from mdopt.utils.utils import (
     create_random_mpo,
     kron_tensors,
@@ -630,3 +633,120 @@ def test_qr_accepts_infinite_chi_max(rng):
     q_small, r_small, _ = qr(mat, cut=1e-16, chi_max=3)
     assert q_small.shape[1] == 3
     assert r_small.shape[0] == 3
+
+
+def test_svd_rectangular_reduction_matches_direct_svd(monkeypatch):
+    """Deterministic coverage of the QR/LQ-reduced SVD branches.
+
+    The pre-reduction is opt-in (``SVD_QR_PREREDUCTION``), so it is switched
+    on here explicitly; these matrices are small enough to be safe on every
+    build. The reduction triggers on aspect ratio >= 2 in either orientation, so
+    each fixed matrix below pins one branch (the 31-column one pins the
+    boundary's open side, staying on the direct path): singular values,
+    reconstruction, orthogonality, and chi_max truncation must all agree
+    with a direct numpy SVD.
+    """
+    monkeypatch.setattr(utils_module, "SVD_QR_PREREDUCTION", True)
+    rng = np.random.default_rng(20240903)
+    shapes_and_paths = [
+        ((16, 32), "wide, reduced"),
+        ((16, 31), "wide, direct boundary"),
+        ((32, 16), "tall, reduced"),
+        ((31, 16), "tall, direct boundary"),
+        ((16, 16), "square, direct"),
+    ]
+    for complex_case in (False, True):
+        for shape, label in shapes_and_paths:
+            mat = rng.standard_normal(shape)
+            if complex_case:
+                mat = mat + 1j * rng.standard_normal(shape)
+            u_l, s, v_h, _ = svd(mat, cut=0.0, chi_max=int(1e4))
+            u_ref, s_ref, v_ref = np.linalg.svd(mat, full_matrices=False)
+            assert np.allclose(s, s_ref, rtol=0.0, atol=1e-11), (label, complex_case)
+            assert np.allclose((u_l * s) @ v_h, mat, rtol=0.0, atol=1e-11), (
+                label,
+                complex_case,
+            )
+            eye = np.eye(u_l.shape[1])
+            assert np.allclose(u_l.conj().T @ u_l, eye, rtol=0.0, atol=1e-12), label
+            assert np.allclose(v_h @ v_h.conj().T, eye, rtol=0.0, atol=1e-12), label
+
+            chi = 5
+            u_t, s_t, v_t, err = svd(
+                mat, cut=0.0, chi_max=chi, return_truncation_error=True
+            )
+            assert s_t.shape == (chi,)
+            assert np.allclose(s_t, s_ref[:chi], rtol=0.0, atol=1e-11), label
+            # rtol=0 so the bound is genuinely absolute; the discarded
+            # spectrum's norm-square is O(100) here, where the default
+            # relative tolerance would hide errors of order 1e-3.
+            assert np.isclose(
+                err, float(np.linalg.norm(s_ref[chi:]) ** 2), rtol=0.0, atol=1e-9
+            ), label
+
+
+@pytest.mark.parametrize("pre_reduction", [False, True])
+def test_svd_nonfinite_input_takes_the_fallback_chain(monkeypatch, pre_reduction):
+    """A non-finite input must make the whole call raise, on either path.
+
+    There is no finiteness pre-scan: on the reduced path the QR of a NaN
+    matrix yields a NaN factor whose SVD raises LinAlgError (LAPACK gesdd on
+    NaN input), on the direct path the SVD raises at once; either sends the
+    call through the fallback chain, and the jitter attempt cannot rescue a
+    NaN either. The 8x32 shape has the aspect ratio that triggers the
+    reduction when the flag is on."""
+    monkeypatch.setattr(utils_module, "SVD_QR_PREREDUCTION", pre_reduction)
+    mat = np.full((8, 32), np.nan)
+    with pytest.raises(RuntimeError, match="All SVD methods failed"):
+        svd(mat)
+
+
+@pytest.mark.parametrize(
+    "pre_reduction",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.skipif(
+                os.environ.get("MDOPT_SVD_QR_PREREDUCTION") != "1",
+                reason="opt-in pre-reduction; on NumPy/Accelerate builds this "
+                "case kills the interpreter (SIGSEGV) rather than failing",
+            ),
+        ),
+    ],
+)
+def test_svd_reconstructs_graded_rank_deficient_matrices_under_allocator_churn(
+    rng, monkeypatch, pre_reduction
+):
+    """``svd`` must be exact on rank-deficient, wide-spectrum input, call after call.
+
+    The default full decomposition always runs; the opt-in QR/LQ
+    pre-reduction (``SVD_QR_PREREDUCTION``) runs when the environment opts
+    in, because on NumPy wheels linked against Accelerate (macOS arm64) this
+    very loop does not fail but segfaults the interpreter, which is the fault
+    that flipped the [[72,12,6]] decode at chi_max=400.
+
+    NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
+    intermittently returns a factorisation whose product is not the input
+    (whole columns off by order one, depending on allocator state) on tall
+    rank-deficient matrices whose spectrum spans many orders of magnitude --
+    the shape the decoders' centre tensors take -- which is why the QR
+    pre-reduction of ``svd`` is off by default. Repeated calls with a
+    churning allocator raise the chance of hitting such a fault if one is
+    ever reintroduced; it is a guard, not a certain detector (the fault is
+    heap-state dependent) -- ``tests/decoding/test_convergence.py`` is the
+    deterministic check.
+    """
+    monkeypatch.setattr(utils_module, "SVD_QR_PREREDUCTION", pre_reduction)
+    rows, cols, rank = 636, 304, 237
+    spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
+    junk = []
+    for _ in range(150):
+        left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+        right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+        mat = (left * spectrum) @ right
+        junk.append(rng.normal(size=rng.integers(1, 200_000)))
+        junk = junk[-10:]
+        u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
+        assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
+        assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10

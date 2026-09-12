@@ -152,7 +152,8 @@ class CanonicalMPS:
         Returns a reversed version of the current MPS.
         """
         reversed_tensors = [np.transpose(tensor) for tensor in reversed(self.tensors)]
-        if self.orth_centre:
+        # `is not None`, not truthiness: a centre at site 0 is a centre.
+        if self.orth_centre is not None:
             reversed_orth_centre = (self.num_sites - 1) - self.orth_centre
             return CanonicalMPS(
                 reversed_tensors, reversed_orth_centre, self.tolerance, self.chi_max
@@ -347,7 +348,8 @@ class CanonicalMPS:
         final_pos: int,
         return_singular_values: bool = False,
         renormalise: bool = True,
-    ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[list]]]:
+        inplace: bool = False,
+    ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[np.ndarray]]]:
         """
         Moves the orthogonality centre from its current position to ``final_pos``.
 
@@ -363,6 +365,11 @@ class CanonicalMPS:
             Whether to return the singular values obtained at each involved bond.
         renormalise : bool
             Whether to renormalise singular values during each SVD.
+        inplace : bool
+            Whether a rightward move may overwrite this instance's tensors
+            instead of deep-copying them first (a leftward move builds a new
+            object either way and leaves this instance unmoved). The returned
+            object is the one to use in both cases.
 
         Raises
         ------
@@ -377,7 +384,7 @@ class CanonicalMPS:
                 f"from 0 to {self.num_sites-1}, given {final_pos}."
             )
 
-        singular_values = []
+        singular_values: List[np.ndarray] = []
 
         if self.orth_centre is None:
             self.orth_centre = self.check_orth_centre()  # type: ignore
@@ -386,7 +393,7 @@ class CanonicalMPS:
 
         if self.orth_centre < final_pos:
             begin, final = self.orth_centre, final_pos
-            mps = self.copy()
+            mps = self if inplace else self.copy()
         elif self.orth_centre > final_pos:
             mps = self.reverse()
             begin = cast(int, mps.orth_centre)
@@ -394,7 +401,60 @@ class CanonicalMPS:
         else:
             return self
 
+        # A move factors the centre alone, (chi_l*d, chi_r), instead of the
+        # two-site tensor whenever the right neighbour is an isometry: the
+        # centre's singular values then ARE the two-site tensor's (theta =
+        # C B with B B^dag = 1 gives theta theta^dag = C C^dag), so the
+        # renormalised spectrum, the cut and the chi_max count all come out
+        # identical, and the move is the two-site SVD's answer at a fraction
+        # of the cost. That covers the DMRG sweeps' one-step moves and the
+        # explicit-form conversion, which ask for renormalised spectra.
+
         for i in range(begin, final):
+            centre = mps.tensors[i]
+            chi_l, phys, chi_r = centre.shape
+            # A collapsed bond (dimension 0) has nothing to factor; the SVD
+            # branch carries that degenerate shape through unchanged.
+            # chi_r <= chi_max: with an isometric neighbour the revealed rank
+            # is at most chi_r, so this integer check rules out any move that
+            # would have to truncate before the factorisation is attempted.
+            if 0 < chi_r <= self.chi_max and chi_l * phys > 0:
+                # The single-site spectrum is the bond's Schmidt spectrum
+                # only if the right neighbour is an isometry. The bias
+                # appliers break that on every site they touch, so it is
+                # checked (a chi^2 * d * chi Gram product, cheaper than the
+                # SVD it enables) rather than assumed: with an isometric
+                # neighbour this move is exactly the two-site SVD's answer
+                # (same cut, same chi_max); otherwise the two-site SVD below
+                # runs, exactly as before. After one traversal the chain is
+                # canonical and every later move takes the fast path.
+                neighbour = mps.tensors[i + 1]
+                flat = neighbour.reshape(neighbour.shape[0], -1)
+                # An inexact dtype: integer or boolean tensors are valid input
+                # (the SVD promotes them), and the in-place subtraction below
+                # must not fail on them. No copy for float or complex.
+                gram_dtype = np.result_type(flat.dtype, 1.0)
+                flat_inexact = np.asarray(flat, dtype=gram_dtype)
+                gram = flat_inexact @ flat_inexact.conj().T
+                # max |G - I| <= 1e-12, spelled without np.allclose: the same
+                # test, minus allclose's temporaries, on a per-site hot path.
+                gram[np.diag_indices_from(gram)] -= 1.0
+                if np.abs(gram).max() <= 1e-12:
+                    u_l, s_bond, v_h, _ = svd(
+                        centre.reshape(chi_l * phys, chi_r),
+                        chi_max=self.chi_max,
+                        renormalise=renormalise,
+                    )
+                    singular_values.append(s_bond)
+                    keep = len(s_bond)
+                    mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
+                    # diag(s) @ (v_h . B): same idiom as the SVD branch below.
+                    mps.tensors[i + 1] = (
+                        np.tensordot(v_h, neighbour, axes=(1, 0))
+                        * s_bond[:, None, None]
+                    )
+                    mps.orth_centre = i + 1
+                    continue
             two_site_tensor = mps.two_site_tensor_next(i)
             u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,

@@ -1,29 +1,72 @@
 """This module contains miscellaneous utilities."""
 
+import os
 from typing import Any, Tuple, Optional, List
 from itertools import chain
 import numpy as np
 import scipy
 from opt_einsum import contract
 
-# --- Backend shim: prefer your GPU/array backend if available, else NumPy ---
-try:
-    # expected to export a NumPy-like API (e.g., NumPy or CuPy)
-    from mdopt.backend import array as xp  # type: ignore
-except (ImportError, ModuleNotFoundError):
-    import numpy as xp  # type: ignore
+# The backend module exposes a NumPy-like API (NumPy, or CuPy when
+# MDOPT_BACKEND=cupy and a CUDA device is usable) plus host/device transfer.
+from mdopt.backend import array as xp
 
 
 def _to_numpy(a):
-    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
-    try:
-        import cupy as cp  # type: ignore
+    """Bring a backend array to the host as a NumPy array (no copy on NumPy).
 
-        if isinstance(a, cp.ndarray):
-            return cp.asnumpy(a)
-    except Exception:
-        pass
-    return np.asarray(a)
+    Resolved through the backend's own transfer, which honours MDOPT_BACKEND
+    and the CUDA device probe; a per-call ``import cupy`` here once cost
+    ~18% of a decoding run.
+    """
+    host = xp.to_host(a)
+    try:
+        return np.asarray(host)
+    except TypeError:
+        # A device array reached us while the NumPy backend is selected
+        # (CuPy installed, MDOPT_BACKEND unset); CuPy refuses the implicit
+        # conversion, so ask it explicitly.
+        return np.asarray(host.get())
+
+
+# Whether svd() may reduce a strongly rectangular matrix by a QR/LQ
+# factorisation before decomposing it (about 1.2x on the zip-up's SVD calls,
+# 5-10% on a decode). Opt-in through MDOPT_SVD_QR_PREREDUCTION=1: on NumPy
+# wheels that link the Accelerate framework (macOS arm64) the reduced path
+# gave heap-layout-dependent results on the decoders' matrices whatever
+# LAPACK or BLAS performed the individual steps (SciPy's included), and
+# NumPy's own ``linalg.qr`` dies with SIGBUS on some of them; the plain
+# decomposition is deterministic and exact on the same inputs. Enable it
+# only where tests/decoding/test_convergence.py passes on the target build.
+SVD_QR_PREREDUCTION = os.environ.get("MDOPT_SVD_QR_PREREDUCTION") == "1"
+
+
+def _qr_reduced(a):
+    """The reduced QR factorisation used by :func:`svd`'s pre-reduction.
+
+    Backend-aware like :func:`svd`: a device array uses the backend's own
+    ``qr``; on the NumPy backend the factorisation goes through SciPy's
+    LAPACK rather than NumPy's, whose ``linalg.qr`` on the Accelerate
+    framework (macOS arm64 wheels) intermittently returns a factorisation
+    whose product is not the input (whole columns off by order one, in a
+    heap-state-dependent fraction of calls) on rank-deficient matrices with
+    a spectrum spanning many orders of magnitude -- the decoders' centre
+    tensors -- and dies with SIGBUS on some of them. SciPy's ``qr``
+    reconstructs the same matrices to 1e-15 every time.
+    """
+    if xp.GPU and not isinstance(a, np.ndarray):
+        return xp.linalg.qr(a)
+    return scipy.linalg.qr(np.asarray(a), mode="economic")
+
+
+def _svd_small(a):
+    """SVD of the square QR factor (see :func:`svd`): SciPy's LAPACK on the
+    NumPy backend, the backend's own on a device array."""
+    if xp.GPU and not isinstance(a, np.ndarray):
+        return xp.linalg.svd(a, full_matrices=False)
+    return scipy.linalg.svd(
+        np.ascontiguousarray(a), full_matrices=False, lapack_driver="gesdd"
+    )
 
 
 def svd(
@@ -32,9 +75,15 @@ def svd(
     chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
-) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
+
+    With ``SVD_QR_PREREDUCTION`` set, strongly rectangular input (one side
+    at least twice the other) is first reduced by a QR/LQ factorisation and
+    the small square factor is decomposed; the QR factor is multiplied back
+    onto the kept singular vectors only, after the truncation. The flag is
+    off by default (see its comment); the full decomposition is then taken.
 
     Parameters
     ----------
@@ -55,8 +104,9 @@ def svd(
     -------
     u_l : np.ndarray
         Unitary matrix having left singular vectors as columns.
-    singular_values : list
-        The singular values, sorted in non-increasing order.
+    singular_values : np.ndarray
+        The singular values kept after the cut and ``chi_max``, sorted in
+        non-increasing order, as a real one-dimensional array.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
     truncation_error : Optional[float]
@@ -77,9 +127,34 @@ def svd(
     u_l = s = v_h = None  # type: ignore
     a = xp.asarray(mat)
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
+        back_q = None
         try:
             if attempt == "xp":
-                u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)  # returns U, S, Vh
+                rows, cols = a.shape
+                # Strongly rectangular input is reduced by QR/LQ first and the
+                # small square factor SVD'd (1.2-2x faster, exact to 1e-14);
+                # the MPO zip-up produces (chi*d, d*chi*w) matrices, so the
+                # wide case is hot.
+                # No finiteness pre-scan: a non-finite input gives a non-finite
+                # factor whose svd raises LinAlgError into the fallbacks below,
+                # and the scan would be a device sync on the GPU backend.
+                # The back-multiplication by the QR factor is deferred until
+                # after the truncation below: only the kept rows of v_h (or
+                # columns of u_l) are ever needed, and each kept row is the
+                # same product whether or not the discarded ones are formed.
+                back_q = None
+                if not SVD_QR_PREREDUCTION:
+                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
+                elif cols >= 2 * rows:
+                    q_f, r_f = _qr_reduced(a.T)
+                    u_l, s, v_h = _svd_small(r_f.T)
+                    back_q = ("right", q_f)
+                elif rows >= 2 * cols:
+                    q_f, r_f = _qr_reduced(a)
+                    u_l, s, v_h = _svd_small(r_f)
+                    back_q = ("left", q_f)
+                else:
+                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
             elif attempt == "gesdd":
                 u_l, s, v_h = scipy.linalg.svd(
                     _to_numpy(a),
@@ -112,10 +187,10 @@ def svd(
     else:
         raise RuntimeError(f"All SVD methods failed. Last error: {last_exception}")
 
-    # Convert to NumPy for downstream consistency with the current codebase
-    u_l = _to_numpy(u_l)
+    # The spectrum comes to the host first: the truncation count is decided
+    # here, and the singular vectors are sliced (and, on the QR-reduced
+    # paths, multiplied back) while still on the backend, then converted.
     s = _to_numpy(s).astype(float, copy=False)  # singular values are real non-negative
-    v_h = _to_numpy(v_h)
 
     # Truncate by cut and chi_max
     # int(chi_max) first would raise OverflowError on the chi_max=np.inf
@@ -126,6 +201,20 @@ def svd(
     u_l = u_l[:, :max_num]
     s = s[:max_num]
     v_h = v_h[:max_num, :]
+    if back_q is not None:
+        side, q_f = back_q
+        # Contiguous operands for the back-multiplication: the sliced
+        # singular vectors and the transposed QR factor are strided views,
+        # and Accelerate's matmul on such views gave layout-dependent
+        # results here (see _qr_reduced).
+        if side == "right":
+            v_h = xp.ascontiguousarray(v_h) @ xp.ascontiguousarray(q_f.T)
+        else:
+            u_l = xp.ascontiguousarray(q_f) @ xp.ascontiguousarray(u_l)
+
+    # Convert to NumPy for downstream consistency with the current codebase
+    u_l = _to_numpy(u_l)
+    v_h = _to_numpy(v_h)
 
     if renormalise and s.size > 0:
         norm = float(np.linalg.norm(s))
