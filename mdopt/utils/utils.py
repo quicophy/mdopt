@@ -1,5 +1,6 @@
 """This module contains miscellaneous utilities."""
 
+import os
 from typing import Any, Tuple, Optional, List
 from itertools import chain
 import numpy as np
@@ -29,14 +30,15 @@ def _to_numpy(a):
 
 
 # Whether svd() may reduce a strongly rectangular matrix by a QR/LQ
-# factorisation before decomposing it. Off by default: on NumPy wheels that
-# link the Accelerate framework (macOS arm64) the reduced path gave
-# heap-layout-dependent results on the decoders' matrices whatever LAPACK or
-# BLAS performed the individual steps (SciPy's included), and NumPy's own
-# ``linalg.qr`` dies with SIGBUS on some of them; the plain decomposition is
-# deterministic and exact on the same inputs. Enable it only after
-# tests/decoding/test_convergence.py passes on the target machine.
-SVD_QR_PREREDUCTION = False
+# factorisation before decomposing it (about 1.2x on the zip-up's SVD calls,
+# 5-10% on a decode). Opt-in through MDOPT_SVD_QR_PREREDUCTION=1: on NumPy
+# wheels that link the Accelerate framework (macOS arm64) the reduced path
+# gave heap-layout-dependent results on the decoders' matrices whatever
+# LAPACK or BLAS performed the individual steps (SciPy's included), and
+# NumPy's own ``linalg.qr`` dies with SIGBUS on some of them; the plain
+# decomposition is deterministic and exact on the same inputs. Enable it
+# only where tests/decoding/test_convergence.py passes on the target build.
+SVD_QR_PREREDUCTION = os.environ.get("MDOPT_SVD_QR_PREREDUCTION") == "1"
 
 
 def _qr_reduced(a):

@@ -17,7 +17,7 @@ import pytest
 from mdopt.decoding.decoding import create_bb_code, decode_css
 
 pytestmark = pytest.mark.skipif(
-    not os.environ.get("MDOPT_RUN_SLOW"),
+    os.environ.get("MDOPT_RUN_SLOW") != "1",
     reason="slow decoding regression test; set MDOPT_RUN_SLOW=1 to run",
 )
 
