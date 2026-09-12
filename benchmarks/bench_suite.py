@@ -186,6 +186,7 @@ def wl_classical_ldpc():
         sites = linear_code_constraint_sites(code)
         start = create_custom_product_state(first, form="Right-canonical")
         state = create_custom_product_state(second, form="Right-canonical")
+        received = state.copy()
         state = apply_bitflip_bias(mps=state, sites_to_bias="All", prob_bias_list=0.1)
         state = apply_constraints(
             state,
@@ -203,7 +204,27 @@ def wl_classical_ldpc():
             chi_max_dmrg=64,
             silent=True,
         )
-        outputs.append(float(overlap))
+        # The DMRG verdict alone is blind to the constrained state: it stays
+        # 1.0 whenever the MAP codeword is unchanged. Observables of the state
+        # the hot path actually produces come first: its overlaps with the
+        # transmitted codeword and with the received (biased) message, and
+        # the Schmidt spectrum at the middle bond (a corrupted contraction
+        # leaves weight outside the codeword, which shows up here).
+        middle = state.num_sites // 2
+        _, spectra = state.copy().move_orth_centre(
+            middle, return_singular_values=True, renormalise=True
+        )
+        schmidt = sorted(
+            (float(v) for v in np.asarray(spectra[-1]).ravel()), reverse=True
+        )
+        outputs.append(
+            [
+                round(float(abs(inner_product(start, state))), 10),
+                round(float(abs(inner_product(received, state))), 10),
+                float(overlap),
+                *[round(v, 10) for v in schmidt[:4]],
+            ]
+        )
     return outputs
 
 

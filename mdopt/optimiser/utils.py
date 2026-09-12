@@ -213,6 +213,23 @@ class ConstraintString:
         return mpo
 
 
+def _product_state_orth_centre(mps: CanonicalMPS, tolerance: float = 1e-12) -> int:
+    """The orthogonality centre :func:`find_orth_centre` assigns a product state.
+
+    For a chain of bond dimension 1 every tensor is (1, d, 1); it is a left
+    and a right isometry exactly when its vector has unit norm. The scan then
+    reports the non-isometric sites as centres and the convention keeps the
+    first of them, or site 0 when all sites are isometric; a biased chain
+    whose first sites are still normalised (the decoders' logical prefix)
+    therefore gets its first biased site, not site 0.
+    """
+    for site, tensor in enumerate(mps.tensors):
+        gram = float(np.vdot(tensor, tensor).real)
+        if not np.isclose(gram, 1.0, atol=tolerance, rtol=0.0):
+            return site
+    return 0
+
+
 def apply_constraints(
     mps: CanonicalMPS,
     strings: List[List[List[int]]],
@@ -305,11 +322,11 @@ def apply_constraints(
         # Ensure orthogonality centre is set and moved once per string
         if mps.orth_centre is None and all(d == 1 for d in mps.bond_dimensions):
             # A product state (every bond of dimension 1) needs no isometry
-            # scan: whether its sites are normalised or not, the convention
-            # below lands on site 0 (all isometric, or the first
-            # non-isometric site of a biased chain), and the move from there
-            # canonicalises the sites it crosses.
-            mps.orth_centre = 0
+            # scan: a (1, d, 1) tensor is an isometry exactly when its
+            # vector has unit norm, so the scan's answer -- the first
+            # non-isometric site, or site 0 when every site is isometric --
+            # comes from the site norms alone. Same tolerance as the scan.
+            mps.orth_centre = _product_state_orth_centre(mps)
         if mps.orth_centre is None:
             orth_centres, flags_left, flags_right = find_orth_centre(
                 mps, return_orth_flags=True
