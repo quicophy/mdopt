@@ -28,23 +28,43 @@ def _to_numpy(a):
         return np.asarray(host.get())
 
 
+# Whether svd() may reduce a strongly rectangular matrix by a QR/LQ
+# factorisation before decomposing it. Off by default: on NumPy wheels that
+# link the Accelerate framework (macOS arm64) the reduced path gave
+# heap-layout-dependent results on the decoders' matrices whatever LAPACK or
+# BLAS performed the individual steps (SciPy's included), and NumPy's own
+# ``linalg.qr`` dies with SIGBUS on some of them; the plain decomposition is
+# deterministic and exact on the same inputs. Enable it only after
+# tests/decoding/test_convergence.py passes on the target machine.
+SVD_QR_PREREDUCTION = False
+
+
 def _qr_reduced(a):
     """The reduced QR factorisation used by :func:`svd`'s pre-reduction.
 
-    On the NumPy backend this goes through SciPy's LAPACK, not NumPy's:
-    NumPy's ``linalg.qr`` on the Accelerate framework (the macOS arm64
-    wheels) intermittently returns a factorisation whose product is not the
-    input -- whole columns off by order one, depending on the state of the
-    allocator -- on rank-deficient matrices whose spectrum spans many
-    orders of magnitude, which is exactly what the decoders' tensors look
-    like (a 636x304 matrix from a [[72,12,6]] bivariate-bicycle decode at
-    chi_max=400 failed in 9 of 30 calls, and the decode's verdict with it).
-    SciPy's ``qr`` and every SVD driver reconstruct the same matrices to
-    1e-15 every time. A device array keeps the backend's own ``qr``.
+    Backend-aware like :func:`svd`: a device array uses the backend's own
+    ``qr``; on the NumPy backend the factorisation goes through SciPy's
+    LAPACK rather than NumPy's, whose ``linalg.qr`` on the Accelerate
+    framework (macOS arm64 wheels) intermittently returns a factorisation
+    whose product is not the input (whole columns off by order one, in a
+    heap-state-dependent fraction of calls) on rank-deficient matrices with
+    a spectrum spanning many orders of magnitude -- the decoders' centre
+    tensors -- and dies with SIGBUS on some of them. SciPy's ``qr``
+    reconstructs the same matrices to 1e-15 every time.
     """
     if xp.GPU and not isinstance(a, np.ndarray):
         return xp.linalg.qr(a)
     return scipy.linalg.qr(np.asarray(a), mode="economic")
+
+
+def _svd_small(a):
+    """SVD of the square QR factor (see :func:`svd`): SciPy's LAPACK on the
+    NumPy backend, the backend's own on a device array."""
+    if xp.GPU and not isinstance(a, np.ndarray):
+        return xp.linalg.svd(a, full_matrices=False)
+    return scipy.linalg.svd(
+        np.ascontiguousarray(a), full_matrices=False, lapack_driver="gesdd"
+    )
 
 
 def svd(
@@ -57,10 +77,11 @@ def svd(
     """
     Performs Singular Value Decomposition with different features.
 
-    Strongly rectangular input (one side at least twice the other) is first
-    reduced by a QR/LQ factorisation and the small square factor is
-    decomposed; the QR factor is multiplied back onto the kept singular
-    vectors only, after the truncation. The result is the same to rounding.
+    With ``SVD_QR_PREREDUCTION`` set, strongly rectangular input (one side
+    at least twice the other) is first reduced by a QR/LQ factorisation and
+    the small square factor is decomposed; the QR factor is multiplied back
+    onto the kept singular vectors only, after the truncation. The flag is
+    off by default (see its comment); the full decomposition is then taken.
 
     Parameters
     ----------
@@ -120,13 +141,15 @@ def svd(
                 # columns of u_l) are ever needed, and each kept row is the
                 # same product whether or not the discarded ones are formed.
                 back_q = None
-                if cols >= 2 * rows:
+                if not SVD_QR_PREREDUCTION:
+                    u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
+                elif cols >= 2 * rows:
                     q_f, r_f = _qr_reduced(a.T)
-                    u_l, s, v_h = xp.linalg.svd(r_f.T, full_matrices=False)
+                    u_l, s, v_h = _svd_small(r_f.T)
                     back_q = ("right", q_f)
                 elif rows >= 2 * cols:
                     q_f, r_f = _qr_reduced(a)
-                    u_l, s, v_h = xp.linalg.svd(r_f, full_matrices=False)
+                    u_l, s, v_h = _svd_small(r_f)
                     back_q = ("left", q_f)
                 else:
                     u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
@@ -178,10 +201,14 @@ def svd(
     v_h = v_h[:max_num, :]
     if back_q is not None:
         side, q_f = back_q
+        # Contiguous operands for the back-multiplication: the sliced
+        # singular vectors and the transposed QR factor are strided views,
+        # and Accelerate's matmul on such views gave layout-dependent
+        # results here (see _qr_reduced).
         if side == "right":
-            v_h = v_h @ q_f.T
+            v_h = xp.ascontiguousarray(v_h) @ xp.ascontiguousarray(q_f.T)
         else:
-            u_l = q_f @ u_l
+            u_l = xp.ascontiguousarray(q_f) @ xp.ascontiguousarray(u_l)
 
     # Convert to NumPy for downstream consistency with the current codebase
     u_l = _to_numpy(u_l)

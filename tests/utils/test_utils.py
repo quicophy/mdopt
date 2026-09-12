@@ -691,18 +691,19 @@ def test_svd_nonfinite_input_takes_the_fallback_chain():
         svd(mat)
 
 
-def test_svd_pre_reduction_reconstructs_graded_rank_deficient_matrices(rng):
-    """The QR pre-reduction must not corrupt rank-deficient, wide-spectrum input.
+def test_svd_reconstructs_graded_rank_deficient_matrices_under_allocator_churn(rng):
+    """``svd`` must be exact on rank-deficient, wide-spectrum input, call after call.
 
     NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
     intermittently returns a factorisation whose product is not the input
     (whole columns off by order one, depending on allocator state) on tall
     rank-deficient matrices whose spectrum spans many orders of magnitude --
-    the shape the decoders' centre tensors take, which flipped the verdict
-    of a [[72,12,6]] bivariate-bicycle decode at ``chi_max=400``. The
-    pre-reduction therefore goes through SciPy's QR. Repeated calls with a
-    churning allocator give a high chance of hitting the fault if it is
-    ever reintroduced; on other BLAS builds the test simply passes.
+    the shape the decoders' centre tensors take -- which is why the QR
+    pre-reduction of ``svd`` is off by default. Repeated calls with a
+    churning allocator raise the chance of hitting such a fault if one is
+    ever reintroduced; it is a guard, not a certain detector (the fault is
+    heap-state dependent) -- ``tests/decoding/test_convergence.py`` is the
+    deterministic check.
     """
     rows, cols, rank = 636, 304, 237
     spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
