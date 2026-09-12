@@ -39,13 +39,17 @@ mdopt's matrices (rank-deficient, with singular values spanning many orders
 of magnitude) Accelerate's LAPACK corrupted memory: `numpy.linalg.qr` died
 with SIGBUS, `numpy.linalg.svd` tripped malloc's heap check, and a
 bivariate-bicycle decode returned wrong verdicts while every test passed.
-mdopt warns at import when it finds Accelerate behind NumPy. The OpenBLAS
-build of the same NumPy version is the `macosx_11_0_arm64` wheel:
+The SciPy macOS wheels link Accelerate as well, and mdopt's SVD helpers
+call SciPy's LAPACK too. mdopt warns at import when it finds Accelerate
+behind either library. The OpenBLAS builds of the same versions are the
+`macosx_11_0_arm64` NumPy wheel and the `macosx_12_0_arm64` SciPy wheel:
 
 ```bash
 pip download "numpy==$(python -c 'import numpy; print(numpy.__version__)')" \
-    --platform macosx_11_0_arm64 --only-binary=:all: --no-deps -d /tmp/numpy-openblas
-pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
+    --platform macosx_11_0_arm64 --only-binary=:all: --no-deps -d /tmp/openblas-wheels
+pip download "scipy==$(python -c 'import scipy; print(scipy.__version__)')" \
+    --platform macosx_12_0_arm64 --only-binary=:all: --no-deps -d /tmp/openblas-wheels
+pip install --force-reinstall --no-deps /tmp/openblas-wheels/*.whl
 ```
 
 Set `MDOPT_ALLOW_ACCELERATE=1` to silence the warning if you must keep

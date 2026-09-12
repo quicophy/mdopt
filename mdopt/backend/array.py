@@ -99,8 +99,28 @@ def _warn_if_accelerate(numpy_module) -> None:
         )
 
 
+def _warn_if_scipy_accelerate() -> None:
+    """The same warning for SciPy, whose LAPACK the SVD helpers also call."""
+    if os.getenv("MDOPT_ALLOW_ACCELERATE") == "1":
+        return
+    try:
+        scipy = importlib.import_module("scipy")
+    except ImportError:
+        return
+    if "accelerate" in _lapack_vendor(scipy):
+        warnings.warn(
+            "SciPy is built against Apple's Accelerate LAPACK (see "
+            "mdopt.backend.array._warn_if_accelerate); install the OpenBLAS "
+            "build (the macosx_12_0_arm64 wheel) or set "
+            "MDOPT_ALLOW_ACCELERATE=1 to silence this warning.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
 if not GPU:
     _warn_if_accelerate(_xp)
+    _warn_if_scipy_accelerate()
 
 
 # ----------------------------------------------------------------------
