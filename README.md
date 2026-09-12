@@ -32,6 +32,26 @@ Otherwise, you can clone the repository and use [poetry](https://python-poetry.o
 poetry install
 ```
 
+### A note on NumPy's BLAS on Apple silicon
+
+The macOS arm64 wheels of NumPy 2.x link Apple's Accelerate framework. On
+mdopt's matrices (rank-deficient, with singular values spanning many orders
+of magnitude) Accelerate's LAPACK corrupted memory: `numpy.linalg.qr` died
+with SIGBUS, `numpy.linalg.svd` tripped malloc's heap check, and a
+bivariate-bicycle decode returned wrong verdicts while every test passed.
+mdopt warns at import when it finds Accelerate behind NumPy. The OpenBLAS
+build of the same NumPy version is the `macosx_11_0_arm64` wheel:
+
+```bash
+pip download "numpy==$(python -c 'import numpy; print(numpy.__version__)')" \
+    --platform macosx_11_0_arm64 --only-binary=:all: --no-deps -d /tmp/numpy-openblas
+pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
+```
+
+Set `MDOPT_ALLOW_ACCELERATE=1` to silence the warning if you must keep
+Accelerate. Use `OMP_NUM_THREADS=1` (or `OPENBLAS_NUM_THREADS=1`) for the
+per-process BLAS of worker pools.
+
 ## Minimal example
 
 ```python

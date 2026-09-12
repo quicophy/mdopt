@@ -88,3 +88,32 @@ def test_stream_is_a_context_manager_on_numpy(monkeypatch):
     with module.stream():
         pass
     module.synchronize()
+
+
+def test_accelerate_lapack_warns_unless_allowed(monkeypatch):
+    """A NumPy built against Accelerate triggers a RuntimeWarning at import
+    time; MDOPT_ALLOW_ACCELERATE=1 silences it; other vendors are silent."""
+    import warnings
+    from types import SimpleNamespace
+
+    from mdopt.backend import array as backend
+
+    def fake_numpy(vendor):
+        return SimpleNamespace(
+            show_config=lambda mode="dicts": {
+                "Build Dependencies": {
+                    "lapack": {"name": vendor},
+                    "blas": {"name": vendor},
+                }
+            }
+        )
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    with pytest.warns(RuntimeWarning, match="Accelerate"):
+        backend._warn_if_accelerate(fake_numpy("accelerate"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        backend._warn_if_accelerate(fake_numpy("scipy-openblas"))
+        monkeypatch.setenv("MDOPT_ALLOW_ACCELERATE", "1")
+        backend._warn_if_accelerate(fake_numpy("accelerate"))
+    assert backend._lapack_vendor(SimpleNamespace()) == ""

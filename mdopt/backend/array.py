@@ -60,6 +60,49 @@ _xp = _load_backend()
 GPU = _xp.__name__ == "cupy"
 
 
+def _lapack_vendor(numpy_module) -> str:
+    """The LAPACK library NumPy was built against, lower-cased ('' if unknown)."""
+    try:
+        deps = numpy_module.show_config(mode="dicts")["Build Dependencies"]
+        return str(deps["lapack"]["name"]).lower()
+    except Exception:  # pylint: disable=broad-except
+        return ""
+
+
+def _warn_if_accelerate(numpy_module) -> None:
+    """Warn once when NumPy's LAPACK is Apple's Accelerate framework.
+
+    On the macOS arm64 wheels of NumPy 2.x (which link Accelerate) the
+    decoders' rank-deficient, wide-spectrum matrices made ``linalg.qr`` die
+    with SIGBUS and ``linalg.svd`` trip malloc's heap-corruption check
+    inside dgesdd, and a [[72,12,6]] decode at chi_max=400 returned wrong
+    verdicts while every unit test passed. The OpenBLAS build of the same
+    NumPy version has none of this; it is the ``macosx_11_0_arm64`` wheel::
+
+        pip download numpy==<version> --platform macosx_11_0_arm64 \
+            --only-binary=:all: --no-deps -d /tmp/numpy-openblas
+        pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
+
+    Set MDOPT_ALLOW_ACCELERATE=1 to silence the warning.
+    """
+    if os.getenv("MDOPT_ALLOW_ACCELERATE") == "1":
+        return
+    if "accelerate" in _lapack_vendor(numpy_module):
+        warnings.warn(
+            "NumPy is built against Apple's Accelerate LAPACK, which corrupted "
+            "memory and produced wrong decoding verdicts on mdopt's matrices "
+            "(see mdopt.backend.array._warn_if_accelerate). Install the "
+            "OpenBLAS build of NumPy (the macosx_11_0_arm64 wheel) or set "
+            "MDOPT_ALLOW_ACCELERATE=1 to silence this warning.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+if not GPU:
+    _warn_if_accelerate(_xp)
+
+
 # ----------------------------------------------------------------------
 # Introspection helpers
 # ----------------------------------------------------------------------
