@@ -685,13 +685,17 @@ def test_svd_rectangular_reduction_matches_direct_svd(monkeypatch):
             ), label
 
 
-def test_svd_nonfinite_input_takes_the_fallback_chain():
-    """A non-finite input must make the whole call raise.
+@pytest.mark.parametrize("pre_reduction", [False, True])
+def test_svd_nonfinite_input_takes_the_fallback_chain(monkeypatch, pre_reduction):
+    """A non-finite input must make the whole call raise, on either path.
 
-    There is no finiteness pre-scan: the reduced path's QR of a NaN matrix
-    yields a NaN factor whose SVD raises LinAlgError (LAPACK gesdd on NaN
-    input), which sends the call through the fallback chain, and the
-    jitter attempt cannot rescue a NaN either."""
+    There is no finiteness pre-scan: on the reduced path the QR of a NaN
+    matrix yields a NaN factor whose SVD raises LinAlgError (LAPACK gesdd on
+    NaN input), on the direct path the SVD raises at once; either sends the
+    call through the fallback chain, and the jitter attempt cannot rescue a
+    NaN either. The 8x32 shape has the aspect ratio that triggers the
+    reduction when the flag is on."""
+    monkeypatch.setattr(utils_module, "SVD_QR_PREREDUCTION", pre_reduction)
     mat = np.full((8, 32), np.nan)
     with pytest.raises(RuntimeError, match="All SVD methods failed"):
         svd(mat)
