@@ -418,6 +418,7 @@ def run_experiment(
         "cut": cut,
         "batch": batch,
         "code_id": code_id,
+        "qubit_order_strategy": qubit_order_strategy,
     }
 
 
@@ -438,6 +439,9 @@ def save_experiment_data(
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
+    # The ordering changes the decoder's results, so it is recorded in the data
+    # itself; the filename tag is derived from the stored value.
+    qubit_order_strategy = data.get("qubit_order_strategy", qubit_order_strategy)
     order_tag = (
         "" if qubit_order_strategy == "Natural" else f"_order{qubit_order_strategy}"
     )
