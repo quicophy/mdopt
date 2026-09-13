@@ -45,11 +45,23 @@ def _fake_cupy(num_devices=0, raises=False):
 
 
 def test_defaults_to_numpy(monkeypatch):
-    """With no MDOPT_BACKEND set, NumPy is used and nothing is warned about."""
+    """With no MDOPT_BACKEND set, NumPy is used and nothing unexpected is warned about.
+
+    The import deliberately warns when NumPy or SciPy links Apple's Accelerate
+    framework, which the stock macOS 14+ wheels do (the macOS CI runners among
+    them); those warnings are allowed, any other warning is not.
+    """
     module, caught = _reload_backend(monkeypatch, None, None)
     assert module.GPU is False
     assert module.backend_name() == "numpy"
-    assert not caught
+    unexpected = [
+        w
+        for w in caught
+        if not (
+            issubclass(w.category, RuntimeWarning) and "Accelerate" in str(w.message)
+        )
+    ]
+    assert not unexpected, [str(w.message) for w in unexpected]
 
 
 def test_falls_back_when_cupy_missing(monkeypatch):
