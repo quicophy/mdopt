@@ -5,8 +5,8 @@ name: notebooks
 # nothing ran these.
 #
 # MDOPT_NB_FAST=1 shrinks the workloads: at the committed full-scale settings
-# the suite totals roughly 10 hours (quantum_surface ~4.9h, classical_ldpc
-# ~2.5h, quantum_three_qubit ~1.6h, maxbonddim ~1.2h -- see
+# the suite totals roughly 20 hours (quantum_surface ~13h, classical_ldpc
+# ~4h, quantum_three_qubit ~1.6h, maxbonddim ~1.2h -- see
 # docs/source/notebook_pipeline.rst), past the 6h GitHub caps a job at and far
 # too dear to spend per pull request. The notebooks read that variable
 # themselves. What is being tested is that they execute, not the numbers they
