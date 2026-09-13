@@ -436,10 +436,12 @@ class CanonicalMPS:
                 gram_dtype = np.result_type(flat.dtype, 1.0)
                 flat_inexact = np.asarray(flat, dtype=gram_dtype)
                 gram = flat_inexact @ flat_inexact.conj().T
-                # max |G - I| <= 1e-12, spelled without np.allclose: the same
-                # test, minus allclose's temporaries, on a per-site hot path.
+                # ||G - I||_F <= 1e-12, the criterion find_orth_centre uses.
+                # The Frobenius norm bounds the spectral deviation of the
+                # neighbour from an isometry; a componentwise maximum does not
+                # (for a 400-dimensional Gram matrix it can be 400x smaller).
                 gram[np.diag_indices_from(gram)] -= 1.0
-                if np.abs(gram).max() <= 1e-12:
+                if np.linalg.norm(gram) <= 1e-12:
                     u_l, s_bond, v_h, _ = svd(
                         centre.reshape(chi_l * phys, chi_r),
                         chi_max=self.chi_max,
