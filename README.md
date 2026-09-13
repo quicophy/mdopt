@@ -34,15 +34,16 @@ poetry install
 
 ### A note on NumPy's BLAS on Apple silicon
 
-The macOS arm64 wheels of NumPy 2.x link Apple's Accelerate framework. On
-mdopt's matrices (rank-deficient, with singular values spanning many orders
-of magnitude) Accelerate's LAPACK corrupted memory: `numpy.linalg.qr` died
-with SIGBUS, `numpy.linalg.svd` tripped malloc's heap check, and a
-bivariate-bicycle decode returned wrong verdicts while every test passed.
-The SciPy macOS wheels link Accelerate as well, and mdopt's SVD helpers
-call SciPy's LAPACK too. mdopt warns at import when it finds Accelerate
-behind either library. The OpenBLAS builds of the same versions are the
-`macosx_11_0_arm64` NumPy wheel and the `macosx_12_0_arm64` SciPy wheel:
+On Apple silicon running macOS 14 or later, pip installs the NumPy and
+SciPy wheels tagged `macosx_14_0_arm64`, which link Apple's Accelerate
+framework. On mdopt's matrices (rank-deficient, with singular values
+spanning many orders of magnitude) Accelerate's LAPACK corrupted memory:
+`numpy.linalg.qr` died with SIGBUS, `numpy.linalg.svd` tripped malloc's
+heap check, and a bivariate-bicycle decode returned wrong verdicts while
+every test passed. mdopt's SVD helpers call both libraries, and mdopt warns
+at import when it finds Accelerate behind either one. The same versions are
+also published as OpenBLAS builds, the `macosx_11_0_arm64` NumPy wheel and
+the `macosx_12_0_arm64` SciPy wheel, which install on the same machines:
 
 ```bash
 pip download "numpy==$(python -c 'import numpy; print(numpy.__version__)')" \
