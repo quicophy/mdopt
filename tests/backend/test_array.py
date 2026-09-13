@@ -91,7 +91,14 @@ def test_uses_cupy_when_device_present(monkeypatch):
     module, caught = _reload_backend(monkeypatch, "cupy", _fake_cupy(num_devices=1))
     assert module.GPU is True
     assert module.backend_name() == "cupy"
-    assert not caught
+    unexpected = [
+        w
+        for w in caught
+        if not (
+            issubclass(w.category, RuntimeWarning) and "Accelerate" in str(w.message)
+        )
+    ]
+    assert not unexpected, [str(w.message) for w in unexpected]
 
 
 def test_stream_is_a_context_manager_on_numpy(monkeypatch):
@@ -181,3 +188,30 @@ def test_scipy_without_show_config_mode_falls_back_to_get_info(monkeypatch):
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         backend._warn_if_scipy_accelerate()
+
+
+def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
+    """With CuPy selected, NumPy and SciPy LAPACK still run on the host (centre
+    moves, host-side contractions, the SVD fallbacks, qr), so an
+    Accelerate-linked build must still be warned about."""
+    import numpy
+    import scipy
+
+    def faked(real):
+        def show_config(mode="stdout"):
+            if mode == "stdout":
+                return None
+            config = real(mode="dicts")
+            config["Build Dependencies"]["lapack"]["name"] = "accelerate"
+            return config
+
+        return show_config
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    monkeypatch.setattr(numpy, "show_config", faked(numpy.show_config))
+    monkeypatch.setattr(scipy, "show_config", faked(scipy.show_config))
+    module, caught = _reload_backend(monkeypatch, "cupy", _fake_cupy(num_devices=1))
+    assert module.GPU is True
+    messages = [str(w.message) for w in caught]
+    assert any("NumPy is built against" in m for m in messages), messages
+    assert any("SciPy is built against" in m for m in messages), messages
