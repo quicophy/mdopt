@@ -197,19 +197,21 @@ def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
     import numpy
     import scipy
 
-    def faked(real):
-        def show_config(mode="stdout"):
-            if mode == "stdout":
-                return None
-            config = real(mode="dicts")
-            config["Build Dependencies"]["lapack"]["name"] = "accelerate"
-            return config
-
-        return show_config
+    def show_config(mode="stdout"):
+        # A synthetic modern config, independent of the installed versions'
+        # show_config API (SciPy 1.9 has no mode argument).
+        if mode == "stdout":
+            return None
+        return {
+            "Build Dependencies": {
+                "blas": {"name": "accelerate"},
+                "lapack": {"name": "accelerate"},
+            }
+        }
 
     monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
-    monkeypatch.setattr(numpy, "show_config", faked(numpy.show_config))
-    monkeypatch.setattr(scipy, "show_config", faked(scipy.show_config))
+    monkeypatch.setattr(numpy, "show_config", show_config)
+    monkeypatch.setattr(scipy, "show_config", show_config)
     module, caught = _reload_backend(monkeypatch, "cupy", _fake_cupy(num_devices=1))
     assert module.GPU is True
     messages = [str(w.message) for w in caught]
