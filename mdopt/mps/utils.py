@@ -252,8 +252,8 @@ def inner_product(
 
 
 def _renormalise_after_truncation(
-    singular_values: List[float], truncation_error: Optional[float]
-) -> List[float]:
+    singular_values: np.ndarray, truncation_error: Optional[float]
+) -> np.ndarray:
     """Renormalises a Schmidt spectrum after ``chi_max`` truncation.
 
     :class:`ExplicitMPS` requires a unit-norm spectrum at every bond. Truncation
@@ -263,11 +263,11 @@ def _renormalise_after_truncation(
     the constraint.
     """
     if not truncation_error:
-        return singular_values
+        return np.asarray(singular_values, dtype=float)
     norm = float(np.linalg.norm(np.asarray(singular_values, dtype=float)))
     if norm == 0:
-        return singular_values
-    return list(np.asarray(singular_values, dtype=float) / norm)
+        return np.asarray(singular_values, dtype=float)
+    return np.asarray(singular_values, dtype=float) / norm
 
 
 def mps_from_dense(
@@ -333,7 +333,7 @@ def mps_from_dense(
         )
 
     tensors: list[np.ndarray] = []
-    singular_values: list[list] = []
+    singular_values: list = []
 
     state_vector = state_vector.reshape((-1, phys_dim))
 

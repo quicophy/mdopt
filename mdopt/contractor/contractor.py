@@ -5,12 +5,88 @@ This module contains the MPS-MPO contractor functions.
 from typing import Union, List, Tuple, cast
 
 import numpy as np
-from opt_einsum import contract
+from opt_einsum import contract_expression
 
 from mdopt.backend import array as A
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.explicit import ExplicitMPS
 from mdopt.utils.utils import split_two_site_tensor
+
+_EXPRESSIONS: dict = {}
+
+
+def _contract_cached(subscripts, path, backend, *tensors):
+    """Evaluate a fixed einsum through a reusable opt_einsum expression.
+
+    The sweep in :func:`mps_mpo_contract` evaluates the same few einsums
+    thousands of times per decode; ``contract`` re-parses the subscripts and
+    rebuilds path metadata on every call even when ``optimize`` is explicit.
+    An expression with an explicit path is shape-independent, so it is
+    cached per (subscripts, path) only -- keying on operand shapes made
+    truncation's data-dependent bond dimensions miss 7-14% of calls on
+    large codes -- and built from whatever shapes the first call carries.
+    """
+    key = (subscripts, path)
+    expression = _EXPRESSIONS.get(key)
+    if expression is None:
+        expression = contract_expression(
+            subscripts, *(tensor.shape for tensor in tensors), optimize=list(path)
+        )
+        _EXPRESSIONS[key] = expression
+    return expression(*tensors, backend=backend)
+
+
+def _zip_first(left, right, mpo_left, mpo_right, backend):
+    """The zip-up's opening two-site tensor, ``ijk, klm, nojp, oqlr -> iprqm``.
+
+    On the NumPy backend the three pairwise contractions of the cached
+    opt_einsum path are issued directly: the expression machinery added
+    roughly a third of the contraction's own cost per call on the small
+    tensors of a decode, and the operands are exactly the tensordots
+    opt_einsum itself would issue, so the result is the same to rounding.
+    """
+    if backend != "numpy":
+        return _contract_cached(
+            "ijk, klm, nojp, oqlr -> iprqm",
+            ((0, 1), (1, 2), (0, 1)),
+            backend,
+            left,
+            right,
+            mpo_left,
+            mpo_right,
+        )
+    pair = np.tensordot(left, right, axes=(2, 0))  # i j l m
+    ops = np.tensordot(mpo_left, mpo_right, axes=(1, 0))  # n j p q l r
+    out = np.tensordot(pair, ops, axes=([1, 2], [1, 4]))  # i m n p q r
+    # n is the MPO's open left virtual leg (dimension 1): summed, as in the
+    # einsum where it is absent from the output.
+    return out.sum(axis=2).transpose(0, 2, 4, 3, 1)  # i p r q m
+
+
+def _zip_step(centre, right, mpo_tensor, backend):
+    """One zip-up sweep step, ``ijkl, lmn, komp -> ijpon`` (see _zip_first).
+
+    On the NumPy backend the MPO tensor is contracted with the right MPS
+    tensor first, arranged so that the final tensordot's output already has
+    the ``i j p o n`` layout: the caller's reshape to a matrix is then a view
+    instead of a copy of the two-site tensor, and only the small
+    ``mpo x right`` intermediate is transposed. Same operands, same sums;
+    the result agrees with the einsum to rounding.
+    """
+    if backend != "numpy":
+        return _contract_cached(
+            "ijkl, lmn, komp -> ijpon",
+            ((0, 1), (0, 1)),
+            backend,
+            centre,
+            right,
+            mpo_tensor,
+        )
+    # k o m p -> k p o m, so that the free legs come out as p, o.
+    ops = np.tensordot(
+        mpo_tensor.transpose(0, 3, 1, 2), right, axes=(3, 1)
+    )  # k p o l n
+    return np.tensordot(centre, ops, axes=([2, 3], [0, 3]))  # i j p o n
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
@@ -57,8 +133,12 @@ def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndar
             f"while the one given has {operator.ndim}."
         )
 
-    tensor_updated = contract(
-        "ijk, jl -> ilk", tensor, operator, optimize=[(0, 1)], backend=backend
+    tensor_updated = _contract_cached(
+        "ijk, jl -> ilk",
+        ((0, 1),),
+        backend,
+        tensor,
+        operator,
     )
     return A.to_device(np.asarray(tensor_updated))
 
@@ -139,17 +219,35 @@ def apply_two_site_unitary(
     b1_scaled = b_1 * (lam[:, None, None])
 
     # with lambda_0
-    t_with = contract(
-        "ijk, klm -> ijlm", b1_scaled, b_2, optimize=[(0, 1)], backend=backend
+    t_with = _contract_cached(
+        "ijk, klm -> ijlm",
+        ((0, 1),),
+        backend,
+        b1_scaled,
+        b_2,
     )
-    t_with = contract(
-        "ijkl, jkmn -> imnl", t_with, unitary, optimize=[(0, 1)], backend=backend
+    t_with = _contract_cached(
+        "ijkl, jkmn -> imnl",
+        ((0, 1),),
+        backend,
+        t_with,
+        unitary,
     )
 
     # without lambda_0 (for back-substitution)
-    t_wo = contract("ijk, klm -> ijlm", b_1, b_2, optimize=[(0, 1)], backend=backend)
-    t_wo = contract(
-        "ijkl, jkmn -> imnl", t_wo, unitary, optimize=[(0, 1)], backend=backend
+    t_wo = _contract_cached(
+        "ijk, klm -> ijlm",
+        ((0, 1),),
+        backend,
+        b_1,
+        b_2,
+    )
+    t_wo = _contract_cached(
+        "ijkl, jkmn -> imnl",
+        ((0, 1),),
+        backend,
+        t_wo,
+        unitary,
     )
 
     # split and back-substitute
@@ -160,12 +258,12 @@ def apply_two_site_unitary(
         renormalise=False,
         return_truncation_error=True,
     )
-    b_1_updated = contract(
+    b_1_updated = _contract_cached(
         "ijkl, mkl -> ijm",
+        ((0, 1),),
+        backend,
         t_wo,
         np.conjugate(b_2_updated),
-        optimize=[(0, 1)],
-        backend=backend,
     )
 
     if A.GPU:
@@ -251,7 +349,12 @@ def mps_mpo_contract(
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
     if mps.orth_centre != start_site:
-        mps = cast(CanonicalMPS, mps.move_orth_centre(start_site, renormalise=False))
+        # inplace: this function owns `mps` by now (copied above unless the
+        # caller asked for inplace, in which case it handed ownership over).
+        mps = cast(
+            CanonicalMPS,
+            mps.move_orth_centre(start_site, renormalise=False, inplace=True),
+        )
 
     for i, tensor in enumerate(mpo):
         if tensor.ndim != 4:
@@ -273,14 +376,12 @@ def mps_mpo_contract(
 
         orth_centre_index = start_site
 
-        two_site_mps_mpo_tensor = contract(
-            "ijk, klm, nojp, oqlr -> iprqm",
+        two_site_mps_mpo_tensor = _zip_first(
             mps.tensors[start_site],
             mps.tensors[start_site + 1],
             mpo[0],
             mpo[1],
-            optimize=[(0, 1), (1, 2), (0, 1)],
-            backend=backend,
+            backend,
         ).reshape(
             (
                 mps.tensors[start_site].shape[0],
@@ -292,17 +393,16 @@ def mps_mpo_contract(
 
         # Sweep across the MPO
         for i in range(len(mpo) - 2):
-            mps.tensors[orth_centre_index], singular_values, b_r, _ = (
+            mps.tensors[orth_centre_index], singular_values, b_r = (
                 split_two_site_tensor(
                     two_site_mps_mpo_tensor,
                     chi_max=chi_max,
                     cut=cut,
                     renormalise=renormalise,
-                    return_truncation_error=True,
                 )
             )
-            with A.stream():
-                if A.GPU:
+            if A.GPU:
+                with A.stream():
                     mps.tensors[orth_centre_index] = A.to_device(
                         mps.tensors[orth_centre_index]
                     )
@@ -310,8 +410,7 @@ def mps_mpo_contract(
                     singular_values = A.to_device(np.asarray(singular_values))
 
             orth_centre_index += 1
-            if isinstance(mps, CanonicalMPS):
-                mps.orth_centre = orth_centre_index
+            mps.orth_centre = orth_centre_index
 
             # Replace diag(s) @ b_r with broadcast multiply (no diag allocation)
             mps.tensors[orth_centre_index] = (
@@ -325,13 +424,11 @@ def mps_mpo_contract(
                 )
             )
 
-            two_site_mps_mpo_tensor = contract(
-                "ijkl, lmn, komp -> ijpon",
+            two_site_mps_mpo_tensor = _zip_step(
                 mps.tensors[orth_centre_index],
                 mps.tensors[orth_centre_index + 1],
                 mpo[i + 2],
-                optimize=[(0, 1), (0, 1)],
-                backend=backend,
+                backend,
             ).reshape(
                 (
                     len(singular_values),
@@ -342,15 +439,14 @@ def mps_mpo_contract(
             )
 
         # Final split and update last tensor
-        mps.tensors[orth_centre_index], singular_values, b_r, _ = split_two_site_tensor(
+        mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
             two_site_mps_mpo_tensor,
             chi_max=chi_max,
             cut=cut,
             renormalise=renormalise,
-            return_truncation_error=True,
         )
-        with A.stream():
-            if A.GPU:
+        if A.GPU:
+            with A.stream():
                 mps.tensors[orth_centre_index] = A.to_device(
                     mps.tensors[orth_centre_index]
                 )

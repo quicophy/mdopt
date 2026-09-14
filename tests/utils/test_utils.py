@@ -1,5 +1,9 @@
 """Tests for the ``mdopt.utils.utils`` module."""
 
+import os
+import subprocess
+import sys
+import textwrap
 import pytest
 import scipy
 import numpy as np
@@ -630,3 +634,127 @@ def test_qr_accepts_infinite_chi_max(rng):
     q_small, r_small, _ = qr(mat, cut=1e-16, chi_max=3)
     assert q_small.shape[1] == 3
     assert r_small.shape[0] == 3
+
+
+def test_svd_rectangular_inputs_match_direct_svd():
+    """Rectangular inputs in both orientations, at and around the 2:1 aspect
+    ratio the removed QR/LQ pre-reduction used to take, must match a direct
+    numpy SVD: singular values, reconstruction, orthogonality, and chi_max
+    truncation.
+    """
+    rng = np.random.default_rng(20240903)
+    shapes_and_paths = [
+        ((16, 32), "wide 2:1"),
+        ((16, 31), "wide just under 2:1"),
+        ((32, 16), "tall 2:1"),
+        ((31, 16), "tall just under 2:1"),
+        ((16, 16), "square"),
+    ]
+    for complex_case in (False, True):
+        for shape, label in shapes_and_paths:
+            mat = rng.standard_normal(shape)
+            if complex_case:
+                mat = mat + 1j * rng.standard_normal(shape)
+            u_l, s, v_h, _ = svd(mat, cut=0.0, chi_max=int(1e4))
+            u_ref, s_ref, v_ref = np.linalg.svd(mat, full_matrices=False)
+            assert np.allclose(s, s_ref, rtol=0.0, atol=1e-11), (label, complex_case)
+            assert np.allclose((u_l * s) @ v_h, mat, rtol=0.0, atol=1e-11), (
+                label,
+                complex_case,
+            )
+            eye = np.eye(u_l.shape[1])
+            assert np.allclose(u_l.conj().T @ u_l, eye, rtol=0.0, atol=1e-12), label
+            assert np.allclose(v_h @ v_h.conj().T, eye, rtol=0.0, atol=1e-12), label
+
+            chi = 5
+            u_t, s_t, v_t, err = svd(
+                mat, cut=0.0, chi_max=chi, return_truncation_error=True
+            )
+            assert s_t.shape == (chi,)
+            assert np.allclose(s_t, s_ref[:chi], rtol=0.0, atol=1e-11), label
+            # rtol=0 so the bound is genuinely absolute; the discarded
+            # spectrum's norm-square is O(100) here, where the default
+            # relative tolerance would hide errors of order 1e-3.
+            assert np.isclose(
+                err, float(np.linalg.norm(s_ref[chi:]) ** 2), rtol=0.0, atol=1e-9
+            ), label
+
+
+def test_svd_nonfinite_input_takes_the_fallback_chain():
+    """A non-finite input must make the whole call raise.
+
+    There is no finiteness pre-scan: the SVD of a NaN matrix raises, which
+    sends the call through the fallback chain, and the jitter attempt cannot
+    rescue a NaN either."""
+    mat = np.full((8, 32), np.nan)
+    with pytest.raises(RuntimeError, match="All SVD methods failed"):
+        svd(mat)
+
+
+def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
+    """A matrix of the decoders' centre-tensor shape with a spectrum spanning
+    sixteen orders of magnitude and a numerically null tail."""
+    spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
+    left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+    right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+    return (left * spectrum) @ right
+
+
+def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
+    """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
+    decoders' centre tensors take. A small deterministic check for the default
+    suite; the allocator-churn stress version is opt-in and runs in a
+    subprocess (see below)."""
+    for _ in range(3):
+        mat = _graded_rank_deficient(rng)
+        u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
+        assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
+        assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10
+
+
+@pytest.mark.skipif(
+    os.environ.get("MDOPT_RUN_SLOW") != "1",
+    reason="allocator-churn stress test; set MDOPT_RUN_SLOW=1 to run",
+)
+def test_svd_under_allocator_churn_in_a_subprocess():
+    """``svd`` stays exact call after call on graded rank-deficient input while
+    the allocator churns.
+
+    NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
+    intermittently returned a factorisation whose product was not the input,
+    and died with SIGBUS, on matrices of this kind, and Accelerate's SVD
+    tripped malloc's heap check on the decoders' matrices. A native crash of
+    that sort would terminate pytest, so the loop runs in a subprocess and a
+    signal becomes an ordinary test failure. It is a guard, not a certain
+    detector (the fault is heap-state dependent);
+    ``tests/decoding/test_convergence.py`` is the deterministic check.
+    """
+    script = textwrap.dedent("""
+        import numpy as np
+        from mdopt.utils.utils import svd
+
+        rng = np.random.default_rng(2026)
+        rows, cols, rank = 636, 304, 237
+        spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
+        junk = []
+        for _ in range(150):
+            left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+            right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+            mat = (left * spectrum) @ right
+            junk.append(rng.normal(size=rng.integers(1, 200_000)))
+            junk = junk[-10:]
+            u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
+            assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
+            assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10
+        """)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"exit code {result.returncode} (a negative code is the signal that "
+        f"killed the process): {result.stderr[-2000:]}"
+    )

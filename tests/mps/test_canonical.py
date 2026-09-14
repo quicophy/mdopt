@@ -886,3 +886,219 @@ def test_marginal_does_not_produce_nans_when_the_centre_underflows():
     marginalised = mps.marginal(sites_to_marginalise=list(range(10)), renormalise=True)
 
     assert np.all(np.isfinite(marginalised.dense(flatten=True)))
+
+
+def _two_site_reference_move(mps, final_pos, renormalise):
+    """The two-site-SVD move spelled out: the reference for the one-site path.
+
+    move_orth_centre no longer has a flag that forces the two-site branch
+    (renormalised moves and returned spectra take the one-site path too), so
+    an old-vs-new comparison has to build the reference explicitly.
+    """
+    if mps.orth_centre == final_pos:
+        return mps.copy()
+    leftwards = mps.orth_centre > final_pos
+    work = mps.reverse() if leftwards else mps.copy()
+    begin = work.orth_centre
+    final = (mps.num_sites - 1 - final_pos) if leftwards else final_pos
+    for i in range(begin, final):
+        u_l, s_bond, v_r, _ = split_two_site_tensor(
+            work.two_site_tensor_next(i),
+            chi_max=mps.chi_max,
+            renormalise=renormalise,
+            strategy="svd",
+            return_truncation_error=True,
+        )
+        work.tensors[i] = u_l
+        work.tensors[i + 1] = v_r * s_bond[:, None, None]
+        work.orth_centre = i + 1
+    return work.reverse() if leftwards else work
+
+
+def test_move_orth_centre_carries_a_collapsed_bond_through():
+    """A bond of dimension 0 (a truncation that emptied the spectrum) must
+    move through the centre-only path without raising.
+
+    Three example notebooks hit this in CI: a zero-width centre has nothing
+    to factor, so such a bond must take the two-site SVD branch, which
+    carries the degenerate shape through unchanged.
+    """
+    from mdopt.mps.canonical import CanonicalMPS
+
+    tensors = [
+        np.zeros((1, 2, 0)),
+        np.zeros((0, 2, 1)),
+        np.zeros((1, 2, 1)),
+    ]
+    mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+    moved = mps.move_orth_centre(2, renormalise=False)
+    assert [t.shape for t in moved.tensors][0][2] == 0
+    back = moved.move_orth_centre(0, renormalise=False)
+    assert len(back) == 3
+
+
+def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
+    """A centre whose whole spectrum sits below the 1e-12 cut must collapse
+    to a zero-width bond on the centre-only path exactly as on the two-site
+    SVD path, rather than propagating a sub-cut direction."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    def tiny_centre_mps():
+        tensors = [
+            np.array([[[1.0, 0.0], [0.0, 1.0]]]).reshape(1, 2, 2) * 5e-13,
+            np.eye(2).reshape(2, 2, 1),
+            np.array([1.0, 0.0]).reshape(1, 2, 1),
+        ]
+        return CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+
+    via_one_site = tiny_centre_mps().move_orth_centre(2, renormalise=False)
+    via_two_site = _two_site_reference_move(tiny_centre_mps(), 2, renormalise=False)
+    assert via_one_site.tensors[0].shape[2] == 0
+    assert via_one_site.tensors[0].shape[2] == via_two_site.tensors[0].shape[2]
+
+
+def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
+    """The one-site move must reproduce the two-site SVD move exactly.
+
+    Real and complex random states, moves in both directions, with a
+    chi_max below the full Schmidt rank so the finite truncation is
+    exercised too: dense() and every bond dimension must agree between the
+    one-site path and the two-site reference spelled out above.
+    """
+    from mdopt.mps.utils import mps_from_dense
+
+    for seed, complex_case in ((11, False), (12, True), (13, False), (14, True)):
+        rng = np.random.default_rng(seed)
+        vec = rng.standard_normal(2**8)
+        if complex_case:
+            vec = vec + 1j * rng.standard_normal(2**8)
+        vec = vec / np.linalg.norm(vec)
+        for chi_max in (int(1e4), 3):
+            base = mps_from_dense(vec, form="Right-canonical")
+            base.chi_max = chi_max
+            for targets in ((7, 0), (0, 7), (4, 1, 6)):
+                fast, slow = base.copy(), base.copy()
+                for target in targets:
+                    fast = fast.move_orth_centre(target, renormalise=False)
+                    slow = _two_site_reference_move(slow, target, renormalise=False)
+                assert list(fast.bond_dimensions) == list(slow.bond_dimensions), (
+                    seed,
+                    chi_max,
+                    targets,
+                )
+                assert np.allclose(
+                    fast.dense(flatten=True),
+                    slow.dense(flatten=True),
+                    rtol=0.0,
+                    atol=1e-11,
+                ), (seed, chi_max, targets)
+
+
+def test_move_orth_centre_matches_svd_path_on_non_canonical_chains():
+    """Behind a biased pair the neighbours are not isometries, so a move
+    that must truncate at chi_max has to take the two-site SVD; the fast
+    path may only handle moves that truncate nothing."""
+    from mdopt.mps.utils import mps_from_dense
+    from mdopt.examples.decoding.decoding import apply_depolarising_bias
+
+    rng = np.random.default_rng(5)
+    vec = rng.standard_normal(2**8)
+    vec = vec / np.linalg.norm(vec)
+    for chi_max in (2, 4, int(1e4)):
+        base = mps_from_dense(vec, form="Right-canonical", chi_max=chi_max)
+        biased = apply_depolarising_bias(
+            base, sites_to_bias=[0, 2, 4, 6], prob_bias_list=0.3
+        )
+        fast = biased.copy().move_orth_centre(0, renormalise=False)
+        slow = _two_site_reference_move(biased.copy(), 0, renormalise=False)
+        assert list(fast.bond_dimensions) == list(slow.bond_dimensions), chi_max
+        assert np.allclose(
+            fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
+        ), chi_max
+
+
+def test_move_orth_centre_prunes_on_discarded_amplitude_not_on_the_centre_spectrum():
+    """Review counterexamples: a sub-cut centre direction amplified by a large
+    neighbour entry must be KEPT (its amplitude is macroscopic), and a
+    direction a null neighbour row makes worthless may go. Both cases must
+    agree with the two-site SVD path on the represented state."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    def chain(neighbour):
+        centre = np.zeros((1, 2, 2))
+        centre[0, 0, 0], centre[0, 1, 1] = 1.0, 5e-13
+        last = np.array([1.0, 0.0]).reshape(1, 2, 1)
+        return CanonicalMPS([centre, neighbour, last], orth_centre=0, chi_max=4)
+
+    amplified = np.zeros((2, 2, 1))
+    amplified[0, 0, 0], amplified[1, 1, 0] = 1.0, 1e13
+    null_row = np.zeros((2, 2, 1))
+    null_row[0, 0, 0] = 1.0
+    for neighbour in (amplified, null_row):
+        fast = chain(neighbour).move_orth_centre(2, renormalise=False)
+        slow = _two_site_reference_move(chain(neighbour), 2, renormalise=False)
+        assert np.allclose(
+            fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
+        )
+    kept = chain(amplified).move_orth_centre(1, renormalise=False)
+    assert kept.tensors[0].shape[2] == 2, "the amplified direction carries amplitude 5"
+
+
+def test_one_site_move_matches_two_site_move_with_renormalisation():
+    """The centre-only move also covers renormalised moves and returned spectra.
+
+    With an isometric neighbour B, theta = C B has theta theta^dag = C C^dag,
+    so the spectrum, its renormalisation, the cut and the chi_max count are
+    those of the centre alone. Both DMRG sweeps (renormalise=True) and the
+    explicit-form conversion (return_singular_values=True) go through it now;
+    the reference below is the two-site formula spelled out.
+    """
+    from mdopt.utils.utils import split_two_site_tensor
+
+    rng = np.random.default_rng(11)
+    for dtype in (float, complex):
+        vector = rng.standard_normal(2**7)
+        if dtype is complex:
+            vector = vector + 1j * rng.standard_normal(2**7)
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form="Right-canonical", chi_max=5)
+        assert isinstance(mps, CanonicalMPS)
+        mps.chi_max = 5
+
+        reference = mps.copy()
+        spectra = []
+        for site in range(0, 4):
+            theta = reference.two_site_tensor_next(site)
+            u_l, s_bond, v_r, _ = split_two_site_tensor(
+                theta, chi_max=5, renormalise=True, return_truncation_error=True
+            )
+            spectra.append(s_bond)
+            reference.tensors[site] = u_l
+            reference.tensors[site + 1] = v_r * s_bond[:, None, None]
+            reference.orth_centre = site + 1
+
+        moved, singular_values = mps.move_orth_centre(
+            4, return_singular_values=True, renormalise=True
+        )
+        assert moved.orth_centre == 4
+        assert len(singular_values) == len(spectra)
+        for got, want in zip(singular_values, spectra):
+            assert np.allclose(got, want, rtol=0.0, atol=1e-12)
+        assert np.allclose(moved.dense(), reference.dense(), rtol=0.0, atol=1e-12)
+        assert moved.bond_dimensions == reference.bond_dimensions
+
+
+def test_move_orth_centre_accepts_integer_and_boolean_tensors():
+    """Exact-arithmetic product states are valid input; the isometry gate must
+    promote its Gram matrix rather than fail on an in-place float subtraction."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    for dtype in (int, bool):
+        tensors = [np.array([1, 0], dtype=dtype).reshape(1, 2, 1) for _ in range(4)]
+        mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+        moved = mps.move_orth_centre(3, renormalise=False)
+        assert moved.orth_centre == 3
+        assert np.allclose(moved.dense(flatten=True)[0], 1.0)
+        back = moved.move_orth_centre(0, renormalise=True)
+        assert back.orth_centre == 0
+        assert list(back.bond_dimensions) == [1, 1, 1]
