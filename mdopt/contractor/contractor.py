@@ -23,8 +23,9 @@ def _contract_cached(subscripts, path, backend, *tensors):
     rebuilds path metadata on every call even when ``optimize`` is explicit.
     An expression with an explicit path is shape-independent, so it is
     cached per (subscripts, path) only -- keying on operand shapes made
-    truncation's data-dependent bond dimensions miss 7-14% of calls on
-    large codes -- and built from whatever shapes the first call carries.
+    truncation's data-dependent bond dimensions miss the cache (1-2% of the
+    zip-up calls on the circuit-level DEM workloads, 23% on the RCM
+    surface-code one) -- and built from whatever shapes the first call carries.
     """
     key = (subscripts, path)
     expression = _EXPRESSIONS.get(key)
