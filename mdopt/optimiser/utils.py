@@ -213,6 +213,23 @@ class ConstraintString:
         return mpo
 
 
+def _product_state_orth_centre(mps: CanonicalMPS, tolerance: float = 1e-12) -> int:
+    """The orthogonality centre :func:`find_orth_centre` assigns a product state.
+
+    For a chain of bond dimension 1 every tensor is (1, d, 1); it is a left
+    and a right isometry exactly when its vector has unit norm. The scan then
+    reports the non-isometric sites as centres and the convention keeps the
+    first of them, or site 0 when all sites are isometric; a biased chain
+    whose first sites are still normalised (the decoders' logical prefix)
+    therefore gets its first biased site, not site 0.
+    """
+    for site, tensor in enumerate(mps.tensors):
+        gram = float(np.vdot(tensor, tensor).real)
+        if not np.isclose(gram, 1.0, atol=tolerance, rtol=0.0):
+            return site
+    return 0
+
+
 def apply_constraints(
     mps: CanonicalMPS,
     strings: List[List[List[int]]],
@@ -282,6 +299,12 @@ def apply_constraints(
     if dense:
         mps_dense = mps.dense(flatten=True)
 
+    # One private copy up front, then every zip-up and move works in place:
+    # the contractor used to deep-copy the whole chain once per constraint,
+    # which on a 1700-site DEM chain was a measurable share of the decode.
+    if strings and not dense:
+        mps = mps.copy()
+
     for string in tqdm(strings, disable=silent):
         string = ConstraintString(logical_tensors, string)
         mpo = string.mpo()
@@ -297,6 +320,13 @@ def apply_constraints(
             continue
 
         # Ensure orthogonality centre is set and moved once per string
+        if mps.orth_centre is None and all(d == 1 for d in mps.bond_dimensions):
+            # A product state (every bond of dimension 1) needs no isometry
+            # scan: a (1, d, 1) tensor is an isometry exactly when its
+            # vector has unit norm, so the scan's answer -- the first
+            # non-isometric site, or site 0 when every site is isometric --
+            # comes from the site norms alone. Same tolerance as the scan.
+            mps.orth_centre = _product_state_orth_centre(mps)
         if mps.orth_centre is None:
             orth_centres, flags_left, flags_right = find_orth_centre(
                 mps, return_orth_flags=True
@@ -324,7 +354,10 @@ def apply_constraints(
                 mps.orth_centre = orth_centres[0]
 
             mps = mps.move_orth_centre(
-                final_pos=start_site, renormalise=False, return_singular_values=False
+                final_pos=start_site,
+                renormalise=False,
+                return_singular_values=False,
+                inplace=True,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
@@ -335,7 +368,7 @@ def apply_constraints(
             chi_max=chi_max,
             cut=cut,
             renormalise=False,
-            inplace=False,
+            inplace=True,
         )
 
         if renormalise:

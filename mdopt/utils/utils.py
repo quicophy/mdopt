@@ -6,24 +6,26 @@ import numpy as np
 import scipy
 from opt_einsum import contract
 
-# --- Backend shim: prefer your GPU/array backend if available, else NumPy ---
-try:
-    # expected to export a NumPy-like API (e.g., NumPy or CuPy)
-    from mdopt.backend import array as xp  # type: ignore
-except (ImportError, ModuleNotFoundError):
-    import numpy as xp  # type: ignore
+# The backend module exposes a NumPy-like API (NumPy, or CuPy when
+# MDOPT_BACKEND=cupy and a CUDA device is usable) plus host/device transfer.
+from mdopt.backend import array as xp
 
 
 def _to_numpy(a):
-    """Convert backend arrays (e.g., CuPy) to NumPy without copying if possible."""
-    try:
-        import cupy as cp  # type: ignore
+    """Bring a backend array to the host as a NumPy array (no copy on NumPy).
 
-        if isinstance(a, cp.ndarray):
-            return cp.asnumpy(a)
-    except Exception:
-        pass
-    return np.asarray(a)
+    Resolved through the backend's own transfer, which honours MDOPT_BACKEND
+    and the CUDA device probe; a per-call ``import cupy`` here once cost
+    ~18% of a decoding run.
+    """
+    host = xp.to_host(a)
+    try:
+        return np.asarray(host)
+    except TypeError:
+        # A device array reached us while the NumPy backend is selected
+        # (CuPy installed, MDOPT_BACKEND unset); CuPy refuses the implicit
+        # conversion, so ask it explicitly.
+        return np.asarray(host.get())
 
 
 def svd(
@@ -32,9 +34,12 @@ def svd(
     chi_max: float = int(1e4),
     renormalise: bool = False,
     return_truncation_error: bool = False,
-) -> Tuple[np.ndarray, List[float], np.ndarray, Optional[float]]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
+
+    The full decomposition is always taken; the comment at the backend call
+    records why strongly rectangular input is not reduced by QR/LQ first.
 
     Parameters
     ----------
@@ -55,8 +60,9 @@ def svd(
     -------
     u_l : np.ndarray
         Unitary matrix having left singular vectors as columns.
-    singular_values : list
-        The singular values, sorted in non-increasing order.
+    singular_values : np.ndarray
+        The singular values kept after the cut and ``chi_max``, sorted in
+        non-increasing order, as a real one-dimensional array.
     v_r : np.ndarray
         Unitary matrix having right singular vectors as rows.
     truncation_error : Optional[float]
@@ -79,7 +85,26 @@ def svd(
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
             if attempt == "xp":
-                u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)  # returns U, S, Vh
+                # The full decomposition, always. A QR/LQ pre-reduction of
+                # strongly rectangular input (factor A = QR, decompose the
+                # small factor, multiply Q back onto the kept singular
+                # vectors) was tried on PR #543 and removed:
+                # - with NumPy/SciPy wheels linked against Apple's Accelerate
+                #   (the macOS 14+ arm64 wheels) it corrupted memory on the
+                #   decoders' rank-deficient matrices: numpy.linalg.qr died
+                #   with SIGBUS, and a [[72,12,6]] decode at chi_max=400
+                #   returned wrong verdicts on 24 of 24 shots while every
+                #   unit test and benchmark fingerprint still passed;
+                # - with OpenBLAS it is memory-safe but not equivalent under
+                #   truncation: it moved a chi_max=64 surface-code posterior
+                #   entry by 0.017, beyond the benchmark suite's tolerance;
+                # - it saved 0-7% on the benchmark workloads.
+                # Reintroducing it needs `benchmarks/bench_suite.py --check`
+                # and tests/decoding/test_convergence.py to pass.
+                # No finiteness pre-scan: a non-finite input makes the SVD
+                # raise LinAlgError into the fallbacks below, and the scan
+                # would be a device sync on the GPU backend.
+                u_l, s, v_h = xp.linalg.svd(a, full_matrices=False)
             elif attempt == "gesdd":
                 u_l, s, v_h = scipy.linalg.svd(
                     _to_numpy(a),
@@ -112,10 +137,10 @@ def svd(
     else:
         raise RuntimeError(f"All SVD methods failed. Last error: {last_exception}")
 
-    # Convert to NumPy for downstream consistency with the current codebase
-    u_l = _to_numpy(u_l)
+    # The spectrum comes to the host first: the truncation count is decided
+    # here, and the singular vectors are sliced while still on the backend,
+    # then converted.
     s = _to_numpy(s).astype(float, copy=False)  # singular values are real non-negative
-    v_h = _to_numpy(v_h)
 
     # Truncate by cut and chi_max
     # int(chi_max) first would raise OverflowError on the chi_max=np.inf
@@ -126,6 +151,9 @@ def svd(
     u_l = u_l[:, :max_num]
     s = s[:max_num]
     v_h = v_h[:max_num, :]
+    # Convert to NumPy for downstream consistency with the current codebase
+    u_l = _to_numpy(u_l)
+    v_h = _to_numpy(v_h)
 
     if renormalise and s.size > 0:
         norm = float(np.linalg.norm(s))
