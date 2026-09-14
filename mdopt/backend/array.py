@@ -89,12 +89,15 @@ def _lapack_vendor(module) -> str:
 def _warn_if_accelerate(numpy_module) -> None:
     """Warn once when NumPy's LAPACK is Apple's Accelerate framework.
 
-    On the macOS arm64 wheels of NumPy 2.x (which link Accelerate) the
-    decoders' rank-deficient, wide-spectrum matrices made ``linalg.qr`` die
-    with SIGBUS and ``linalg.svd`` trip malloc's heap-corruption check
-    inside dgesdd, and a [[72,12,6]] decode at chi_max=400 returned wrong
-    verdicts while every unit test passed. The OpenBLAS build of the same
-    NumPy version has none of this; it is the ``macosx_11_0_arm64`` wheel::
+    On the NumPy 2.x wheels for macOS 14+ on Apple silicon
+    (``macosx_14_0_arm64``, which link Accelerate) the decoders'
+    rank-deficient, wide-spectrum matrices made ``linalg.qr`` die with SIGBUS
+    and ``linalg.svd`` trip malloc's heap-corruption check inside dgesdd.
+    While mdopt still reduced its SVDs by QR first, this also turned a
+    [[72,12,6]] decode at chi_max=400 into wrong verdicts (21 of 22 shots with
+    a non-trivial error) while every unit test passed. The OpenBLAS build of
+    the same NumPy version has none of this; it is the ``macosx_11_0_arm64``
+    wheel::
 
         pip download numpy==<version> --platform macosx_11_0_arm64 \
             --only-binary=:all: --no-deps -d /tmp/numpy-openblas
@@ -107,8 +110,9 @@ def _warn_if_accelerate(numpy_module) -> None:
     if "accelerate" in _lapack_vendor(numpy_module):
         warnings.warn(
             "NumPy is built against Apple's Accelerate LAPACK, which corrupted "
-            "memory and produced wrong decoding verdicts on mdopt's matrices "
-            "(see mdopt.backend.array._warn_if_accelerate). Install the "
+            "memory on mdopt's matrices and, with an earlier SVD code path, led "
+            "to wrong decoding verdicts (see "
+            "mdopt.backend.array._warn_if_accelerate). Install the "
             "OpenBLAS build of NumPy (the macosx_11_0_arm64 wheel) or set "
             "MDOPT_ALLOW_ACCELERATE=1 to silence this warning.",
             RuntimeWarning,

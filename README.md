@@ -48,9 +48,10 @@ first, against 3 of 24 on OpenBLAS, and every unit test still passed. The
 same test shot decoded correctly at `chi_max` 64, 128 and 256. Not seeing
 the fault at those smaller bond dimensions is no guarantee, because it
 depends on the state of the heap. mdopt's SVD helpers call both libraries,
-and mdopt warns at import when it finds Accelerate behind either one. The same versions are
-also published as OpenBLAS builds, the `macosx_11_0_arm64` NumPy wheel and
-the `macosx_12_0_arm64` SciPy wheel, which install on the same machines:
+and mdopt warns at import when it finds Accelerate behind either one. The
+same versions are also published as OpenBLAS builds, the `macosx_11_0_arm64`
+NumPy wheel and the `macosx_12_0_arm64` SciPy wheel, which install on the
+same machines:
 
 ```bash
 pip download "numpy==$(python -c 'import numpy; print(numpy.__version__)')" \
