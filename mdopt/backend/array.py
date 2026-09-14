@@ -63,27 +63,15 @@ GPU = _xp.__name__ == "cupy"
 def _lapack_vendor(module) -> str:
     """The LAPACK library a NumPy or SciPy module was built against, lower-cased.
 
-    NumPy and SciPy 1.10 and later report it through
-    ``show_config(mode="dicts")``. SciPy 1.9 (a numpy.distutils build) has no
-    ``mode`` argument and exposes its link information through
-    ``__config__.get_info`` instead; an Accelerate link there is reported as
-    ``"accelerate"``. Returns ``""`` when neither source is available.
+    Read from ``show_config(mode="dicts")``, which every NumPy and SciPy
+    release mdopt supports provides (NumPy 2.3+, SciPy 1.15+). Returns ``""``
+    when the configuration cannot be read.
     """
     try:
         deps = module.show_config(mode="dicts")["Build Dependencies"]
         return str(deps["lapack"]["name"]).lower()
-    except TypeError:
-        pass  # show_config without a mode argument: fall through to get_info
     except Exception:  # pylint: disable=broad-except
         return ""
-    try:
-        info = module.__config__.get_info("lapack_opt")
-    except Exception:  # pylint: disable=broad-except
-        return ""
-    text = " ".join(str(value) for value in dict(info).values()).lower()
-    if "accelerate" in text or "veclib" in text:
-        return "accelerate"
-    return text
 
 
 def _warn_if_accelerate(numpy_module) -> None:

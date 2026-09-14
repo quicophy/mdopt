@@ -134,11 +134,14 @@ def test_accelerate_lapack_warns_unless_allowed(monkeypatch):
         backend._warn_if_accelerate(fake_numpy("scipy-openblas"))
         monkeypatch.setenv("MDOPT_ALLOW_ACCELERATE", "1")
         backend._warn_if_accelerate(fake_numpy("accelerate"))
+    # An unreadable configuration (no show_config, or one without the dicts
+    # mode) reports an unknown vendor instead of raising.
     assert backend._lapack_vendor(SimpleNamespace()) == ""
+    assert backend._lapack_vendor(SimpleNamespace(show_config=lambda: None)) == ""
 
 
 def test_scipy_shaped_config_is_detected(monkeypatch):
-    """SciPy 1.10+ reports its LAPACK through show_config(mode="dicts"), with
+    """SciPy reports its LAPACK through show_config(mode="dicts"), with
     the vendor capitalised ("Accelerate"); the SciPy check must warn on it."""
     from types import SimpleNamespace
 
@@ -160,35 +163,6 @@ def test_scipy_shaped_config_is_detected(monkeypatch):
         backend._warn_if_scipy_accelerate()
 
 
-def test_scipy_without_show_config_mode_falls_back_to_get_info(monkeypatch):
-    """SciPy 1.9 has show() without a mode argument; its link information
-    comes from __config__.get_info, which must still detect Accelerate and
-    stay silent for OpenBLAS."""
-    from types import SimpleNamespace
-
-    from mdopt.backend import array as backend
-
-    def show():
-        return None
-
-    def scipy_with(info):
-        return SimpleNamespace(
-            show_config=show, __config__=SimpleNamespace(get_info=lambda name: info)
-        )
-
-    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
-    accelerate = scipy_with({"extra_link_args": ["-Wl,-framework", "-Wl,Accelerate"]})
-    openblas = scipy_with({"libraries": ["openblas", "openblas"], "language": "c"})
-    assert backend._lapack_vendor(accelerate) == "accelerate"
-    monkeypatch.setitem(sys.modules, "scipy", accelerate)
-    with pytest.warns(RuntimeWarning, match="SciPy"):
-        backend._warn_if_scipy_accelerate()
-    monkeypatch.setitem(sys.modules, "scipy", openblas)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        backend._warn_if_scipy_accelerate()
-
-
 def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
     """With CuPy selected, NumPy and SciPy LAPACK still run on the host (centre
     moves, host-side contractions, the SVD fallbacks, qr), so an
@@ -197,8 +171,8 @@ def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
     import scipy
 
     def show_config(mode="stdout"):
-        # A synthetic modern config, independent of the installed versions'
-        # show_config API (SciPy 1.9 has no mode argument).
+        # A synthetic config, independent of what the installed NumPy and
+        # SciPy report.
         if mode == "stdout":
             return None
         return {
