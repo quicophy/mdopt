@@ -27,8 +27,8 @@ def test_bb_72_12_6_natural_order_single_error_converges_in_chi():
     chi_max=400 in the natural qubit order, and the verdict is the same at
     chi_max=128.
 
-    This instance exposed the QR pre-reduction of ``svd`` (now off by
-    default): with it, the decode returned a flat or wrongly peaked
+    This instance exposed the QR pre-reduction of ``svd`` (since removed):
+    with it, the decode returned a flat or wrongly peaked
     posterior at chi_max=400 on NumPy/Accelerate builds -- 24 of 24 shots
     -- while every unit test and benchmark fingerprint still passed. Each
     chi_max=400 decode takes 30-60 minutes on a laptop.
