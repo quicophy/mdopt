@@ -99,7 +99,7 @@ def _warn_if_accelerate(numpy_module) -> None:
     the same NumPy version has none of this; it is the ``macosx_11_0_arm64``
     wheel::
 
-        pip download numpy==<version> --platform macosx_11_0_arm64 \
+        pip download numpy==<version> --platform macosx_11_0_arm64 \\
             --only-binary=:all: --no-deps -d /tmp/numpy-openblas
         pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
 

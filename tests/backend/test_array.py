@@ -112,7 +112,6 @@ def test_stream_is_a_context_manager_on_numpy(monkeypatch):
 def test_accelerate_lapack_warns_unless_allowed(monkeypatch):
     """A NumPy built against Accelerate triggers a RuntimeWarning at import
     time; MDOPT_ALLOW_ACCELERATE=1 silences it; other vendors are silent."""
-    import warnings
     from types import SimpleNamespace
 
     from mdopt.backend import array as backend

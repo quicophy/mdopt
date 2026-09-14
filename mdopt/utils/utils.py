@@ -16,8 +16,8 @@ def _to_numpy(a):
 
     Resolved through the backend's own transfer, which honours MDOPT_BACKEND
     and the CUDA device probe; a per-call ``import cupy`` here once cost
-    about 11,000 failed imports per decode, between roughly a tenth and
-    a third of the decode depending on the workload.
+    about 11,000 failed imports per decode: from about 4% of the decode on
+    surface_bitflip to about a third on dem_d3.
     """
     host = xp.to_host(a)
     try:
