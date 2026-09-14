@@ -60,6 +60,92 @@ _xp = _load_backend()
 GPU = _xp.__name__ == "cupy"
 
 
+def _lapack_vendor(module) -> str:
+    """The LAPACK library a NumPy or SciPy module was built against, lower-cased.
+
+    NumPy and SciPy 1.10 and later report it through
+    ``show_config(mode="dicts")``. SciPy 1.9 (a numpy.distutils build) has no
+    ``mode`` argument and exposes its link information through
+    ``__config__.get_info`` instead; an Accelerate link there is reported as
+    ``"accelerate"``. Returns ``""`` when neither source is available.
+    """
+    try:
+        deps = module.show_config(mode="dicts")["Build Dependencies"]
+        return str(deps["lapack"]["name"]).lower()
+    except TypeError:
+        pass  # show_config without a mode argument: fall through to get_info
+    except Exception:  # pylint: disable=broad-except
+        return ""
+    try:
+        info = module.__config__.get_info("lapack_opt")
+    except Exception:  # pylint: disable=broad-except
+        return ""
+    text = " ".join(str(value) for value in dict(info).values()).lower()
+    if "accelerate" in text or "veclib" in text:
+        return "accelerate"
+    return text
+
+
+def _warn_if_accelerate(numpy_module) -> None:
+    """Warn once when NumPy's LAPACK is Apple's Accelerate framework.
+
+    On the NumPy 2.x wheels for macOS 14+ on Apple silicon
+    (``macosx_14_0_arm64``, which link Accelerate) the decoders'
+    rank-deficient, wide-spectrum matrices made ``linalg.qr`` die with SIGBUS
+    and ``linalg.svd`` trip malloc's heap-corruption check inside dgesdd.
+    While mdopt still reduced its SVDs by QR first, this also turned a
+    [[72,12,6]] decode at chi_max=400 into wrong verdicts (21 of 22 shots with
+    a non-trivial error) while every unit test passed. The OpenBLAS build of
+    the same NumPy version has none of this; it is the ``macosx_11_0_arm64``
+    wheel::
+
+        pip download numpy==<version> --platform macosx_11_0_arm64 \
+            --only-binary=:all: --no-deps -d /tmp/numpy-openblas
+        pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
+
+    Set MDOPT_ALLOW_ACCELERATE=1 to silence the warning.
+    """
+    if os.getenv("MDOPT_ALLOW_ACCELERATE") == "1":
+        return
+    if "accelerate" in _lapack_vendor(numpy_module):
+        warnings.warn(
+            "NumPy is built against Apple's Accelerate LAPACK, which corrupted "
+            "memory on mdopt's matrices and, with an earlier SVD code path, led "
+            "to wrong decoding verdicts (see "
+            "mdopt.backend.array._warn_if_accelerate). Install the "
+            "OpenBLAS build of NumPy (the macosx_11_0_arm64 wheel) or set "
+            "MDOPT_ALLOW_ACCELERATE=1 to silence this warning.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+def _warn_if_scipy_accelerate() -> None:
+    """The same warning for SciPy, whose LAPACK the SVD helpers also call."""
+    if os.getenv("MDOPT_ALLOW_ACCELERATE") == "1":
+        return
+    try:
+        scipy = importlib.import_module("scipy")
+    except ImportError:
+        return
+    if "accelerate" in _lapack_vendor(scipy):
+        warnings.warn(
+            "SciPy is built against Apple's Accelerate LAPACK (see "
+            "mdopt.backend.array._warn_if_accelerate); install the OpenBLAS "
+            "build (the macosx_12_0_arm64 wheel) or set "
+            "MDOPT_ALLOW_ACCELERATE=1 to silence this warning.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+
+# Both checks run on every backend: with CuPy selected the orthogonality-centre
+# moves and host-side contractions still call NumPy's linalg and BLAS, and the
+# SVD fallbacks and qr call SciPy's LAPACK.
+_warn_if_accelerate(importlib.import_module("numpy"))
+_warn_if_scipy_accelerate()
+
+
 # ----------------------------------------------------------------------
 # Introspection helpers
 # ----------------------------------------------------------------------

@@ -45,11 +45,23 @@ def _fake_cupy(num_devices=0, raises=False):
 
 
 def test_defaults_to_numpy(monkeypatch):
-    """With no MDOPT_BACKEND set, NumPy is used and nothing is warned about."""
+    """With no MDOPT_BACKEND set, NumPy is used and nothing unexpected is warned about.
+
+    The import deliberately warns when NumPy or SciPy links Apple's Accelerate
+    framework, which the stock macOS 14+ wheels do (the macOS CI runners among
+    them); those warnings are allowed, any other warning is not.
+    """
     module, caught = _reload_backend(monkeypatch, None, None)
     assert module.GPU is False
     assert module.backend_name() == "numpy"
-    assert not caught
+    unexpected = [
+        w
+        for w in caught
+        if not (
+            issubclass(w.category, RuntimeWarning) and "Accelerate" in str(w.message)
+        )
+    ]
+    assert not unexpected, [str(w.message) for w in unexpected]
 
 
 def test_falls_back_when_cupy_missing(monkeypatch):
@@ -79,7 +91,14 @@ def test_uses_cupy_when_device_present(monkeypatch):
     module, caught = _reload_backend(monkeypatch, "cupy", _fake_cupy(num_devices=1))
     assert module.GPU is True
     assert module.backend_name() == "cupy"
-    assert not caught
+    unexpected = [
+        w
+        for w in caught
+        if not (
+            issubclass(w.category, RuntimeWarning) and "Accelerate" in str(w.message)
+        )
+    ]
+    assert not unexpected, [str(w.message) for w in unexpected]
 
 
 def test_stream_is_a_context_manager_on_numpy(monkeypatch):
@@ -88,3 +107,113 @@ def test_stream_is_a_context_manager_on_numpy(monkeypatch):
     with module.stream():
         pass
     module.synchronize()
+
+
+def test_accelerate_lapack_warns_unless_allowed(monkeypatch):
+    """A NumPy built against Accelerate triggers a RuntimeWarning at import
+    time; MDOPT_ALLOW_ACCELERATE=1 silences it; other vendors are silent."""
+    import warnings
+    from types import SimpleNamespace
+
+    from mdopt.backend import array as backend
+
+    def fake_numpy(vendor):
+        return SimpleNamespace(
+            show_config=lambda mode="dicts": {
+                "Build Dependencies": {
+                    "lapack": {"name": vendor},
+                    "blas": {"name": vendor},
+                }
+            }
+        )
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    with pytest.warns(RuntimeWarning, match="Accelerate"):
+        backend._warn_if_accelerate(fake_numpy("accelerate"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        backend._warn_if_accelerate(fake_numpy("scipy-openblas"))
+        monkeypatch.setenv("MDOPT_ALLOW_ACCELERATE", "1")
+        backend._warn_if_accelerate(fake_numpy("accelerate"))
+    assert backend._lapack_vendor(SimpleNamespace()) == ""
+
+
+def test_scipy_shaped_config_is_detected(monkeypatch):
+    """SciPy 1.10+ reports its LAPACK through show_config(mode="dicts"), with
+    the vendor capitalised ("Accelerate"); the SciPy check must warn on it."""
+    from types import SimpleNamespace
+
+    from mdopt.backend import array as backend
+
+    def show_config(mode="stdout"):
+        if mode == "stdout":
+            return None
+        return {
+            "Build Dependencies": {
+                "blas": {"name": "Accelerate"},
+                "lapack": {"name": "Accelerate"},
+            }
+        }
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    monkeypatch.setitem(sys.modules, "scipy", SimpleNamespace(show_config=show_config))
+    with pytest.warns(RuntimeWarning, match="SciPy"):
+        backend._warn_if_scipy_accelerate()
+
+
+def test_scipy_without_show_config_mode_falls_back_to_get_info(monkeypatch):
+    """SciPy 1.9 has show() without a mode argument; its link information
+    comes from __config__.get_info, which must still detect Accelerate and
+    stay silent for OpenBLAS."""
+    from types import SimpleNamespace
+
+    from mdopt.backend import array as backend
+
+    def show():
+        return None
+
+    def scipy_with(info):
+        return SimpleNamespace(
+            show_config=show, __config__=SimpleNamespace(get_info=lambda name: info)
+        )
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    accelerate = scipy_with({"extra_link_args": ["-Wl,-framework", "-Wl,Accelerate"]})
+    openblas = scipy_with({"libraries": ["openblas", "openblas"], "language": "c"})
+    assert backend._lapack_vendor(accelerate) == "accelerate"
+    monkeypatch.setitem(sys.modules, "scipy", accelerate)
+    with pytest.warns(RuntimeWarning, match="SciPy"):
+        backend._warn_if_scipy_accelerate()
+    monkeypatch.setitem(sys.modules, "scipy", openblas)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        backend._warn_if_scipy_accelerate()
+
+
+def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
+    """With CuPy selected, NumPy and SciPy LAPACK still run on the host (centre
+    moves, host-side contractions, the SVD fallbacks, qr), so an
+    Accelerate-linked build must still be warned about."""
+    import numpy
+    import scipy
+
+    def show_config(mode="stdout"):
+        # A synthetic modern config, independent of the installed versions'
+        # show_config API (SciPy 1.9 has no mode argument).
+        if mode == "stdout":
+            return None
+        return {
+            "Build Dependencies": {
+                "blas": {"name": "accelerate"},
+                "lapack": {"name": "accelerate"},
+            }
+        }
+
+    monkeypatch.delenv("MDOPT_ALLOW_ACCELERATE", raising=False)
+    monkeypatch.setattr(numpy, "show_config", show_config)
+    monkeypatch.setattr(scipy, "show_config", show_config)
+    module, caught = _reload_backend(monkeypatch, "cupy", _fake_cupy(num_devices=1))
+    assert module.GPU is True
+    messages = [str(w.message) for w in caught]
+    assert any("NumPy is built against" in m for m in messages), messages
+    assert any("SciPy is built against" in m for m in messages), messages
