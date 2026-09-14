@@ -1,5 +1,9 @@
 """Tests for the ``mdopt.utils.utils`` module."""
 
+import os
+import subprocess
+import sys
+import textwrap
 import pytest
 import scipy
 import numpy as np
@@ -687,29 +691,70 @@ def test_svd_nonfinite_input_takes_the_fallback_chain():
         svd(mat)
 
 
-def test_svd_reconstructs_graded_rank_deficient_matrices_under_allocator_churn(rng):
-    """``svd`` must be exact on rank-deficient, wide-spectrum input, call after call.
-
-    NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
-    intermittently returned a factorisation whose product was not the input
-    (whole columns off by order one, depending on allocator state), and died
-    with SIGBUS, on tall rank-deficient matrices whose spectrum spans many
-    orders of magnitude -- the shape the decoders' centre tensors take. That
-    is one reason ``svd`` takes the full decomposition and never reduces by
-    QR first. Repeated calls with a churning allocator raise the chance of
-    hitting such a fault if one is ever reintroduced; it is a guard, not a
-    certain detector (the fault is heap-state dependent) --
-    ``tests/decoding/test_convergence.py`` is the deterministic check.
-    """
-    rows, cols, rank = 636, 304, 237
+def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
+    """A matrix of the decoders' centre-tensor shape with a spectrum spanning
+    sixteen orders of magnitude and a numerically null tail."""
     spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
-    junk = []
-    for _ in range(150):
-        left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
-        right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
-        mat = (left * spectrum) @ right
-        junk.append(rng.normal(size=rng.integers(1, 200_000)))
-        junk = junk[-10:]
+    left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+    right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+    return (left * spectrum) @ right
+
+
+def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
+    """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
+    decoders' centre tensors take. A small deterministic check for the default
+    suite; the allocator-churn stress version is opt-in and runs in a
+    subprocess (see below)."""
+    for _ in range(3):
+        mat = _graded_rank_deficient(rng)
         u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
         assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
         assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10
+
+
+@pytest.mark.skipif(
+    os.environ.get("MDOPT_RUN_SLOW") != "1",
+    reason="allocator-churn stress test; set MDOPT_RUN_SLOW=1 to run",
+)
+def test_svd_under_allocator_churn_in_a_subprocess():
+    """``svd`` stays exact call after call on graded rank-deficient input while
+    the allocator churns.
+
+    NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
+    intermittently returned a factorisation whose product was not the input,
+    and died with SIGBUS, on matrices of this kind, and Accelerate's SVD
+    tripped malloc's heap check on the decoders' matrices. A native crash of
+    that sort would terminate pytest, so the loop runs in a subprocess and a
+    signal becomes an ordinary test failure. It is a guard, not a certain
+    detector (the fault is heap-state dependent);
+    ``tests/decoding/test_convergence.py`` is the deterministic check.
+    """
+    script = textwrap.dedent("""
+        import numpy as np
+        from mdopt.utils.utils import svd
+
+        rng = np.random.default_rng(2026)
+        rows, cols, rank = 636, 304, 237
+        spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
+        junk = []
+        for _ in range(150):
+            left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
+            right, _ = np.linalg.qr(rng.normal(size=(cols, cols)))
+            mat = (left * spectrum) @ right
+            junk.append(rng.normal(size=rng.integers(1, 200_000)))
+            junk = junk[-10:]
+            u_l, s, v_h, _ = svd(mat, cut=1e-17, chi_max=400)
+            assert np.isfinite(u_l).all() and np.isfinite(v_h).all()
+            assert np.abs((u_l * s) @ v_h - mat).max() < 1e-10
+        """)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=1800,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"exit code {result.returncode} (a negative code is the signal that "
+        f"killed the process): {result.stderr[-2000:]}"
+    )
