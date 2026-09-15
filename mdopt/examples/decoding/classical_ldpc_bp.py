@@ -48,7 +48,7 @@ def main():
 
     print(f"H shape: {m} x {n}")
     print(
-        f"Estimated code params: n={n_}, k≈{k_est} (R≈{k_est/n_:.3f}, lower bound {rate_lb:.2f}), d_est≈{d_est}"
+        f"Estimated code params: n={n_}, k≈{k_est} (R≈{k_est / n_:.3f}, lower bound {rate_lb:.2f}), d_est≈{d_est}"
     )
 
     col_w = np.asarray(h.sum(axis=0)).ravel()
@@ -128,7 +128,7 @@ def main():
     plt.xlabel("Physical bit-flip rate $p$ (BSC)")
     plt.ylabel("Logical error rate")
     plt.title(
-        f"Gallager (3,4) LDPC — n={n_}, k≈{k_est} (R≈{k_est/n_:.2f}),"
+        f"Gallager (3,4) LDPC — n={n_}, k≈{k_est} (R≈{k_est / n_:.2f}),"
         f" max_iter={max_iters}, {bp_method}"
     )
     plt.grid(True, which="both")

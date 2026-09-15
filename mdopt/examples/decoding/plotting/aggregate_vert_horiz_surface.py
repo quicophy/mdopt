@@ -87,8 +87,8 @@ def main():
     print(f"  bandwidth  Natural : max_span={bw_n[0]}, total_span={bw_n[1]}")
     print(f"             Optimised: max_span={bw_o[0]}, total_span={bw_o[1]}")
     print(
-        f"  reduction  max {100*(bw_n[0]-bw_o[0])/bw_n[0]:.1f}%, "
-        f"total {100*(bw_n[1]-bw_o[1])/bw_n[1]:.1f}%"
+        f"  reduction  max {100 * (bw_n[0] - bw_o[0]) / bw_n[0]:.1f}%, "
+        f"total {100 * (bw_n[1] - bw_o[1]) / bw_n[1]:.1f}%"
     )
 
     rng = np.random.default_rng(BOOT_SEED)
@@ -100,8 +100,7 @@ def main():
 
     print(f"\nDecoding-time reduction (%) — paired, bootstrap SEM (N_boot={N_BOOT}):")
     print(
-        f"{'chi':>4} {'p':>6} | {'vert only':>14} | {'horiz only':>14} | "
-        f"{'both':>14}"
+        f"{'chi':>4} {'p':>6} | {'vert only':>14} | {'horiz only':>14} | {'both':>14}"
     )
     for c in chis:
         for p in ps:

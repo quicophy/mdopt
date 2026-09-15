@@ -91,6 +91,10 @@ def _warn_if_accelerate(numpy_module) -> None:
             --only-binary=:all: --no-deps -d /tmp/numpy-openblas
         pip install --force-reinstall --no-deps /tmp/numpy-openblas/*.whl
 
+    In a uv project environment the next ``uv run`` reinstalls the locked
+    wheels; ``uv sync --python-platform aarch64-apple-darwin`` targets macOS 13
+    and so selects the OpenBLAS NumPy and SciPy wheels instead.
+
     Set MDOPT_ALLOW_ACCELERATE=1 to silence the warning.
     """
     if os.getenv("MDOPT_ALLOW_ACCELERATE") == "1":

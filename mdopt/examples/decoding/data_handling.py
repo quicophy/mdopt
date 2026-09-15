@@ -470,7 +470,7 @@ def check_error_consistency(
                     total_inconsistencies += num_inconsistent
                     total_checked += num_total
                     print(
-                        f"lattice_size={lattice_size}, chi_max={chi_max}: Inconsistent ({num_inconsistent}/{num_total}), {num_inconsistent/num_total*100:.2f}%"
+                        f"lattice_size={lattice_size}, chi_max={chi_max}: Inconsistent ({num_inconsistent}/{num_total}), {num_inconsistent / num_total * 100:.2f}%"
                     )
 
     if total_inconsistencies == 0:
@@ -879,7 +879,7 @@ def fit_failure_statistics(
             }
 
             print(f"Lattice size: {lattice_size}, Bond dimension: {chi_max}")
-            print(f"  Estimated threshold (p_th): {p_th*100:.5f}%")
+            print(f"  Estimated threshold (p_th): {p_th * 100:.5f}%")
             print(f"  Scaling exponent (nu): {nu:.5f}")
 
         # Skip plotting if no valid results exist
@@ -927,7 +927,7 @@ def fit_failure_statistics(
             plt.plot(
                 fit_p,
                 fit_y,
-                label=f"Fit L={lattice_size}, p_th={p_th*100:.2f}%, nu={nu:.2f}",
+                label=f"Fit L={lattice_size}, p_th={p_th * 100:.2f}%, nu={nu:.2f}",
                 linewidth=3,
                 color=cmap(norm(index)),  # Ensure fit curve matches data color
             )

@@ -316,9 +316,9 @@ def main():
         ax.grid(True, ls=":", linewidth=0.6)
     for ax in list(axes_flat)[n_chi:]:
         ax.set_visible(False)
-    for ax in (axes[-1] if n_rows > 1 else axes):
+    for ax in axes[-1] if n_rows > 1 else axes:
         ax.set_xlabel(r"Physical error rate $p$")
-    for ax in (axes[:, 0] if n_rows > 1 else [axes[0]]):
+    for ax in axes[:, 0] if n_rows > 1 else [axes[0]]:
         ax.set_ylabel(r"Avg.\ decoding time per shot (s)")
     (axes[0, 0] if n_rows > 1 else axes[0]).legend(
         loc="lower right", framealpha=0.9, fontsize=7

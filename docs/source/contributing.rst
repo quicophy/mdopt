@@ -4,11 +4,11 @@ Contributing
 We welcome contributions of all sizes! Before opening a pull request, please:
 
 1. Run the test suite (see :doc:`testing`).
-2. Follow the **Black** code style:
+2. Format the code with **Ruff**:
 
    .. code-block:: bash
 
-      black .
+      uv run --group dev ruff format .
 
 3. Install pre-commit hooks:
 

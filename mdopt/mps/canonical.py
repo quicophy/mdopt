@@ -102,7 +102,7 @@ class CanonicalMPS:
         if orth_centre and orth_centre not in range(self.num_sites):
             raise ValueError(
                 f"The orthogonality centre index must reside anywhere from site 0 "
-                f"to {self.num_sites-1}, the one given is at position {orth_centre}."
+                f"to {self.num_sites - 1}, the one given is at position {orth_centre}."
             )
 
         for i, tensor in enumerate(tensors):
@@ -381,7 +381,7 @@ class CanonicalMPS:
         if final_pos not in range(self.num_sites):
             raise ValueError(
                 "The final position of the orthogonality centre should be"
-                f"from 0 to {self.num_sites-1}, given {final_pos}."
+                f"from 0 to {self.num_sites - 1}, given {final_pos}."
             )
 
         singular_values: List[np.ndarray] = []

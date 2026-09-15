@@ -21,7 +21,7 @@ on:
       - "mdopt/**"
       - "scripts/run_notebooks.py"
       - "pyproject.toml"
-      - "poetry.lock"
+      - "uv.lock"
       - ".github/workflows/notebooks.yml"
   pull_request:
     paths:
@@ -29,7 +29,7 @@ on:
       - "mdopt/**"
       - "scripts/run_notebooks.py"
       - "pyproject.toml"
-      - "poetry.lock"
+      - "uv.lock"
       - ".github/workflows/notebooks.yml"
   workflow_dispatch:
 
@@ -51,7 +51,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
+      - name: Set up uv and Python 3.11
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           python-version: "3.11"
 
@@ -65,15 +66,12 @@ jobs:
             texlive-latex-base texlive-latex-extra texlive-fonts-recommended \
             cm-super dvipng ghostscript
 
-      - name: Set up Poetry
-        run: pip install poetry
-
       # The dev group carries ipykernel, nbclient, nbformat and matplotlib.
       - name: Install package and notebook dependencies
-        run: poetry install --with dev
+        run: uv sync --locked --group dev
 
       - name: Execute notebooks
         env:
           MDOPT_NB_FAST: "1"
           MPLBACKEND: Agg
-        run: poetry run python scripts/run_notebooks.py
+        run: uv run python scripts/run_notebooks.py

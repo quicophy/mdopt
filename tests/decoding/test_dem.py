@@ -204,9 +204,9 @@ def test_two_observable_bit_ordering_matches_the_enumeration():
     for syndrome in ([0, 0], [1, 0], [0, 1], [1, 1]):
         masses, flips = decode_dem(problem, np.array(syndrome))
         exact = _exact_class_masses(problem, np.array(syndrome))
-        assert np.allclose(
-            masses / masses.sum(), exact / exact.sum(), atol=1e-9
-        ), syndrome
+        assert np.allclose(masses / masses.sum(), exact / exact.sum(), atol=1e-9), (
+            syndrome
+        )
         assert np.array_equal(
             flips,
             [(int(np.argmax(exact)) >> j) & 1 for j in range(2)],
@@ -343,9 +343,9 @@ def test_untouched_observable_is_deterministically_unflipped():
     for syndrome in ([0, 0], [1, 0], [0, 1], [1, 1]):
         masses, flips = decode_dem(problem, np.array(syndrome))
         exact = _exact_class_masses(problem, np.array(syndrome))
-        assert np.allclose(
-            masses / masses.sum(), exact / exact.sum(), atol=1e-9
-        ), syndrome
+        assert np.allclose(masses / masses.sum(), exact / exact.sum(), atol=1e-9), (
+            syndrome
+        )
         assert flips[1] == 0, syndrome
         # No mass may sit on any class with the untouched bit set.
         norm = masses / masses.sum()
@@ -485,9 +485,9 @@ def test_unsorted_rows_decode_like_sorted_rows():
         exact = _exact_class_masses(sorted_problem, np.array(syndrome))
         for problem in (sorted_problem, shuffled_problem):
             masses, flips = decode_dem(problem, np.array(syndrome))
-            assert np.allclose(
-                masses / masses.sum(), exact / exact.sum(), atol=1e-9
-            ), syndrome
+            assert np.allclose(masses / masses.sum(), exact / exact.sum(), atol=1e-9), (
+                syndrome
+            )
             assert flips[0] == int(np.argmax(exact)), syndrome
 
 
