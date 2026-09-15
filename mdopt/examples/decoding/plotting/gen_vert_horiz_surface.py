@@ -127,8 +127,8 @@ def main():
     print(f"  Natural:   max_span={bw_nat[0]:4d}, total_span={bw_nat[1]:6d}")
     print(f"  Optimised: max_span={bw_opt[0]:4d}, total_span={bw_opt[1]:6d}")
     print(
-        f"  Reduction: max {100*(bw_nat[0]-bw_opt[0])/bw_nat[0]:.1f}%, "
-        f"total {100*(bw_nat[1]-bw_opt[1])/bw_nat[1]:.1f}%"
+        f"  Reduction: max {100 * (bw_nat[0] - bw_opt[0]) / bw_nat[0]:.1f}%, "
+        f"total {100 * (bw_nat[1] - bw_opt[1]) / bw_nat[1]:.1f}%"
     )
 
     # Pre-generate errors per p, shared across all (chi, ordering, vertical).

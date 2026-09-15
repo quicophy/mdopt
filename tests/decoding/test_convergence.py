@@ -29,9 +29,10 @@ def test_bb_72_12_6_natural_order_single_error_converges_in_chi():
 
     This instance exposed the QR pre-reduction of ``svd`` (since removed):
     with it, the decode returned a flat or wrongly peaked
-    posterior at chi_max=400 on NumPy/Accelerate builds -- 24 of 24 shots
-    -- while every unit test and benchmark fingerprint still passed. Each
-    chi_max=400 decode takes 30-60 minutes on a laptop.
+    posterior at chi_max=400 on NumPy/Accelerate builds, as did 21 of the 22
+    shots with a non-trivial error in the natural-order experiment, while
+    every unit test and benchmark fingerprint still passed. The test takes
+    about 20 minutes on an idle laptop.
     """
     code = create_bb_code(6, 6, "x**3 + y + y**2", "y**3 + x + x**2")
     error = "I" * 58 + "Z" + "I" * 13

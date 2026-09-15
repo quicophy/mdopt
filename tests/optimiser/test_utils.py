@@ -145,9 +145,9 @@ def test_random_constraints():
             assert key in result
             assert isinstance(result[key], list)
 
-        assert (
-            len(result["all_constrained_bits"]) <= constraint_size
-        ), f"Number of constrained bits exceeds the maximum constraint_size={constraint_size}"
+        assert len(result["all_constrained_bits"]) <= constraint_size, (
+            f"Number of constrained bits exceeds the maximum constraint_size={constraint_size}"
+        )
         assert len(result["xor_left_sites"]) == 1
         assert len(result["xor_right_sites"]) == 1
         assert result["xor_left_sites"][0] < result["xor_right_sites"][0]

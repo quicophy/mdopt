@@ -193,7 +193,7 @@ def run_chi_group(chi, errors_per_p, n_qubits):
             },
             fh,
         )
-    print(f"[chi={chi}] saved {pkl}  (wall {elapsed/60:.1f} min)")
+    print(f"[chi={chi}] saved {pkl}  (wall {elapsed / 60:.1f} min)")
 
 
 def main():

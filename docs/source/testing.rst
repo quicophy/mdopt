@@ -6,8 +6,8 @@ We use ``pytest`` for tests. From the project root:
 .. code-block:: bash
 
    pytest
-   # or, if installed with poetry:
-   poetry run pytest
+   # or, from a uv checkout:
+   uv run --group test pytest
 
 Tips
 ----

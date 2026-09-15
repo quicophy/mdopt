@@ -469,12 +469,12 @@ def test_canonical_explicit_near_zero_singular_values():
             mps_explicit = mps_canonical.explicit()
 
             for i, gamma in enumerate(mps_explicit.tensors):
-                assert np.all(
-                    np.isfinite(gamma)
-                ), f"Γ[{i}] contains NaN or Inf for eps={eps}, form={form}"
-            assert np.all(
-                np.isfinite(mps_explicit.dense())
-            ), f"dense() contains NaN or Inf for eps={eps}, form={form}"
+                assert np.all(np.isfinite(gamma)), (
+                    f"Γ[{i}] contains NaN or Inf for eps={eps}, form={form}"
+                )
+            assert np.all(np.isfinite(mps_explicit.dense())), (
+                f"dense() contains NaN or Inf for eps={eps}, form={form}"
+            )
 
     # float32 path
     psi32 = psi.astype(np.complex64)

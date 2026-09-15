@@ -7,8 +7,8 @@ updates:
     schedule:
       interval: "daily"
 
-  # Maintain dependencies for Poetry
-  - package-ecosystem: "pip"
+  # Maintain dependencies in pyproject.toml and uv.lock
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "daily"

@@ -12,3 +12,10 @@ jobs:
         uses: actions/checkout@v7
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v5
+        with:
+          # diskcache <= 5.6.3 unpickles cache files, so anyone who can write
+          # to the cache directory can run code (CVE-2025-69872). No fixed
+          # release exists. qldpc imports it at module level (qldpc.cache,
+          # loaded by qldpc.codes), so it cannot be dropped. Remove this entry
+          # once diskcache ships a fix or qldpc stops requiring it.
+          allow-ghsas: GHSA-w8v5-vhqr-4h9v

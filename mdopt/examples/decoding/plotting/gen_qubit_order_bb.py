@@ -133,8 +133,8 @@ def main():
     print(f"  Natural:   max_span={max_nat:4d},  total_span={sum_nat:6d}")
     print(f"  Optimised: max_span={max_opt:4d},  total_span={sum_opt:6d}")
     print(
-        f"  Reduction: max {100*(max_nat-max_opt)/max_nat:.1f}%, "
-        f"total {100*(sum_nat-sum_opt)/sum_nat:.1f}%"
+        f"  Reduction: max {100 * (max_nat - max_opt) / max_nat:.1f}%, "
+        f"total {100 * (sum_nat - sum_opt) / sum_nat:.1f}%"
     )
 
     # ── Generate shared errors per p ───────────────────────────────────────────

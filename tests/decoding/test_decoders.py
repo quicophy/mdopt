@@ -308,9 +308,9 @@ def test_dense_and_dmrg_readout_agree_when_the_map_class_is_unique():
             num_runs=2,
             dense_readout_max_sites=0,
         )
-        assert (
-            int(round(float(overlap))) == dense_success
-        ), f"readouts disagree on {error} (degenerate: {degenerate})"
+        assert int(round(float(overlap))) == dense_success, (
+            f"readouts disagree on {error} (degenerate: {degenerate})"
+        )
         compared += 1
 
     assert compared >= 5, "too few shots to be a meaningful check"
@@ -351,9 +351,9 @@ def test_qubit_reordering_leaves_the_posterior_invariant(bias):
             )
             probs = np.asarray(dense_out, dtype=float) ** 2
             posteriors.append(probs / probs.sum())
-        assert np.allclose(
-            posteriors[0], posteriors[1], atol=1e-9
-        ), f"reordering changed the posterior for {error}"
+        assert np.allclose(posteriors[0], posteriors[1], atol=1e-9), (
+            f"reordering changed the posterior for {error}"
+        )
         compared += 1
 
     assert compared >= 3
@@ -399,9 +399,9 @@ def test_dmrg_readout_finds_the_true_maximum_on_decoder_posteriors():
         amplitudes = np.abs(np.asarray(logical_mps.dense(flatten=True), dtype=float))
         found = abs(inner_product(engine.mps, logical_mps))
 
-        assert found == pytest.approx(
-            amplitudes.max(), rel=1e-6
-        ), f"DMRG stopped below the true maximum for {error}"
+        assert found == pytest.approx(amplitudes.max(), rel=1e-6), (
+            f"DMRG stopped below the true maximum for {error}"
+        )
         checked += 1
 
     assert checked >= 5
@@ -525,9 +525,9 @@ def test_truncation_shows_up_as_a_negative_logical_amplitude(caplog):
         patch.object(ExplicitMPS, "dense", return_value=readout),
     ):
         decode_css(code, errors[0], chi_max=4, silent=False)
-    assert any(
-        "Negative logical amplitude" in r.message for r in caplog.records
-    ), "a posterior with a negative amplitude must be flagged"
+    assert any("Negative logical amplitude" in r.message for r in caplog.records), (
+        "a posterior with a negative amplitude must be flagged"
+    )
 
 
 def test_max_product_readout_is_optimal_and_certified():
@@ -571,9 +571,9 @@ def test_max_product_readout_is_optimal_and_certified():
 
         assert amplitude == pytest.approx(true_max, rel=1e-9)
         assert amplitude <= bound * (1 + 1e-9), "a witness cannot exceed the bound"
-        assert amplitude >= bound * (
-            1 - 1e-9
-        ), "bracket should close on a converged run"
+        assert amplitude >= bound * (1 - 1e-9), (
+            "bracket should close on a converged run"
+        )
         checked += 1
 
     assert checked >= 5
@@ -783,8 +783,8 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
     if bias == "Depolarising":
         weight = lambda dx, dz: (1 - prob) if (dx == 0 and dz == 0) else prob / 3
     else:
-        weight = lambda dx, dz: ((1 - prob) if dx == 0 else prob) * (
-            (1 - prob) if dz == 0 else prob
+        weight = lambda dx, dz: (
+            ((1 - prob) if dx == 0 else prob) * ((1 - prob) if dz == 0 else prob)
         )
 
     def reference(error):

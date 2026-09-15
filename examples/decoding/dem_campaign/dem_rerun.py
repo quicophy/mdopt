@@ -32,10 +32,11 @@ import stim
 try:
     from beliefmatching import BeliefMatching
 except ImportError:  # pragma: no cover - optional third decoder
-    # beliefmatching's metadata pins a numpy range Poetry cannot reconcile
-    # with ours, so it is not a declared dependency; `pip install
-    # beliefmatching` works. Without it the harness still runs and simply
-    # records no belief-matching column.
+    # beliefmatching's metadata pins numpy<=2.2.6, which uv.lock cannot
+    # reconcile with our numpy>=2.3, so it is not a declared dependency.
+    # `uv pip install --no-deps beliefmatching` installs it, and it decodes
+    # normally on newer numpy (see the campaign README). Without it the
+    # harness still runs and simply records no belief-matching column.
     BeliefMatching = None
 
 from mdopt.decoding.dem import decode_dem, dem_to_problem
@@ -163,7 +164,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
             if n % 200 == 0:
                 z = (obs_fail - pred_fail) / np.sqrt(max(pred_fail, 1.0))
                 print(
-                    f"[{tag}] {i+1}/{shots} calib: predicted {pred_fail:.1f} "
+                    f"[{tag}] {i + 1}/{shots} calib: predicted {pred_fail:.1f} "
                     f"observed {int(obs_fail)} z={z:+.2f} escalations={escalations}",
                     flush=True,
                 )
@@ -185,7 +186,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
         if scored:
             f = sum(r[dec] != r["truth"] for r in scored)
             print(
-                f"[{tag}] {dec}: fails={f}/{len(scored)} ({f/len(scored):.4f})",
+                f"[{tag}] {dec}: fails={f}/{len(scored)} ({f / len(scored):.4f})",
                 flush=True,
             )
     for chi in ladder:
@@ -196,7 +197,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
             f = sum(r["flips"][str(chi)] != r["truth"] for r in scored)
             print(
                 f"[{tag}] ladder LER(chi={chi}): {f}/{len(scored)} "
-                f"({f/len(scored):.4f})",
+                f"({f / len(scored):.4f})",
                 flush=True,
             )
     # Recomputed from every loaded row so a resumed run's summary covers the
@@ -205,7 +206,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
     of = sum(r["map"] != r["truth"] for r in rows)
     print(
         f"[{tag}] final calibration: predicted {pf:.1f} observed {of} "
-        f"z={(of-pf)/np.sqrt(max(pf,1)):+.2f}",
+        f"z={(of - pf) / np.sqrt(max(pf, 1)):+.2f}",
         flush=True,
     )
     print(f"[{tag}] complete ({n})", flush=True)

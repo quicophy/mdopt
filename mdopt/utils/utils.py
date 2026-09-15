@@ -16,7 +16,8 @@ def _to_numpy(a):
 
     Resolved through the backend's own transfer, which honours MDOPT_BACKEND
     and the CUDA device probe; a per-call ``import cupy`` here once cost
-    ~18% of a decoding run.
+    about 11,000 failed imports per decode: from about 4% of the decode on
+    surface_bitflip to about a third on dem_d3.
     """
     host = xp.to_host(a)
     try:
@@ -93,12 +94,14 @@ def svd(
                 #   (the macOS 14+ arm64 wheels) it corrupted memory on the
                 #   decoders' rank-deficient matrices: numpy.linalg.qr died
                 #   with SIGBUS, and a [[72,12,6]] decode at chi_max=400
-                #   returned wrong verdicts on 24 of 24 shots while every
-                #   unit test and benchmark fingerprint still passed;
+                #   returned wrong verdicts on 21 of 22 shots with a
+                #   non-trivial error, while every unit test and benchmark
+                #   fingerprint still passed;
                 # - with OpenBLAS it is memory-safe but not equivalent under
                 #   truncation: it moved a chi_max=64 surface-code posterior
                 #   entry by 0.017, beyond the benchmark suite's tolerance;
-                # - it saved 0-7% on the benchmark workloads.
+                # - it saved at most 7% on the benchmark workloads, and
+                #   nothing measurable on most of them.
                 # Reintroducing it needs `benchmarks/bench_suite.py --check`
                 # and tests/decoding/test_convergence.py to pass.
                 # No finiteness pre-scan: a non-finite input makes the SVD

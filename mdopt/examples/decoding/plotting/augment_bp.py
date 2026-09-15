@@ -150,7 +150,7 @@ def main():
 
         reps_per_np[(N, TARGET_P)] = target_total
         elapsed = time.perf_counter() - t0
-        print(f"N={N}: wall {elapsed/60:.1f} min")
+        print(f"N={N}: wall {elapsed / 60:.1f} min")
 
         # Persist after each N so a partial run is recoverable.
         with open(CACHE_FILE, "wb") as f:

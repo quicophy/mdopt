@@ -26,11 +26,56 @@ To install the current release, use the package manager [pip](https://pip.pypa.i
 pip install mdopt
 ```
 
-Otherwise, you can clone the repository and use [poetry](https://python-poetry.org/).
+Otherwise, you can clone the repository and use [uv](https://docs.astral.sh/uv/).
 
 ```bash
-poetry install
+uv sync
 ```
+
+`uv sync --group dev --group test` also installs the development and test tools.
+
+### A note on NumPy's BLAS on Apple silicon
+
+On Apple silicon running macOS 14 or later, pip installs the NumPy and
+SciPy wheels tagged `macosx_14_0_arm64`, which link Apple's Accelerate
+framework. On mdopt's matrices (rank-deficient, with singular values
+spanning many orders of magnitude) Accelerate's LAPACK corrupted memory:
+`numpy.linalg.qr` died with SIGBUS on a 636x304 matrix, and
+`numpy.linalg.svd` tripped malloc's heap check. How much this showed in the
+decoding depended on the bond dimension. On the [[72,12,6]]
+bivariate-bicycle code in the natural qubit order, at `chi_max=400`, where
+the SVDs act on matrices of about 800x1600, 21 of 22 shots with a
+non-trivial error decoded wrongly while mdopt still reduced its SVDs by QR
+first, against 3 of 24 on OpenBLAS, and every unit test still passed. The
+same test shot decoded correctly at `chi_max` 64, 128 and 256. Not seeing
+the fault at those smaller bond dimensions is no guarantee, because it
+depends on the state of the heap. mdopt's SVD helpers call both libraries,
+and mdopt warns at import when it finds Accelerate behind either one. The
+same versions are also published as OpenBLAS builds, the `macosx_11_0_arm64`
+NumPy wheel and the `macosx_12_0_arm64` SciPy wheel, which install on the
+same machines:
+
+```bash
+pip download "numpy==$(python -c 'import numpy; print(numpy.__version__)')" \
+    --platform macosx_11_0_arm64 --only-binary=:all: --no-deps -d /tmp/openblas-wheels
+pip download "scipy==$(python -c 'import scipy; print(scipy.__version__)')" \
+    --platform macosx_12_0_arm64 --only-binary=:all: --no-deps -d /tmp/openblas-wheels
+pip install --force-reinstall --no-deps /tmp/openblas-wheels/*.whl
+```
+
+In a uv checkout, a reinstall like this lasts only until the next `uv run`
+or `uv sync`, which put the locked Accelerate wheels back. Sync against a
+macOS 13 target instead (adding your usual `--group` flags). It selects the
+same OpenBLAS wheels, and later `uv run` and `uv sync` calls keep them. Run
+it again whenever the lock moves NumPy or SciPy to a new version:
+
+```bash
+uv sync --python-platform aarch64-apple-darwin
+```
+
+Set `MDOPT_ALLOW_ACCELERATE=1` to silence the warning if you must keep
+Accelerate. Use `OMP_NUM_THREADS=1` (or `OPENBLAS_NUM_THREADS=1`) for the
+per-process BLAS of worker pools.
 
 ## Minimal example
 
@@ -157,11 +202,11 @@ Developers may find the following guidelines useful:
   ```
 
 - **Coding style.**
-  The project follows the [Black](https://black.readthedocs.io/en/stable/) code style.
-  Please run Black before submitting a pull request:
+  The code is formatted with [Ruff](https://docs.astral.sh/ruff/formatter/), whose style matches Black's.
+  Please run the formatter before submitting a pull request:
 
   ```bash
-  black .
+  uv run --group dev ruff format .
   ```
 
 - **Pre-commit hooks.**
