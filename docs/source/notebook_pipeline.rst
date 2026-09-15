@@ -39,36 +39,47 @@ Regenerating the results
 
 .. code-block:: bash
 
-   python scripts/run_notebooks.py --inplace                    # all of them
+   python scripts/run_notebooks.py --inplace --timeout 86400    # all of them
    python scripts/run_notebooks.py --inplace examples/decoding/shor.ipynb
 
 ``--inplace`` writes the executed outputs back into the notebook. Commit the
 notebook afterwards; the next push to ``main`` opens the sync PR, and the docs
 follow once it is merged.
 
-Expect this to take hours. Measured on an M-series laptop, one notebook at a
-time (``classical_ldpc`` is the one estimate here -- it has not yet completed
-a full run):
+``--timeout`` is the limit per cell, in seconds. Its default of 1800 (or
+``MDOPT_NB_TIMEOUT``, if set) suits the fast CI workloads, but at full scale
+the longest cells below run for hours, so a full regeneration needs a larger
+limit; the last one used a day.
 
-===========================  =================
+Expect this to take hours: the last full run took about 12 hours. Measured on
+an M-series laptop (10 cores: 4 performance, 6 efficiency), one notebook at a
+time, with one BLAS thread per process:
+
+===========================  ==============================================================
 notebook                     full run
-===========================  =================
+===========================  ==============================================================
 ``main_component``           4 s
-``ground_state``             11 s
-``mps-rand-circ``            26 s
-``dephasing_dmrg_debug_bb``  39 s
-``shor``                     39 s
-``quantum_five_qubit``       43 s
-``maxbonddim``               1.2 h
-``quantum_three_qubit``      1.6 h
-``quantum_surface``          4.9 h
-``classical_ldpc``           ~2.5 h (estimate)
-===========================  =================
+``quantum_five_qubit``       7 s
+``ground_state``             9 s
+``shor``                     10 s
+``mps-rand-circ``            14 s
+``dephasing_dmrg_debug_bb``  1.5 min
+``quantum_three_qubit``      4.6 min
+``classical_ldpc``           2.8 h (the truncation sweep 2.2 h, the BP comparison 36 min)
+``maxbonddim``               3.2 h
+``quantum_surface``          5.5 h (the threshold sweep alone 4.7 h)
+===========================  ==============================================================
 
-The shot counts in the four expensive notebooks were chosen to land in that
-range. They were once far larger -- ``quantum_surface`` alone needed 33 hours,
-which nobody was going to run -- so the results here are deliberately noisier
-than a cluster campaign would give. The thesis figures come from the scripts in
+``classical_ldpc`` and ``quantum_surface`` end with a cell that regenerates
+its data through a pool of worker processes (all but two cores by default;
+``MDOPT_NB_PROCESSES`` overrides it). Their times above are with eight
+workers; note that concurrent workers on this laptop run about three times
+slower per shot than a single process, because they share the efficiency
+cores, so a lone-process estimate understates them badly. The shot counts in
+the expensive notebooks were chosen to keep them at this scale -- the surface
+threshold sweep once needed 33 hours in the natural qubit order, which nobody
+was going to run -- so the results here are deliberately noisier than a
+cluster campaign would give. The thesis figures come from the scripts in
 ``mdopt/examples/decoding/plotting/`` and their cluster datasets, not from these
 notebooks.
 
