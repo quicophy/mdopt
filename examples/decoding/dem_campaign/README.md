@@ -38,10 +38,19 @@ REPRO_D=3 REPRO_SHOTS=2000 python repro_tnd3d.py
 ```
 
 `dem_rerun.py` and `repro_tnd3d.py` also decode every shot with belief
-matching when the optional `beliefmatching` package is importable
-(`pip install beliefmatching`; it is not a declared dependency because its
-numpy pin cannot be reconciled with ours). Without it the `bm` column is
-simply omitted.
+matching when the optional `beliefmatching` package is importable. It is not
+a declared dependency: its metadata pins `numpy<=2.2.6`, below mdopt's
+`numpy>=2.3`, so uv cannot lock it. Its other dependencies (stim, ldpc, sinter
+and pymatching) are already present after `uv sync --group test`, so install
+it on its own:
+
+```bash
+uv pip install --no-deps beliefmatching
+```
+
+Despite the pin, beliefmatching 0.2.0 decodes normally on NumPy 2.4. `uv run`
+and `uv sync --inexact` keep it, but a plain `uv sync` removes it because it
+is not in the lock. Without it the `bm` column is simply omitted.
 
 Close the laptop lid and the run sleeps. Use `caffeinate -is -w <pid>` on
 macOS, or run on a machine that does not suspend.

@@ -33,9 +33,10 @@ try:
     from beliefmatching import BeliefMatching
 except ImportError:  # pragma: no cover - optional third decoder
     # beliefmatching's metadata pins numpy<=2.2.6, which uv.lock cannot
-    # reconcile with our numpy>=2.3, so it is not a declared dependency; `pip install
-    # beliefmatching` works. Without it the harness still runs and simply
-    # records no belief-matching column.
+    # reconcile with our numpy>=2.3, so it is not a declared dependency.
+    # `uv pip install --no-deps beliefmatching` installs it, and it decodes
+    # normally on newer numpy (see the campaign README). Without it the
+    # harness still runs and simply records no belief-matching column.
     BeliefMatching = None
 
 from mdopt.decoding.dem import decode_dem, dem_to_problem
