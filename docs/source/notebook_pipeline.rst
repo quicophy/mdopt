@@ -39,12 +39,17 @@ Regenerating the results
 
 .. code-block:: bash
 
-   python scripts/run_notebooks.py --inplace                    # all of them
+   python scripts/run_notebooks.py --inplace --timeout 86400    # all of them
    python scripts/run_notebooks.py --inplace examples/decoding/shor.ipynb
 
 ``--inplace`` writes the executed outputs back into the notebook. Commit the
 notebook afterwards; the next push to ``main`` opens the sync PR, and the docs
 follow once it is merged.
+
+``--timeout`` is the limit per cell, in seconds. Its default of 1800 (or
+``MDOPT_NB_TIMEOUT``, if set) suits the fast CI workloads, but at full scale
+the longest cells below run for hours, so a full regeneration needs a larger
+limit; the last one used a day.
 
 Expect this to take hours: the last full run took about 12 hours. Measured on
 an M-series laptop (10 cores: 4 performance, 6 efficiency), one notebook at a
