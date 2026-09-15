@@ -63,6 +63,16 @@ pip download "scipy==$(python -c 'import scipy; print(scipy.__version__)')" \
 pip install --force-reinstall --no-deps /tmp/openblas-wheels/*.whl
 ```
 
+In a uv checkout, a reinstall like this lasts only until the next `uv run`
+or `uv sync`, which put the locked Accelerate wheels back. Sync against a
+macOS 13 target instead (adding your usual `--group` flags). It selects the
+same OpenBLAS wheels, and later `uv run` and `uv sync` calls keep them. Run
+it again whenever the lock moves NumPy or SciPy to a new version:
+
+```bash
+uv sync --python-platform aarch64-apple-darwin
+```
+
 Set `MDOPT_ALLOW_ACCELERATE=1` to silence the warning if you must keep
 Accelerate. Use `OMP_NUM_THREADS=1` (or `OPENBLAS_NUM_THREADS=1`) for the
 per-process BLAS of worker pools.
