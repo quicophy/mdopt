@@ -7,7 +7,7 @@ Metrics reported:
   - Logical error rate (avg over trials).
 
 Usage:
-    poetry run python examples/decoding/compare_qubit_order_bb.py
+    uv run python mdopt/examples/decoding/plotting/compare_qubit_order_bb.py
 """
 
 # --- asset paths (the code lives in the package; the data does not) ---
@@ -149,8 +149,8 @@ def main():
     print(f"  Natural:   max_span={bw_nat:4d},  total_span={ts_nat:6d}")
     print(f"  Optimised: max_span={bw_opt:4d},  total_span={ts_opt:6d}")
     print(
-        f"  Reduction: max_span {100*(bw_nat-bw_opt)/bw_nat:.1f}%,"
-        f"  total_span {100*(ts_nat-ts_opt)/ts_nat:.1f}%"
+        f"  Reduction: max_span {100 * (bw_nat - bw_opt) / bw_nat:.1f}%,"
+        f"  total_span {100 * (ts_nat - ts_opt) / ts_nat:.1f}%"
     )
 
     # ── Decoding trials ────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ def main():
         f"  Optimised: LER={ler_opt:.6f} ± {sem_opt:.6f},  avg time/decode={t_opt:.3f}s"
     )
     if ler_nat > 0 and ler_opt > 0:
-        print(f"  LER ratio (nat/opt): {ler_nat/ler_opt:.2f}×")
+        print(f"  LER ratio (nat/opt): {ler_nat / ler_opt:.2f}×")
 
 
 if __name__ == "__main__":

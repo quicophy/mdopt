@@ -107,7 +107,7 @@ run_one_job() {
 
     echo "[$((IDX+1))/${TOTAL}] Starting: N=${N}, chi=${CHI}, code_id=${CODE_ID}"
 
-    poetry run python -m mdopt.examples.decoding.quantum_csp \
+    uv run python -m mdopt.examples.decoding.quantum_csp \
         --num_qubits   "$N"                \
         --batch        "$BATCH"            \
         --code_id      "$CODE_ID"          \

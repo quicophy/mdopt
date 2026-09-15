@@ -26,11 +26,13 @@ To install the current release, use the package manager [pip](https://pip.pypa.i
 pip install mdopt
 ```
 
-Otherwise, you can clone the repository and use [poetry](https://python-poetry.org/).
+Otherwise, you can clone the repository and use [uv](https://docs.astral.sh/uv/).
 
 ```bash
-poetry install
+uv sync
 ```
+
+`uv sync --group dev --group test` also installs the development and test tools.
 
 ### A note on NumPy's BLAS on Apple silicon
 
@@ -190,11 +192,11 @@ Developers may find the following guidelines useful:
   ```
 
 - **Coding style.**
-  The project follows the [Black](https://black.readthedocs.io/en/stable/) code style.
-  Please run Black before submitting a pull request:
+  The code is formatted with [Ruff](https://docs.astral.sh/ruff/formatter/), whose style matches Black's.
+  Please run the formatter before submitting a pull request:
 
   ```bash
-  black .
+  uv run --group dev ruff format .
   ```
 
 - **Pre-commit hooks.**

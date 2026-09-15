@@ -23,11 +23,13 @@ To install the current release, use the package manager
    pip install mdopt
 
 Otherwise, you can clone the repository and use
-`poetry <https://python-poetry.org/>`__.
+`uv <https://docs.astral.sh/uv/>`__.
 
 .. code:: bash
 
-   poetry install
+   uv sync
+
+``uv sync --group dev --group test`` also installs the development and test tools.
 
 Minimal example
 ---------------
@@ -199,13 +201,13 @@ Developers may find the following guidelines useful:
 
      ./generate_docs.sh
 
-- **Coding style.** The project follows the
-  `Black <https://black.readthedocs.io/en/stable/>`__ code style. Please
-  run Black before submitting a pull request:
+- **Coding style.** The code is formatted with
+  `Ruff <https://docs.astral.sh/ruff/formatter/>`__, whose style matches
+  Black's. Please run the formatter before submitting a pull request:
 
   .. code:: bash
 
-     black .
+     uv run --group dev ruff format .
 
 - **Pre-commit hooks.** `Pre-commit <https://pre-commit.com/>`__ hooks
   are configured to enforce consistent style automatically. To enable

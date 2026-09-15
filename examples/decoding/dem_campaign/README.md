@@ -20,7 +20,8 @@ from its last record.
 
 ## Running
 
-From the repository root, inside the Poetry environment:
+From the repository root, inside the uv environment (`uv sync --group test`, which
+provides pymatching, then `source .venv/bin/activate`):
 
 ```bash
 cd examples/decoding/dem_campaign

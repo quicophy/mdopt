@@ -10,13 +10,13 @@ You can install the package from PyPI:
 
    pip install mdopt
 
-Or, alternatively, from source using Poetry:
+Or, alternatively, from source using uv:
 
 .. code-block:: bash
 
    git clone https://github.com/quicophy/mdopt.git
    cd mdopt
-   poetry install
+   uv sync
 
 Minimal example
 ---------------------
