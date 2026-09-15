@@ -99,9 +99,9 @@ def per_seed_speedup(agg, chi, p, baseline, target):
     """Per-seed (1 - t_target / t_baseline). Returns mean ± SEM and array."""
     b = agg[(chi, p, *baseline)]
     t = agg[(chi, p, *target)]
-    assert (
-        b["seeds"] == t["seeds"]
-    ).all(), f"seed mismatch baseline={baseline} target={target} at ({chi},{p})"
+    assert (b["seeds"] == t["seeds"]).all(), (
+        f"seed mismatch baseline={baseline} target={target} at ({chi},{p})"
+    )
     per = 1.0 - t["seed_times"] / b["seed_times"]
     return float(per.mean()), float(per.std(ddof=1) / np.sqrt(len(per))), per
 
@@ -146,7 +146,7 @@ def main():
         f"\nSpeedup % vs baseline (Naive vert + Natural horiz), mean across "
         f"p values (± std):"
     )
-    print(f"{'chi':>4} | {'vert only':>14} | {'horiz only':>14} | " f"{'both':>14}")
+    print(f"{'chi':>4} | {'vert only':>14} | {'horiz only':>14} | {'both':>14}")
     for chi in CHI_LIST:
         row = [f"{chi:>4}"]
         for label in ("vert", "horiz", "both"):
@@ -156,8 +156,7 @@ def main():
 
     print(f"\nDecode time at chi={PLOT_CHI} (s):")
     print(
-        f"{'p':>7} | {'baseline':>10} | {'+vert':>10} | {'+horiz':>10} | "
-        f"{'+both':>10}"
+        f"{'p':>7} | {'baseline':>10} | {'+vert':>10} | {'+horiz':>10} | {'+both':>10}"
     )
     for p in P_LIST:
         b = agg[(PLOT_CHI, p, *BASELINE)]["avg_time_s"]

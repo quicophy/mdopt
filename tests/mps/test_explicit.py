@@ -702,9 +702,9 @@ def test_explicit_compress_bond_accepts_a_list_spectrum():
     truncation cut raises. Coercing the type here keeps both constructors usable.
     """
     mps = create_simple_product_state(4, which="+", form="Explicit")
-    assert isinstance(
-        mps.singular_values[1], list
-    ), "constructor no longer yields lists"
+    assert isinstance(mps.singular_values[1], list), (
+        "constructor no longer yields lists"
+    )
 
     compressed, truncation_error = mps.compress_bond(
         bond=1, chi_max=8, cut=1e-16, renormalise=True, return_truncation_error=True

@@ -82,14 +82,14 @@ def run(distance, p, shots, chi=128, seed=0):
             if (i + 1) % 500 == 0:
                 sink.flush()
                 print(
-                    f"[{tag}] {i+1}/{shots} rss={_rss_gb():.2f}GB",
+                    f"[{tag}] {i + 1}/{shots} rss={_rss_gb():.2f}GB",
                     flush=True,
                 )
     rows = [json.loads(l) for l in open(path)]
     m = sum(r["map"] != r["truth"] for r in rows)
     w = sum(r["mwpm"] != r["truth"] for r in rows)
     print(
-        f"[{tag}] n={len(rows)} MAP {m/len(rows):.4f} MWPM {w/len(rows):.4f}",
+        f"[{tag}] n={len(rows)} MAP {m / len(rows):.4f} MWPM {w / len(rows):.4f}",
         flush=True,
     )
 

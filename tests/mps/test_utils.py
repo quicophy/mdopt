@@ -164,12 +164,12 @@ def test_mps_from_dense_near_zero_singular_values():
 
         mps = mps_from_dense(psi, form="Explicit")
         for i, gamma in enumerate(mps.tensors):
-            assert np.all(
-                np.isfinite(gamma)
-            ), f"Γ[{i}] contains NaN or Inf for eps={eps}"
-        assert np.all(
-            np.isfinite(mps.dense())
-        ), f"dense() contains NaN or Inf for eps={eps}"
+            assert np.all(np.isfinite(gamma)), (
+                f"Γ[{i}] contains NaN or Inf for eps={eps}"
+            )
+        assert np.all(np.isfinite(mps.dense())), (
+            f"dense() contains NaN or Inf for eps={eps}"
+        )
 
     # float32 path
     psi32 = psi.astype(np.complex64)

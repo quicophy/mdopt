@@ -342,12 +342,12 @@ def save_experiment_data(
     order_tag = (
         "" if qubit_order_strategy == "Natural" else f"_order{qubit_order_strategy}"
     )
-    file_key = f"latticesize{order_x*order_y}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_seed{seed}{order_tag}.pkl"
+    file_key = f"latticesize{order_x * order_y}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_seed{seed}{order_tag}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
         f"Saved data for {file_key} with "
-        f"{np.nanmean(data['failures'])*100:.2f}±{sem(data['failures'], nan_policy='omit')*100:.2f}% failure rate."
+        f"{np.nanmean(data['failures']) * 100:.2f}±{sem(data['failures'], nan_policy='omit') * 100:.2f}% failure rate."
     )
 
 

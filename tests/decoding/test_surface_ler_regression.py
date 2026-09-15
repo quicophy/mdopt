@@ -65,9 +65,9 @@ def test_surface_5_truncated_ler_does_not_increase():
     pinned = "1111111111111111011011101111111111011111"
     verdicts = _verdicts(_surface_code(5), 0.08)
     failures = verdicts.count("0")
-    assert failures <= pinned.count(
-        "0"
-    ), f"{failures} failures, pinned {pinned.count('0')}: {verdicts}"
-    assert (
-        verdicts == pinned
-    ), f"verdict pattern changed:\n got    {verdicts}\n pinned {pinned}"
+    assert failures <= pinned.count("0"), (
+        f"{failures} failures, pinned {pinned.count('0')}: {verdicts}"
+    )
+    assert verdicts == pinned, (
+        f"verdict pattern changed:\n got    {verdicts}\n pinned {pinned}"
+    )

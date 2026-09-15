@@ -282,7 +282,7 @@ def save_experiment_data(
         pickle.dump(data, pickle_file)
     logging.info(
         f"Saved experiment data for {path} with "
-        f"{np.mean(data['failures'])*100:.2f}% failure rate."
+        f"{np.mean(data['failures']) * 100:.2f}% failure rate."
     )
 
 
