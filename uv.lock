@@ -1960,7 +1960,7 @@ requires-dist = [
     { name = "opt-einsum", specifier = ">=3.3.0,<4.0.0" },
     { name = "qecsim", specifier = ">=1.0b9,<2.0.0" },
     { name = "qecstruct", specifier = ">=0.2.9,<0.3.0" },
-    { name = "qldpc", specifier = ">=0.1.4,<0.2.0" },
+    { name = "qldpc", specifier = ">=0.1.4,<0.4.0" },
     { name = "scipy", specifier = ">=1.15.0,<2.0.0" },
     { name = "seaborn", specifier = ">=0.13.2,<0.14.0" },
     { name = "stim", specifier = ">=1.16.0,<2.0.0" },
@@ -2850,6 +2850,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyperclip"
+version = "1.11.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6", size = 12185, upload-time = "2025-09-26T14:40:37.245Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273", size = 11063, upload-time = "2025-09-26T14:40:36.069Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3095,7 +3104,7 @@ wheels = [
 
 [[package]]
 name = "qldpc"
-version = "0.1.4"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxpy" },
@@ -3106,13 +3115,15 @@ dependencies = [
     { name = "numpy" },
     { name = "platformdirs" },
     { name = "pymatching" },
+    { name = "pyperclip" },
     { name = "scipy" },
+    { name = "sinter" },
     { name = "stim" },
     { name = "sympy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d6/bd/93675b705fd3ba579508bea501f626c080f9ab20ca12d82461d90a4a9e86/qldpc-0.1.4.tar.gz", hash = "sha256:f0354757998bf44195ae98de5d8329a7ef09548264e3a568a5d5f3cd93d25242", size = 116910, upload-time = "2025-07-31T17:45:30.812Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/4e/2a32b9e17ea05dce010aa31beaaab4d8ee50567b8270a35630ca79525055/qldpc-0.3.3.tar.gz", hash = "sha256:afeacf4ceb2b70b1a86c04aa68d5f4a8db551dbec0c44ce68d9852c19bf4e48f", size = 274971, upload-time = "2026-08-01T13:11:02.343Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f8/9e/6ab0a63cb7b95b78d2d3759da5a4b0ab22449d65b4ab6e1de8c58f1c6367/qldpc-0.1.4-py3-none-any.whl", hash = "sha256:2fc6b8ebb17d67d532ef9c5912e497837e27259c34c37d6697c88936592e01e1", size = 134951, upload-time = "2025-07-31T17:45:29.489Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/51/68fa6b3c43530eeacfdf2389270f703f479f228588adede3f3ceeec8632d/qldpc-0.3.3-py3-none-any.whl", hash = "sha256:1a40b624a8ae4fac10e9ea23de64e630b462fb591c87be20f2f5ce08ab650bc9", size = 320515, upload-time = "2026-08-01T13:11:01.126Z" },
 ]
 
 [[package]]
