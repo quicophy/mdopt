@@ -51,7 +51,7 @@ follow once it is merged.
 the longest cells below run for hours, so a full regeneration needs a larger
 limit; the last one used a day.
 
-Expect this to take hours: the last full run took about 12 hours. Measured on
+Expect this to take hours: the last full run took about 34 hours. Measured on
 an M-series laptop (10 cores: 4 performance, 6 efficiency), one notebook at a
 time, with one BLAS thread per process:
 
@@ -67,7 +67,7 @@ notebook                     full run
 ``quantum_three_qubit``      4.6 min
 ``classical_ldpc``           2.8 h (the truncation sweep 2.2 h, the BP comparison 36 min)
 ``maxbonddim``               3.2 h
-``quantum_surface``          5.5 h (the threshold sweep alone 4.7 h)
+``quantum_surface``          27.4 h (the threshold sweep alone 26.6 h, at chi_max = 128)
 ===========================  ==============================================================
 
 ``classical_ldpc`` and ``quantum_surface`` end with a cell that regenerates
