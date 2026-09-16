@@ -25,11 +25,12 @@ Usage::
     python scripts/run_notebooks.py                 # every eligible notebook
     python scripts/run_notebooks.py path/to/nb.ipynb
     MDOPT_NB_FAST=1 python scripts/run_notebooks.py  # CI-scale workloads
-    python scripts/run_notebooks.py --inplace --timeout 86400  # full-scale results
+    python scripts/run_notebooks.py --inplace --timeout 172800  # full-scale results
 
 At full scale several cells run for hours, far past the default per-cell
-timeout of 1800 s (``--timeout``, or ``MDOPT_NB_TIMEOUT``), so a full run
-needs a larger one; docs/source/notebook_pipeline.rst lists the times.
+timeout of 1800 s (``--timeout``, or ``MDOPT_NB_TIMEOUT``); the surface-code
+threshold sweep alone takes 26.6 h, so a full run needs a limit well above
+that. docs/source/notebook_pipeline.rst lists the times.
 """
 
 from __future__ import annotations
