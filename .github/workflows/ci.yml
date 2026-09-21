@@ -24,7 +24,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             pyproject.toml
-            requirements*.txt
+            uv.lock
       - name: Show Python
         run: python -V && pip -V
       - name: Install package + test deps

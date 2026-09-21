@@ -10,9 +10,12 @@ build:
 sphinx:
   configuration: docs/source/conf.py
 
+# Installs the project and its docs group straight from uv.lock, so the docs
+# build uses the same pins as everything else and no exported requirements
+# file has to be kept in the repository.
 python:
   install:
-    - requirements: docs/source/requirements.txt
-    - requirements: requirements.txt
-    - method: pip
-      path: .
+    - method: uv
+      command: sync
+      groups:
+        - docs
