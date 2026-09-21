@@ -44,6 +44,3 @@ repos:
     hooks:
       # Fails when uv.lock is out of date with pyproject.toml.
       - id: uv-lock
-      # Keeps requirements.txt (read by readthedocs) in step with uv.lock.
-      - id: uv-export
-        args: ["--frozen", "--no-default-groups", "--no-emit-project", "--output-file=requirements.txt", "--quiet"]
