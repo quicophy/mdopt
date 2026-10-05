@@ -1958,7 +1958,7 @@ requires-dist = [
     { name = "opt-einsum", specifier = ">=3.3.0,<4.0.0" },
     { name = "qecsim", specifier = ">=1.0b9,<2.0.0" },
     { name = "qecstruct", specifier = ">=0.2.9,<0.3.0" },
-    { name = "qldpc", specifier = ">=0.1.4,<0.4.0" },
+    { name = "qldpc", specifier = ">=0.1.4,<0.5.0" },
     { name = "scipy", specifier = ">=1.15.0,<2.0.0" },
     { name = "seaborn", specifier = ">=0.13.2,<0.14.0" },
     { name = "stim", specifier = ">=1.16.0,<2.0.0" },
@@ -3102,7 +3102,7 @@ wheels = [
 
 [[package]]
 name = "qldpc"
-version = "0.3.3"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxpy" },
@@ -3118,10 +3118,11 @@ dependencies = [
     { name = "sinter" },
     { name = "stim" },
     { name = "sympy" },
+    { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0f/4e/2a32b9e17ea05dce010aa31beaaab4d8ee50567b8270a35630ca79525055/qldpc-0.3.3.tar.gz", hash = "sha256:afeacf4ceb2b70b1a86c04aa68d5f4a8db551dbec0c44ce68d9852c19bf4e48f", size = 274971, upload-time = "2026-08-01T13:11:02.343Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/a6/23cedda995dd588588e99c56ca4606d00015612d9b1fe06f260bbd643409/qldpc-0.4.0.tar.gz", hash = "sha256:7de925040c250e6d7062ed33cc38e3d75ab78e2dcc6d44ba0c0938a65a916fed", size = 537239, upload-time = "2026-10-01T18:39:21Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0b/51/68fa6b3c43530eeacfdf2389270f703f479f228588adede3f3ceeec8632d/qldpc-0.3.3-py3-none-any.whl", hash = "sha256:1a40b624a8ae4fac10e9ea23de64e630b462fb591c87be20f2f5ce08ab650bc9", size = 320515, upload-time = "2026-08-01T13:11:01.126Z" },
+    { url = "https://files.pythonhosted.org/packages/70/51/740aa0404f69ce8de7735829c0c9b963f3e79ec99697b91ec2e9b0aabf36/qldpc-0.4.0-py3-none-any.whl", hash = "sha256:c47653677ce3fea40c5ed35a2739bddc126ebdc6afee8aac78c409fb2ab1e515", size = 616634, upload-time = "2026-10-01T18:39:19.125Z" },
 ]
 
 [[package]]
