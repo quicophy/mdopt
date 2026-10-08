@@ -3101,7 +3101,7 @@ wheels = [
 
 [[package]]
 name = "qldpc"
-version = "0.4.0"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cvxpy" },
@@ -3119,9 +3119,9 @@ dependencies = [
     { name = "sympy" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e9/a6/23cedda995dd588588e99c56ca4606d00015612d9b1fe06f260bbd643409/qldpc-0.4.0.tar.gz", hash = "sha256:7de925040c250e6d7062ed33cc38e3d75ab78e2dcc6d44ba0c0938a65a916fed", size = 537239, upload-time = "2026-10-01T18:39:21Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/10/20/a82b0c6f943628a0b706dfd24d2a1588ceae2a7a8056bdfea15d90ec4118/qldpc-0.4.1.tar.gz", hash = "sha256:ee4c988bdffa26cde9bdf65b3676be81c35d6d53ac87c44a0c9462f4380e267c", size = 573363, upload-time = "2026-10-03T03:16:14.229Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/70/51/740aa0404f69ce8de7735829c0c9b963f3e79ec99697b91ec2e9b0aabf36/qldpc-0.4.0-py3-none-any.whl", hash = "sha256:c47653677ce3fea40c5ed35a2739bddc126ebdc6afee8aac78c409fb2ab1e515", size = 616634, upload-time = "2026-10-01T18:39:19.125Z" },
+    { url = "https://files.pythonhosted.org/packages/89/14/c2fe1beef714c0687c38614bc15832ecad5b3dab3606cf26acdf23dadbdb/qldpc-0.4.1-py3-none-any.whl", hash = "sha256:27c971d58e9ffe12859cedd6e41c366b272d0b5008e28c95e7c0c0c6d7d3826c", size = 658663, upload-time = "2026-10-03T03:16:12.634Z" },
 ]
 
 [[package]]
