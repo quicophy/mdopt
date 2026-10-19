@@ -1983,7 +1983,7 @@ docs = [
     { name = "matplotlib", specifier = ">=3.11.1,<4" },
     { name = "myst-parser", specifier = ">=5.1.0,<6" },
     { name = "nbsphinx", specifier = ">=0.9.2,<0.10" },
-    { name = "pydata-sphinx-theme", specifier = ">=0.21.0,<0.23.0" },
+    { name = "pydata-sphinx-theme", specifier = ">=0.21.0,<0.24.0" },
     { name = "pygments", specifier = ">=2.20.0,<3" },
     { name = "sphinx", specifier = ">=8.2.3,<9.0.0" },
     { name = "sphinxcontrib-napoleon", specifier = ">=0.7,<0.8" },
@@ -2711,7 +2711,7 @@ wheels = [
 
 [[package]]
 name = "pydata-sphinx-theme"
-version = "0.22.0"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "accessible-pygments" },
@@ -2723,9 +2723,9 @@ dependencies = [
     { name = "requests" },
     { name = "sphinx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/7f/42064a2f02ea074c230a73b9eb6ee4a1a1ea0d9ae76ba32336d7ce9ed32c/pydata_sphinx_theme-0.22.0.tar.gz", hash = "sha256:5a18c517494f7ea285263d117b0b22e56d4eb689fcab72d9f70e3a6d766a77f1", size = 5013837, upload-time = "2026-09-25T09:46:38.273Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/54/24/efb184268dc958ea894821b8643954be7746f67cdd2c08f8f47f9b0c4735/pydata_sphinx_theme-0.23.0.tar.gz", hash = "sha256:f9e647e0bb3f1d8eaa6d866248812711211313627cc4ae76b5f88a17a4be38ce", size = 5015474, upload-time = "2026-10-08T08:52:13.975Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bc/c1/36d3002684e7ff60f939bcfc3f20d369dd3f16ad6b540d50df722554372d/pydata_sphinx_theme-0.22.0-py3-none-any.whl", hash = "sha256:b76a6fc2efcca26aa7fd34f05302a223d4d07fbcc4d03129d56f416f2d4408c0", size = 6213182, upload-time = "2026-09-25T09:46:36.142Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/a9/187b2aa8ea213d72c13ce3627e605d922d697c470532d67b5b707d944b2c/pydata_sphinx_theme-0.23.0-py3-none-any.whl", hash = "sha256:7bf56f1eda7b03c62719dd0dd3b50035c8bfb72caf4faefa5ac46400a82e408f", size = 6214022, upload-time = "2026-10-08T08:52:11.881Z" },
 ]
 
 [[package]]
