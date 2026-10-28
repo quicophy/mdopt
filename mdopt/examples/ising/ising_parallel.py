@@ -1,5 +1,5 @@
 """
-Here we parallelise our ground-state example. Co-authored by Moïse Russeau.
+Here we parallelize our ground-state example. Co-authored by Moïse Russeau.
 """
 
 from multiprocessing import cpu_count, Pool
@@ -10,7 +10,7 @@ from scipy.sparse.linalg import eigsh
 
 from mdopt.examples.ising.ising import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
-from mdopt.optimiser.dmrg import DMRG as dmrg_optimiser
+from mdopt.optimizer.dmrg import DMRG as dmrg_optimizer
 
 NUM_SITES = 15
 
@@ -24,8 +24,8 @@ def exact_simulation(magnetic_field: float = 0):
     ham_sp = exact.hamiltonian_sparse()
     ground_state_ex = eigsh(ham_sp, k=2, tol=1e-9)[1][:, 0]
     return (
-        exact.average_chain_x_magnetisation(ground_state_ex),
-        exact.average_chain_z_magnetisation(ground_state_ex),
+        exact.average_chain_x_magnetization(ground_state_ex),
+        exact.average_chain_z_magnetization(ground_state_ex),
     )
 
 
@@ -37,7 +37,7 @@ def dmrg_simulation(magnetic_field: float = 0):
     mpo = IsingMPO(num_sites=NUM_SITES, h_magnetic=magnetic_field)
     hamiltonian_mpo = mpo.hamiltonian_mpo()
     start_mps = create_simple_product_state(num_sites=NUM_SITES, which="+")
-    dmrg_container = dmrg_optimiser(
+    dmrg_container = dmrg_optimizer(
         start_mps,
         hamiltonian_mpo,
         chi_max=128,
@@ -49,8 +49,8 @@ def dmrg_simulation(magnetic_field: float = 0):
     dmrg_container.run(10)
     dmrg_final_mps = dmrg_container.mps
     return (
-        mpo.average_chain_x_magnetisation(dmrg_final_mps),
-        mpo.average_chain_z_magnetisation(dmrg_final_mps),
+        mpo.average_chain_x_magnetization(dmrg_final_mps),
+        mpo.average_chain_z_magnetization(dmrg_final_mps),
     )
 
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
         transverse_magnetic_field_space, mag_z_dmrg, label="DMRG", linestyle="dashed"
     )
     plt.xlabel("Transverse magnetic field $h$")
-    plt.ylabel("Longitudinal magnetisation $m_z$", rotation=90, labelpad=10)
+    plt.ylabel("Longitudinal magnetization $m_z$", rotation=90, labelpad=10)
     plt.xlim((0.2, 2))
     plt.ylim((-1, 1))
     plt.legend(fontsize=10)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         transverse_magnetic_field_space, mag_x_dmrg, label="DMRG", linestyle="dashed"
     )
     plt.xlabel("Transverse magnetic field $h$")
-    plt.ylabel("Transverse magnetisation $m_x$", rotation=90, labelpad=10)
+    plt.ylabel("Transverse magnetization $m_x$", rotation=90, labelpad=10)
     plt.xlim((0.2, 2))
     plt.ylim((0, 1))
     plt.legend(fontsize=10)

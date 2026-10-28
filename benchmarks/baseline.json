@@ -22,7 +22,7 @@
   "dmrg_ground_state": [
     -30.1997123268
   ],
-  "shor_depolarising": [
+  "shor_depolarizing": [
     [
       1.0,
       0.87983707,
@@ -348,7 +348,7 @@
       0.0
     ]
   ],
-  "css_optimised": [
+  "css_optimized": [
     [
       1.0,
       0.993071558,

@@ -142,7 +142,7 @@ def test_accelerate_lapack_warns_unless_allowed(monkeypatch):
 
 def test_scipy_shaped_config_is_detected(monkeypatch):
     """SciPy reports its LAPACK through show_config(mode="dicts"), with
-    the vendor capitalised ("Accelerate"); the SciPy check must warn on it."""
+    the vendor capitalized ("Accelerate"); the SciPy check must warn on it."""
     from types import SimpleNamespace
 
     from mdopt.backend import array as backend
@@ -164,7 +164,7 @@ def test_scipy_shaped_config_is_detected(monkeypatch):
 
 
 def test_accelerate_warnings_fire_on_the_gpu_backend(monkeypatch):
-    """With CuPy selected, NumPy and SciPy LAPACK still run on the host (centre
+    """With CuPy selected, NumPy and SciPy LAPACK still run on the host (center
     moves, host-side contractions, the SVD fallbacks, qr), so an
     Accelerate-linked build must still be warned about."""
     import numpy

@@ -95,7 +95,7 @@ jobs:
               echo "docs/source/notebooks already matches examples/ -- nothing to do."
               # A bot PR opened for earlier drift is now stale: merging it would
               # reintroduce copies whose source has since been reverted or
-              # synchronised another way. Close it rather than leave it mergeable.
+              # synchronized another way. Close it rather than leave it mergeable.
               # No || true: an empty list already exits 0, so a failure here is
               # an auth/API error, and swallowing it would leave the stale PR
               # open while the job reports success.

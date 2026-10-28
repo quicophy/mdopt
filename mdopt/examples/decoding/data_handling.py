@@ -933,8 +933,8 @@ def fit_failure_statistics(
             )
 
         if has_valid_data:
-            plt.xlabel("Physical Error Rate (p)")
-            plt.ylabel("Logical Failure Rate (P_L)")
+            plt.xlabel("Physical error rate (p)")
+            plt.ylabel("Logical failure rate (P_L)")
             plt.legend(fontsize=7)
             plt.xscale(xscale)
             plt.yscale(yscale)

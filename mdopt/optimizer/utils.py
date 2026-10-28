@@ -1,5 +1,5 @@
 """
-This module contains different combinatorial optimisation utilities.
+This module contains different combinatorial optimization utilities.
 
 First, we define the tensors which represent logical operation.
 We use the following tensors: IDENTITY, COPY, XOR, SWAP.
@@ -16,7 +16,7 @@ from matrex import msro
 from numpy.random import Generator
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import find_orth_centre
+from mdopt.mps.utils import find_orth_center
 from mdopt.utils.utils import mpo_to_matrix
 from mdopt.contractor.contractor import mps_mpo_contract
 
@@ -43,11 +43,11 @@ SWAP = np.fromfunction(
 ).astype(float, copy=False)
 
 
-def optimise_qubit_order(H: np.ndarray) -> np.ndarray:
+def optimize_qubit_order(H: np.ndarray) -> np.ndarray:
     """
     Given a binary parity check matrix ``H`` of shape
     ``(num_checks, num_qubits)``, returns a permutation ``perm`` that
-    minimises the bandwidth of ``H`` by reordering its columns (qubits).
+    minimizes the bandwidth of ``H`` by reordering its columns (qubits).
 
     ``perm[i]`` is the original qubit index placed at MPS position ``i``
     after reordering.  The inverse ``inv_perm = np.argsort(perm)`` gives
@@ -213,14 +213,14 @@ class ConstraintString:
         return mpo
 
 
-def _product_state_orth_centre(mps: CanonicalMPS, tolerance: float = 1e-12) -> int:
-    """The orthogonality centre :func:`find_orth_centre` assigns a product state.
+def _product_state_orth_center(mps: CanonicalMPS, tolerance: float = 1e-12) -> int:
+    """The orthogonality center :func:`find_orth_center` assigns a product state.
 
     For a chain of bond dimension 1 every tensor is (1, d, 1); it is a left
     and a right isometry exactly when its vector has unit norm. The scan then
-    reports the non-isometric sites as centres and the convention keeps the
+    reports the non-isometric sites as centers and the convention keeps the
     first of them, or site 0 when all sites are isometric; a biased chain
-    whose first sites are still normalised (the decoders' logical prefix)
+    whose first sites are still normalized (the decoders' logical prefix)
     therefore gets its first biased site, not site 0.
     """
     for site, tensor in enumerate(mps.tensors):
@@ -236,7 +236,7 @@ def apply_constraints(
     logical_tensors: List[np.ndarray],
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-    renormalise: bool = True,
+    renormalize: bool = True,
     strategy: str = "Naive",
     silent: bool = False,
     dense: bool = False,
@@ -259,12 +259,12 @@ def apply_constraints(
     cut : float
         The lower boundary of the spectrum in the contractor.
         All singular values below this value are truncated.
-    renormalise : bool
-        Whether to renormalise the orthogonality centre after each constraint application.
+    renormalize : bool
+        Whether to renormalize the orthogonality center after each constraint application.
     result_to_explicit : bool
         Whether to transform the resulting MPS into the Explicit form.
     strategy : str
-        The contractor strategy. Available options are "Optimised" and "Naive".
+        The contractor strategy. Available options are "Optimized" and "Naive".
     silent : bool
         Whether to show the progress bar or not.
     return_entropies_and_bond_dims : bool
@@ -285,16 +285,16 @@ def apply_constraints(
     entropies = []
     bond_dims = []
 
-    if strategy == "Optimised":
-        # Using matrix front minimization technique to optimise the order
+    if strategy == "Optimized":
+        # Using matrix front minimization technique to optimize the order
         # in which to apply the checks.
         mpo_location_matrix = np.zeros((len(strings), mps.num_sites), dtype=int)
         for row_idx, sublist in enumerate(strings):
             for subsublist in sublist:
                 for index in subsublist:  # type: ignore
                     mpo_location_matrix[row_idx, index] = 1
-        optimised_order = msro(mpo_location_matrix)
-        strings = [strings[index] for index in optimised_order]
+        optimized_order = msro(mpo_location_matrix)
+        strings = [strings[index] for index in optimized_order]
 
     if dense:
         mps_dense = mps.dense(flatten=True)
@@ -319,43 +319,43 @@ def apply_constraints(
             mps_dense = mpo_dense @ mps_dense  # type: ignore[has-type]
             continue
 
-        # Ensure orthogonality centre is set and moved once per string
-        if mps.orth_centre is None and all(d == 1 for d in mps.bond_dimensions):
+        # Ensure orthogonality center is set and moved once per string
+        if mps.orth_center is None and all(d == 1 for d in mps.bond_dimensions):
             # A product state (every bond of dimension 1) needs no isometry
             # scan: a (1, d, 1) tensor is an isometry exactly when its
             # vector has unit norm, so the scan's answer -- the first
             # non-isometric site, or site 0 when every site is isometric --
             # comes from the site norms alone. Same tolerance as the scan.
-            mps.orth_centre = _product_state_orth_centre(mps)
-        if mps.orth_centre is None:
-            orth_centres, flags_left, flags_right = find_orth_centre(
+            mps.orth_center = _product_state_orth_center(mps)
+        if mps.orth_center is None:
+            orth_centers, flags_left, flags_right = find_orth_center(
                 mps, return_orth_flags=True
             )
 
-            # Managing possible issues with multiple orthogonality centres
-            # arising if we do not renormalise while contracting.
-            if orth_centres and len(orth_centres) == 1:
-                mps.orth_centre = orth_centres[0]
+            # Managing possible issues with multiple orthogonality centers
+            # arising if we do not renormalize while contracting.
+            if orth_centers and len(orth_centers) == 1:
+                mps.orth_center = orth_centers[0]
             # Convention.
             if all(flags_left) and all(flags_right):
-                mps.orth_centre = 0
+                mps.orth_center = 0
             elif flags_left in ([True] + [False] * (mps.num_sites - 1)):
                 if flags_right == [not flag for flag in flags_left]:
-                    mps.orth_centre = mps.num_sites - 1
+                    mps.orth_center = mps.num_sites - 1
             elif flags_left in ([True] * (mps.num_sites - 1) + [False]):
                 if flags_right == [not flag for flag in flags_left]:
-                    mps.orth_centre = 0
+                    mps.orth_center = 0
             elif all(flags_right):
-                mps.orth_centre = 0
+                mps.orth_center = 0
             elif all(flags_left):
-                mps.orth_centre = mps.num_sites - 1
+                mps.orth_center = mps.num_sites - 1
 
-            if isinstance(orth_centres, list) and len(orth_centres) > 1:
-                mps.orth_centre = orth_centres[0]
+            if isinstance(orth_centers, list) and len(orth_centers) > 1:
+                mps.orth_center = orth_centers[0]
 
-            mps = mps.move_orth_centre(
+            mps = mps.move_orth_center(
                 final_pos=start_site,
-                renormalise=False,
+                renormalize=False,
                 return_singular_values=False,
                 inplace=True,
             )  # type: ignore
@@ -367,16 +367,16 @@ def apply_constraints(
             start_site=start_site,
             chi_max=chi_max,
             cut=cut,
-            renormalise=False,
+            renormalize=False,
             inplace=True,
         )
 
-        if renormalise:
-            orth_centre_index = int(mps.orth_centre)  # type: ignore
-            centre = mps.tensors[orth_centre_index]
-            norm = np.linalg.norm(centre)
+        if renormalize:
+            orth_center_index = int(mps.orth_center)  # type: ignore
+            center = mps.tensors[orth_center_index]
+            norm = np.linalg.norm(center)
             if norm > 0:
-                mps.tensors[orth_centre_index] = centre / norm
+                mps.tensors[orth_center_index] = center / norm
 
         if return_entropies_and_bond_dims:
             # Use a copy to avoid mutating `mps` during entropy computation

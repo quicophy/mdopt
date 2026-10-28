@@ -9,7 +9,7 @@ from opt_einsum import contract
 from mdopt.mps.utils import (
     create_simple_product_state,
     create_state_vector,
-    find_orth_centre,
+    find_orth_center,
     mps_from_dense,
     inner_product,
     is_canonical,
@@ -30,12 +30,12 @@ def test_canonical_init():
             for _ in range(num_sites)
         ]
         tensors = [tensor.astype(np.complex128) for tensor in tensors]
-        orth_centre = np.random.randint(low=0, high=num_sites)
+        orth_center = np.random.randint(low=0, high=num_sites)
         tolerance = 1e-10
         chi_max = 1e3
         mps = CanonicalMPS(
             tensors=tensors,
-            orth_centre=orth_centre,
+            orth_center=orth_center,
             tolerance=tolerance,
             chi_max=chi_max,
         )
@@ -46,14 +46,14 @@ def test_canonical_init():
         assert np.isclose(mps.num_bonds, num_sites - 1).all()
         assert np.isclose(mps.bond_dimensions, [1 for _ in range(mps.num_bonds)]).all()
         assert np.isclose(mps.phys_dimensions, [2 for _ in range(mps.num_sites)]).all()
-        assert mps.orth_centre == orth_centre
+        assert mps.orth_center == orth_center
         assert mps.dtype == np.dtype(np.complex128)
         assert np.isclose(mps.tolerance, tolerance).all()
         assert np.isclose(mps.chi_max, chi_max).all()
         assert np.isclose(len(mps), mps.num_sites).all()
 
         with pytest.raises(ValueError):
-            CanonicalMPS(tensors=tensors, orth_centre=num_sites + 1)
+            CanonicalMPS(tensors=tensors, orth_center=num_sites + 1)
 
         with pytest.raises(ValueError):
             mps.tensors[0] = np.expand_dims(mps.tensors[0], 0)
@@ -76,7 +76,7 @@ def test_canonical_copy():
         assert np.isclose(mps.num_bonds, mps_copied.num_bonds).all()
         assert np.isclose(mps.bond_dimensions, mps_copied.bond_dimensions).all()
         assert np.isclose(mps.phys_dimensions, mps_copied.phys_dimensions).all()
-        assert mps.orth_centre == mps_copied.orth_centre
+        assert mps.orth_center == mps_copied.orth_center
         assert mps.dtype == mps_copied.dtype
         assert np.isclose(mps.tolerance, mps_copied.tolerance).all()
         assert np.isclose(mps.chi_max, mps_copied.chi_max).all()
@@ -90,7 +90,7 @@ def test_canonical_reverse():
 
     for _ in range(10):
         psi = create_state_vector(num_sites)
-        mps = mps_from_dense(psi, form="Mixed-canonical", orth_centre=num_sites - 2)
+        mps = mps_from_dense(psi, form="Mixed-canonical", orth_center=num_sites - 2)
         mps_reversed = mps.reverse()
 
         for tensor, reversed_tensor in zip(reversed(mps.tensors), mps_reversed.tensors):
@@ -99,7 +99,7 @@ def test_canonical_reverse():
         assert np.isclose(mps_reversed.num_bonds, mps.num_bonds).all()
         assert np.isclose(mps_reversed.bond_dimensions, mps.bond_dimensions).all()
         assert np.isclose(mps_reversed.phys_dimensions, mps.phys_dimensions).all()
-        assert mps_reversed.orth_centre == mps.num_sites - 1 - mps.orth_centre
+        assert mps_reversed.orth_center == mps.num_sites - 1 - mps.orth_center
         assert mps_reversed.dtype == mps.dtype
         assert np.isclose(mps_reversed.tolerance, mps.tolerance).all()
         assert np.isclose(mps_reversed.chi_max, mps.chi_max).all()
@@ -122,7 +122,7 @@ def test_canonical_conjugate():
         assert np.isclose(mps.num_bonds, mps_conjugated.num_bonds).all()
         assert np.isclose(mps.bond_dimensions, mps_conjugated.bond_dimensions).all()
         assert np.isclose(mps.phys_dimensions, mps_conjugated.phys_dimensions).all()
-        assert mps.orth_centre == mps_conjugated.orth_centre
+        assert mps.orth_center == mps_conjugated.orth_center
         assert mps.dtype == mps_conjugated.dtype
         assert np.isclose(mps.tolerance, mps_conjugated.tolerance).all()
         assert np.isclose(mps.chi_max, mps_conjugated.chi_max).all()
@@ -237,12 +237,12 @@ def test_canonical_dense():
         mps = mps_from_dense(psi, form="Right-canonical")
         shape = [2] * num_sites
 
-        assert np.isclose(psi, mps.dense(flatten=True, renormalise=False)).all()
+        assert np.isclose(psi, mps.dense(flatten=True, renormalize=False)).all()
         assert np.isclose(
-            np.linalg.norm(mps.dense(flatten=True, renormalise=True, norm=1), ord=1), 1
+            np.linalg.norm(mps.dense(flatten=True, renormalize=True, norm=1), ord=1), 1
         )
         assert np.isclose(
-            psi.reshape(shape), mps.dense(flatten=False, renormalise=False)
+            psi.reshape(shape), mps.dense(flatten=False, renormalize=False)
         ).all()
 
 
@@ -276,7 +276,7 @@ def test_canonical_entanglement_entropy():
     mps_dimer = mps_from_dense(
         psi_many_body_dimer, form="Right-canonical", tolerance=1e-6
     )
-    mps_dimer.orth_centre = 0
+    mps_dimer.orth_center = 0
 
     entropy_list = np.array(mps_dimer.entanglement_entropy(tolerance=1e-1))
 
@@ -291,72 +291,72 @@ def test_canonical_entanglement_entropy():
     assert np.allclose(np.linalg.norm(zeros), 0, atol=1e-6)
 
 
-def test_canonical_move_orth_centre():
-    """Test for the ``move_orth_centre`` method of the :class:`CanonicalMPS` class."""
+def test_canonical_move_orth_center():
+    """Test for the ``move_orth_center`` method of the :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
         psi = create_state_vector(num_sites)
 
-        orth_centre_init = np.random.randint(num_sites)
+        orth_center_init = np.random.randint(num_sites)
         mps_mixed_init = mps_from_dense(
-            psi, form="Mixed-canonical", orth_centre=orth_centre_init
+            psi, form="Mixed-canonical", orth_center=orth_center_init
         )
-        orth_centre_final = np.random.randint(num_sites)
-        mps_mixed_final = mps_mixed_init.move_orth_centre(
-            final_pos=orth_centre_final, return_singular_values=False, renormalise=False
+        orth_center_final = np.random.randint(num_sites)
+        mps_mixed_final = mps_mixed_init.move_orth_center(
+            final_pos=orth_center_final, return_singular_values=False, renormalize=False
         )
-        mps_mixed_final_renorm = mps_mixed_init.move_orth_centre(
-            final_pos=orth_centre_final, return_singular_values=False, renormalise=True
+        mps_mixed_final_renorm = mps_mixed_init.move_orth_center(
+            final_pos=orth_center_final, return_singular_values=False, renormalize=True
         )
         mps_product = create_simple_product_state(
             num_sites=num_sites, form="Right-canonical"
         )
 
         with pytest.raises(ValueError):
-            mps_mixed_init.move_orth_centre(-3)
+            mps_mixed_init.move_orth_center(-3)
 
         assert is_canonical(mps_mixed_init)
         assert is_canonical(mps_mixed_final)
-        assert find_orth_centre(mps_mixed_init) == [orth_centre_init]
-        assert find_orth_centre(mps_mixed_final) == [orth_centre_final]
-        assert find_orth_centre(mps_mixed_final_renorm) == [orth_centre_final]
-        assert find_orth_centre(mps_product) == [0]
+        assert find_orth_center(mps_mixed_init) == [orth_center_init]
+        assert find_orth_center(mps_mixed_final) == [orth_center_final]
+        assert find_orth_center(mps_mixed_final_renorm) == [orth_center_final]
+        assert find_orth_center(mps_product) == [0]
         assert np.isclose(mps_mixed_final_renorm.norm() - 1, 0)
 
 
-def test_canonical_move_orth_centre_to_border():
-    """Test for the ``move_orth_centre_to_border`` method of :class:`CanonicalMPS` class."""
+def test_canonical_move_orth_center_to_border():
+    """Test for the ``move_orth_center_to_border`` method of :class:`CanonicalMPS` class."""
 
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
         psi = create_state_vector(num_sites)
-        mps_mixed_init_1 = mps_from_dense(psi, form="Mixed-canonical", orth_centre=1)
+        mps_mixed_init_1 = mps_from_dense(psi, form="Mixed-canonical", orth_center=1)
         mps_mixed_init_2 = mps_from_dense(
-            psi, form="Mixed-canonical", orth_centre=num_sites - 2
+            psi, form="Mixed-canonical", orth_center=num_sites - 2
         )
         mps_product = create_simple_product_state(
             num_sites=num_sites, form="Right-canonical"
         )
 
-        mps, position = mps_mixed_init_1.move_orth_centre_to_border()
+        mps, position = mps_mixed_init_1.move_orth_center_to_border()
         for tensor_1, tensor_2 in zip(
-            mps.tensors, mps_mixed_init_1.move_orth_centre(0).tensors
+            mps.tensors, mps_mixed_init_1.move_orth_center(0).tensors
         ):
             assert np.isclose(tensor_1, tensor_2).all()
         assert position == "first"
 
-        mps, position = mps_mixed_init_2.move_orth_centre_to_border()
+        mps, position = mps_mixed_init_2.move_orth_center_to_border()
         for tensor_1, tensor_2 in zip(
-            mps.tensors, mps_mixed_init_2.move_orth_centre(num_sites - 1).tensors
+            mps.tensors, mps_mixed_init_2.move_orth_center(num_sites - 1).tensors
         ):
             assert np.isclose(tensor_1, tensor_2).all()
         assert position == "last"
 
         with pytest.raises(UnboundLocalError):
-            mps, position = mps_product.move_orth_centre_to_border()
+            mps, position = mps_product.move_orth_center_to_border()
 
 
 def test_canonical_explicit():
@@ -371,8 +371,8 @@ def test_canonical_explicit():
         psi = create_state_vector(num_sites)
         left = mps_from_dense(psi, form="Left-canonical")
         right = mps_from_dense(psi, form="Right-canonical")
-        orth_centre = np.random.randint(num_sites)
-        mixed = mps_from_dense(psi, form="Mixed-canonical", orth_centre=orth_centre)
+        orth_center = np.random.randint(num_sites)
+        mixed = mps_from_dense(psi, form="Mixed-canonical", orth_center=orth_center)
 
         assert is_canonical(left)
         assert is_canonical(right)
@@ -382,8 +382,8 @@ def test_canonical_explicit():
         explicit_from_left = left.explicit()
         explicit_from_mixed = mixed.explicit()
 
-        mixed_from_right = right.mixed_canonical(orth_centre=orth_centre)
-        mixed_from_left = left.mixed_canonical(orth_centre=orth_centre)
+        mixed_from_right = right.mixed_canonical(orth_center=orth_center)
+        mixed_from_left = left.mixed_canonical(orth_center=orth_center)
 
         assert isinstance(mixed.right_canonical(), CanonicalMPS)
         assert isinstance(mixed.left_canonical(), CanonicalMPS)
@@ -411,24 +411,24 @@ def test_canonical_explicit():
         )
 
         assert np.isclose(
-            abs(inner_product(mixed, explicit_from_mixed.mixed_canonical(orth_centre))),
+            abs(inner_product(mixed, explicit_from_mixed.mixed_canonical(orth_center))),
             1,
         )
 
         assert np.isclose(
-            abs(inner_product(mixed, explicit_from_right.mixed_canonical(orth_centre))),
+            abs(inner_product(mixed, explicit_from_right.mixed_canonical(orth_center))),
             1,
         )
 
         assert np.isclose(
-            abs(inner_product(mixed, explicit_from_left.mixed_canonical(orth_centre))),
+            abs(inner_product(mixed, explicit_from_left.mixed_canonical(orth_center))),
             1,
         )
 
         assert np.isclose(
             abs(
                 inner_product(
-                    mixed_from_left, explicit_from_left.mixed_canonical(orth_centre)
+                    mixed_from_left, explicit_from_left.mixed_canonical(orth_center)
                 )
             ),
             1,
@@ -437,7 +437,7 @@ def test_canonical_explicit():
         assert np.isclose(
             abs(
                 inner_product(
-                    mixed_from_right, explicit_from_left.mixed_canonical(orth_centre)
+                    mixed_from_right, explicit_from_left.mixed_canonical(orth_center)
                 )
             ),
             1,
@@ -455,7 +455,7 @@ def test_canonical_explicit_near_zero_singular_values():
     threshold (LAPACK pinv convention) so those near-zero components are
     suppressed rather than inverted.
     """
-    # |00...0> + eps|11...1>: after normalisation the interior singular values
+    # |00...0> + eps|11...1>: after normalization the interior singular values
     # at every bond are ~eps, exercising the near-zero division path.
     num_sites = 5
     for eps in (1e-20, 1e-15, 1e-10):
@@ -546,7 +546,7 @@ def test_canonical_two_site_expectation_value():
         ) + 1j * np.random.uniform(size=(phys_dim, phys_dim, phys_dim, phys_dim))
         site = int(np.random.randint(num_sites - 1))
         mps = mps_from_dense(
-            psi, phys_dim=phys_dim, form="Mixed-canonical", orth_centre=site
+            psi, phys_dim=phys_dim, form="Mixed-canonical", orth_center=site
         )
         mps_copy = mps.copy()
         operator_mpo = mpo_from_matrix(
@@ -587,7 +587,7 @@ def test_canonical_compress_bond():
             mps_compressed, truncation_error = mps.compress_bond(
                 bond=bond_to_compress,
                 chi_max=chi_max,
-                renormalise=False,
+                renormalize=False,
                 strategy=strategy,
                 return_truncation_error=True,
             )
@@ -615,7 +615,7 @@ def test_canonical_compress_bond():
             mps_compressed, truncation_error = mps.compress_bond(
                 bond=bond_to_compress,
                 cut=cut,
-                renormalise=False,
+                renormalize=False,
                 strategy=strategy,
                 return_truncation_error=True,
             )
@@ -640,7 +640,7 @@ def test_canonical_compress_bond():
                 assert inner_product(mps_compressed, mps_compressed) <= 1
                 assert inner_product(mps, mps_compressed) <= 1
 
-        # Testing the renormalisation option
+        # Testing the renormalization option
         for strategy in ["svd", "svd_advanced"]:
             num_sites = 10
             phys_dim = 2
@@ -653,7 +653,7 @@ def test_canonical_compress_bond():
             mps_compressed, truncation_error = mps.compress_bond(
                 bond=bond_to_compress,
                 cut=cut,
-                renormalise=True,
+                renormalize=True,
                 strategy=strategy,
                 return_truncation_error=True,
             )
@@ -691,7 +691,7 @@ def test_canonical_compress_bond():
             mps_compressed, truncation_error = mps.compress_bond(
                 bond=bond_to_compress,
                 cut=cut,
-                renormalise=False,
+                renormalize=False,
                 strategy=strategy,
                 return_truncation_error=True,
             )
@@ -724,7 +724,7 @@ def test_canonical_compress():
 
     for _ in range(10):
         strategy = "svd"
-        renormalise = False
+        renormalize = False
         num_sites = 10
         phys_dim = 2
         chi_max = 3
@@ -736,7 +736,7 @@ def test_canonical_compress():
         mps_compressed, truncation_errors = mps.compress(
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             strategy=strategy,
             return_truncation_errors=True,
         )
@@ -754,21 +754,21 @@ def test_canonical_marginal():
     Test for the ``marginal`` method of the :class:`CanonicalMPS` class.
     """
 
-    # Testing marginalisation on product states.
+    # Testing marginalization on product states.
     num_sites = np.random.randint(4, 9)
     phys_dim = np.random.randint(2, 4)
-    sites_to_marginalise = [0, 1]
+    sites_to_marginalize = [0, 1]
 
     mps_prod = create_simple_product_state(
         num_sites=num_sites, which="0", phys_dim=phys_dim, form="Right-canonical"
     )
     mps_prod_result = create_simple_product_state(
-        num_sites=num_sites - len(sites_to_marginalise),
+        num_sites=num_sites - len(sites_to_marginalize),
         which="0",
         phys_dim=phys_dim,
         form="Right-canonical",
     )
-    mps_marginalised = mps_prod.marginal(sites_to_marginalise)
+    mps_marginalized = mps_prod.marginal(sites_to_marginalize)
     mps_prod_result.tensors[0] /= phys_dim
     for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
         assert np.isclose(tensor_0, tensor_1).all()
@@ -779,7 +779,7 @@ def test_canonical_marginal():
     for tensor in mps_prod.tensors:
         tensor *= np.sqrt(phys_dim)
     mps_prod_result = create_simple_product_state(
-        num_sites=num_sites - len(sites_to_marginalise),
+        num_sites=num_sites - len(sites_to_marginalize),
         which="+",
         phys_dim=phys_dim,
         form="Right-canonical",
@@ -787,42 +787,42 @@ def test_canonical_marginal():
     for tensor in mps_prod_result.tensors:
         tensor *= np.sqrt(phys_dim)
     mps_prod.tensors[0] /= phys_dim
-    mps_marginalised = mps_prod.marginal(sites_to_marginalise)
+    mps_marginalized = mps_prod.marginal(sites_to_marginalize)
     for tensor_0, tensor_1 in zip(mps_prod.tensors, mps_prod_result.tensors):
         assert np.isclose(tensor_0, tensor_1).all()
 
-    # Testing marginalisation on random states.
+    # Testing marginalization on random states.
     for _ in range(10):
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
         mps_copy = mps.copy()
 
         sites_all = list(range(mps.num_sites))
-        sites_to_marginalise = [site for site in sites_all if np.random.uniform() < 0.3]
-        sites_left = [site for site in sites_all if site not in sites_to_marginalise]
+        sites_to_marginalize = [site for site in sites_all if np.random.uniform() < 0.3]
+        sites_left = [site for site in sites_all if site not in sites_to_marginalize]
 
-        mps_marginalised_normalised = mps_copy.marginal(
-            sites_to_marginalise, renormalise=True
+        mps_marginalized_normalized = mps_copy.marginal(
+            sites_to_marginalize, renormalize=True
         )
 
         with pytest.raises(ValueError):
             mps.marginal([100, 200])
 
         assert (
-            mps_marginalised_normalised.num_sites == len(sites_left)
+            mps_marginalized_normalized.num_sites == len(sites_left)
             if len(sites_left) > 0
             else 1
         )
         if len(sites_left) > 0:
-            assert np.isclose(mps_marginalised_normalised.norm(), 1)
+            assert np.isclose(mps_marginalized_normalized.norm(), 1)
 
-    # Testing marginalisation on a particular random state.
+    # Testing marginalization on a particular random state.
     num_sites = 8
     phys_dim = 2
 
     sites_all = list(range(num_sites))
-    sites_to_marginalise = [0, 1, 4]
-    sites_left = [site for site in sites_all if site not in sites_to_marginalise]
+    sites_to_marginalize = [0, 1, 4]
+    sites_left = [site for site in sites_all if site not in sites_to_marginalize]
 
     psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
     mps = mps_from_dense(psi, phys_dim=phys_dim, form="Right-canonical")
@@ -830,7 +830,7 @@ def test_canonical_marginal():
     mps_start = mps.copy()
     trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
 
-    mps_marginalised = mps.marginal(sites_to_marginalise, renormalise=False)
+    mps_marginalized = mps.marginal(sites_to_marginalize, renormalize=False)
 
     mps_start.tensors[0] = np.tensordot(mps_start.tensors[0], trace_tensor, (1, 0))
     mps_start.tensors[1] = np.tensordot(mps_start.tensors[1], trace_tensor, (1, 0))
@@ -848,7 +848,7 @@ def test_canonical_marginal():
         tensors=[tensor for tensor in mps_start.tensors if tensor.ndim == 3]
     )
 
-    for tensor_0, tensor_1 in zip(mps_start.tensors, mps_marginalised.tensors):
+    for tensor_0, tensor_1 in zip(mps_start.tensors, mps_marginalized.tensors):
         assert tensor_0.shape == tensor_1.shape
         assert np.isclose(tensor_0, tensor_1).all()
 
@@ -863,63 +863,63 @@ def test_canonical_marginal():
     expected_tensor_1 = np.tensordot(tensors[1], trace_tensor, axes=([1], [0]))
     expected_tensor_1 = np.einsum("ij, jkl", expected_tensor_1, tensor_2)
 
-    mps = mps.marginal([1], renormalise=False)
+    mps = mps.marginal([1], renormalize=False)
 
     assert mps.tensors[1].shape == expected_tensor_1.shape
     assert np.allclose(mps.tensors[1], expected_tensor_1)
 
 
-def test_marginal_does_not_produce_nans_when_the_centre_underflows():
-    """Marginalising a chain whose amplitudes have underflowed must stay finite.
+def test_marginal_does_not_produce_nans_when_the_center_underflows():
+    """Marginalizing a chain whose amplitudes have underflowed must stay finite.
 
     Long chains of very small amplitudes (low physical error rates, hundreds of
-    sites) can drive the orthogonality centre to exactly zero. Renormalising by
+    sites) can drive the orthogonality center to exactly zero. Renormalizing by
     that norm gives 0/0 and silently fills the state with NaNs, which then reach
     the decoder as unusable shots.
     """
     mps = create_simple_product_state(12, which="0", form="Right-canonical")
-    # It has to be the LAST tensor: marginal() sets the orthogonality centre to
-    # the final site and renormalises by *that* tensor's norm, so zeroing any
+    # It has to be the LAST tensor: marginal() sets the orthogonality center to
+    # the final site and renormalizes by *that* tensor's norm, so zeroing any
     # earlier one leaves the guard untouched and the test vacuous.
     mps.tensors[-1] = mps.tensors[-1] * 0.0
 
-    marginalised = mps.marginal(sites_to_marginalise=list(range(10)), renormalise=True)
+    marginalized = mps.marginal(sites_to_marginalize=list(range(10)), renormalize=True)
 
-    assert np.all(np.isfinite(marginalised.dense(flatten=True)))
+    assert np.all(np.isfinite(marginalized.dense(flatten=True)))
 
 
-def _two_site_reference_move(mps, final_pos, renormalise):
+def _two_site_reference_move(mps, final_pos, renormalize):
     """The two-site-SVD move spelled out: the reference for the one-site path.
 
-    move_orth_centre no longer has a flag that forces the two-site branch
-    (renormalised moves and returned spectra take the one-site path too), so
+    move_orth_center no longer has a flag that forces the two-site branch
+    (renormalized moves and returned spectra take the one-site path too), so
     an old-vs-new comparison has to build the reference explicitly.
     """
-    if mps.orth_centre == final_pos:
+    if mps.orth_center == final_pos:
         return mps.copy()
-    leftwards = mps.orth_centre > final_pos
+    leftwards = mps.orth_center > final_pos
     work = mps.reverse() if leftwards else mps.copy()
-    begin = work.orth_centre
+    begin = work.orth_center
     final = (mps.num_sites - 1 - final_pos) if leftwards else final_pos
     for i in range(begin, final):
         u_l, s_bond, v_r, _ = split_two_site_tensor(
             work.two_site_tensor_next(i),
             chi_max=mps.chi_max,
-            renormalise=renormalise,
+            renormalize=renormalize,
             strategy="svd",
             return_truncation_error=True,
         )
         work.tensors[i] = u_l
         work.tensors[i + 1] = v_r * s_bond[:, None, None]
-        work.orth_centre = i + 1
+        work.orth_center = i + 1
     return work.reverse() if leftwards else work
 
 
-def test_move_orth_centre_carries_a_collapsed_bond_through():
+def test_move_orth_center_carries_a_collapsed_bond_through():
     """A bond of dimension 0 (a truncation that emptied the spectrum) must
-    move through the centre-only path without raising.
+    move through the center-only path without raising.
 
-    Three example notebooks hit this in CI: a zero-width centre has nothing
+    Three example notebooks hit this in CI: a zero-width center has nothing
     to factor, so such a bond must take the two-site SVD branch, which
     carries the degenerate shape through unchanged.
     """
@@ -930,34 +930,34 @@ def test_move_orth_centre_carries_a_collapsed_bond_through():
         np.zeros((0, 2, 1)),
         np.zeros((1, 2, 1)),
     ]
-    mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
-    moved = mps.move_orth_centre(2, renormalise=False)
+    mps = CanonicalMPS(tensors, orth_center=0, chi_max=4)
+    moved = mps.move_orth_center(2, renormalize=False)
     assert [t.shape for t in moved.tensors][0][2] == 0
-    back = moved.move_orth_centre(0, renormalise=False)
+    back = moved.move_orth_center(0, renormalize=False)
     assert len(back) == 3
 
 
-def test_move_orth_centre_collapses_a_sub_cut_spectrum_like_the_svd_path():
-    """A centre whose whole spectrum sits below the 1e-12 cut must collapse
-    to a zero-width bond on the centre-only path exactly as on the two-site
+def test_move_orth_center_collapses_a_sub_cut_spectrum_like_the_svd_path():
+    """A center whose whole spectrum sits below the 1e-12 cut must collapse
+    to a zero-width bond on the center-only path exactly as on the two-site
     SVD path, rather than propagating a sub-cut direction."""
     from mdopt.mps.canonical import CanonicalMPS
 
-    def tiny_centre_mps():
+    def tiny_center_mps():
         tensors = [
             np.array([[[1.0, 0.0], [0.0, 1.0]]]).reshape(1, 2, 2) * 5e-13,
             np.eye(2).reshape(2, 2, 1),
             np.array([1.0, 0.0]).reshape(1, 2, 1),
         ]
-        return CanonicalMPS(tensors, orth_centre=0, chi_max=4)
+        return CanonicalMPS(tensors, orth_center=0, chi_max=4)
 
-    via_one_site = tiny_centre_mps().move_orth_centre(2, renormalise=False)
-    via_two_site = _two_site_reference_move(tiny_centre_mps(), 2, renormalise=False)
+    via_one_site = tiny_center_mps().move_orth_center(2, renormalize=False)
+    via_two_site = _two_site_reference_move(tiny_center_mps(), 2, renormalize=False)
     assert via_one_site.tensors[0].shape[2] == 0
     assert via_one_site.tensors[0].shape[2] == via_two_site.tensors[0].shape[2]
 
 
-def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
+def test_move_orth_center_qr_path_matches_svd_path_on_full_rank_states():
     """The one-site move must reproduce the two-site SVD move exactly.
 
     Real and complex random states, moves in both directions, with a
@@ -979,8 +979,8 @@ def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
             for targets in ((7, 0), (0, 7), (4, 1, 6)):
                 fast, slow = base.copy(), base.copy()
                 for target in targets:
-                    fast = fast.move_orth_centre(target, renormalise=False)
-                    slow = _two_site_reference_move(slow, target, renormalise=False)
+                    fast = fast.move_orth_center(target, renormalize=False)
+                    slow = _two_site_reference_move(slow, target, renormalize=False)
                 assert list(fast.bond_dimensions) == list(slow.bond_dimensions), (
                     seed,
                     chi_max,
@@ -994,62 +994,62 @@ def test_move_orth_centre_qr_path_matches_svd_path_on_full_rank_states():
                 ), (seed, chi_max, targets)
 
 
-def test_move_orth_centre_matches_svd_path_on_non_canonical_chains():
-    """Behind a biased pair the neighbours are not isometries, so a move
+def test_move_orth_center_matches_svd_path_on_non_canonical_chains():
+    """Behind a biased pair the neighbors are not isometries, so a move
     that must truncate at chi_max has to take the two-site SVD; the fast
     path may only handle moves that truncate nothing."""
     from mdopt.mps.utils import mps_from_dense
-    from mdopt.examples.decoding.decoding import apply_depolarising_bias
+    from mdopt.examples.decoding.decoding import apply_depolarizing_bias
 
     rng = np.random.default_rng(5)
     vec = rng.standard_normal(2**8)
     vec = vec / np.linalg.norm(vec)
     for chi_max in (2, 4, int(1e4)):
         base = mps_from_dense(vec, form="Right-canonical", chi_max=chi_max)
-        biased = apply_depolarising_bias(
+        biased = apply_depolarizing_bias(
             base, sites_to_bias=[0, 2, 4, 6], prob_bias_list=0.3
         )
-        fast = biased.copy().move_orth_centre(0, renormalise=False)
-        slow = _two_site_reference_move(biased.copy(), 0, renormalise=False)
+        fast = biased.copy().move_orth_center(0, renormalize=False)
+        slow = _two_site_reference_move(biased.copy(), 0, renormalize=False)
         assert list(fast.bond_dimensions) == list(slow.bond_dimensions), chi_max
         assert np.allclose(
             fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
         ), chi_max
 
 
-def test_move_orth_centre_prunes_on_discarded_amplitude_not_on_the_centre_spectrum():
-    """Review counterexamples: a sub-cut centre direction amplified by a large
-    neighbour entry must be KEPT (its amplitude is macroscopic), and a
-    direction a null neighbour row makes worthless may go. Both cases must
+def test_move_orth_center_prunes_on_discarded_amplitude_not_on_the_center_spectrum():
+    """Review counterexamples: a sub-cut center direction amplified by a large
+    neighbor entry must be KEPT (its amplitude is macroscopic), and a
+    direction a null neighbor row makes worthless may go. Both cases must
     agree with the two-site SVD path on the represented state."""
     from mdopt.mps.canonical import CanonicalMPS
 
-    def chain(neighbour):
-        centre = np.zeros((1, 2, 2))
-        centre[0, 0, 0], centre[0, 1, 1] = 1.0, 5e-13
+    def chain(neighbor):
+        center = np.zeros((1, 2, 2))
+        center[0, 0, 0], center[0, 1, 1] = 1.0, 5e-13
         last = np.array([1.0, 0.0]).reshape(1, 2, 1)
-        return CanonicalMPS([centre, neighbour, last], orth_centre=0, chi_max=4)
+        return CanonicalMPS([center, neighbor, last], orth_center=0, chi_max=4)
 
     amplified = np.zeros((2, 2, 1))
     amplified[0, 0, 0], amplified[1, 1, 0] = 1.0, 1e13
     null_row = np.zeros((2, 2, 1))
     null_row[0, 0, 0] = 1.0
-    for neighbour in (amplified, null_row):
-        fast = chain(neighbour).move_orth_centre(2, renormalise=False)
-        slow = _two_site_reference_move(chain(neighbour), 2, renormalise=False)
+    for neighbor in (amplified, null_row):
+        fast = chain(neighbor).move_orth_center(2, renormalize=False)
+        slow = _two_site_reference_move(chain(neighbor), 2, renormalize=False)
         assert np.allclose(
             fast.dense(flatten=True), slow.dense(flatten=True), rtol=0.0, atol=1e-10
         )
-    kept = chain(amplified).move_orth_centre(1, renormalise=False)
+    kept = chain(amplified).move_orth_center(1, renormalize=False)
     assert kept.tensors[0].shape[2] == 2, "the amplified direction carries amplitude 5"
 
 
-def test_one_site_move_matches_two_site_move_with_renormalisation():
-    """The centre-only move also covers renormalised moves and returned spectra.
+def test_one_site_move_matches_two_site_move_with_renormalization():
+    """The center-only move also covers renormalized moves and returned spectra.
 
-    With an isometric neighbour B, theta = C B has theta theta^dag = C C^dag,
-    so the spectrum, its renormalisation, the cut and the chi_max count are
-    those of the centre alone. Both DMRG sweeps (renormalise=True) and the
+    With an isometric neighbor B, theta = C B has theta theta^dag = C C^dag,
+    so the spectrum, its renormalization, the cut and the chi_max count are
+    those of the center alone. Both DMRG sweeps (renormalize=True) and the
     explicit-form conversion (return_singular_values=True) go through it now;
     the reference below is the two-site formula spelled out.
     """
@@ -1070,17 +1070,17 @@ def test_one_site_move_matches_two_site_move_with_renormalisation():
         for site in range(0, 4):
             theta = reference.two_site_tensor_next(site)
             u_l, s_bond, v_r, _ = split_two_site_tensor(
-                theta, chi_max=5, renormalise=True, return_truncation_error=True
+                theta, chi_max=5, renormalize=True, return_truncation_error=True
             )
             spectra.append(s_bond)
             reference.tensors[site] = u_l
             reference.tensors[site + 1] = v_r * s_bond[:, None, None]
-            reference.orth_centre = site + 1
+            reference.orth_center = site + 1
 
-        moved, singular_values = mps.move_orth_centre(
-            4, return_singular_values=True, renormalise=True
+        moved, singular_values = mps.move_orth_center(
+            4, return_singular_values=True, renormalize=True
         )
-        assert moved.orth_centre == 4
+        assert moved.orth_center == 4
         assert len(singular_values) == len(spectra)
         for got, want in zip(singular_values, spectra):
             assert np.allclose(got, want, rtol=0.0, atol=1e-12)
@@ -1088,17 +1088,17 @@ def test_one_site_move_matches_two_site_move_with_renormalisation():
         assert moved.bond_dimensions == reference.bond_dimensions
 
 
-def test_move_orth_centre_accepts_integer_and_boolean_tensors():
+def test_move_orth_center_accepts_integer_and_boolean_tensors():
     """Exact-arithmetic product states are valid input; the isometry gate must
     promote its Gram matrix rather than fail on an in-place float subtraction."""
     from mdopt.mps.canonical import CanonicalMPS
 
     for dtype in (int, bool):
         tensors = [np.array([1, 0], dtype=dtype).reshape(1, 2, 1) for _ in range(4)]
-        mps = CanonicalMPS(tensors, orth_centre=0, chi_max=4)
-        moved = mps.move_orth_centre(3, renormalise=False)
-        assert moved.orth_centre == 3
+        mps = CanonicalMPS(tensors, orth_center=0, chi_max=4)
+        moved = mps.move_orth_center(3, renormalize=False)
+        assert moved.orth_center == 3
         assert np.allclose(moved.dense(flatten=True)[0], 1.0)
-        back = moved.move_orth_centre(0, renormalise=True)
-        assert back.orth_centre == 0
+        back = moved.move_orth_center(0, renormalize=True)
+        assert back.orth_center == 0
         assert list(back.bond_dimensions) == [1, 1, 1]

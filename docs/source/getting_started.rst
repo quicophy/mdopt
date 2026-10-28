@@ -48,8 +48,8 @@ Run this quick decoding example to verify your setup:
         bias_prob=0.01,
         bias_type="Bitflip",
         chi_max=64,
-        renormalise=True,
-        contraction_strategy="Optimised",
+        renormalize=True,
+        contraction_strategy="Optimized",
         tolerance=1e-12,
         silent=False,
     )
@@ -100,13 +100,13 @@ repository, with a README on how every number is regenerated.
 Workflow at a glance
 --------------------
 
-1. Formulate your optimisation problem in the MPS-MPO formalism (MPS state, MPO constraints/operators).
+1. Formulate your optimization problem in the MPS-MPO formalism (MPS state, MPO constraints/operators).
 2. Apply constraints/operations with a chosen contraction and truncation strategies.
-3. Optimise (e.g., DMRG-like decoding) and evaluate success metrics.
+3. Optimize (e.g., DMRG-like decoding) and evaluate success metrics.
 
 For decoding, steps 1-3 are wrapped by :func:`~mdopt.decoding.decoding.decode_css`
 (CSS codes from ``qecstruct``), :func:`~mdopt.decoding.decoding.decode_custom`
-(any stabiliser code given as Pauli strings),
+(any stabilizer code given as Pauli strings),
 :func:`~mdopt.decoding.decoding.decode_message` (classical linear codes) and
 :func:`~mdopt.decoding.dem.decode_dem` (detector error models).
 

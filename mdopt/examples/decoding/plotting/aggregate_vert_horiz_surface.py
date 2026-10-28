@@ -47,9 +47,9 @@ N_BOOT = 10000
 BOOT_SEED = 0
 
 BASELINE = ("Natural", "Naive")
-VERT = ("Natural", "Optimised")
-HORIZ = ("Optimised", "Naive")
-BOTH = ("Optimised", "Optimised")
+VERT = ("Natural", "Optimized")
+HORIZ = ("Optimized", "Naive")
+BOTH = ("Optimized", "Optimized")
 
 
 def paired_speedup(res, chi, p, target, rng):
@@ -81,11 +81,11 @@ def main():
     L = d["lattice_size"]
     n = d["n_qubits"]
     bw_n = d["bandwidth_natural"]
-    bw_o = d["bandwidth_optimised"]
+    bw_o = d["bandwidth_optimized"]
 
     print(f"Surface L={L}: [[{n}, 1, {L}]]")
     print(f"  bandwidth  Natural : max_span={bw_n[0]}, total_span={bw_n[1]}")
-    print(f"             Optimised: max_span={bw_o[0]}, total_span={bw_o[1]}")
+    print(f"             Optimized: max_span={bw_o[0]}, total_span={bw_o[1]}")
     print(
         f"  reduction  max {100 * (bw_n[0] - bw_o[0]) / bw_n[0]:.1f}%, "
         f"total {100 * (bw_n[1] - bw_o[1]) / bw_n[1]:.1f}%"
@@ -188,7 +188,7 @@ def main():
 
     for idx, c in enumerate(chis):
         color = cmap(norm(idx))
-        for ordering, ls, marker in [("Natural", "-", "o"), ("Optimised", "--", "s")]:
+        for ordering, ls, marker in [("Natural", "-", "o"), ("Optimized", "--", "s")]:
             ys, sems, ubs = [], [], []
             for p in ps:
                 v, s, is_ub = ler_or_ub(res[(c, p, ordering, "Naive")])
@@ -224,7 +224,7 @@ def main():
                     linewidths=0.9,
                 )
     # No second connecting pass: the errorbar calls above already join the real
-    # points in the intended colour and style. Redrawing here dashed every
+    # points in the intended color and style. Redrawing here dashed every
     # ordering, hiding the solid Natural curve, and joined the Wilson upper
     # bounds as though they were measured values.
 
@@ -242,7 +242,7 @@ def main():
         plt.Line2D(
             [],
             [],
-            color="grey",
+            color="gray",
             ls="None",
             marker="v",
             markersize=5,

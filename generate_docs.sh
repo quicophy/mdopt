@@ -62,7 +62,7 @@ fi
 #    We generate examples_auto.rst and you can link to it from your curated page.
 echo "==> Generating $EXAMPLES_AUTO_RST (auto-index of notebooks)"
 cat > "$EXAMPLES_AUTO_RST" << 'EOF'
-Notebook Examples (auto-generated)
+Notebook examples (auto-generated)
 ==================================
 
 The following notebooks were discovered and copied from the repository's

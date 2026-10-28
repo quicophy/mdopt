@@ -17,7 +17,7 @@ class IsingExact:
 
     def __init__(self, num_sites: int = 2, h_magnetic: float = 0) -> None:
         """
-        Initialises an instance to exactly simulate the Ising model in 1D.
+        Initializes an instance to exactly simulate the Ising model in 1D.
 
         Parameters
         ----------
@@ -66,9 +66,9 @@ class IsingExact:
         """
         return np.conjugate(state.T) @ self.hamiltonian_sparse @ state
 
-    def z_magnetisation(self, i: int, state: np.ndarray) -> float:
+    def z_magnetization(self, i: int, state: np.ndarray) -> float:
         """
-        Computes the z-magnetisation value
+        Computes the z-magnetization value
         corresponding to a quantum state ``state``
         at site ``i``.
         """
@@ -92,9 +92,9 @@ class IsingExact:
             @ state
         )
 
-    def x_magnetisation(self, i: int, state: np.ndarray) -> float:
+    def x_magnetization(self, i: int, state: np.ndarray) -> float:
         """
-        Computes the x-magnetisation value
+        Computes the x-magnetization value
         corresponding to a quantum state ``state``
         at site ``i``.
         """
@@ -118,38 +118,38 @@ class IsingExact:
             @ state
         )
 
-    def average_chain_z_magnetisation(self, state: np.ndarray) -> float:
+    def average_chain_z_magnetization(self, state: np.ndarray) -> float:
         """
-        Computes the average z-magnetisation
+        Computes the average z-magnetization
         corresponding to a quantum state ``state``
         of the whole chain.
         """
         return (
-            sum([self.z_magnetisation(i, state) for i in range(self.num_sites)])
+            sum([self.z_magnetization(i, state) for i in range(self.num_sites)])
             / self.num_sites
         )
 
-    def average_chain_x_magnetisation(self, state: np.ndarray) -> float:
+    def average_chain_x_magnetization(self, state: np.ndarray) -> float:
         """
-        Computes the average x-magnetisation
+        Computes the average x-magnetization
         corresponding to a quantum state ``state``
         of the whole chain.
         """
         return (
-            sum([self.x_magnetisation(i, state) for i in range(self.num_sites)])
+            sum([self.x_magnetization(i, state) for i in range(self.num_sites)])
             / self.num_sites
         )
 
 
 class IsingMPO:
     """
-    Class for a Matrix Product Operator (MPO) representation of
+    Class for a matrix product operator (MPO) representation of
     a transverse field Ising model in 1D and computing relevant physical observables.
     """
 
     def __init__(self, num_sites: int = int(2), h_magnetic: float = float(0)) -> None:
         """
-        Initialises an instance to simulate the Ising model in 1D using MPS.
+        Initializes an instance to simulate the Ising model in 1D using MPS.
 
         Parameters
         ----------
@@ -167,7 +167,7 @@ class IsingMPO:
             raise ValueError(f"Number of sites should be >=2, given {num_sites}")
 
     def hamiltonian_mpo(self) -> List[np.ndarray]:
-        """Returns a Matrix Product Operator representation of the Hamiltonian.
+        """Returns a matrix product operator representation of the Hamiltonian.
 
         Follows the convention of indices from ``mdopt.mps.explicit.py``:
         each tensor in the MPO list has legs ``(vL, vR, pU, pD)``,
@@ -197,44 +197,44 @@ class IsingMPO:
 
         return mpo_list
 
-    def z_magnetisation(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
+    def z_magnetization(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
         """
-        Computes the z-magnetisation value
+        Computes the z-magnetization value
         corresponding to a quantum state
         in the form of an MPS at site ``i``.
         """
         return mps.one_site_expectation_value(i, self.pauli_z)
 
-    def x_magnetisation(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
+    def x_magnetization(self, i: int, mps: Union[ExplicitMPS, CanonicalMPS]) -> float:
         """
-        Computes the x-magnetisation value
+        Computes the x-magnetization value
         corresponding to a quantum state
         in the form of an MPS at site ``i``.
         """
         return mps.one_site_expectation_value(i, self.pauli_x)
 
-    def average_chain_z_magnetisation(
+    def average_chain_z_magnetization(
         self, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> float:
         """
-        Computes the average z-magnetisation
+        Computes the average z-magnetization
         corresponding to a quantum state
         in the form of an MPS at site ``i``.
         """
         return (
-            sum([self.z_magnetisation(i, mps) for i in range(self.num_sites)])
+            sum([self.z_magnetization(i, mps) for i in range(self.num_sites)])
             / self.num_sites
         )
 
-    def average_chain_x_magnetisation(
+    def average_chain_x_magnetization(
         self, mps: Union[ExplicitMPS, CanonicalMPS]
     ) -> float:
         """
-        Computes the average x-magnetisation
+        Computes the average x-magnetization
         corresponding to a quantum state
         in the form of an MPS at site ``i``.
         """
         return (
-            sum([self.x_magnetisation(i, mps) for i in range(self.num_sites)])
+            sum([self.x_magnetization(i, mps) for i in range(self.num_sites)])
             / self.num_sites
         )

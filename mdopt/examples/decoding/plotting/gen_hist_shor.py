@@ -68,7 +68,7 @@ print(
 )
 
 # ── Decode every error (hyperparameters from shor.ipynb) ──────────────────────
-common = dict(bias_type="Bitflip", renormalise=True, silent=True)
+common = dict(bias_type="Bitflip", renormalize=True, silent=True)
 
 print("Decoding weight-1 errors (bias_prob=0)...")
 dists_w1 = [decode_css(code, err, bias_prob=0, **common)[0] for err in tqdm(errors_w1)]

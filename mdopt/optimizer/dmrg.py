@@ -43,7 +43,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
     we make a special class for local effective operators.
     It allows us to compute eigenvectors more efficiently.
 
-    Such effective operator is to be diagonalised in the
+    Such effective operator is to be diagonalized in the
     ``update_bond`` method of the :class:`DMRG` class::
 
         ---uL                    uR---
@@ -129,7 +129,7 @@ class EffectiveOperator(scipy.sparse.linalg.LinearOperator):
 
 class DMRG:
     """
-    Class holding the Density Matrix Renormalisation Group algorithm with two-site updates
+    Class holding the Density Matrix Renormalization Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
     """
 
@@ -207,7 +207,7 @@ class DMRG:
                 effective_hamiltonian.shape[0]
             )
         else:  # CanonicalMPS
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
                 effective_hamiltonian.shape[0]
             )
@@ -226,7 +226,7 @@ class DMRG:
             x,
             chi_max=self.chi_max,
             cut=self.cut,
-            renormalise=True,
+            renormalize=True,
             return_truncation_error=True,
         )
 
@@ -235,7 +235,7 @@ class DMRG:
         if isinstance(self.mps, CanonicalMPS):
             # mps[i] = left_iso_i @ diag(s)  -> scale vR axis by s
             self.mps.tensors[i] = left_iso_i * s[None, None, :]
-            self.mps.orth_centre = i
+            self.mps.orth_center = i
             self.mps.tensors[j] = right_iso_j
 
         else:  # ExplicitMPS
@@ -265,7 +265,7 @@ class DMRG:
         if isinstance(self.mps, ExplicitMPS):
             right_iso = self.mps.one_site_right_iso(i)
         else:  # CanonicalMPS
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i - 1))
             right_iso = self.mps.one_site_tensor(i)
 
         right_environment = contract(
@@ -288,7 +288,7 @@ class DMRG:
         if isinstance(self.mps, ExplicitMPS):
             left_iso = self.mps.one_site_left_iso(i)
         else:  # CanonicalMPS
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i + 1))
             left_iso = self.mps.one_site_tensor(i)
 
         left_environment = contract(

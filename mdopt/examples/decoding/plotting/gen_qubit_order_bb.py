@@ -1,7 +1,7 @@
 """Generate Figure 8.14: qubit ordering comparison for the [[72, 12, 6]] BB code.
 
 Two-panel figure (LER vs p, avg time vs p), one curve per chi_max in
-{8, 16, 24, 32, 40}, Natural ordering shown as solid lines, RCM-optimised
+{8, 16, 24, 32, 40}, Natural ordering shown as solid lines, RCM-optimized
 ordering as dashed. The two orderings see the *same* sampled error strings
 (per p) so the comparison is paired.
 """
@@ -42,7 +42,7 @@ from mdopt.decoding.decoding import (
     css_code_checks,
     decode_css,
 )
-from mdopt.optimiser.utils import optimise_qubit_order
+from mdopt.optimizer.utils import optimize_qubit_order
 
 mpl.rcParams.update(
     {
@@ -70,7 +70,7 @@ SEED = 42
 NUM_WORKERS = 8
 chi_max_list = [8, 16, 24, 32, 40]
 p_list = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
-orderings = ["Natural", "Optimised"]
+orderings = ["Natural", "Optimized"]
 CUT = 1e-10
 TOLERANCE = 1e-10
 BIAS_TYPE = "Bitflip"
@@ -91,7 +91,7 @@ def _decode_one_cell(args):
             cut=CUT,
             bias_type=BIAS_TYPE,
             bias_prob=p,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             contraction_strategy="Naive",
             qubit_order_strategy=ordering,
@@ -120,7 +120,7 @@ def main():
         for c in cols:
             H_z[r, c] = 1
     H = np.vstack([H_x, H_z])
-    perm = optimise_qubit_order(H)
+    perm = optimize_qubit_order(H)
 
     cx_nat, cz_nat = css_code_checks(code, qubit_perm=None)
     cx_opt, cz_opt = css_code_checks(code, qubit_perm=perm)
@@ -131,7 +131,7 @@ def main():
 
     print(f"BB code [[n={n}, k={code.num_x_logicals()}]]")
     print(f"  Natural:   max_span={max_nat:4d},  total_span={sum_nat:6d}")
-    print(f"  Optimised: max_span={max_opt:4d},  total_span={sum_opt:6d}")
+    print(f"  Optimized: max_span={max_opt:4d},  total_span={sum_opt:6d}")
     print(
         f"  Reduction: max {100 * (max_nat - max_opt) / max_nat:.1f}%, "
         f"total {100 * (sum_nat - sum_opt) / sum_nat:.1f}%"
@@ -177,7 +177,7 @@ def main():
                 "orderings": orderings,
                 "num_experiments": NUM_EXPERIMENTS,
                 "bandwidth_natural": (max_nat, sum_nat),
-                "bandwidth_optimised": (max_opt, sum_opt),
+                "bandwidth_optimized": (max_opt, sum_opt),
                 "bias_type": BIAS_TYPE,
                 "code_params": CODE_PARAMS,
             },
@@ -190,7 +190,7 @@ def main():
     norm = Normalize(vmin=0, vmax=len(chi_max_list) - 1)
 
     # Natural solid, RCM dashed, as the module docstring above promises.
-    style = {"Natural": ("-", "o"), "Optimised": ("--", "s")}
+    style = {"Natural": ("-", "o"), "Optimized": ("--", "s")}
     for idx, chi in enumerate(chi_max_list):
         color = cmap(norm(idx))
         for ordering in orderings:
@@ -219,7 +219,7 @@ def main():
                 linewidth=1.5,
             )
 
-    # Two-column legend: chi colours (via natural-style proxy lines) + ordering styles.
+    # Two-column legend: chi colors (via natural-style proxy lines) + ordering styles.
     chi_handles = [
         plt.Line2D(
             [],

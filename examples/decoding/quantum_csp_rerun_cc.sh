@@ -37,7 +37,7 @@
 # The decoder fixes are NOT on origin/main. A fresh clone reproduces the NaNs
 # this script exists to eliminate. Verify before submitting anything:
 #     python -c "import inspect, mdopt.mps.canonical as c; \
-#         assert 'orth_centre_norm > 0' in inspect.getsource(c.CanonicalMPS.marginal), \
+#         assert 'orth_center_norm > 0' in inspect.getsource(c.CanonicalMPS.marginal), \
 #         'STOP: unpatched mdopt -- the NaN fix is missing'; print('mdopt OK')"
 # =============================================================================
 
@@ -83,7 +83,7 @@ python - <<'PYCHECK'
 import inspect, sys
 import mdopt.mps.canonical as canonical
 src = inspect.getsource(canonical.CanonicalMPS.marginal)
-if "orth_centre_norm > 0" not in src:
+if "orth_center_norm > 0" not in src:
     sys.exit("STOP: mdopt is missing the marginal() zero-guard (the NaN fix). "
              "Sync the patched working tree to the cluster before submitting.")
 print("mdopt NaN fix present -- proceeding.")
@@ -129,7 +129,7 @@ case "$JOB" in
     NUM_PROCESSES=16; MEM=32000
     ;;
   deep_p)
-    # Push n = 90, p = 1e-4 from 5 failures towards ~25. p_L ~ 1.2e-6 means
+    # Push n = 90, p = 1e-4 from 5 failures toward ~25. p_L ~ 1.2e-6 means
     # ~21M shots are needed in total and 4.24M already exist, so aim for ~18M.
     # Seeds start at 100 to stay clear of the existing 0..99 and 111..1199.
     NUMS_QUBITS=(90); BOND_DIMS=(400)

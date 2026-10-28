@@ -59,8 +59,8 @@ logicals, success = decode_css(
     bias_prob=0.1,
     bias_type="Bitflip",
     chi_max=64,
-    renormalise=True,
-    contraction_strategy="Optimised",
+    renormalize=True,
+    contraction_strategy="Optimized",
     tolerance=0,
     silent=False,
 )

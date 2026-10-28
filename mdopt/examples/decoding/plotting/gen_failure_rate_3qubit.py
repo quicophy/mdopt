@@ -35,7 +35,7 @@ mpl.rcParams.update(
     }
 )
 
-# Bit-flip repetition code: Z-type stabilisers detect the X errors
+# Bit-flip repetition code: Z-type stabilizers detect the X errors
 # (textbook symplectic pairing).
 stabilizer_generators = ["ZZI", "IZZ"]
 x_logical_operators = ["XXX"]
@@ -81,7 +81,7 @@ for CHI_MAX in max_bond_dims_sim:
                 bias_prob=0.1,
                 cut=1e-17,
                 tolerance=1e-17,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 contraction_strategy="Naive",
             )[1]

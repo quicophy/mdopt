@@ -1,6 +1,6 @@
 """
 Decoding of classical and quantum error-correcting codes with MPS/MPO tools:
-error-based decoders for CSS and custom stabiliser codes, plus the functions
+error-based decoders for CSS and custom stabilizer codes, plus the functions
 used to generate and operate on the codes themselves. Part of the installed
 :mod:`mdopt.decoding` package (moved here from the examples tree).
 """
@@ -32,11 +32,11 @@ from mdopt.mps.utils import (
     create_simple_product_state,
     create_custom_product_state,
 )
-from mdopt.optimiser.utils import apply_constraints, optimise_qubit_order
+from mdopt.optimizer.utils import apply_constraints, optimize_qubit_order
 from mdopt.utils.utils import split_two_site_tensor
-from mdopt.optimiser.dephasing_dmrg import DephasingDMRG
+from mdopt.optimizer.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
-from mdopt.optimiser.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
+from mdopt.optimizer.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
 
 # A library must not configure the root logger; consumers attach handlers.
 LOGGER = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ LOGGER = logging.getLogger(__name__)
 def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     """
     This function returns a bitflip bias operator -- the operator which will bias us
-    towards the initial input by ranking the bitstrings according to
+    toward the initial input by ranking the bitstrings according to
     the Hamming distance from the latter by virtue of bitflip.
 
     Parameters
@@ -72,7 +72,7 @@ def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
         |1> -> √p|0>  + √(1-p)|1>,
 
     Note, that this operation is not unitary, which means that it does not
-    preserve the canonical form without enforcing renormalisation.
+    preserve the canonical form without enforcing renormalization.
     """
 
     if not 0 <= prob_bias <= 1:
@@ -87,11 +87,11 @@ def bitflip_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     return bias_operator
 
 
-def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
+def depolarizing_bias(prob_bias: float = float(0.5)) -> np.ndarray:
     """
-    This function returns a depolarising bias operator -- the operator which will bias us
-    towards the initial input by ranking the bitstrings according to
-    the Hamming distance from the latter by virtue of depolarisation.
+    This function returns a depolarizing bias operator -- the operator which will bias us
+    toward the initial input by ranking the bitstrings according to
+    the Hamming distance from the latter by virtue of depolarization.
 
     Parameters
     ----------
@@ -119,7 +119,7 @@ def depolarising_bias(prob_bias: float = float(0.5)) -> np.ndarray:
         |11> -> √(p/3)|00> + √(p/3)|01> + √(p/3)|10> + √(1-p)|11>,
 
     Note, that this operation is not unitary, which means that it does not
-    preserve the canonical form without enforcing renormalisation.
+    preserve the canonical form without enforcing renormalization.
     Following our convention, the operator has legs ``(pUL, pUR, pDL, pDR)``,
     where ``p`` stands for "physical", and
     ``L``, ``R``, ``U``, ``D`` -- for "left", "right", "up", "down" accordingly.
@@ -194,14 +194,14 @@ def apply_bitflip_bias(
     return mps
 
 
-def apply_depolarising_bias(
+def apply_depolarizing_bias(
     mps: CanonicalMPS,
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
-    renormalise: bool = True,
+    renormalize: bool = True,
 ) -> CanonicalMPS:
     """
-    The function which applies a depolarising bias to a given MPS.
+    The function which applies a depolarizing bias to a given MPS.
 
     Parameters
     ----------
@@ -215,8 +215,8 @@ def apply_depolarising_bias(
     prob_bias_list : Union[float, List[float]]
         The list of probabilities of each operator at each site.
         If set to a number, applies it to all of the sites.
-    renormalise : bool
-        Whether to renormalise spectra during contraction.
+    renormalize : bool
+        Whether to renormalize spectra during contraction.
 
     Raises
     ------
@@ -241,7 +241,7 @@ def apply_depolarising_bias(
     if any(site + 1 >= mps.num_sites for site in sites_to_bias):
         raise ValueError(
             "Each site in the list is the first of a two-site pair, so every "
-            "entry needs a right neighbour within the chain."
+            "entry needs a right neighbor within the chain."
         )
     if len(set(sites_to_bias)) != len(sites_to_bias):
         raise ValueError("The sites to bias should be distinct.")
@@ -259,29 +259,29 @@ def apply_depolarising_bias(
                 f"given {probability} at site {site}."
             )
 
-    mps = mps.mixed_canonical(orth_centre=min(sites_to_bias))
+    mps = mps.mixed_canonical(orth_center=min(sites_to_bias))
 
     for site, prob_bias in zip(sites_to_bias, prob_bias_list):
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
             mps.tensors[site + 1],
-            depolarising_bias(prob_bias=prob_bias),
+            depolarizing_bias(prob_bias=prob_bias),
             optimize=[(0, 1), (0, 1)],
         )
         mps.tensors[site], singular_values, b_r, _ = split_two_site_tensor(
             two_site_tensor,
-            renormalise=renormalise,
+            renormalize=renormalize,
             return_truncation_error=True,
         )
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
         )
-        mps.orth_centre = site + 1
-        if renormalise:
-            centre_norm = float(np.linalg.norm(mps.tensors[mps.orth_centre]))
-            if centre_norm > 0:
-                mps.tensors[mps.orth_centre] /= centre_norm
+        mps.orth_center = site + 1
+        if renormalize:
+            center_norm = float(np.linalg.norm(mps.tensors[mps.orth_center]))
+            if center_norm > 0:
+                mps.tensors[mps.orth_center] /= center_norm
 
     return mps
 
@@ -470,9 +470,9 @@ def linear_code_codewords(code: LinearCode) -> np.ndarray:
     return np.sort(np.array(codewords))
 
 
-def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
+def css_code_stabilizers(code: CssCode) -> Tuple[List[str], List[str]]:
     """
-    Given a quantum CSS code, returns a list of its stabilisers as Pauli strings.
+    Given a quantum CSS code, returns a list of its stabilizers as Pauli strings.
 
     Parameters
     ----------
@@ -481,9 +481,9 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
 
     Returns
     -------
-    stabilisers : Tuple[List[str], List[str]]
-        A tuple of two lists, where the first one corresponds to X stabilisers and
-        the second one -- to Z stabilisers. Each stabiliser is spelled with the
+    stabilizers : Tuple[List[str], List[str]]
+        A tuple of two lists, where the first one corresponds to X stabilizers and
+        the second one -- to Z stabilizers. Each stabilizer is spelled with the
         letters of its type: an X-type generator reads "X..X".
         ``custom_code_checks`` derives the symplectic parity check from these
         strings, acting on the opposite component of each qubit.
@@ -501,25 +501,25 @@ def css_code_stabilisers(code: CssCode) -> Tuple[List[str], List[str]]:
 
     num_qubits = len(code)
 
-    # X stabilisers
+    # X stabilizers
     parity_matrix_x = code.x_stabs_binary()
-    stabilisers_x = []
+    stabilizers_x = []
     for row in parity_matrix_x.rows():
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_x.append(_binary_to_pauli(binary_row, num_qubits, "X"))
+        stabilizers_x.append(_binary_to_pauli(binary_row, num_qubits, "X"))
 
-    # Z stabilisers
+    # Z stabilizers
     parity_matrix_z = code.z_stabs_binary()
-    stabilisers_z = []
+    stabilizers_z = []
     for row in parity_matrix_z.rows():
         binary_row = np.zeros(num_qubits, dtype=int)
         for col in row:
             binary_row[col] = 1
-        stabilisers_z.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
+        stabilizers_z.append(_binary_to_pauli(binary_row, num_qubits, "Z"))
 
-    return stabilisers_x, stabilisers_z
+    return stabilizers_x, stabilizers_z
 
 
 def css_code_checks(
@@ -565,11 +565,11 @@ def css_code_checks(
 
     offset = code.num_x_logicals() + code.num_z_logicals()
 
-    # Textbook symplectic pairing: an X-type stabiliser detects Z errors, so
+    # Textbook symplectic pairing: an X-type stabilizer detects Z errors, so
     # its parity check constrains the Z components (odd MPS sites), and a
-    # Z-type stabiliser constrains the X components. The enforced parity is
-    # then the symplectic product with the stabiliser, which makes multiplying
-    # the error by any commuting stabiliser a gauge move.
+    # Z-type stabilizer constrains the X components. The enforced parity is
+    # then the symplectic product with the stabilizer, which makes multiplying
+    # the error by any commuting stabilizer a gauge move.
     if qubit_perm is not None:
         inv_perm = np.argsort(qubit_perm)
         checks_x = [
@@ -841,8 +841,8 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
     for stabilizer in stabilizers:
         # Textbook symplectic pairing (see _swap_pauli_components): the check
         # constrains the opposite component of every qubit, so the enforced
-        # parity is the symplectic product with the stabiliser and multiplying
-        # the error by any commuting stabiliser is a gauge move.
+        # parity is the symplectic product with the stabilizer and multiplying
+        # the error by any commuting stabilizer is a gauge move.
         bitstring = _swap_pauli_components(pauli_to_mps(stabilizer))
         check = len(logicals) + np.nonzero([int(bit) for bit in bitstring])[0]
         if len(check) < 2:
@@ -850,7 +850,7 @@ def custom_code_checks(stabilizers: List[str], logicals: List[str]) -> List[List
             # least two sites; a single X or Z touches only one and used to
             # surface as an opaque "Non-unique sites" error much deeper down.
             raise ValueError(
-                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                f"Stabilizer {stabilizer!r} touches fewer than two MPS sites "
                 "and cannot be represented as a parity-check constraint."
             )
         checks.append([int(site) for site in check])
@@ -1061,20 +1061,20 @@ def map_distribution_to_pauli(distribution):
 
 
 KNOWN_ERROR_MODELS = frozenset(
-    {"Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure"}
+    {"Depolarizing", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure"}
 )
 TIE_POLICIES = ("optimistic", "fractional", "pessimistic")
 # "Dense" forces the dense readout regardless of dense_readout_max_sites;
 # "Dephasing DMRG" reads out densely up to that many logical sites and by
 # DMRG beyond it; "Optima TT" is reserved and not implemented.
-OPTIMISERS = ("Dephasing DMRG", "Dense", "Optima TT")
-QUBIT_ORDER_STRATEGIES = ("Natural", "Optimised")
+OPTIMIZERS = ("Dephasing DMRG", "Dense", "Optima TT")
+QUBIT_ORDER_STRATEGIES = ("Natural", "Optimized")
 
 
 def generate_pauli_error_string(
     num_qubits: int,
     error_rate: float,
-    error_model: str = "Depolarising",
+    error_model: str = "Depolarizing",
     rng: Optional[np.random.Generator] = None,
     erasure_rate: Optional[float] = None,
 ) -> str:
@@ -1089,7 +1089,7 @@ def generate_pauli_error_string(
         Physical error rate for generating Pauli errors.
     error_model : str
         The noise model to use for generating Pauli errors.
-        Options are "Depolarising", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure".
+        Options are "Depolarizing", "Bitflip", "Phaseflip", "Amplitude Damping", "Erasure".
     rng : Optional[np.random.Generator]
         Random generator to draw from; a fresh default generator if None.
     erasure_rate : Optional[float]
@@ -1123,12 +1123,12 @@ def generate_pauli_error_string(
             )
 
     for _ in range(num_qubits):
-        if error_model == "Depolarising":
+        if error_model == "Depolarizing":
             if rng.random() < error_rate:
                 # Draw from the generator that was passed in, not the global
                 # numpy one: using np.random here left the *positions* of the
                 # errors reproducible while their Pauli types were not, so a
-                # depolarising run could not be reproduced from its seed.
+                # depolarizing run could not be reproduced from its seed.
                 error = rng.choice(["X", "Y", "Z"], p=[1 / 3, 1 / 3, 1 / 3])
             else:
                 error = "I"
@@ -1219,25 +1219,25 @@ def str_to_bool(value: str) -> bool:
     """
     if isinstance(value, bool):
         return value
-    normalised = str(value).strip().lower()
-    if normalised in {"true", "t", "yes", "y", "1"}:
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "t", "yes", "y", "1"}:
         return True
-    if normalised in {"false", "f", "no", "n", "0", ""}:
+    if normalized in {"false", "f", "no", "n", "0", ""}:
         return False
     raise argparse.ArgumentTypeError(f"expected a boolean value, got {value!r}")
 
 
 def _score_tie(is_map_identity: bool, degeneracy: int, tie_policy: str) -> float:
-    """Turn "identity is among the maximisers" into a success score.
+    """Turn "identity is among the maximizers" into a success score.
 
-    A decoder that has to name one class picks arbitrarily among the maximisers,
+    A decoder that has to name one class picks arbitrarily among the maximizers,
     so it succeeds a fraction ``1/degeneracy`` of the time. "fractional" reports
     that expectation directly: unbiased, and being deterministic it has lower
     variance than actually sampling the tie-break. "optimistic" is the
-    long-standing behaviour here and never scores a tie as a failure;
+    long-standing behavior here and never scores a tie as a failure;
     "pessimistic" never scores one as a success.
 
-    The choice is not a small one. Under depolarising noise a fifth to a half of
+    The choice is not a small one. Under depolarizing noise a fifth to a half of
     shots have a degenerate MAP set and the policy moves the failure rate by
     tens of percent; under bit-flip noise the Z sector is frozen, no exact
     degeneracies arise, and all three policies agree.
@@ -1258,14 +1258,14 @@ def _score_tie(is_map_identity: bool, degeneracy: int, tie_policy: str) -> float
 def max_amplitude_bound(logical_mps) -> float:
     """Upper bound on ``max_s |<s|logical_mps>|``, in ``O(k d chi^2)``.
 
-    Propagates absolute values along the chain, maximising over the physical
+    Propagates absolute values along the chain, maximizing over the physical
     index at each site. Since ``|sum_a v[a] A[a, b]| <= sum_a |v[a]| |A[a, b]|``
     this can only over-estimate, so the result is always a valid upper bound --
     no enumeration of the ``4^k`` classes and no variational search.
 
     The bound is *exact* when the logical MPS has no negative amplitudes, which
     is the case for an untruncated run: the initial state, the bias MPOs and the
-    XOR/COPY/SWAP tensors all have non-negative entries, and marginalisation
+    XOR/COPY/SWAP tensors all have non-negative entries, and marginalization
     traces against all-ones, so nothing can cancel. Truncation breaks that --
     the best rank-``chi`` approximation of a non-negative object need not be
     non-negative -- and then the bound is only an upper bound. In practice the
@@ -1394,7 +1394,7 @@ def _logical_readout(
         # production -- that was wrong. It ended full-scale classical_ldpc runs
         # at chi_max=128 twice, through the classical decode_message path, and
         # the cause was the zero operator rather than the starting vector.
-        # Both are now guarded at source in optimiser/dmrg.py and
+        # Both are now guarded at source in optimizer/dmrg.py and
         # dephasing_dmrg.py; this stays as a backstop for anything else.
         #
         # It is cheap insurance rather than a correction: the beam search has
@@ -1435,18 +1435,18 @@ def _dmrg_readout(
 ):
     """Find the largest-amplitude computational basis state by Dephasing DMRG.
 
-    Dephasing DMRG is a local optimiser, so a single sweep from a single start
+    Dephasing DMRG is a local optimizer, so a single sweep from a single start
     often settles on a class that is not the global maximum. That matters here
     because the success test compares the identity's amplitude against whatever
     DMRG returned: if DMRG stops short, the identity can clear a bar that the
-    true maximiser would not have, turning a logical error into a reported
+    true maximizer would not have, turning a logical error into a reported
     success. Restarting from several product states and keeping the best result
     makes that far less likely; empirically a single start recovers the true
     maximum only when it exceeds the runner-up by roughly a factor of five,
     whereas eight starts stay reliable well below that.
 
     The all-zeros state is always among the starts, so the identity class is
-    never missed for want of a lucky initialisation.
+    never missed for want of a lucky initialization.
 
     Returns
     -------
@@ -1525,7 +1525,7 @@ def decode_message(
     -------
     engine : DephasingDMRG
         The container class for the Dephasing DMRG algorithm,
-        see :class:`mdopt.optimiser.DephasingDMRG`.
+        see :class:`mdopt.optimizer.DephasingDMRG`.
     overlap : float
         The overlap between the decoded message and a given codeword,
         computed as the inner product ``|<decoded_message|codeword>|``.
@@ -1561,7 +1561,7 @@ def _identity_fast_path_fires(error: str, bias_prob: float) -> bool:
 
     Below bias 0.5 the identity class is provably the MAP answer for an
     all-identity error (exact enumeration up to p = 0.49); decode_css uses
-    the same predicate to know when the optimised ordering can be skipped.
+    the same predicate to know when the optimized ordering can be skipped.
     """
     return error == "I" * len(error) and bias_prob < 0.5
 
@@ -1572,14 +1572,14 @@ def decode_css(
     num_runs: int = int(1),
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-    bias_type: str = "Depolarising",
+    bias_type: str = "Depolarizing",
     bias_prob: float = float(0.1),
-    renormalise: bool = True,
-    multiply_by_stabiliser: bool = False,
+    renormalize: bool = True,
+    multiply_by_stabilizer: bool = False,
     silent: bool = False,
     contraction_strategy: str = "Naive",
     qubit_order_strategy: str = "Natural",
-    optimiser: str = "Dephasing DMRG",
+    optimizer: str = "Dephasing DMRG",
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 30,
     num_restarts: int = 8,
@@ -1587,7 +1587,7 @@ def decode_css(
     rng: Optional[np.random.Generator] = None,
 ):
     """
-    This function performs error-based decoding of a CSS code via MPS marginalisation and
+    This function performs error-based decoding of a CSS code via MPS marginalization and
     subsequent reading out the main component via densifying or Dephasing DMRG.
     It takes as input an error string and returns the most likely Pauli correction.
 
@@ -1607,14 +1607,14 @@ def decode_css(
     bias_type : str
         The type of the bias applied before checks. Any name in
         ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
-        bit-flip bias, every other model ("Depolarising", "Phaseflip",
-        "Amplitude Damping", "Erasure") the two-site depolarising bias.
+        bit-flip bias, every other model ("Depolarizing", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarizing bias.
     bias_prob : float
-        The probability of the depolarising bias applied before checks.
-    renormalise : bool
-        Whether to renormalise the MPS during decoding.
-    multiply_by_stabiliser : bool
-        Whether to multiply the error by a randomly chosen stabiliser before
+        The probability of the depolarizing bias applied before checks.
+    renormalize : bool
+        Whether to renormalize the MPS during decoding.
+    multiply_by_stabilizer : bool
+        Whether to multiply the error by a randomly chosen stabilizer before
         decoding. Under the symplectic checks this is a gauge move: it maps
         the error to another representative of the same coset and leaves the
         posterior unchanged.
@@ -1625,10 +1625,10 @@ def decode_css(
     qubit_order_strategy : str
         Strategy for ordering qubits along the MPS chain.
         ``"Natural"`` keeps the original column order of the parity check matrix.
-        ``"Optimised"`` applies the Reverse Cuthill-McKee algorithm to the qubit
+        ``"Optimized"`` applies the Reverse Cuthill-McKee algorithm to the qubit
         interaction graph to reduce the bandwidth of each MPO constraint string,
         lowering the required bond dimension.
-    optimiser : str
+    optimizer : str
         How the logical class is read out of the logical MPS. "Dephasing DMRG"
         reads it out densely while the logical MPS has at most
         ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
@@ -1640,10 +1640,10 @@ def decode_css(
     dense_readout_max_sites : int
         Read the logical class out by dense contraction while the logical MPS has
         at most this many sites, and by Dephasing DMRG beyond it. The default
-        keeps the usual behaviour; setting it to 0 forces the DMRG path, which is
+        keeps the usual behavior; setting it to 0 forces the DMRG path, which is
         how the two readouts can be compared on a code small enough to check.
     rng : np.random.Generator, optional
-        Source of randomness for ``multiply_by_stabiliser``. Pass the same
+        Source of randomness for ``multiply_by_stabilizer``. Pass the same
         generator used to sample the error if the run needs to be reproducible;
         when omitted a fresh generator is created and the choice will differ
         between runs.
@@ -1655,8 +1655,8 @@ def decode_css(
     """
 
     # decode_css is a thin adapter over decode_custom: it renders the code's
-    # stabilisers and logicals as Pauli strings (letters matching each
-    # operator's type), applies the optimised qubit ordering at the string
+    # stabilizers and logicals as Pauli strings (letters matching each
+    # operator's type), applies the optimized qubit ordering at the string
     # level when asked, and delegates. The two decoders used to be parallel
     # ~450-line pipelines, which is how the symplectic-pairing bug (issue
     # #531), the retry-direction gap and three fast-path validation bypasses
@@ -1681,23 +1681,23 @@ def decode_css(
         )
 
     # A misspelled strategy must not fall through to the natural ordering:
-    # "Optimized" would silently disable the requested optimisation.
+    # "Optimised" would silently disable the requested optimization.
     if qubit_order_strategy not in QUBIT_ORDER_STRATEGIES:
         raise ValueError(
             f"Unknown qubit_order_strategy {qubit_order_strategy!r}; expected "
             f"one of {QUBIT_ORDER_STRATEGIES}."
         )
 
-    stabilisers_x, stabilisers_z = css_code_stabilisers(code)
-    stabilizers = stabilisers_x + stabilisers_z
+    stabilizers_x, stabilizers_z = css_code_stabilizers(code)
+    stabilizers = stabilizers_x + stabilizers_z
     x_logicals = _rows_as_pauli(code.x_logicals_binary(), "X")
     z_logicals = _rows_as_pauli(code.z_logicals_binary(), "Z")
 
-    # The ordering optimisation builds dense check matrices and runs a search;
+    # The ordering optimization builds dense check matrices and runs a search;
     # pointless when decode_custom's no-error fast path will return
     # immediately, and that path dominates low-error-rate Monte Carlo.
     fast_path_will_fire = _identity_fast_path_fires(error, bias_prob)
-    if qubit_order_strategy == "Optimised" and not fast_path_will_fire:
+    if qubit_order_strategy == "Optimized" and not fast_path_will_fire:
         pm_x = code.x_stabs_binary()
         H_x = np.zeros((pm_x.num_rows(), pm_x.num_columns()), dtype=int)
         for r, cols in enumerate(pm_x.rows()):
@@ -1708,7 +1708,7 @@ def decode_css(
         for r, cols in enumerate(pm_z.rows()):
             for c in cols:
                 H_z[r, c] = 1
-        qubit_perm = optimise_qubit_order(np.vstack([H_x, H_z]))
+        qubit_perm = optimize_qubit_order(np.vstack([H_x, H_z]))
 
         def _permute(string):
             return "".join(string[qubit_perm[i]] for i in range(num_qubits))
@@ -1718,7 +1718,7 @@ def decode_css(
         z_logicals = [_permute(string) for string in z_logicals]
         error = _permute(error)
         if not silent:
-            LOGGER.info("Applied optimised qubit ordering.")
+            LOGGER.info("Applied optimized qubit ordering.")
 
     return decode_custom(
         stabilizers,
@@ -1730,11 +1730,11 @@ def decode_css(
         cut=cut,
         bias_type=bias_type,
         bias_prob=bias_prob,
-        renormalise=renormalise,
-        multiply_by_stabiliser=multiply_by_stabiliser,
+        renormalize=renormalize,
+        multiply_by_stabilizer=multiply_by_stabilizer,
         silent=silent,
         contraction_strategy=contraction_strategy,
-        optimiser=optimiser,
+        optimizer=optimizer,
         tolerance=tolerance,
         dense_readout_max_sites=dense_readout_max_sites,
         num_restarts=num_restarts,
@@ -1751,13 +1751,13 @@ def decode_custom(
     num_runs: int = int(1),
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-    bias_type: str = "Depolarising",
+    bias_type: str = "Depolarizing",
     bias_prob: float = float(0.1),
-    renormalise: bool = True,
-    multiply_by_stabiliser: bool = False,
+    renormalize: bool = True,
+    multiply_by_stabilizer: bool = False,
     silent: bool = False,
     contraction_strategy: str = "Naive",
-    optimiser: str = "Dephasing DMRG",
+    optimizer: str = "Dephasing DMRG",
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 12,
     num_restarts: int = 8,
@@ -1787,14 +1787,14 @@ def decode_custom(
     bias_type : str
         The type of the bias applied before the parity checks. Any name in
         ``KNOWN_ERROR_MODELS`` is accepted: "Bitflip" selects the one-site
-        bit-flip bias, every other model ("Depolarising", "Phaseflip",
-        "Amplitude Damping", "Erasure") the two-site depolarising bias.
+        bit-flip bias, every other model ("Depolarizing", "Phaseflip",
+        "Amplitude Damping", "Erasure") the two-site depolarizing bias.
     bias_prob : float
-        The probability of the depolarising bias applied before the parity checks.
-    renormalise : bool
-        Whether to renormalise the MPS during decoding.
-    multiply_by_stabiliser : bool
-        Whether to multiply the error by a randomly chosen stabiliser before
+        The probability of the depolarizing bias applied before the parity checks.
+    renormalize : bool
+        Whether to renormalize the MPS during decoding.
+    multiply_by_stabilizer : bool
+        Whether to multiply the error by a randomly chosen stabilizer before
         decoding. Under the symplectic checks this is a gauge move: it maps
         the error to another representative of the same coset and leaves the
         posterior unchanged.
@@ -1802,7 +1802,7 @@ def decode_custom(
         Whether to show the progress bars or not.
     contraction_strategy : str
         The contractor's strategy.
-    optimiser : str
+    optimizer : str
         How the logical class is read out of the logical MPS. "Dephasing DMRG"
         reads it out densely while the logical MPS has at most
         ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
@@ -1819,7 +1819,7 @@ def decode_custom(
     Returns
     -------
     result : Tuple
-        Decoding results, depending on the chosen optimiser.
+        Decoding results, depending on the chosen optimizer.
     """
     if not silent:
         LOGGER.info("Starting the decoding.")
@@ -1830,7 +1830,7 @@ def decode_custom(
     # simply cover a prefix of the qubits and the decoder returns a
     # plausible-looking posterior for a different code. Refuse instead.
     if not stabilizers:
-        raise ValueError("At least one stabiliser is required.")
+        raise ValueError("At least one stabilizer is required.")
     expected_length = len(stabilizers[0])
     for name, strings in (
         ("stabilizers", stabilizers),
@@ -1874,7 +1874,7 @@ def decode_custom(
     for stabilizer in stabilizers:
         if sum(2 if letter == "Y" else letter in "XZ" for letter in stabilizer) < 2:
             raise ValueError(
-                f"Stabiliser {stabilizer!r} touches fewer than two MPS sites "
+                f"Stabilizer {stabilizer!r} touches fewer than two MPS sites "
                 "and cannot be represented as a parity-check constraint."
             )
     # The error is validated here too: the fast path below matches any
@@ -1887,35 +1887,35 @@ def decode_custom(
 
     # Channel validation must precede the shortcut: an invalid probability
     # with a trivial error would otherwise "succeed", and a misspelled bias
-    # type would silently decode as depolarising.
+    # type would silently decode as depolarizing.
     if not 0 <= bias_prob <= 1:
         raise ValueError(f"bias_prob should be a probability, given {bias_prob}.")
     # Every error-model name generate_pauli_error_string knows is a valid
     # bias_type (the experiment scripts forward --error_model verbatim);
     # only "Bitflip" selects the bit-flip bias, every other model uses the
-    # depolarising bias as it always has. Typos are still rejected.
+    # depolarizing bias as it always has. Typos are still rejected.
     if bias_type not in KNOWN_ERROR_MODELS:
         raise ValueError(
             f"Unknown bias_type {bias_type!r}; expected one of "
             f"{sorted(KNOWN_ERROR_MODELS)} ('Bitflip' selects the bit-flip "
-            "bias, every other model the depolarising bias)."
+            "bias, every other model the depolarizing bias)."
         )
     # Public selectors are validated before the shortcut so malformed options
     # fail consistently for every sampled error.
-    if contraction_strategy not in ("Naive", "Optimised"):
+    if contraction_strategy not in ("Naive", "Optimized"):
         raise ValueError(
             f"Unknown contraction_strategy {contraction_strategy!r}; expected "
-            "'Naive' or 'Optimised'."
+            "'Naive' or 'Optimized'."
         )
     if tie_policy not in TIE_POLICIES:
         raise ValueError(
             f"Unknown tie_policy {tie_policy!r}; expected one of {TIE_POLICIES}."
         )
-    if optimiser not in OPTIMISERS:
+    if optimizer not in OPTIMIZERS:
         raise ValueError(
-            f"Unknown optimiser {optimiser!r}; expected one of {OPTIMISERS}."
+            f"Unknown optimizer {optimizer!r}; expected one of {OPTIMIZERS}."
         )
-    if optimiser == "Optima TT":
+    if optimizer == "Optima TT":
         raise NotImplementedError("Optima TT is not implemented yet.")
 
     if _identity_fast_path_fires(error, bias_prob):
@@ -1936,10 +1936,10 @@ def decode_custom(
         index for index, single_error in enumerate(error) if single_error == "E"
     ]
 
-    if multiply_by_stabiliser and not erased_qubits:
+    if multiply_by_stabilizer and not erased_qubits:
         # See decode_css: the choice must come from the passed-in generator so
         # the run stays reproducible from its seed. Under symplectic checks the
-        # honest stabiliser is the gauge move -- the parities it flips vanish
+        # honest stabilizer is the gauge move -- the parities it flips vanish
         # exactly when it commutes with every generator, for non-CSS codes too.
         generator = np.random.default_rng() if rng is None else rng
         error = multiply_pauli_strings(error, str(generator.choice(stabilizers)))
@@ -1971,12 +1971,12 @@ def decode_custom(
     )
     logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
 
-    # Exclude erased qubit sites from bias: erased qubits are initialised as
+    # Exclude erased qubit sites from bias: erased qubits are initialized as
     # |+>, which already represents complete ignorance, so biasing them would
     # corrupt that state.  Each physical qubit q occupies MPS sites
     # (num_logicals + 2q) and (num_logicals + 2q + 1).
     # See decode_css: the one-site bit-flip bias wants every site, the two-site
-    # depolarising bias only the first site of each qubit pair.
+    # depolarizing bias only the first site of each qubit pair.
     num_qubits = len(stabilizers[0])
     unerased = [q for q in range(num_qubits) if q not in erased_qubits]
     if bias_type == "Bitflip":
@@ -2000,12 +2000,12 @@ def decode_custom(
             )
         else:
             if not silent:
-                LOGGER.info("Applying depolarising bias.")
-            error_mps = apply_depolarising_bias(
+                LOGGER.info("Applying depolarizing bias.")
+            error_mps = apply_depolarizing_bias(
                 mps=error_mps,
                 sites_to_bias=sites_to_bias,
                 prob_bias_list=bias_prob,
-                renormalise=renormalise,
+                renormalize=renormalize,
             )
 
     if not silent:
@@ -2018,7 +2018,7 @@ def decode_custom(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
         ),
@@ -2034,7 +2034,7 @@ def decode_custom(
             logicals_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
         ),
@@ -2050,34 +2050,34 @@ def decode_custom(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
         ),
     )
 
     if not silent:
-        LOGGER.info("Marginalising the error MPS.")
-    # Marginalise ALL physical qubit sites in one pass.  Erased qubits are
+        LOGGER.info("Marginalizing the error MPS.")
+    # Marginalize ALL physical qubit sites in one pass.  Erased qubits are
     # already in |+> and are naturally included here — no separate
     # intermediate marginalization is needed.
-    sites_to_marginalise = list(range(num_logicals, num_sites))
+    sites_to_marginalize = list(range(num_logicals, num_sites))
     logical_mps = error_mps.marginal(
-        sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
+        sites_to_marginalize=sites_to_marginalize, renormalize=renormalize
     ).reverse()
 
     num_logical_sites = len(logical_mps)
     if not silent:
         LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
-    if optimiser == "Dense" or num_logical_sites <= dense_readout_max_sites:
+    if optimizer == "Dense" or num_logical_sites <= dense_readout_max_sites:
         logical_signed = np.real(
-            np.asarray(logical_mps.dense(flatten=True, renormalise=renormalise, norm=2))
+            np.asarray(logical_mps.dense(flatten=True, renormalize=renormalize, norm=2))
         )
 
         # An exact run cannot produce a negative amplitude: every tensor in the
-        # pipeline is non-negative and marginalisation traces against all-ones.
-        # A negative one is therefore a truncation artefact and a direct signal
+        # pipeline is non-negative and marginalization traces against all-ones.
+        # A negative one is therefore a truncation artifact and a direct signal
         # that chi_max is too small for this instance -- the cheapest
         # convergence diagnostic available, since the vector is already here.
         # Negative entries are clamped to zero, never folded with abs: an
@@ -2103,7 +2103,7 @@ def decode_custom(
         # destroys it: at low chi_max a whole site tensor can be driven to zero.
         if not np.isfinite(peak) or peak == 0.0:
             # Scoring must stop here. Every entry of an all-zero vector is within
-            # eps of the maximum, so the identity would be "among the maximisers"
+            # eps of the maximum, so the identity would be "among the maximizers"
             # and the shot would score a success -- turning numerical collapse
             # into a correctly decoded shot and biasing the failure rate
             # downward, invisibly when silent=True. Report the failure instead.
@@ -2115,16 +2115,16 @@ def decode_custom(
                 )
             return logical_dense, 0.0
 
-        # Normalise to the peak so that tie tolerances are scale-independent.
+        # Normalize to the peak so that tie tolerances are scale-independent.
         # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
         # collapse guard but have every entry within the fixed 1e-12 absolute
         # tolerance of the maximum, marking all classes as tied.
         logical_normed = logical_dense / peak
 
-        # find global maximum amplitude (always 1.0 after normalisation)
+        # find global maximum amplitude (always 1.0 after normalization)
         max_amp = np.max(logical_normed)
 
-        # treat identity logical as success if it is among the maximisers
+        # treat identity logical as success if it is among the maximizers
         # (within some numerical tolerance)
         # Same tolerance as decode_css, so both decoders call a tie the same way.
         eps = max(1e-9 * max_amp, 1e-12)
@@ -2171,7 +2171,7 @@ def decode_custom(
     # whichever tied class its sweep reached first. Comparing only that state
     # with the identity would then score a tie as a failure, while the dense
     # branch above scores the same shot as a success. Instead ask the question
-    # dense readout asks -- is the identity among the maximisers? -- by pulling
+    # dense readout asks -- is the identity among the maximizers? -- by pulling
     # both amplitudes out of the logical MPS directly, which costs O(k chi^2) and
     # needs no enumeration of the 4^k classes.
     mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
@@ -2188,7 +2188,7 @@ def decode_custom(
             )
         return engine, 0
 
-    # Compare amplitudes on a unit scale (normalised by the DMRG maximum) so
+    # Compare amplitudes on a unit scale (normalized by the DMRG maximum) so
     # that the fixed tolerance is meaningful regardless of overall scale.
     normed_identity = amplitude_identity / amplitude_found
     eps = 1e-9

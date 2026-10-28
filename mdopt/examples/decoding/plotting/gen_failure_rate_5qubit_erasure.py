@@ -79,7 +79,7 @@ def _decode_one_cell(args):
             bias_type="Bitflip",
             cut=1e-17,
             tolerance=1e-17,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             contraction_strategy="Naive",
         )

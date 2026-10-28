@@ -14,7 +14,7 @@ from mdopt.backend import array as xp
 def _to_numpy(a):
     """Bring a backend array to the host as a NumPy array (no copy on NumPy).
 
-    Resolved through the backend's own transfer, which honours MDOPT_BACKEND
+    Resolved through the backend's own transfer, which honors MDOPT_BACKEND
     and the CUDA device probe; a per-call ``import cupy`` here once cost
     about 11,000 failed imports per decode: from about 4% of the decode on
     surface_bitflip to about a third on dem_d3.
@@ -33,7 +33,7 @@ def svd(
     mat: np.ndarray,
     cut: float = float(1e-12),
     chi_max: float = int(1e4),
-    renormalise: bool = False,
+    renormalize: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[float]]:
     """
@@ -52,8 +52,8 @@ def svd(
         Maximum number of singular values to keep. ``np.inf`` disables the
         bound, keeping every value above ``cut`` -- the untruncated-reference
         idiom the example notebooks use.
-    renormalise : bool
-        Whether to renormalise the singular value spectrum after the cut.
+    renormalize : bool
+        Whether to renormalize the singular value spectrum after the cut.
     return_truncation_error : bool
         Whether to return the truncation error.
 
@@ -158,7 +158,7 @@ def svd(
     u_l = _to_numpy(u_l)
     v_h = _to_numpy(v_h)
 
-    if renormalise and s.size > 0:
+    if renormalize and s.size > 0:
         norm = float(np.linalg.norm(s))
         if norm > 0:
             s = s / norm
@@ -177,7 +177,7 @@ def qr(
     mat: np.ndarray,
     cut: float = float(1e-12),
     chi_max: float = int(1e4),
-    renormalise: bool = False,
+    renormalize: bool = False,
     return_truncation_error: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[float]]:
     """
@@ -191,8 +191,8 @@ def qr(
         Threshold below which the diagonal values of R are discarded.
     chi_max : float
         Maximum number of columns/rows to keep after truncation.
-    renormalise : bool
-        Whether to renormalise the matrix after truncation.
+    renormalize : bool
+        Whether to renormalize the matrix after truncation.
     return_truncation_error : bool
         Whether to return the truncation error.
 
@@ -234,7 +234,7 @@ def qr(
     r_r = r_r[trunc_idx, :][:, inv_piv]
     q_l = q_l[:, trunc_idx]
 
-    if renormalise and effective_rank > 0:
+    if renormalize and effective_rank > 0:
         diag = np.diag(r_r[:effective_rank, :effective_rank])
         nrm = float(np.linalg.norm(diag))
         if nrm > 0:
@@ -326,7 +326,7 @@ def split_two_site_tensor(
     tensor: np.ndarray,
     chi_max: float = int(1e4),
     cut: float = float(1e-12),
-    renormalise: bool = False,
+    renormalize: bool = False,
     strategy: str = "svd",
     return_truncation_error: bool = False,
 ) -> Tuple:
@@ -347,8 +347,8 @@ def split_two_site_tensor(
         Maximum number of singular/diagonal values to keep.
     cut : float
         Discard any singular/diagonal values smaller than this.
-    renormalise : bool
-        Whether to renormalise the singular value spectrum or the R diagonal
+    renormalize : bool
+        Whether to renormalize the singular value spectrum or the R diagonal
         after the cut.
     strategy : str
         Which strategy to use for the splitting.
@@ -391,7 +391,7 @@ def split_two_site_tensor(
             mat=mat,
             cut=cut,
             chi_max=chi_max,
-            renormalise=renormalise,
+            renormalize=renormalize,
             return_truncation_error=return_truncation_error,
         )
         s = np.asarray(singular_values, dtype=float)
@@ -407,7 +407,7 @@ def split_two_site_tensor(
         mat=mat,
         cut=cut,
         chi_max=chi_max,
-        renormalise=renormalise,
+        renormalize=renormalize,
         return_truncation_error=return_truncation_error,
     )
     chi_v_cut = min(chi_max, q_l.shape[1])
@@ -426,7 +426,7 @@ def create_random_mpo(
     rng: Optional[np.random.Generator] = None,
 ) -> List[np.ndarray]:
     """
-    Creates a random complex-valued Matrix Product Operator.
+    Creates a random complex-valued matrix product operator.
 
     Parameters
     ----------
@@ -439,7 +439,7 @@ def create_random_mpo(
         Physical dimension of the tensors.
     rng : Optional[np.random.Generator]
         Random number generator to draw from. If ``None``, the legacy global
-        ``np.random`` stream is used, which honours :func:`numpy.random.seed`.
+        ``np.random`` stream is used, which honors :func:`numpy.random.seed`.
     which : str
         Specifies the distribution from which
         the matrix elements are being taken.
@@ -586,16 +586,16 @@ def mpo_from_matrix(
     matrix: np.ndarray,
     num_sites: int,
     interlaced: bool = True,
-    orthogonalise: bool = False,
+    orthogonalize: bool = False,
     phys_dim: int = 2,
     chi_max: int = int(1e4),
 ) -> List[np.ndarray]:
     """
     Creates an MPO from a matrix (either grouped 2D or ungrouped 2N-D).
 
-    If orthogonalise=True, carry singular values to the orthogonality centre
-    (isometric tensors except centre). Otherwise split sqrt singular values
-    to both sides (non-isometric, no single centre).
+    If orthogonalize=True, carry singular values to the orthogonality center
+    (isometric tensors except center). Otherwise split sqrt singular values
+    to both sides (non-isometric, no single center).
     """
     hilbert_space_dim = phys_dim**num_sites
     phys_dims = [phys_dim] * num_sites * 2
@@ -622,18 +622,18 @@ def mpo_from_matrix(
     mps_dim = phys_dim**2
     mat2 = mat.reshape((-1, mps_dim))
 
-    U, S, Vh, _ = svd(mat2, chi_max=chi_max, renormalise=False)
+    U, S, Vh, _ = svd(mat2, chi_max=chi_max, renormalize=False)
     S_np = np.asarray(S, dtype=float)
     Vh_np = np.asarray(Vh)
 
-    if not orthogonalise:
+    if not orthogonalize:
         # v_r = sqrt(S)[:, None] * Vh
         sqrtS = np.sqrt(S_np)
         Vh_np = sqrtS[:, None] * Vh_np
     mpo.append(np.expand_dims(Vh_np, -1))
 
     while U.shape[0] >= mps_dim:
-        if not orthogonalise:
+        if not orthogonalize:
             S_np = np.sqrt(S_np)
 
         # matrix = U @ diag(S)  → scale columns of U by S
@@ -642,19 +642,19 @@ def mpo_from_matrix(
 
         bond_dim = U.shape[-1]
         U_reshaped = U.reshape((-1, mps_dim * bond_dim))
-        U, S, Vh, _ = svd(U_reshaped, chi_max=chi_max, renormalise=False)
+        U, S, Vh, _ = svd(U_reshaped, chi_max=chi_max, renormalize=False)
         S_np = np.asarray(S, dtype=float)
         Vh_np = np.asarray(Vh)
 
-        if not orthogonalise:
+        if not orthogonalize:
             sqrtS = np.sqrt(S_np)
             Vh_np = sqrtS[:, None] * Vh_np
 
         Vh_np = Vh_np.reshape((-1, mps_dim, bond_dim))
         mpo.insert(0, Vh_np)
 
-    # Contract orthogonality centre (avoid diag by broadcasting)
-    if not orthogonalise:
+    # Contract orthogonality center (avoid diag by broadcasting)
+    if not orthogonalize:
         S_np = np.sqrt(S_np)
     # mpo[0] = contract("ij, jk, klm", U, diag(S), mpo[0])  -> scale rows of mpo[0] by S, then contract
     if S_np.size:

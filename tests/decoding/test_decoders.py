@@ -24,11 +24,11 @@ from mdopt.mps.utils import inner_product
 
 from mdopt.decoding.decoding import (
     str_to_bool,
-    css_code_stabilisers,
+    css_code_stabilizers,
     custom_code_checks,
     decode_css,
     decode_custom,
-    depolarising_bias,
+    depolarizing_bias,
     generate_pauli_error_string,
     max_amplitude_bound,
     max_product_readout,
@@ -100,7 +100,7 @@ def exact_posterior(code, error, bias_type, prob):
     log_x = _dense(code.x_logicals_binary(), num_qubits)
     log_z = _dense(code.z_logicals_binary(), num_qubits)
 
-    if bias_type == "Depolarising":
+    if bias_type == "Depolarizing":
 
         def weight(d_x, d_z):
             return (1 - prob) if (d_x == 0 and d_z == 0) else prob / 3
@@ -142,7 +142,7 @@ def _logicals_as_pauli(code):
     return [as_str(log_x[0], "X")], [as_str(log_z[0], "Z")]
 
 
-def _normalised(dense_out):
+def _normalized(dense_out):
     probs = np.asarray(dense_out, dtype=float) ** 2
     return probs / probs.sum()
 
@@ -155,19 +155,19 @@ ERRORS = {
 
 
 @pytest.mark.parametrize("name", sorted(CODES))
-@pytest.mark.parametrize("bias", ["Bitflip", "Depolarising"])
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
 def test_decode_css_matches_exact_posterior(name, bias):
     """decode_css reproduces the brute-force posterior exactly."""
     code = CODES[name]()
     for error in ERRORS[name]:
-        got = _normalised(
+        got = _normalized(
             decode_css(
                 code,
                 error,
                 chi_max=int(1e5),
                 bias_type=bias,
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )[0]
         )
@@ -175,22 +175,22 @@ def test_decode_css_matches_exact_posterior(name, bias):
 
 
 @pytest.mark.parametrize("name", sorted(CODES))
-@pytest.mark.parametrize("bias", ["Bitflip", "Depolarising"])
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
 def test_decode_custom_matches_exact_posterior(name, bias):
     """decode_custom agrees with the same reference.
 
-    mdopt speaks textbook symplectic semantics: an X-type stabiliser detects
+    mdopt speaks textbook symplectic semantics: an X-type stabilizer detects
     Z errors, and each class label is the symplectic product with the partner
     logical. A pairing inconsistent between decode_custom, decode_css and this
     reference is invisible for a self-dual code such as Steane and wrong for
     Shor, so both are exercised here. The strings come from
-    css_code_stabilisers, whose letters match each generator's type.
+    css_code_stabilizers, whose letters match each generator's type.
     """
     code = CODES[name]()
-    stabs = sum(css_code_stabilisers(code), [])
+    stabs = sum(css_code_stabilizers(code), [])
     log_x, log_z = _logicals_as_pauli(code)
     for error in ERRORS[name]:
-        got = _normalised(
+        got = _normalized(
             decode_custom(
                 stabs,
                 log_x,
@@ -199,17 +199,17 @@ def test_decode_custom_matches_exact_posterior(name, bias):
                 chi_max=int(1e5),
                 bias_type=bias,
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )[0]
         )
         assert np.allclose(got, exact_posterior(code, error, bias, 0.1), atol=1e-6)
 
 
-def test_depolarising_bias_reproduces_the_channel():
-    """The two-site bias MPO must be the depolarising channel itself."""
+def test_depolarizing_bias_reproduces_the_channel():
+    """The two-site bias MPO must be the depolarizing channel itself."""
     prob = 0.12
-    operator = depolarising_bias(prob)
+    operator = depolarizing_bias(prob)
     for a, b in itertools.product((0, 1), repeat=2):
         assert operator[a, b, a, b] == pytest.approx(np.sqrt(1 - prob))
     for a, b, c, d in itertools.product((0, 1), repeat=4):
@@ -229,9 +229,9 @@ def test_five_qubit_code_corrects_every_single_qubit_error():
             ["ZZZZZ"],
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.05,
-            renormalise=True,
+            renormalize=True,
             silent=True,
         )
         assert success == 1
@@ -251,7 +251,7 @@ def test_distance_three_code_corrects_every_erasure_below_distance():
                 chi_max=128,
                 bias_type="Bitflip",
                 bias_prob=0.05,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )
             assert success == 1, f"erasure pattern {combo} should be correctable"
@@ -277,7 +277,7 @@ def test_dense_and_dmrg_readout_agree_when_the_map_class_is_unique():
 
     for _ in range(25):
         error = generate_pauli_error_string(
-            num_qubits, 0.15, error_model="Depolarising", rng=rng
+            num_qubits, 0.15, error_model="Depolarizing", rng=rng
         )
         if error == "I" * num_qubits:
             continue
@@ -286,9 +286,9 @@ def test_dense_and_dmrg_readout_agree_when_the_map_class_is_unique():
             code,
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=True,
         )
         amplitudes = np.asarray(dense_out, dtype=float)
@@ -301,9 +301,9 @@ def test_dense_and_dmrg_readout_agree_when_the_map_class_is_unique():
             code,
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             num_runs=2,
             dense_readout_max_sites=0,
@@ -317,11 +317,11 @@ def test_dense_and_dmrg_readout_agree_when_the_map_class_is_unique():
     assert degenerate_seen, "no degenerate posterior arose, so ties went untested"
 
 
-@pytest.mark.parametrize("bias", ["Bitflip", "Depolarising"])
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
 def test_qubit_reordering_leaves_the_posterior_invariant(bias):
-    """RCM reordering is a relabelling, so exact results must not move.
+    """RCM reordering is a relabeling, so exact results must not move.
 
-    The optimisation permutes qubits along the chain to shorten the MPO spans.
+    The optimization permutes qubits along the chain to shorten the MPO spans.
     That is meant to buy speed and a lower bond dimension, never a different
     answer, so at exact contraction the two orderings have to agree to machine
     precision.
@@ -333,19 +333,19 @@ def test_qubit_reordering_leaves_the_posterior_invariant(bias):
 
     for _ in range(8):
         error = generate_pauli_error_string(
-            num_qubits, 0.15, error_model="Depolarising", rng=rng
+            num_qubits, 0.15, error_model="Depolarizing", rng=rng
         )
         if error == "I" * num_qubits:
             continue
         posteriors = []
-        for strategy in ("Natural", "Optimised"):
+        for strategy in ("Natural", "Optimized"):
             dense_out, _ = decode_css(
                 code,
                 error,
                 chi_max=int(1e5),
                 bias_type=bias,
                 bias_prob=0.15,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 qubit_order_strategy=strategy,
             )
@@ -360,7 +360,7 @@ def test_qubit_reordering_leaves_the_posterior_invariant(bias):
 
 
 def test_dmrg_readout_finds_the_true_maximum_on_decoder_posteriors():
-    """DMRG must return a genuine maximiser of the logical MPS.
+    """DMRG must return a genuine maximizer of the logical MPS.
 
     Checking only whether the identity was returned is too weak: DMRG could stop
     on some other suboptimal class and go unnoticed. Here the logical MPS is
@@ -368,7 +368,7 @@ def test_dmrg_readout_finds_the_true_maximum_on_decoder_posteriors():
     reached is compared against it.
 
     Decoder posteriors are strongly peaked, which is the regime Dephasing DMRG
-    handles reliably. It is a local optimiser, so on a nearly flat posterior --
+    handles reliably. It is a local optimizer, so on a nearly flat posterior --
     near threshold, or at large k -- it can settle below the true maximum; that
     is what ``num_restarts`` mitigates.
     """
@@ -379,7 +379,7 @@ def test_dmrg_readout_finds_the_true_maximum_on_decoder_posteriors():
 
     for _ in range(12):
         error = generate_pauli_error_string(
-            num_qubits, 0.15, error_model="Depolarising", rng=rng
+            num_qubits, 0.15, error_model="Depolarizing", rng=rng
         )
         if error == "I" * num_qubits:
             continue
@@ -388,9 +388,9 @@ def test_dmrg_readout_finds_the_true_maximum_on_decoder_posteriors():
             code,
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             num_runs=2,
             dense_readout_max_sites=0,
@@ -420,9 +420,9 @@ def test_dmrg_readout_returns_a_computational_basis_state():
         code,
         "XZIIIII",
         chi_max=int(1e4),
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.15,
-        renormalise=True,
+        renormalize=True,
         silent=True,
         num_runs=2,
         dense_readout_max_sites=0,
@@ -449,7 +449,7 @@ def test_max_amplitude_bound_is_sound_and_tight_when_converged():
 
     for _ in range(10):
         error = generate_pauli_error_string(
-            len(code), 0.15, error_model="Depolarising", rng=rng
+            len(code), 0.15, error_model="Depolarizing", rng=rng
         )
         if error == "I" * len(code):
             continue
@@ -458,9 +458,9 @@ def test_max_amplitude_bound_is_sound_and_tight_when_converged():
             code,
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             num_runs=1,
             dense_readout_max_sites=0,
@@ -480,7 +480,7 @@ def test_max_amplitude_bound_is_sound_and_tight_when_converged():
 def test_truncation_shows_up_as_a_negative_logical_amplitude(caplog):
     """A negative amplitude is a free chi-convergence signal.
 
-    Nothing in an exact run can make one, so it can only be a low-rank artefact.
+    Nothing in an exact run can make one, so it can only be a low-rank artifact.
     Squeezing chi_max should surface it and a converged chi_max should not.
     """
     code = qec.steane_code()
@@ -488,7 +488,7 @@ def test_truncation_shows_up_as_a_negative_logical_amplitude(caplog):
     errors = []
     while len(errors) < 6:
         error = generate_pauli_error_string(
-            len(code), 0.15, error_model="Depolarising", rng=rng
+            len(code), 0.15, error_model="Depolarizing", rng=rng
         )
         if error != "I" * len(code):
             errors.append(error)
@@ -501,16 +501,16 @@ def test_truncation_shows_up_as_a_negative_logical_amplitude(caplog):
                     code,
                     error,
                     chi_max=chi_max,
-                    bias_type="Depolarising",
+                    bias_type="Depolarizing",
                     bias_prob=0.15,
-                    renormalise=True,
+                    renormalize=True,
                     silent=False,
                 )
         return [r for r in caplog.records if "Negative logical amplitude" in r.message]
 
     # Whether a given seeded decode produces a negative amplitude at a given
     # chi_max is BLAS-dependent numerical noise (it differs between Accelerate
-    # and OpenBLAS and migrates under behaviour-preserving SVD changes), so the
+    # and OpenBLAS and migrates under behavior-preserving SVD changes), so the
     # real decodes pin only the converged side. The emission itself is asserted
     # deterministically on a readout that is known to carry a negative entry.
     assert not warnings_for(64), "a converged run should not be flagged"
@@ -545,7 +545,7 @@ def test_max_product_readout_is_optimal_and_certified():
 
     for _ in range(12):
         error = generate_pauli_error_string(
-            len(code), 0.15, error_model="Depolarising", rng=rng
+            len(code), 0.15, error_model="Depolarizing", rng=rng
         )
         if error == "I" * len(code):
             continue
@@ -554,9 +554,9 @@ def test_max_product_readout_is_optimal_and_certified():
             code,
             error,
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             num_runs=1,
             dense_readout_max_sites=0,
@@ -587,9 +587,9 @@ def test_readout_skips_dmrg_when_the_bracket_closes(caplog):
             qec.steane_code(),
             "XZIIIII",
             chi_max=int(1e4),
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.15,
-            renormalise=True,
+            renormalize=True,
             silent=False,
             dense_readout_max_sites=0,
         )
@@ -646,7 +646,7 @@ def test_tie_policy_is_irrelevant_under_bitflip_noise():
                     chi_max=256,
                     bias_type="Bitflip",
                     bias_prob=0.08,
-                    renormalise=True,
+                    renormalize=True,
                     silent=True,
                     tie_policy=policy,
                 )[1]
@@ -656,8 +656,8 @@ def test_tie_policy_is_irrelevant_under_bitflip_noise():
     assert scores["optimistic"] == scores["fractional"] == scores["pessimistic"]
 
 
-def test_multiply_by_stabiliser_uses_the_supplied_generator():
-    """The stabiliser draw must come from the passed generator, not global state.
+def test_multiply_by_stabilizer_uses_the_supplied_generator():
+    """The stabilizer draw must come from the passed generator, not global state.
 
     Reaching for ``np.random`` made this path depend on process-wide state, so a
     run that fell back to it could not be reproduced from its seed.
@@ -675,28 +675,28 @@ def test_multiply_by_stabiliser_uses_the_supplied_generator():
         code,
         error,
         chi_max=256,
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
-        multiply_by_stabiliser=True,
+        multiply_by_stabilizer=True,
         rng=mock_rng,
     )
 
     mock_rng.choice.assert_called_once()
 
 
-def test_posterior_is_invariant_under_multiplication_by_a_stabiliser():
-    """Multiplying the error by a stabiliser must not move the posterior.
+def test_posterior_is_invariant_under_multiplication_by_a_stabilizer():
+    """Multiplying the error by a stabilizer must not move the posterior.
 
-    A stabiliser maps the error to a different representative of the same coset,
+    A stabilizer maps the error to a different representative of the same coset,
     so every logical class keeps its weight. This is what makes
-    ``multiply_by_stabiliser`` a safe retry when a decode fails numerically, and
+    ``multiply_by_stabilizer`` a safe retry when a decode fails numerically, and
     it is a sharp check on the constraint machinery: get the syndrome wiring
     wrong and the invariance breaks immediately.
     """
     code = qec.steane_code()
-    stabilisers = sum(css_code_stabilisers(code), [])
+    stabilizers = sum(css_code_stabilizers(code), [])
     error = "XZ" + "I" * (len(code) - 2)
 
     def posterior(err):
@@ -705,24 +705,24 @@ def test_posterior_is_invariant_under_multiplication_by_a_stabiliser():
                 code,
                 err,
                 chi_max=1000,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )[0],
             dtype=float,
         )
 
     base = posterior(error)
-    for stabiliser in stabilisers:
+    for stabilizer in stabilizers:
         assert np.allclose(
-            posterior(multiply_pauli_strings(error, stabiliser)), base, atol=1e-9
+            posterior(multiply_pauli_strings(error, stabilizer)), base, atol=1e-9
         )
 
 
-def test_depolarising_errors_are_reproducible_from_their_seed():
-    """Sampling must honour the supplied generator for every noise model."""
-    for model in ("Bitflip", "Depolarising", "Phaseflip"):
+def test_depolarizing_errors_are_reproducible_from_their_seed():
+    """Sampling must honor the supplied generator for every noise model."""
+    for model in ("Bitflip", "Depolarizing", "Phaseflip"):
         runs = [
             [
                 generate_pauli_error_string(
@@ -735,18 +735,18 @@ def test_depolarising_errors_are_reproducible_from_their_seed():
         assert runs[0] == runs[1] == runs[2], f"{model} sampling is not reproducible"
 
 
-@pytest.mark.parametrize("bias", ["Bitflip", "Depolarising"])
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
 def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
     """The k > 1 path against brute-force enumeration.
 
-    Every other decoder test uses a k = 1 code, so multi-logical marginalisation
+    Every other decoder test uses a k = 1 code, so multi-logical marginalization
     and readout were never checked against an exact reference. The [[4,2,2]]
     code has 2k = 4 logical sites, giving 16 classes that all fit in a brute
     force. Logical-site amplitudes come back in reversed bit order because the
     logical MPS is reversed before readout.
     """
     num_qubits = 4
-    stabilisers = ["XXXX", "ZZZZ"]
+    stabilizers = ["XXXX", "ZZZZ"]
     logicals_x = ["XXII", "XIXI"]
     logicals_z = ["ZIZI", "ZZII"]
     prob = 0.1
@@ -780,7 +780,7 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
     span_x, span_z = kernel(checks_z), kernel(checks_x)
     labels = ["".join(b) for b in itertools.product("01", repeat=4)]
 
-    if bias == "Depolarising":
+    if bias == "Depolarizing":
         weight = lambda dx, dz: (1 - prob) if (dx == 0 and dz == 0) else prob / 3
     else:
         weight = lambda dx, dz: (
@@ -806,16 +806,16 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
     reversed_order = [int(format(i, "04b")[::-1], 2) for i in range(16)]
 
     for error in ("XIII", "ZIII", "YIII", "XZII", "XXII", "ZZII", "XYZI", "YYII"):
-        got = _normalised(
+        got = _normalized(
             decode_custom(
-                stabilisers,
+                stabilizers,
                 logicals_x,
                 logicals_z,
                 error,
                 chi_max=int(1e5),
                 bias_type=bias,
                 bias_prob=prob,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )[0]
         )
@@ -824,11 +824,11 @@ def test_decode_custom_matches_exact_posterior_with_two_logical_qubits(bias):
 
 
 def test_trivial_error_takes_the_fast_path():
-    """The no-error shortcut is a deliberate speed optimisation, not a posterior.
+    """The no-error shortcut is a deliberate speed optimization, not a posterior.
 
     Low-p Monte Carlo is dominated by shots with no error, so both decoders
     return immediately without contracting anything. The vector it hands back is
-    a k = 1-shaped stub; callers consume only the success flag. Materialising a
+    a k = 1-shaped stub; callers consume only the success flag. Materializing a
     real 2**(2k)-entry posterior here would allocate 128 MB and cost ~10 ms per
     shot on a k = 12 BB code, on exactly the hot path this exists to skip.
 
@@ -843,9 +843,9 @@ def test_trivial_error_takes_the_fast_path():
         ["ZIZI", "ZZII"],
         "IIII",
         chi_max=int(1e5),
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
     )
     assert success == 1
@@ -856,9 +856,9 @@ def test_trivial_error_takes_the_fast_path():
         code,
         "I" * len(code),
         chi_max=int(1e5),
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
     )
     assert success_css == 1
@@ -870,12 +870,12 @@ def test_trivial_error_is_decoded_to_the_identity_class(name):
     """What the fast path asserts without computing: identity is the MAP class.
 
     If this ever failed, the shortcut would be silently scoring real failures as
-    successes, so it is the property the optimisation actually rests on.
+    successes, so it is the property the optimization actually rests on.
     """
     code = CODES[name]()
     zero_error = "I" * len(code)
     for prob in (0.05, 0.1, 0.2, 0.3, 0.4, 0.49):
-        for bias in ("Bitflip", "Depolarising"):
+        for bias in ("Bitflip", "Depolarizing"):
             posterior = exact_posterior(code, zero_error, bias, prob)
             assert int(np.argmax(posterior)) == 0
             assert posterior[0] > posterior[1:].max()
@@ -885,7 +885,7 @@ def test_a_collapsed_posterior_is_not_scored_as_a_success(monkeypatch):
     """Numerical collapse must not read as a correctly decoded shot.
 
     Every entry of an all-zero posterior is within ``eps`` of the maximum, so the
-    identity class is trivially "among the maximisers" and the shot would score a
+    identity class is trivially "among the maximizers" and the shot would score a
     success under the default tie policy. With ``silent=True`` the warning is
     suppressed as well, so the collapse would silently bias the measured failure
     rate downward -- the direction that makes a decoder look better than it is.
@@ -906,9 +906,9 @@ def test_a_collapsed_posterior_is_not_scored_as_a_success(monkeypatch):
         code,
         error,
         chi_max=64,
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
     )
 
@@ -947,9 +947,9 @@ def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
         code,
         error,
         chi_max=64,
-        bias_type="Depolarising",
+        bias_type="Depolarizing",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
         dense_readout_max_sites=0,
     )
@@ -958,11 +958,11 @@ def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
 
 
 def test_gauge_seeds_are_independent_of_the_error_seeds():
-    """The stabiliser-gauge sampler must not reuse the error generator's stream.
+    """The stabilizer-gauge sampler must not reuse the error generator's stream.
 
     ``generate_errors`` derives its per-shot streams from ``SeedSequence(seed)``.
     Rooting the gauge seeds there too hands each shot's gauge sampler the very
-    stream that produced that shot's error, so the stabiliser choice becomes a
+    stream that produced that shot's error, so the stabilizer choice becomes a
     deterministic function of the error rather than an independent draw. The
     error streams themselves must not move: the stored datasets came from them.
 
@@ -998,10 +998,10 @@ def test_tie_tolerance_is_scale_invariant(caplog):
     """A uniformly rescaled posterior must not change the degeneracy verdict.
 
     The tie window is ``max(1e-9 * max_amp, 1e-12)``. Against a raw posterior
-    that has underflowed towards ``1e-250`` the absolute floor dominates, every
+    that has underflowed toward ``1e-250`` the absolute floor dominates, every
     entry lands inside the window, and a sharply peaked distribution is reported
     as fully degenerate -- which scores as a tie rather than a clean win, and
-    fires a spurious degeneracy warning. Normalising by the peak first makes the
+    fires a spurious degeneracy warning. Normalizing by the peak first makes the
     comparison scale-free.
     """
     code = qec.steane_code()
@@ -1019,9 +1019,9 @@ def test_tie_tolerance_is_scale_invariant(caplog):
                     code,
                     error,
                     chi_max=64,
-                    bias_type="Depolarising",
+                    bias_type="Depolarizing",
                     bias_prob=0.1,
-                    renormalise=True,
+                    renormalize=True,
                     silent=False,
                 )
         reported = [
@@ -1092,9 +1092,9 @@ def test_readout_survives_a_failing_eigensolver(caplog):
                     code,
                     error,
                     chi_max=64,
-                    bias_type="Depolarising",
+                    bias_type="Depolarizing",
                     bias_prob=0.1,
-                    renormalise=True,
+                    renormalize=True,
                     silent=False,
                     dense_readout_max_sites=0,
                 )
@@ -1106,9 +1106,9 @@ def test_readout_survives_a_failing_eigensolver(caplog):
 def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
     """decode_custom must be gauge-invariant when fed honest Pauli strings.
 
-    Regression test for issue #531. The stabiliser strings here spell an X-type
+    Regression test for issue #531. The stabilizer strings here spell an X-type
     generator as "X..X" -- the contract any external caller assumes. Before the
-    fix, ``css_code_stabilisers`` emitted the letters crossed and
+    fix, ``css_code_stabilizers`` emitted the letters crossed and
     ``custom_code_checks`` carried a component swap that silently expected
     that, so honest strings mirrored the constraint wiring and the logical
     readout stopped being gauge-invariant. Self-dual codes (Steane) and codes
@@ -1127,7 +1127,7 @@ def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
             "".join(letter if v else "I" for v in row) for row in np.asarray(matrix)
         ]
 
-    stabilisers = rows_to_paulis(surface.matrix_x, "X") + rows_to_paulis(
+    stabilizers = rows_to_paulis(surface.matrix_x, "X") + rows_to_paulis(
         surface.matrix_z, "Z"
     )
     logicals = np.asarray(surface.get_logical_ops())
@@ -1146,14 +1146,14 @@ def test_custom_decoder_corrects_weight_one_errors_with_honest_paulis():
         for pauli in "XZY":
             error = "I" * qubit + pauli + "I" * (num_qubits - qubit - 1)
             _, success = decode_custom(
-                stabilisers,
+                stabilizers,
                 x_logicals,
                 z_logicals,
                 error,
                 chi_max=64,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.05,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 tolerance=0,
             )
@@ -1176,7 +1176,7 @@ def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
 ):
     """The 3-qubit pipeline must reproduce the repetition-code curve.
 
-    Textbook semantics: the bit-flip repetition code has Z-type stabilisers
+    Textbook semantics: the bit-flip repetition code has Z-type stabilizers
     ``["ZZI", "IZZ"]``, which detect X errors through the symplectic pairing,
     and the analytic logical error rate is 3p^2 - 2p^3 -- weight-one flips
     correct, weight-two flips fail. These six verdicts are deterministic and
@@ -1191,14 +1191,14 @@ def test_three_qubit_repetition_code_matches_the_analytic_verdicts(
         chi_max=64,
         bias_type="Bitflip",
         bias_prob=0.2,
-        renormalise=True,
+        renormalize=True,
         silent=True,
         tolerance=0,
     )
     assert bool(success) == should_succeed
 
 
-def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+def test_custom_multiply_by_stabilizer_is_invariant_on_a_non_self_dual_code():
     """decode_custom's retry direction must preserve the posterior on Shor.
 
     Self-dual codes mask a wrong retry direction (the crossed and uncrossed
@@ -1207,7 +1207,7 @@ def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
     changes the enforced parities and moves the posterior.
     """
     code = qec.shor_code()
-    stabs = sum(css_code_stabilisers(code), [])
+    stabs = sum(css_code_stabilizers(code), [])
     log_x, log_z = _logicals_as_pauli(code)
     error = "XZ" + "I" * (len(code) - 2)
 
@@ -1219,9 +1219,9 @@ def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
                 log_z,
                 error,
                 chi_max=1000,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 **kwargs,
             )[0],
@@ -1231,7 +1231,7 @@ def test_custom_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
     base = posterior()
     for seed in range(4):
         retried = posterior(
-            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+            multiply_by_stabilizer=True, rng=np.random.default_rng(seed)
         )
         assert np.allclose(retried, base, atol=1e-9)
 
@@ -1240,7 +1240,7 @@ def test_decode_custom_rejects_wrong_length_operators():
     """A wrong-length operator must fail loudly, not decode a different code.
 
     Found by fuzzing decode_custom against an exact oracle: a logical shorter
-    than the stabilisers silently covered a prefix of the qubits and returned a
+    than the stabilizers silently covered a prefix of the qubits and returned a
     plausible-looking posterior.
     """
     with pytest.raises(ValueError, match="length"):
@@ -1261,18 +1261,18 @@ def test_decode_custom_rejects_wrong_length_operators():
         decode_css(qec.steane_code(), "III", silent=True)
 
 
-def test_custom_code_checks_rejects_a_single_site_stabiliser():
+def test_custom_code_checks_rejects_a_single_site_stabilizer():
     """Weight-one strings cannot form a parity-check constraint."""
     with pytest.raises(ValueError, match="fewer than two"):
         custom_code_checks(["XIII"], ["XXXX", "ZZZZ"])
 
     # And the trivial-error fast path must not bypass that either: a weight-one
-    # stabiliser with an all-identity error used to return success.
+    # stabilizer with an all-identity error used to return success.
     with pytest.raises(ValueError, match="fewer than two"):
         decode_custom(["XIII"], ["XXXX"], ["ZZZZ"], "IIII", silent=True)
 
 
-def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
+def test_css_multiply_by_stabilizer_is_invariant_on_a_non_self_dual_code():
     """decode_css's retry direction must preserve the posterior on Shor.
 
     The Steane invariance test is masked (crossed and uncrossed string sets
@@ -1289,9 +1289,9 @@ def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
                 code,
                 error,
                 chi_max=1000,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 **kwargs,
             )[0],
@@ -1301,14 +1301,14 @@ def test_css_multiply_by_stabiliser_is_invariant_on_a_non_self_dual_code():
     base = posterior()
     for seed in range(4):
         retried = posterior(
-            multiply_by_stabiliser=True, rng=np.random.default_rng(seed)
+            multiply_by_stabilizer=True, rng=np.random.default_rng(seed)
         )
         assert np.allclose(retried, base, atol=1e-9)
 
 
-def test_decode_custom_rejects_an_empty_stabiliser_list():
+def test_decode_custom_rejects_an_empty_stabilizer_list():
     """An empty list used to surface as an opaque IndexError."""
-    with pytest.raises(ValueError, match="At least one stabiliser"):
+    with pytest.raises(ValueError, match="At least one stabilizer"):
         decode_custom([], ["XX"], ["ZZ"], "II", silent=True)
 
 
@@ -1316,13 +1316,13 @@ def test_logical_multiplication_permutes_the_class_posterior():
     """Implementation-independent identities of textbook class labels.
 
     Multiplying the error by X-bar must exchange the I and X class amplitudes
-    (and Z with Y); by Z-bar, I with Z (and X with Y); by any stabiliser,
+    (and Z with Y); by Z-bar, I with Z (and X with Y); by any stabilizer,
     nothing. These pin the group action of the logical algebra on the readout
     without reference to any enumerator.
     """
     code = qec.shor_code()
     x_bar, z_bar = "XXXIIIIII", "ZIIZIIZII"
-    stabilisers = sum(css_code_stabilisers(code), [])
+    stabilizers = sum(css_code_stabilizers(code), [])
 
     def posterior(err):
         raw = np.abs(
@@ -1331,9 +1331,9 @@ def test_logical_multiplication_permutes_the_class_posterior():
                     code,
                     err,
                     chi_max=512,
-                    bias_type="Depolarising",
+                    bias_type="Depolarizing",
                     bias_prob=0.1,
-                    renormalise=True,
+                    renormalize=True,
                     silent=True,
                 )[0],
                 dtype=float,
@@ -1350,16 +1350,16 @@ def test_logical_multiplication_permutes_the_class_posterior():
     assert np.allclose(
         posterior(multiply_pauli_strings("XZIIIIIII", z_bar)), base[swap_iz], atol=1e-8
     )
-    for stabiliser in stabilisers[:3]:
+    for stabilizer in stabilizers[:3]:
         assert np.allclose(
-            posterior(multiply_pauli_strings("XZIIIIIII", stabiliser)), base, atol=1e-8
+            posterior(multiply_pauli_strings("XZIIIIIII", stabilizer)), base, atol=1e-8
         )
 
 
 def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
     """The unified decode_css must equal decode_custom on a k = 2 code.
 
-    The equality battery that proved the adapter behaviour-preserving only had
+    The equality battery that proved the adapter behavior-preserving only had
     k = 1 code objects; this pins the k = 2 string rendering and pairing.
     """
     linear = qec.LinearCode(qec.BinaryMatrix(4, [[0, 1, 2, 3]]))
@@ -1371,9 +1371,9 @@ def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
                 code,
                 "XZII",
                 chi_max=512,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
             )[0],
             dtype=float,
@@ -1387,9 +1387,9 @@ def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
                 ["ZZII", "ZIIZ"],
                 "XZII",
                 chi_max=512,
-                bias_type="Depolarising",
+                bias_type="Depolarizing",
                 bias_prob=0.1,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 tolerance=0,
                 dense_readout_max_sites=30,
@@ -1401,7 +1401,7 @@ def test_css_adapter_matches_direct_strings_with_two_logical_qubits():
     assert np.allclose(via_adapter, via_strings, atol=1e-12)
 
 
-def test_adapter_rejects_wrong_length_errors_under_optimised_ordering():
+def test_adapter_rejects_wrong_length_errors_under_optimized_ordering():
     """The permutation indexes the error string, so length must be checked first.
 
     A long error was silently truncated to num_qubits by the permutation and
@@ -1411,7 +1411,7 @@ def test_adapter_rejects_wrong_length_errors_under_optimised_ordering():
     code = qec.steane_code()
     for bad in ("XIIIIIII", "XII"):
         with pytest.raises(ValueError, match="error acts on"):
-            decode_css(code, bad, silent=True, qubit_order_strategy="Optimised")
+            decode_css(code, bad, silent=True, qubit_order_strategy="Optimized")
 
 
 def test_unpaired_logicals_are_rejected_even_for_a_trivial_error():
@@ -1434,7 +1434,7 @@ def test_binary_and_string_code_builders_agree():
         css_code_constraint_sites,
         css_code_logicals,
         css_code_logicals_sites,
-        css_code_stabilisers,
+        css_code_stabilizers,
         custom_code_checks,
         custom_code_constraint_sites,
         custom_code_logicals,
@@ -1457,7 +1457,7 @@ def test_binary_and_string_code_builders_agree():
     ]
     for code in codes:
         num_qubits = len(code)
-        stabs_x, stabs_z = css_code_stabilisers(code)
+        stabs_x, stabs_z = css_code_stabilizers(code)
         stabs = list(stabs_x) + list(stabs_z)
         x_log = pauli_rows(code.x_logicals_binary(), "X", num_qubits)
         z_log = pauli_rows(code.z_logicals_binary(), "Z", num_qubits)
@@ -1493,7 +1493,7 @@ def test_generate_pauli_error_string_models():
     """Every error model draws from its own alphabet; bad inputs raise."""
     rng = np.random.default_rng(5)
     cases = {
-        "Depolarising": set("IXYZ"),
+        "Depolarizing": set("IXYZ"),
         "Bitflip": set("IX"),
         "Phaseflip": set("IZ"),
         "Amplitude Damping": set("IX"),
@@ -1524,14 +1524,14 @@ def test_decode_css_dmrg_readout_agrees_with_dense():
     for _ in range(6):
         error = generate_pauli_error_string(len(code), 0.08, rng=rng)
         dense = decode_css(
-            code, error, chi_max=64, bias_prob=0.08, renormalise=True, silent=True
+            code, error, chi_max=64, bias_prob=0.08, renormalize=True, silent=True
         )
         dmrg = decode_css(
             code,
             error,
             chi_max=64,
             bias_prob=0.08,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             dense_readout_max_sites=0,
             num_runs=2,
@@ -1544,15 +1544,15 @@ def test_decode_css_dmrg_readout_agrees_with_dense():
         decode_css(
             code,
             "X" + "I" * 8,
-            optimiser="Optima TT",
+            optimizer="Optima TT",
             dense_readout_max_sites=0,
             silent=True,
         )
-    with pytest.raises(ValueError, match="optimiser"):
+    with pytest.raises(ValueError, match="optimizer"):
         decode_css(
             code,
             "X" + "I" * 8,
-            optimiser="Nonsense",
+            optimizer="Nonsense",
             dense_readout_max_sites=0,
             silent=True,
         )
@@ -1570,23 +1570,23 @@ def test_decode_css_dmrg_readout_agrees_with_dense():
 
 def test_bias_application_validates_its_inputs():
     """The bias appliers reject malformed site lists and probabilities."""
-    from mdopt.decoding.decoding import apply_bitflip_bias, apply_depolarising_bias
+    from mdopt.decoding.decoding import apply_bitflip_bias, apply_depolarizing_bias
     from mdopt.mps.utils import create_simple_product_state
 
     mps = create_simple_product_state(6, which="0", form="Right-canonical")
-    # The pair validations live in the two-site depolarising applier.
-    with pytest.raises(ValueError, match="right neighbour"):
-        apply_depolarising_bias(mps.copy(), sites_to_bias=[5], prob_bias_list=0.1)
+    # The pair validations live in the two-site depolarizing applier.
+    with pytest.raises(ValueError, match="right neighbor"):
+        apply_depolarizing_bias(mps.copy(), sites_to_bias=[5], prob_bias_list=0.1)
     with pytest.raises(ValueError, match="distinct"):
-        apply_depolarising_bias(
+        apply_depolarizing_bias(
             mps.copy(), sites_to_bias=[2, 2], prob_bias_list=[0.1, 0.1]
         )
     with pytest.raises(ValueError, match="not.*equal|number"):
-        apply_depolarising_bias(
+        apply_depolarizing_bias(
             mps.copy(), sites_to_bias=[0, 2], prob_bias_list=[0.1, 0.2, 0.3]
         )
     with pytest.raises(ValueError, match="probability"):
-        apply_depolarising_bias(mps.copy(), sites_to_bias=[0], prob_bias_list=1.5)
+        apply_depolarizing_bias(mps.copy(), sites_to_bias=[0], prob_bias_list=1.5)
     # The "All" branches of both appliers.
     assert (
         len(apply_bitflip_bias(mps.copy(), sites_to_bias="All", prob_bias_list=0.1))
@@ -1594,7 +1594,7 @@ def test_bias_application_validates_its_inputs():
     )
     assert (
         len(
-            apply_depolarising_bias(mps.copy(), sites_to_bias="All", prob_bias_list=0.1)
+            apply_depolarizing_bias(mps.copy(), sites_to_bias="All", prob_bias_list=0.1)
         )
         == 6
     )
@@ -1629,11 +1629,11 @@ def test_linear_code_constraint_sites_and_codewords():
 
 
 def test_small_helpers_and_operator_validations():
-    """bitflip/depolarising operators reject non-probabilities;
+    """bitflip/depolarizing operators reject non-probabilities;
     linear_code_prepare_message round-trips; the distribution/str helpers work."""
     from mdopt.decoding.decoding import (
         bitflip_bias,
-        depolarising_bias,
+        depolarizing_bias,
         linear_code_parity_matrix_dense,
         linear_code_prepare_message,
         map_distribution_to_pauli,
@@ -1643,7 +1643,7 @@ def test_small_helpers_and_operator_validations():
     with pytest.raises(ValueError, match="probability"):
         bitflip_bias(1.5)
     with pytest.raises(ValueError, match="probability"):
-        depolarising_bias(-0.1)
+        depolarizing_bias(-0.1)
 
     code = qec.random_regular_code(12, 9, 3, 4, qec.Rng(11))
     first, second = linear_code_prepare_message(
@@ -1690,7 +1690,7 @@ def test_identity_fast_path_is_gated_on_low_bias():
         chi_max=128,
         bias_type="Bitflip",
         bias_prob=0.9,
-        renormalise=True,
+        renormalize=True,
         silent=True,
     )
     assert high == 0.0, "MAP at bias 0.9 is XXX, not identity"
@@ -1702,7 +1702,7 @@ def test_identity_fast_path_is_gated_on_low_bias():
         chi_max=128,
         bias_type="Bitflip",
         bias_prob=0.1,
-        renormalise=True,
+        renormalize=True,
         silent=True,
     )
     assert low == 1.0
@@ -1724,17 +1724,17 @@ def test_hardening_did_not_break_the_experiment_scripts_contract():
 
     - The scripts forward --error_model verbatim as bias_type, so every
       model name the generator knows must be accepted (non-Bitflip models
-      use the depolarising bias, as always); typos still raise.
+      use the depolarizing bias, as always); typos still raise.
     - The bias appliers accept any iterable of sites, not only lists.
-    - decode_css must apply the optimised ordering whenever the identity
+    - decode_css must apply the optimized ordering whenever the identity
       fast path will NOT fire (bias >= 0.5), and stay silent about it when
       it will.
     """
-    from mdopt.decoding.decoding import apply_depolarising_bias
+    from mdopt.decoding.decoding import apply_depolarizing_bias
     from mdopt.mps.utils import create_simple_product_state
 
     stabs, log_x, log_z = ["ZZI", "IZZ"], ["XXX"], ["ZII"]
-    for model in ("Phaseflip", "Amplitude Damping", "Erasure", "Depolarising"):
+    for model in ("Phaseflip", "Amplitude Damping", "Erasure", "Depolarizing"):
         _, verdict = decode_custom(
             stabs, log_x, log_z, "XII", bias_type=model, bias_prob=0.1, silent=True
         )
@@ -1746,7 +1746,7 @@ def test_hardening_did_not_break_the_experiment_scripts_contract():
     for sites in ((0, 2), range(0, 4, 2), np.array([0, 2])):
         assert (
             len(
-                apply_depolarising_bias(
+                apply_depolarizing_bias(
                     mps.copy(), sites_to_bias=sites, prob_bias_list=0.1
                 )
             )
@@ -1759,7 +1759,7 @@ def test_hardening_did_not_break_the_experiment_scripts_contract():
         "I" * 9,
         bias_type="Bitflip",
         bias_prob=0.9,
-        qubit_order_strategy="Optimised",
+        qubit_order_strategy="Optimized",
         chi_max=128,
         silent=True,
     )
@@ -1797,7 +1797,7 @@ def test_decode_css_rejects_unknown_qubit_order_strategy():
     code = qec.steane_code()
     for error in ("I" * 7, "X" + "I" * 6):
         with pytest.raises(ValueError, match="qubit_order_strategy"):
-            decode_css(code, error, silent=True, qubit_order_strategy="Optimized")
+            decode_css(code, error, silent=True, qubit_order_strategy="Optimised")
 
 
 def test_decode_custom_rejects_unknown_tie_policy_on_trivial_error():
@@ -1811,7 +1811,7 @@ def test_negative_logical_amplitudes_are_clamped_not_folded():
     """A truncation-induced negative amplitude can never become the MAP class.
 
     Folding with ``abs`` let an unconverged negative component win; clamping to
-    zero keeps it out of the maximiser set, and a negative identity entry is
+    zero keeps it out of the maximizer set, and a negative identity entry is
     scored as a failure instead of a spurious success.
     """
     from mdopt.mps.explicit import ExplicitMPS
@@ -1845,19 +1845,19 @@ def test_decode_custom_validates_pauli_alphabet_before_the_shortcut():
         decode_custom(["ZZE"], ["XXX"], ["ZII"], "III", silent=True)
 
 
-def test_optimiser_is_validated_before_the_shortcut_and_dense_forces_readout():
-    """The optimiser selector is checked on every call; "Dense" means dense."""
+def test_optimizer_is_validated_before_the_shortcut_and_dense_forces_readout():
+    """The optimizer selector is checked on every call; "Dense" means dense."""
     code = qec.shor_code()
     trivial = "I" * 9
-    with pytest.raises(ValueError, match="optimiser"):
-        decode_css(code, trivial, optimiser="Nonsense", silent=True)
+    with pytest.raises(ValueError, match="optimizer"):
+        decode_css(code, trivial, optimizer="Nonsense", silent=True)
     with pytest.raises(NotImplementedError, match="Optima TT"):
-        decode_css(code, trivial, optimiser="Optima TT", silent=True)
-    # With the dense threshold at 0 the default optimiser takes the DMRG path,
+        decode_css(code, trivial, optimizer="Optima TT", silent=True)
+    # With the dense threshold at 0 the default optimizer takes the DMRG path,
     # while "Dense" still returns the full 4**k posterior.
     error = "X" + "I" * 8
     posterior, success = decode_css(
-        code, error, optimiser="Dense", dense_readout_max_sites=0, silent=True
+        code, error, optimizer="Dense", dense_readout_max_sites=0, silent=True
     )
     assert len(posterior) == 4
     assert success == 1.0

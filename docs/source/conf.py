@@ -61,7 +61,7 @@ exclude_patterns = [
     "mdopt.rst",
     "mdopt.contractor.rst",
     "mdopt.mps.rst",
-    "mdopt.optimiser.rst",
+    "mdopt.optimizer.rst",
     "mdopt.utils.rst",
 ]
 

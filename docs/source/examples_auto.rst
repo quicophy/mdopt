@@ -1,4 +1,4 @@
-Notebook Examples (auto-generated)
+Notebook examples (auto-generated)
 ==================================
 
 The following notebooks were discovered and copied from the repository's

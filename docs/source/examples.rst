@@ -20,7 +20,7 @@ Examples
 
 - :doc:`notebooks/shor` — Demonstrates the 9-qubit Shor code with separated X/Z error handling in the TN framework. Serves as a bridge between toy codes and LDPC-like examples.
 
-- :doc:`notebooks/quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Visualise the underlying tensor network structure. Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
+- :doc:`notebooks/quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Visualize the underlying tensor network structure. Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
 
 
 .. toctree::
@@ -33,13 +33,13 @@ Examples
    notebooks/maxbonddim.ipynb
    notebooks/gpu_example.ipynb
 
-- :doc:`notebooks/ground_state` — Solve a simple 1D quantum Ising chain using an MPS ground-state search. Compares observables and magnetisation curves from exact diagonalisation and DMRG to confirm correctness. A gentle introduction to MPS/MPO mechanics outside of decoding.
+- :doc:`notebooks/ground_state` — Solve a simple 1D quantum Ising chain using an MPS ground-state search. Compares observables and magnetization curves from exact diagonalization and DMRG to confirm correctness. A gentle introduction to MPS/MPO mechanics outside of decoding.
 
-- :doc:`notebooks/mps-rand-circ` — Simulates random (checkerboard-style) circuits on MPS to study entanglement growth and contraction behaviour. Tracks fidelity decay at fixed bond dimension, providing a benchmarking harness for contraction strategies.
+- :doc:`notebooks/mps-rand-circ` — Simulates random (checkerboard-style) circuits on MPS to study entanglement growth and contraction behavior. Tracks fidelity decay at fixed bond dimension, providing a benchmarking harness for contraction strategies.
 
-- :doc:`notebooks/main_component` — Defines and solves the Main Component Problem (finding the basis state that contributes most to a given state) as a sanity check for the dephasing DMRG optimiser. Compares solutions from exact diagonalisation, standard DMRG, and dephasing DMRG, demonstrating agreement.
+- :doc:`notebooks/main_component` — Defines and solves the main component problem (finding the basis state that contributes most to a given state) as a sanity check for the dephasing DMRG optimizer. Compares solutions from exact diagonalization, standard DMRG, and dephasing DMRG, demonstrating agreement.
 
-- :doc:`notebooks/maxbonddim` — Tests an MPO order-optimisation strategy (based on matrix bandwidth minimisation) to reduce intermediate bond growth during operator application. Shows how reordering lowers contraction cost and improves practical performance within experiments.
+- :doc:`notebooks/maxbonddim` — Tests an MPO order-optimization strategy (based on matrix bandwidth minimization) to reduce intermediate bond growth during operator application. Shows how reordering lowers contraction cost and improves practical performance within experiments.
 
 - :doc:`notebooks/gpu_example` — Illustrates how to leverage GPU acceleration (via CuPy) for MPS/MPO operations. Compares performance between CPU and GPU backends for key tensor network routines, demonstrating speedups on compatible hardware.
 

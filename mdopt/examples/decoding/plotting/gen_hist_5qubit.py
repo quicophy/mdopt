@@ -84,15 +84,15 @@ dists_w1 = [
     decode_custom(error=err, bias_prob=0, **common)[0] for err in tqdm(errors_w1)
 ]
 
-print("Decoding weight-2 errors (Depolarising, bias_prob=1e-2)...")
+print("Decoding weight-2 errors (Depolarizing, bias_prob=1e-2)...")
 dists_w2 = [
-    decode_custom(error=err, bias_type="Depolarising", bias_prob=1e-2, **common)[0]
+    decode_custom(error=err, bias_type="Depolarizing", bias_prob=1e-2, **common)[0]
     for err in tqdm(errors_w2)
 ]
 
-print("Decoding weight-3 errors (Depolarising, bias_prob=1e-2)...")
+print("Decoding weight-3 errors (Depolarizing, bias_prob=1e-2)...")
 dists_w3 = [
-    decode_custom(error=err, bias_type="Depolarising", bias_prob=1e-2, **common)[0]
+    decode_custom(error=err, bias_type="Depolarizing", bias_prob=1e-2, **common)[0]
     for err in tqdm(errors_w3)
 ]
 

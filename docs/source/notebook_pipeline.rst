@@ -98,7 +98,7 @@ protected and rejects direct pushes. Its full contract:
 * **There is only ever one.** Consecutive drifts force-push the same branch,
   updating the open PR in place.
 * **It cleans up after itself.** If the drift disappears (a notebook reverted,
-  or synchronised another way), the next run closes the stale PR and deletes
+  or synchronized another way), the next run closes the stale PR and deletes
   the branch, so outdated copies cannot be merged.
 * **Merging it does not loop.** The merge triggers a run that finds no drift
   and exits without committing.
@@ -108,7 +108,7 @@ protected and rejects direct pushes. Its full contract:
 * **Manual dispatch:** ``gh workflow run docs-sync.yml --ref main`` runs the
   sync on demand.
 
-One trap to know: GitHub honours CI-skip markers (such as ``[skip ci]``)
+One trap to know: GitHub honors CI-skip markers (such as ``[skip ci]``)
 anywhere in a commit message, and a squash merge concatenates every branch
 commit's title and body into one message. A commit that merely *quotes* such a
 marker therefore silences all workflows on the merge push -- including this

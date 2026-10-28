@@ -1,29 +1,29 @@
-mdopt.optimiser package
+mdopt.optimizer package
 =======================
 
 Submodules
 ----------
 
-mdopt.optimiser.dephasing\_dmrg module
+mdopt.optimizer.dephasing\_dmrg module
 --------------------------------------
 
-.. automodule:: mdopt.optimiser.dephasing_dmrg
+.. automodule:: mdopt.optimizer.dephasing_dmrg
    :members:
    :undoc-members:
    :show-inheritance:
 
-mdopt.optimiser.dmrg module
+mdopt.optimizer.dmrg module
 ---------------------------
 
-.. automodule:: mdopt.optimiser.dmrg
+.. automodule:: mdopt.optimizer.dmrg
    :members:
    :undoc-members:
    :show-inheritance:
 
-mdopt.optimiser.utils module
+mdopt.optimizer.utils module
 ----------------------------
 
-.. automodule:: mdopt.optimiser.utils
+.. automodule:: mdopt.optimizer.utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -31,7 +31,7 @@ mdopt.optimiser.utils module
 Module contents
 ---------------
 
-.. automodule:: mdopt.optimiser
+.. automodule:: mdopt.optimizer
    :members:
    :undoc-members:
    :show-inheritance:

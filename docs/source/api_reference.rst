@@ -10,10 +10,10 @@ Entry points
 
 - :mod:`mdopt.decoding` — the decoders: :func:`~mdopt.decoding.decoding.decode_css`,
   :func:`~mdopt.decoding.decoding.decode_custom` and
-  :func:`~mdopt.decoding.decoding.decode_message` for stabiliser and classical codes,
+  :func:`~mdopt.decoding.decoding.decode_message` for stabilizer and classical codes,
   :func:`~mdopt.decoding.dem.decode_dem` for stim detector error models
 - :mod:`mdopt.mps` — MPS data structures and helpers
-- :mod:`mdopt.optimiser` — optimisation via DMRG-like routines and the parity-check MPO tensors
+- :mod:`mdopt.optimizer` — optimization via DMRG-like routines and the parity-check MPO tensors
 - :mod:`mdopt.contractor` — tensor-network contraction utilities
 - :mod:`mdopt.utils` — shared tensor utilities
 

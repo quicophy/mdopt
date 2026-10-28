@@ -15,5 +15,5 @@ Subpackages
    mdopt.contractor
    mdopt.decoding
    mdopt.mps
-   mdopt.optimiser
+   mdopt.optimizer
    mdopt.utils

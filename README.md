@@ -16,7 +16,7 @@
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://lbesson.mit-license.org/)
 
 
-##### `mdopt` is a python package built on top of `numpy` for discrete optimisation (with the main application to classical and quantum decoding) in the tensor-network (specifically, Matrix Product States / Operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
+##### `mdopt` is a Python package built on top of `numpy` for discrete optimization (with the main application to classical and quantum decoding) in the tensor-network (specifically, matrix product states / operators) language. The intended audience includes physicists, quantum information / error correction researchers, and those interested in exploring tensor-network methods beyond traditional applications.
 
 ## Installation
 
@@ -103,8 +103,8 @@ logicals, success = decode_css(
     bias_prob=0.01,
     bias_type="Bitflip",
     chi_max=64,
-    renormalise=True,
-    contraction_strategy="Optimised",
+    renormalize=True,
+    contraction_strategy="Optimized",
     tolerance=1e-12,
     silent=False,
 )
@@ -142,8 +142,8 @@ print(predicted_flips, observables[0].astype(int))
 
 - `mdopt.mps` — matrix product states in the explicit (Vidal) and canonical forms.
 - `mdopt.contractor` — MPS-MPO zip-up contraction with truncation.
-- `mdopt.optimiser` — DMRG, dephasing DMRG, and the parity-check MPO tensors applied by `apply_constraints`.
-- `mdopt.decoding` — the decoders: `decode_css`, `decode_custom` and `decode_message` for stabiliser and classical codes, `decode_dem` for detector error models.
+- `mdopt.optimizer` — DMRG, dephasing DMRG, and the parity-check MPO tensors applied by `apply_constraints`.
+- `mdopt.decoding` — the decoders: `decode_css`, `decode_custom` and `decode_message` for stabilizer and classical codes, `decode_dem` for detector error models.
 - `mdopt.utils` — truncated SVD/QR and tensor helpers.
 - `mdopt.examples` — the runnable campaign scripts behind the example notebooks.
 

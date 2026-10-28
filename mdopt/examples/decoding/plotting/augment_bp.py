@@ -9,7 +9,7 @@ p=1e-3 (independent of, and additive to, any existing reps for that cell),
 re-pickles in v4 format that records reps per (N, p), and leaves the
 remaining cells untouched.
 
-Parallelised across codes per N.
+Parallelized across codes per N.
 """
 
 # --- asset paths (the code lives in the package; the data does not) ---

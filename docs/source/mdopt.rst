@@ -9,7 +9,7 @@ Subpackages
 
    mdopt.contractor
    mdopt.mps
-   mdopt.optimiser
+   mdopt.optimizer
    mdopt.utils
 
 Module contents

@@ -28,7 +28,7 @@ def create_state_vector(
         Number of dimensions of each degree of freedom.
     rng : Optional[np.random.Generator]
         Random number generator to draw from. If ``None``, the legacy global
-        ``np.random`` stream is used, which honours :func:`numpy.random.seed`.
+        ``np.random`` stream is used, which honors :func:`numpy.random.seed`.
 
     Returns
     -------
@@ -43,16 +43,16 @@ def create_state_vector(
     return state_vector
 
 
-def find_orth_centre(
+def find_orth_center(
     mps: CanonicalMPS, return_orth_flags: bool = False, tolerance: float = 1e-12
 ):
     """
-    Returns a list of integers corresponding to positions of orthogonality centres of an MPS.
+    Returns a list of integers corresponding to positions of orthogonality centers of an MPS.
 
     Parameters
     ----------
     mps : CanonicalMPS
-        The MPS to find the orthogonality centre(s) in.
+        The MPS to find the orthogonality center(s) in.
     return_orth_flags : bool
         Whether to return if each tensor is a right or a left isometry.
     tolerance : float
@@ -60,8 +60,8 @@ def find_orth_centre(
 
     Returns
     -------
-    orth_centres : List[int]
-        Indices of sites at which tensors are orthogonality centres.
+    orth_centers : List[int]
+        Indices of sites at which tensors are orthogonality centers.
     orth_flags_left : Optional[List[bool]]
         Boolean variables for each tensor corresponding to being a left isometry.
     orth_flags_right : Optional[List[bool]]
@@ -71,18 +71,18 @@ def find_orth_centre(
     ------
     ValueError
         If an :class:`ExplicitMPS` instance is passed as an input.
-        They do not have orthogonality centres by definition.
+        They do not have orthogonality centers by definition.
     """
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
-            "Orthogonality centre is undefined for an Explicit MPS instance."
+            "Orthogonality center is undefined for an Explicit MPS instance."
         )
 
     num_sites = mps.num_sites
 
     orth_flags_left = []
     orth_flags_right = []
-    orth_centres = []
+    orth_centers = []
 
     for i, tensor in enumerate(mps.tensors):
         to_be_identity_left = np.asarray(
@@ -108,28 +108,28 @@ def find_orth_centre(
         if not (np.isclose(norm_left, 0, atol=tolerance)) and not (
             np.isclose(norm_right, 0, atol=tolerance)
         ):
-            orth_centres.append(i)
+            orth_centers.append(i)
 
     # Handling exceptions, right- and left-canonical forms, and cases
-    # when the orthogonality centre might be left- or right- isometry at
+    # when the orthogonality center might be left- or right- isometry at
     # the boundaries while all the other tensors are the opposite isometries.
     if orth_flags_left in ([True] + [False] * (num_sites - 1), [False] * num_sites):
         if orth_flags_right == [not flag for flag in orth_flags_left]:
-            orth_centres.append(0)
+            orth_centers.append(0)
 
     if orth_flags_left in ([True] * (num_sites - 1) + [False], [True] * num_sites):
         if orth_flags_right == [not flag for flag in orth_flags_left]:
-            orth_centres.append(num_sites - 1)
+            orth_centers.append(num_sites - 1)
 
     if (orth_flags_left == [True] * num_sites) and (
         orth_flags_right == [True] * num_sites
     ):
-        orth_centres.append(0)
+        orth_centers.append(0)
 
     if return_orth_flags:
-        return orth_centres, orth_flags_left, orth_flags_right
+        return orth_centers, orth_flags_left, orth_flags_right
 
-    return orth_centres
+    return orth_centers
 
 
 def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
@@ -152,11 +152,11 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
     ------
     ValueError
         If an :class:`ExplicitMPS` instance is passed as an input.
-        They do not have orthogonality centres by definition.
+        They do not have orthogonality centers by definition.
     """
     if isinstance(mps, ExplicitMPS):
         raise ValueError(
-            "Orthogonality centre is undefined for an Explicit MPS instance."
+            "Orthogonality center is undefined for an Explicit MPS instance."
         )
 
     flags_left = []
@@ -190,15 +190,15 @@ def is_canonical(mps: CanonicalMPS, tolerance: float = 1e-12):
     if np.array(flags_left).all() or np.array(flags_right).all():
         return True
 
-    orth_centres = find_orth_centre(mps)
-    return len(orth_centres) == 1
+    orth_centers = find_orth_center(mps)
+    return len(orth_centers) == 1
 
 
 def inner_product(
     mps_1: Union[ExplicitMPS, CanonicalMPS], mps_2: Union[ExplicitMPS, CanonicalMPS]
 ) -> Union[float, np.complex128]:
     """
-    Returns an inner product between 2 Matrix Product States.
+    Returns an inner product between 2 matrix product states.
 
     Parameters
     ----------
@@ -215,7 +215,7 @@ def inner_product(
     Raises
     ------
     ValueError
-        If the Matrix Product States are of different length.
+        If the matrix product states are of different length.
     """
     if len(mps_1) != len(mps_2):
         raise ValueError(
@@ -251,13 +251,13 @@ def inner_product(
     return np.complex128(product)
 
 
-def _renormalise_after_truncation(
+def _renormalize_after_truncation(
     singular_values: np.ndarray, truncation_error: Optional[float]
 ) -> np.ndarray:
-    """Renormalises a Schmidt spectrum after ``chi_max`` truncation.
+    """Renormalizes a Schmidt spectrum after ``chi_max`` truncation.
 
     :class:`ExplicitMPS` requires a unit-norm spectrum at every bond. Truncation
-    leaves the retained spectrum short of that, so we always renormalise when
+    leaves the retained spectrum short of that, so we always renormalize when
     truncation has occurred. The input state vector is validated for unit norm
     before decomposition, so spectra that were not truncated already satisfy
     the constraint.
@@ -276,7 +276,7 @@ def mps_from_dense(
     chi_max: int = int(1e4),
     tolerance: float = float(1e-12),
     form: str = "Explicit",
-    orth_centre: Optional[int] = None,
+    orth_center: Optional[int] = None,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     Builds an MPS from a dense (state-vector) from.
@@ -291,15 +291,15 @@ def mps_from_dense(
     chi_max : int
         Maximum number of singular values to keep.
     tolerance : float
-        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        Absolute tolerance of the normalization of the singular value spectrum at each bond.
     form : str
         The form of the MPS. Available options:
             | ``Explicit`` : The :class:`ExplicitMPS` form (by default).
             | ``Right-canonical`` : The :class:`CanonicalMPS` right-canonical form.
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
             | ``Mixed-canonical`` : The :class:`CanonicalMPS` mixed-canonical form.
-    orth_centre : Optional[int]
-        The orthogonal centre position for the mixed-canonical form.
+    orth_center : Optional[int]
+        The orthogonal center position for the mixed-canonical form.
 
     Returns
     -------
@@ -328,7 +328,7 @@ def mps_from_dense(
     vec_norm = float(np.linalg.norm(state_vector))
     if abs(vec_norm - 1) > tolerance:
         raise ValueError(
-            "The input state vector must be normalised to 1, "
+            "The input state vector must be normalized to 1, "
             f"instead the norm is {vec_norm}."
         )
 
@@ -339,9 +339,9 @@ def mps_from_dense(
 
     # First SVD
     state_vector, singular_values_local, v_r, trunc_err = svd(
-        state_vector, chi_max=chi_max, renormalise=False, return_truncation_error=True
+        state_vector, chi_max=chi_max, renormalize=False, return_truncation_error=True
     )
-    singular_values_local = _renormalise_after_truncation(
+    singular_values_local = _renormalize_after_truncation(
         singular_values_local, trunc_err
     )
     tensors.append(np.expand_dims(v_r, -1))
@@ -357,10 +357,10 @@ def mps_from_dense(
         state_vector, singular_values_local, v_r, trunc_err = svd(
             state_vector,
             chi_max=chi_max,
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
-        singular_values_local = _renormalise_after_truncation(
+        singular_values_local = _renormalize_after_truncation(
             singular_values_local, trunc_err
         )
         v_r = v_r.reshape((-1, phys_dim, bond_dim))
@@ -392,10 +392,10 @@ def mps_from_dense(
             tensors, singular_values, tolerance=tolerance, chi_max=chi_max
         ).left_canonical()
     if form == "Mixed-canonical":
-        orth_centre = cast(int, orth_centre)
+        orth_center = cast(int, orth_center)
         return ExplicitMPS(
             tensors, singular_values, tolerance=tolerance, chi_max=chi_max
-        ).mixed_canonical(orth_centre=orth_centre)
+        ).mixed_canonical(orth_center=orth_center)
 
     return ExplicitMPS(tensors, singular_values, tolerance=tolerance)
 
@@ -429,7 +429,7 @@ def create_simple_product_state(
             | ``Left-canonical`` : The :class:`CanonicalMPS` left-canonical form.
     tolerance : float
         For the Explicit form:
-        absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        absolute tolerance of the normalization of the singular value spectrum at each bond.
         For the Canonical form:
         numerical tolerance to zero out the singular values in Singular Value Decomposition.
 
@@ -445,14 +445,14 @@ def create_simple_product_state(
 
     Notes
     -----
-    Produces a Matrix Product State consisting of tensors with bond dimenstions equal to 1.
+    Produces a matrix product state consisting of tensors with bond dimensions equal to 1.
     The tensors are defined as follows:
 
     - :math:`| 0 \rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`
     - :math:`| 1 \rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`
     - :math:`| + \rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`
 
-    The returned state is normalised at the end.
+    The returned state is normalized at the end.
     """
     tensor = np.zeros((phys_dim,))
     if which == "0":
@@ -467,11 +467,11 @@ def create_simple_product_state(
 
     if form == "Right-canonical":
         mps = ExplicitMPS(tensors, singular_values).right_canonical()
-        mps.orth_centre = None
+        mps.orth_center = None
         return mps
     if form == "Left-canonical":
         mps = ExplicitMPS(tensors, singular_values).left_canonical()
-        mps.orth_centre = None
+        mps.orth_center = None
         return mps
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")
@@ -518,14 +518,14 @@ def create_custom_product_state(
 
     Notes
     -----
-    Produces a Matrix Product State consisting of tensors with bond dimensions equal to 1.
+    Produces a matrix product state consisting of tensors with bond dimensions equal to 1.
     The tensors are defined as follows:
 
     - :math:`|0\rangle = \underbrace{(1, 0, ..., 0, 0)}_{\text{phys_dim}}`
     - :math:`|1\rangle = \underbrace{(0, 0, ..., 0, 1)}_{\text{phys_dim}}`
     - :math:`|+\rangle = \underbrace{(\frac{1}{\sqrt{\text{phys_dim}}}, ..., \frac{1}{\sqrt{\text{phys_dim}}})}_{\text{phys_dim}}`
 
-    The returned state is renormalised at the end.
+    The returned state is renormalized at the end.
     """
     num_sites = len(string)
     tensors = []
@@ -551,13 +551,13 @@ def create_custom_product_state(
         mps = ExplicitMPS(
             tensors, singular_values, tolerance=tolerance
         ).right_canonical()
-        mps.orth_centre = None
+        mps.orth_center = None
         return mps
     if form == "Left-canonical":
         mps = ExplicitMPS(
             tensors, singular_values, tolerance=tolerance
         ).left_canonical()
-        mps.orth_centre = None
+        mps.orth_center = None
         return mps
     if form == "Mixed-canonical":
         raise ValueError("Mixed-canonical form is not defined for a product state.")

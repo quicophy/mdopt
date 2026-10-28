@@ -46,7 +46,7 @@ os.makedirs(os.path.dirname(PICKLE_OUT), exist_ok=True)
 PLOT_OUT = _fig("bb-qubit-ordering.pdf")
 CHI_LIST = [8, 16, 24, 32, 40]
 P_LIST = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
-ORDERINGS = ["Natural", "Optimised"]
+ORDERINGS = ["Natural", "Optimized"]
 
 
 def load_all():
@@ -110,7 +110,7 @@ def main():
     for chi in CHI_LIST:
         for p in P_LIST:
             n = aggregated[chi, p, "Natural"]
-            o = aggregated[chi, p, "Optimised"]
+            o = aggregated[chi, p, "Optimized"]
             assert (n["seeds"] == o["seeds"]).all(), f"seed mismatch at ({chi},{p})"
             per_seed = 1.0 - o["seed_times"] / n["seed_times"]
             speedup[chi, p] = {
@@ -152,7 +152,7 @@ def main():
     for c in CHI_LIST:
         for p in P_LIST:
             n = aggregated[c, p, "Natural"]
-            o = aggregated[c, p, "Optimised"]
+            o = aggregated[c, p, "Optimized"]
             s = speedup[c, p]
             print(
                 f"{c:>4} {p:>7.0e} | "
@@ -168,7 +168,7 @@ def main():
     cmap = colormaps["viridis_r"]
     norm = Normalize(vmin=0, vmax=len(CHI_LIST) - 1)
     # Natural solid, RCM dashed, as the module docstring above promises.
-    style = {"Natural": ("-", "o"), "Optimised": ("--", "s")}
+    style = {"Natural": ("-", "o"), "Optimized": ("--", "s")}
 
     # Left panel: LER vs p, both orderings (overlap demonstrates LER preservation).
     for idx, chi in enumerate(CHI_LIST):
@@ -217,7 +217,7 @@ def main():
     )
     ax_r.grid(True, ls=":", linewidth=0.6)
 
-    # Combined legend on left panel: chi colours + ordering linestyles.
+    # Combined legend on left panel: chi colors + ordering linestyles.
     chi_handles = [
         plt.Line2D(
             [],

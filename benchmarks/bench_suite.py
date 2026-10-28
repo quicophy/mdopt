@@ -2,13 +2,13 @@
 
 Each workload is deterministic (fixed seeds), sized to run in tens of seconds,
 and returns a correctness fingerprint. The fingerprints are the contract for
-the optimisation work: ``--check`` compares them against the committed
+the optimization work: ``--check`` compares them against the committed
 ``benchmarks/baseline.json`` -- exact values (energies, verdicts, overlaps)
 must match to 1e-10, and chi-truncated posterior entries must stay within
 1e-2: a different but equally valid SVD gauge in a near-degenerate spectrum
 changes which directions chi_max keeps, and that moves small class masses at
 this level while leaving verdicts and converged results untouched (old and
-new decoders agree to 6e-14 at chi=1e5). A real behaviour change moves
+new decoders agree to 6e-14 at chi=1e5). A real behavior change moves
 verdicts or exact values. ``--write-baseline``
 records a new baseline after a change that is validated some other way
 (exact-enumeration tests, agreement at converged chi).
@@ -50,8 +50,8 @@ from mdopt.mps.utils import (
     create_simple_product_state,
     inner_product,
 )
-from mdopt.optimiser.dmrg import DMRG
-from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+from mdopt.optimizer.dmrg import DMRG
+from mdopt.optimizer.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
 
 HERE = Path(__file__).parent
 RESULTS = HERE / "results"
@@ -72,9 +72,9 @@ def wl_surface_bitflip():
             chi_max=64,
             bias_type="Bitflip",
             bias_prob=0.05,
-            renormalise=True,
+            renormalize=True,
             silent=True,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
         )
         # The full posterior, not just the verdict: a wrong posterior
         # with an unmoved argmax must still move the fingerprint.
@@ -82,8 +82,8 @@ def wl_surface_bitflip():
     return outputs
 
 
-def wl_css_optimised():
-    """Surface-code decode under the RCM qubit ordering (optimise_qubit_order)."""
+def wl_css_optimized():
+    """Surface-code decode under the RCM qubit ordering (optimize_qubit_order)."""
     code = qec.hypergraph_product(qec.repetition_code(5), qec.repetition_code(5))
     rng = np.random.default_rng(52)
     outputs = []
@@ -97,10 +97,10 @@ def wl_css_optimised():
             chi_max=64,
             bias_type="Bitflip",
             bias_prob=0.05,
-            renormalise=True,
+            renormalize=True,
             silent=True,
-            contraction_strategy="Optimised",
-            qubit_order_strategy="Optimised",
+            contraction_strategy="Optimized",
+            qubit_order_strategy="Optimized",
         )
         outputs.append([float(success)] + [round(float(x), 10) for x in dense])
     return outputs
@@ -135,7 +135,7 @@ def _dem_rows(problem, syndromes, chi_max):
     for syndrome in syndromes:
         masses, flips = decode_dem(problem, syndrome, chi_max=chi_max)
         posterior = masses / masses.sum()
-        # [verdict, *normalised class masses]: the verdict is exact, the
+        # [verdict, *normalized class masses]: the verdict is exact, the
         # masses are chi-truncated posterior entries.
         outputs.append([float(flips[0])] + [round(float(x), 10) for x in posterior])
     return outputs
@@ -153,8 +153,8 @@ def wl_dem_d5():
     return _dem_rows(problem, syndromes, chi_max=32)
 
 
-def wl_shor_depolarising():
-    """Small-code depolarising decode: dense readout path end to end."""
+def wl_shor_depolarizing():
+    """Small-code depolarizing decode: dense readout path end to end."""
     code = qec.shor_code()
     rng = np.random.default_rng(7)
     outputs = []
@@ -164,9 +164,9 @@ def wl_shor_depolarising():
             code,
             error,
             chi_max=128,
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.1,
-            renormalise=True,
+            renormalize=True,
             silent=True,
         )
         # The full posterior, not just the verdict: a wrong posterior
@@ -193,8 +193,8 @@ def wl_classical_ldpc():
             sites,
             [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
             chi_max=64,
-            renormalise=True,
-            strategy="Optimised",
+            renormalize=True,
+            strategy="Optimized",
             silent=True,
         )
         _, overlap = decode_message(
@@ -211,8 +211,8 @@ def wl_classical_ldpc():
         # the Schmidt spectrum at the middle bond (a corrupted contraction
         # leaves weight outside the codeword, which shows up here).
         middle = state.num_sites // 2
-        _, spectra = state.copy().move_orth_centre(
-            middle, return_singular_values=True, renormalise=True
+        _, spectra = state.copy().move_orth_center(
+            middle, return_singular_values=True, renormalize=True
         )
         schmidt = sorted(
             (float(v) for v in np.asarray(spectra[-1]).ravel()), reverse=True
@@ -229,17 +229,17 @@ def wl_classical_ldpc():
 
 
 def wl_dmrg_ground_state():
-    """Plain DMRG on a transverse-field Ising chain (optimiser hot path)."""
+    """Plain DMRG on a transverse-field Ising chain (optimizer hot path)."""
     num_sites = 24
     mpo = IsingMPO(num_sites=num_sites, h_magnetic=1.0).hamiltonian_mpo()
     mps = create_simple_product_state(num_sites, which="+")
     engine = DMRG(mps, mpo, chi_max=48, cut=1e-12, mode="SA", silent=True)
     engine.run(2)
-    # The energy depends on the optimised state everywhere the norm does not:
-    # renormalised bond updates make norm() ~ 1.0 for any state, correct or
+    # The energy depends on the optimized state everywhere the norm does not:
+    # renormalized bond updates make norm() ~ 1.0 for any state, correct or
     # not, so it cannot serve as the correctness fingerprint.
     ground = engine.mps
-    h_ground = mps_mpo_contract(ground, mpo, chi_max=int(1e4), renormalise=False)
+    h_ground = mps_mpo_contract(ground, mpo, chi_max=int(1e4), renormalize=False)
     energy = float(np.real(inner_product(ground, h_ground)))
     return [round(energy, 10)]
 
@@ -248,16 +248,16 @@ BASELINE = HERE / "baseline.json"
 # Workloads whose fingerprint rows are [verdict, *posterior entries at chi_max].
 POSTERIOR_WORKLOADS = {
     "surface_bitflip",
-    "shor_depolarising",
-    "css_optimised",
+    "shor_depolarizing",
+    "css_optimized",
     "dem_d3",
     "dem_d5",
 }
 
 WORKLOADS = {
     "surface_bitflip": wl_surface_bitflip,
-    "css_optimised": wl_css_optimised,
-    "shor_depolarising": wl_shor_depolarising,
+    "css_optimized": wl_css_optimized,
+    "shor_depolarizing": wl_shor_depolarizing,
     "classical_ldpc": wl_classical_ldpc,
     "dmrg_ground_state": wl_dmrg_ground_state,
     "dem_d3": wl_dem_d3,

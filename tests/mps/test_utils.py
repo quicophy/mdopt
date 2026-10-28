@@ -8,7 +8,7 @@ from mdopt.mps.explicit import ExplicitMPS
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import (
     create_state_vector,
-    find_orth_centre,
+    find_orth_center,
     is_canonical,
     inner_product,
     mps_from_dense,
@@ -30,16 +30,16 @@ def test_mps_utils_create_state_vector():
         assert np.isclose(np.linalg.norm(psi) - 1, 0)
 
 
-def test_mps_utils_find_orth_centre():
-    """Test for the ``find_orth_centre`` function."""
+def test_mps_utils_find_orth_center():
+    """Test for the ``find_orth_center`` function."""
 
     num_sites = np.random.randint(4, 9)
 
     for _ in range(10):
         psi = create_state_vector(num_sites)
-        orth_centre = np.random.randint(num_sites)
+        orth_center = np.random.randint(num_sites)
         mps_explicit = mps_from_dense(psi, form="Explicit")
-        mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_centre=orth_centre)
+        mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_center=orth_center)
         mps_left = mps_from_dense(psi, form="Left-canonical")
         mps_right = mps_from_dense(psi, form="Right-canonical")
         mps_product = create_simple_product_state(
@@ -47,15 +47,15 @@ def test_mps_utils_find_orth_centre():
         )
 
         with pytest.raises(ValueError):
-            find_orth_centre(mps_explicit)
-        assert np.isclose(find_orth_centre(mps_mixed), [orth_centre])
+            find_orth_center(mps_explicit)
+        assert np.isclose(find_orth_center(mps_mixed), [orth_center])
         assert np.isclose(
-            find_orth_centre(mps_left, return_orth_flags=True)[1], [True] * num_sites
+            find_orth_center(mps_left, return_orth_flags=True)[1], [True] * num_sites
         ).all()
         assert np.isclose(
-            find_orth_centre(mps_right, return_orth_flags=True)[2], [True] * num_sites
+            find_orth_center(mps_right, return_orth_flags=True)[2], [True] * num_sites
         ).all()
-        assert np.isclose(find_orth_centre(mps_product), [0])
+        assert np.isclose(find_orth_center(mps_product), [0])
 
 
 def test_mps_utils_is_canonical():
@@ -65,9 +65,9 @@ def test_mps_utils_is_canonical():
 
     for _ in range(10):
         psi = create_state_vector(num_sites)
-        orth_centre = np.random.randint(num_sites)
+        orth_center = np.random.randint(num_sites)
         mps_explicit = mps_from_dense(psi, form="Explicit")
-        mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_centre=orth_centre)
+        mps_mixed = mps_from_dense(psi, form="Mixed-canonical", orth_center=orth_center)
         mps_left = mps_from_dense(psi, form="Left-canonical")
         mps_right = mps_from_dense(psi, form="Right-canonical")
 
@@ -87,14 +87,14 @@ def test_mps_utils_inner_product():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
-        # All possible orthogonality centre indices.
-        orth_centre_indices = np.arange(num_sites)
+        # All possible orthogonality center indices.
+        orth_center_indices = np.arange(num_sites)
 
         list_of_mps = []
 
         list_of_mps.append(mps.left_canonical())
         list_of_mps.append(mps.right_canonical())
-        for index in orth_centre_indices:
+        for index in orth_center_indices:
             list_of_mps.append(mps.mixed_canonical(index))
 
         index_list = np.arange(len(list_of_mps))
@@ -134,9 +134,9 @@ def test_mps_utils_mps_from_dense():
         assert np.isclose(overlap, 1)
 
         psi = create_state_vector(num_sites)
-        orth_centre_index = np.random.randint(num_sites)
+        orth_center_index = np.random.randint(num_sites)
         mps_mixed = mps_from_dense(
-            psi, form="Mixed-canonical", orth_centre=orth_centre_index
+            psi, form="Mixed-canonical", orth_center=orth_center_index
         )
         psi_from_mps_mixed = mps_mixed.dense().reshape((2**num_sites))
         overlap = abs(np.conjugate(psi_from_mps_mixed) @ psi) ** 2
@@ -152,7 +152,7 @@ def test_mps_from_dense_near_zero_singular_values():
     for states with near-zero singular values at interior bonds.
 
     The state |00...0> + eps|11...1> has singular values ~[1, eps] at every
-    bond after normalisation.  The old ``np.where(s != 0, s, 1)`` guard let
+    bond after normalization.  The old ``np.where(s != 0, s, 1)`` guard let
     near-zero values through unchanged, causing 1/eps overflow in float64.
     """
     num_sites = 5
@@ -216,12 +216,12 @@ def test_mps_utils_create_simple_product_state():
     assert np.isclose(mps_4.tensors, mps_4_tensors).all()
     assert np.isclose(mps_5.tensors, mps_5_tensors).all()
     assert np.isclose(mps_6.tensors, mps_6_tensors).all()
-    assert mps_1.orth_centre is None
-    assert mps_2.orth_centre is None
-    assert mps_3.orth_centre is None
-    assert mps_4.orth_centre is None
-    assert mps_5.orth_centre is None
-    assert mps_6.orth_centre is None
+    assert mps_1.orth_center is None
+    assert mps_2.orth_center is None
+    assert mps_3.orth_center is None
+    assert mps_4.orth_center is None
+    assert mps_5.orth_center is None
+    assert mps_6.orth_center is None
     with pytest.raises(ValueError):
         create_simple_product_state(4, "0", form="Mixed-canonical")
 
@@ -246,13 +246,13 @@ def test_mps_utils_create_custom_product_state():
 
     assert np.isclose(mps_1.tensors, mps_tensors).all()
     assert np.isclose(mps_2.tensors, mps_tensors).all()
-    assert mps_1.orth_centre is None
-    assert mps_2.orth_centre is None
+    assert mps_1.orth_center is None
+    assert mps_2.orth_center is None
     with pytest.raises(ValueError):
         create_custom_product_state("0011++", form="Mixed-canonical")
 
 
-def test_create_state_vector_rng_is_honoured():
+def test_create_state_vector_rng_is_honored():
     """A passed generator must control the draw and be reproducible."""
     first = create_state_vector(4, rng=np.random.default_rng(2024))
     second = create_state_vector(4, rng=np.random.default_rng(2024))
@@ -276,10 +276,10 @@ def test_create_state_vector_global_seed_is_reproducible():
     assert np.array_equal(first, create_state_vector(4))
 
 
-def test_mps_from_dense_honours_a_truncating_chi_max():
+def test_mps_from_dense_honors_a_truncating_chi_max():
     """``chi_max`` must actually be usable for truncation.
 
-    Every SVD in the construction ran with ``renormalise=False``, so a
+    Every SVD in the construction ran with ``renormalize=False``, so a
     truncating ``chi_max`` left each Schmidt spectrum with norm < 1 and
     ``ExplicitMPS`` rejected it. The argument therefore only worked for values
     large enough not to truncate, which is why no call site ever passed one.
@@ -291,7 +291,7 @@ def test_mps_from_dense_honours_a_truncating_chi_max():
     for chi_max in (1, 2, 4):
         mps = mps_from_dense(psi, chi_max=chi_max, form="Explicit")
         assert all(bond <= chi_max for bond in mps.bond_dimensions)
-        dense = mps.dense(flatten=True, renormalise=True)
+        dense = mps.dense(flatten=True, renormalize=True)
         overlaps.append(
             abs(np.vdot(psi, dense)) / (np.linalg.norm(psi) * np.linalg.norm(dense))
         )
@@ -304,6 +304,6 @@ def test_mps_from_dense_honours_a_truncating_chi_max():
         mps_canonical = mps_from_dense(psi, chi_max=2, form=form)
         assert all(bond <= 2 for bond in mps_canonical.bond_dimensions)
 
-    # A non-normalised input vector must still be rejected as before.
+    # A non-normalized input vector must still be rejected as before.
     with pytest.raises(ValueError):
         mps_from_dense(psi * 3.0, form="Explicit")

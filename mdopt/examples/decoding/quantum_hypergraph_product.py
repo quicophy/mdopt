@@ -50,7 +50,7 @@ try:
     from mdopt.decoding.decoding import (
         str_to_bool,
         decode_css,
-        css_code_stabilisers,
+        css_code_stabilizers,
         generate_pauli_error_string,
     )
 except ImportError as e:
@@ -129,7 +129,7 @@ def parse_arguments():
         "--qubit_order_strategy",
         type=str,
         default="Natural",
-        choices=["Natural", "Optimised"],
+        choices=["Natural", "Optimized"],
         help=(
             "Qubit order along the MPS chain: the code's natural order, or the "
             "reverse Cuthill-McKee order, which lowers the bond dimension the "
@@ -196,12 +196,12 @@ def run_single_experiment(
             code=qhgp_code,
             error=error,
             chi_max=chi_max,
-            multiply_by_stabiliser=False,
+            multiply_by_stabilizer=False,
             bias_type=error_model,
             bias_prob=bias_prob,
-            renormalise=True,
+            renormalize=True,
             silent=silent,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
             tolerance=tolerance,
             cut=cut,
             qubit_order_strategy=qubit_order_strategy,
@@ -209,17 +209,17 @@ def run_single_experiment(
     except Exception as e:
         logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
-            logging.info("Trying to decode with multiply_by_stabiliser=True.")
+            logging.info("Trying to decode with multiply_by_stabilizer=True.")
             container, success = decode_css(
                 code=qhgp_code,
                 error=error,
                 chi_max=chi_max,
-                multiply_by_stabiliser=True,
+                multiply_by_stabilizer=True,
                 bias_type=error_model,
                 bias_prob=bias_prob,
-                renormalise=True,
+                renormalize=True,
                 silent=silent,
-                contraction_strategy="Optimised",
+                contraction_strategy="Optimized",
                 tolerance=tolerance,
                 cut=cut,
                 qubit_order_strategy=qubit_order_strategy,
@@ -274,7 +274,7 @@ def run_experiment(
     )
     qhgp_code = qec.hypergraph_product(classical_code, classical_code)
     code_parameters = (
-        len(css_code_stabilisers(qhgp_code)[0][0]),
+        len(css_code_stabilizers(qhgp_code)[0][0]),
         len(qhgp_code) - qhgp_code.num_x_stabs() - qhgp_code.num_z_stabs(),
     )
 
