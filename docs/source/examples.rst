@@ -11,6 +11,7 @@ Examples
    notebooks/quantum_five_qubit.ipynb
    notebooks/shor.ipynb
    notebooks/quantum_surface.ipynb
+   notebooks/dem_decoding.ipynb
 
 - :doc:`notebooks/classical_ldpc` — Builds an MPS that encodes the superposition of all codewords of a random-regular Gallager (3,4) classical LDPC code and translates parity checks into MPO (XOR) constraints. Demonstrates “dephasing DMRG” to solve the main-component (max-likelihood) decoding problem and validates the end-to-end pipeline.
 
@@ -21,6 +22,8 @@ Examples
 - :doc:`notebooks/shor` — Demonstrates the 9-qubit Shor code with separated X/Z error handling in the TN framework. Serves as a bridge between toy codes and LDPC-like examples.
 
 - :doc:`notebooks/quantum_surface` — Small planar surface-code instances (e.g., perfect syndrome). Visualize the underlying tensor network structure. Compare contraction strategies and explore accuracy/cost trade-offs as a function of maximum bond dimension.
+
+- :doc:`notebooks/dem_decoding` — Decodes circuit-level noise from a stim detector error model: every error mechanism becomes an MPS site, every detector a parity-check constraint and every logical observable a readout. Checks convergence in the bond dimension, shows why stim's native mechanism order beats bandwidth reordering, and compares the logical error rate with minimum-weight perfect matching.
 
 
 .. toctree::

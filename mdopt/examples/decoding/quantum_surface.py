@@ -171,12 +171,15 @@ def run_single_experiment(
     tolerance,
     cut,
     qubit_order_strategy="Natural",
+    seed=None,
 ):
     """Run a single experiment.
 
     ``qubit_order_strategy="Optimized"`` orders the qubits along the chain by
     reverse Cuthill-McKee before decoding, which cuts the bond dimension the
     contraction needs; the default keeps the campaign's natural order.
+    ``seed`` seeds the random stabilizer of the multiply-by-stabilizer
+    fallback, so a run that needs it is still reproducible.
     """
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
@@ -205,6 +208,7 @@ def run_single_experiment(
                 error=error,
                 chi_max=chi_max,
                 multiply_by_stabilizer=True,
+                rng=np.random.default_rng(seed),
                 bias_type=error_model,
                 bias_prob=bias_prob,
                 renormalize=True,
