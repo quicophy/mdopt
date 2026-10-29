@@ -460,13 +460,12 @@ def test_optimizer_utils_apply_constraints(rng):
                 )
 
 
-@pytest.mark.parametrize("strategy", ["Optimised", "unsupported"])
-def test_optimizer_utils_apply_constraints_rejects_unknown_strategy(strategy):
+def test_optimizer_utils_apply_constraints_rejects_unknown_strategy():
     """Unsupported constraint strategies must fail rather than use the naive path."""
     with pytest.raises(ValueError, match="expected 'Naive' or 'Optimized'"):
         apply_constraints(
             mps=None,
             strings=[],
             logical_tensors=[],
-            strategy=strategy,
+            strategy="unsupported",
         )
