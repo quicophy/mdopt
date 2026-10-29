@@ -1,13 +1,13 @@
-"""Tests for the ``mdopt.optimiser.dephasing_dmrg`` module."""
+"""Tests for the ``mdopt.optimizer.dephasing_dmrg`` module."""
 
 import pytest
 import numpy as np
 from scipy.sparse.linalg import ArpackError, LinearOperator, eigsh
 
-from mdopt.optimiser.dephasing_dmrg import DephasingDMRG as deph_dmrg
-from mdopt.optimiser.dmrg import DMRG as dmrg
-import mdopt.optimiser.dephasing_dmrg as dephasing_dmrg_module
-from mdopt.optimiser.dephasing_dmrg import (
+from mdopt.optimizer.dephasing_dmrg import DephasingDMRG as deph_dmrg
+from mdopt.optimizer.dmrg import DMRG as dmrg
+import mdopt.optimizer.dephasing_dmrg as dephasing_dmrg_module
+from mdopt.optimizer.dephasing_dmrg import (
     EffectiveDensityOperator,
     _operator_is_numerically_zero,
     _restart_from_operator_range,
@@ -21,7 +21,7 @@ from mdopt.mps.utils import (
 )
 
 
-def test_optimiser_effective_density_operator():
+def test_optimizer_effective_density_operator():
     """Test for the ``__init__`` method of the ``EffectiveDensityOperator`` class."""
 
     left_environment = np.random.uniform(low=0, high=1, size=(2, 2, 2, 2))
@@ -68,7 +68,7 @@ def test_optimiser_effective_density_operator():
 
 def _linear_operator_to_dense(op) -> np.ndarray:
     """
-    Materialise a scipy.sparse.linalg.LinearOperator into a dense matrix
+    Materialize a scipy.sparse.linalg.LinearOperator into a dense matrix
     by applying it to basis vectors. Intended only for tiny dimensions in tests.
     """
     n, m = op.shape
@@ -202,10 +202,10 @@ def _assert_is_computational_basis_product_state(mps, *, atol: float = 1e-10) ->
     return "".join(bits)
 
 
-def test_optimiser_main_component():
+def test_optimizer_main_component():
     """
-    Test the dephasing DMRG optimiser with the main component problem.
-    We solve the problem using exact diagonalisation, DMRG and dephasing DMRG.
+    Test the dephasing DMRG optimizer with the main component problem.
+    We solve the problem using exact diagonalization, DMRG and dephasing DMRG.
     Next, we compare the solutions which should be exactly the same.
     """
 
@@ -216,7 +216,7 @@ def test_optimiser_main_component():
         # Creating a random pure complex state and its MPS version.
         psi = create_state_vector(num_sites)
 
-        # Bumping up the main component amplitude and renormalising the state.
+        # Bumping up the main component amplitude and renormalizing the state.
         index_to_bump = np.random.randint(0, 2**num_sites)
         psi[index_to_bump] = 10
         psi /= np.linalg.norm(psi)
@@ -365,7 +365,7 @@ def test_effective_density_operator_dtype_preserved_complex():
     """
     The EffectiveDensityOperator must preserve complex dtype when targets are complex.
     For chi_left=chi_right=1, the operator should remain diagonal in computational basis
-    and the materialised matrix should be complex-typed.
+    and the materialized matrix should be complex-typed.
     """
     # Environments for chi=1 with complex dtype
     left_env = np.zeros((1, 1, 1, 1), dtype=complex)
@@ -552,7 +552,7 @@ def test_dephasing_dmrg_skips_a_bond_whose_operator_underflowed():
 def test_operator_is_numerically_zero_rejects_a_mere_nullspace_hit():
     """A single probe landing in the nullspace must not read as a zero operator.
 
-    Skipping on one zero image would silently abandon a real optimisation
+    Skipping on one zero image would silently abandon a real optimization
     whenever the starting vector happened to be annihilated.
     """
     dimension = 8
@@ -641,7 +641,7 @@ def test_restart_recovers_a_start_vector_in_the_nullspace():
 
     ARPACK reports a nullspace start vector with the same message it uses for a
     zero one. The operator here is a healthy rank-1 projector; only ``v0`` is
-    annihilated. Treating that as "nothing to optimise" would silently discard a
+    annihilated. Treating that as "nothing to optimize" would silently discard a
     bond whose dominant eigenvector is perfectly well defined.
     """
     dimension, generator = 256, np.random.default_rng(1)

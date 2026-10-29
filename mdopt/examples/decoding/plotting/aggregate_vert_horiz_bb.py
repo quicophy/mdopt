@@ -3,7 +3,7 @@
 
 Loads pickles from
   examples/decoding/data/quantum-bivariate-bicycle/qubit_order_data/
-where filenames carrying "vert-Optimised" use contraction_strategy="Optimised"
+where filenames carrying "vert-Optimized" use contraction_strategy="Optimized"
 and all other pickles default to contraction_strategy="Naive".
 
 Outputs:
@@ -50,8 +50,8 @@ os.makedirs(os.path.dirname(PICKLE_OUT), exist_ok=True)
 PLOT_OUT = _fig("bb-vert-horiz-speedup.pdf")
 CHI_LIST = [8, 16, 24, 32, 40]
 P_LIST = [1e-4, 3e-4, 1e-3, 3e-3, 1e-2]
-ORDERINGS = ["Natural", "Optimised"]
-VERTICALS = ["Naive", "Optimised"]
+ORDERINGS = ["Natural", "Optimized"]
+VERTICALS = ["Naive", "Optimized"]
 PLOT_CHI = 40  # focal chi for the 2-panel figure
 
 
@@ -130,9 +130,9 @@ def main():
 
     # Three ablation paths (baseline always = Naive vert + Natural horiz):
     BASELINE = ("Natural", "Naive")  # no opt
-    VERT = ("Natural", "Optimised")  # vertical alone
-    HORIZ = ("Optimised", "Naive")  # horizontal alone
-    BOTH = ("Optimised", "Optimised")  # both
+    VERT = ("Natural", "Optimized")  # vertical alone
+    HORIZ = ("Optimized", "Naive")  # horizontal alone
+    BOTH = ("Optimized", "Optimized")  # both
 
     speedups = {}  # (chi, p, label) -> (mean, sem)
     for chi in CHI_LIST:

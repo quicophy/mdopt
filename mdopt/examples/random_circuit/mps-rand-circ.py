@@ -63,7 +63,7 @@ for NUM_QUBITS in num_qubits:
                     mps=state,
                     mpo=mpo,
                     start_site=k % 2,
-                    renormalise=True,
+                    renormalize=True,
                     chi_max=1e4,
                     cut=1e-12,
                     inplace=False,
@@ -73,7 +73,7 @@ for NUM_QUBITS in num_qubits:
                 state, errors = state.compress(
                     chi_max=BOND_DIM,
                     cut=1e-12,
-                    renormalise=True,
+                    renormalize=True,
                     strategy="svd",
                     return_truncation_errors=True,
                 )

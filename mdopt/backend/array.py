@@ -131,7 +131,7 @@ def _warn_if_scipy_accelerate() -> None:
         )
 
 
-# Both checks run on every backend: with CuPy selected the orthogonality-centre
+# Both checks run on every backend: with CuPy selected the orthogonality-center
 # moves and host-side contractions still call NumPy's linalg and BLAS, and the
 # SVD fallbacks and qr call SciPy's LAPACK.
 _warn_if_accelerate(importlib.import_module("numpy"))

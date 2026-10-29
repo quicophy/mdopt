@@ -23,7 +23,7 @@ from scipy.stats import sem
 from tqdm import tqdm
 
 from mdopt.mps.utils import create_custom_product_state
-from mdopt.optimiser.utils import SWAP, COPY_LEFT, XOR_BULK, XOR_LEFT, XOR_RIGHT
+from mdopt.optimizer.utils import SWAP, COPY_LEFT, XOR_BULK, XOR_LEFT, XOR_RIGHT
 from mdopt.decoding.decoding import (
     custom_code_constraint_sites,
     custom_code_logicals_sites,
@@ -45,7 +45,7 @@ mpl.rcParams.update(
     }
 )
 
-# Bit-flip repetition code: Z-type stabilisers detect the X errors
+# Bit-flip repetition code: Z-type stabilizers detect the X errors
 # (textbook symplectic pairing).
 stabilizer_generators = ["ZZI", "IZZ"]
 x_logical_operators = ["XXX"]
@@ -82,7 +82,7 @@ for i in [0, 1]:
         logicals_tensors,
         cut=1e-17,
         chi_max=1e4,
-        renormalise=True,
+        renormalize=True,
         strategy="Naive",
         return_entropies_and_bond_dims=True,
     )
@@ -95,7 +95,7 @@ error_mps, entrps, bnd_dims = apply_constraints(
     constraints_tensors,
     cut=1e-17,
     chi_max=1e4,
-    renormalise=True,
+    renormalize=True,
     strategy="Naive",
     return_entropies_and_bond_dims=True,
 )
@@ -143,7 +143,7 @@ compress_vals = [10000 if np.isinf(chi) else int(chi) for chi in bond_dim_vals]
 trunc_errors = [
     np.linalg.norm(
         error_mps.compress(
-            chi_max=chi, renormalise=True, return_truncation_errors=True
+            chi_max=chi, renormalize=True, return_truncation_errors=True
         )[1]
     )
     for chi in compress_vals
@@ -172,8 +172,8 @@ for chi in bond_dim_vals:
             mps,
             logicals_sites[i],
             logicals_tensors,
-            renormalise=True,
-            strategy="Optimised",
+            renormalize=True,
+            strategy="Optimized",
             chi_max=chi_use,
             silent=True,
             cut=1e-17,
@@ -182,15 +182,15 @@ for chi in bond_dim_vals:
         mps,
         constraint_sites,
         constraints_tensors,
-        renormalise=True,
-        strategy="Optimised",
+        renormalize=True,
+        strategy="Optimized",
         chi_max=chi_use,
         silent=True,
         cut=1e-17,
     )
     logical = mps.marginal(
-        sites_to_marginalise=list(range(num_logicals, len(error_state) + num_logicals))
-    ).dense(flatten=True, renormalise=True, norm=1)
+        sites_to_marginalize=list(range(num_logicals, len(error_state) + num_logicals))
+    ).dense(flatten=True, renormalize=True, norm=1)
     for i in range(4):
         logical_values[i].append(logical[i])
 
@@ -251,7 +251,7 @@ for CHI_MAX in max_bond_dims_sim:
                 bias_prob=0.1,
                 cut=1e-17,
                 tolerance=1e-17,
-                renormalise=True,
+                renormalize=True,
                 silent=True,
                 contraction_strategy="Naive",
             )

@@ -16,7 +16,7 @@ from mdopt.mps.utils import (
     mps_from_dense,
     create_simple_product_state,
     inner_product,
-    find_orth_centre,
+    find_orth_center,
 )
 
 
@@ -324,12 +324,12 @@ def test_explicit_dense():
         mps = mps_from_dense(psi, form="Explicit")
         shape = [2] * num_sites
 
-        assert np.isclose(psi, mps.dense(flatten=True, renormalise=False)).all()
+        assert np.isclose(psi, mps.dense(flatten=True, renormalize=False)).all()
         assert np.isclose(
-            np.linalg.norm(mps.dense(flatten=True, renormalise=True, norm=1), ord=1), 1
+            np.linalg.norm(mps.dense(flatten=True, renormalize=True, norm=1), ord=1), 1
         )
         assert np.isclose(
-            psi.reshape(shape), mps.dense(flatten=False, renormalise=False)
+            psi.reshape(shape), mps.dense(flatten=False, renormalize=False)
         ).all()
 
 
@@ -417,7 +417,7 @@ def test_explicit_right_canonical():
         assert is_canonical(mps_right)
         assert isinstance(mps_right, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_right, mps_right)), 1)
-        assert len(find_orth_centre(mps_right)) == 1
+        assert len(find_orth_center(mps_right)) == 1
 
         for i in range(num_sites):
             assert mps.tensors[i].shape == mps_right.tensors[i].shape
@@ -449,7 +449,7 @@ def test_explicit_left_canonical():
         assert is_canonical(mps_left)
         assert isinstance(mps_left, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_left, mps_left)), 1)
-        assert len(find_orth_centre(mps_left)) == 1
+        assert len(find_orth_center(mps_left)) == 1
 
         for i in range(num_sites):
             assert mps.tensors[i].shape == mps_left.tensors[i].shape
@@ -476,15 +476,15 @@ def test_explicit_mixed_canonical():
         psi = create_state_vector(num_sites)
         mps = mps_from_dense(psi, form="Explicit")
 
-        orth_centre_index = np.random.randint(num_sites)
-        mps_mixed = mps.mixed_canonical(orth_centre_index)
+        orth_center_index = np.random.randint(num_sites)
+        mps_mixed = mps.mixed_canonical(orth_center_index)
 
         for i in range(num_sites):
             assert mps.tensors[i].shape == mps_mixed.tensors[i].shape
         assert is_canonical(mps_mixed)
         assert isinstance(mps_mixed, CanonicalMPS)
         assert np.isclose(abs(inner_product(mps_mixed, mps_mixed)), 1)
-        assert find_orth_centre(mps_mixed) == [orth_centre_index]
+        assert find_orth_center(mps_mixed) == [orth_center_index]
 
         with pytest.raises(ValueError):
             mps.mixed_canonical(num_sites + 100)
@@ -590,7 +590,7 @@ def test_explicit_compress_bond():
         mps_compressed, truncation_error = mps.compress_bond(
             bond=bond_to_compress,
             chi_max=chi_max,
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         assert mps_compressed.bond_dimensions[bond_to_compress] <= chi_max
@@ -609,7 +609,7 @@ def test_explicit_compress_bond():
         mps_compressed, truncation_error = mps.compress_bond(
             bond=bond_to_compress,
             cut=cut,
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         singular_values = mps.singular_values[bond_to_compress + 1]
@@ -621,7 +621,7 @@ def test_explicit_compress_bond():
         assert inner_product(mps_compressed, mps_compressed) <= 1
         assert inner_product(mps, mps_compressed) <= 1
 
-        # Testing the renormalisation option
+        # Testing the renormalization option
         cut = 1e-1
         psi = create_state_vector(num_sites=num_sites, phys_dim=phys_dim)
         mps = mps_from_dense(
@@ -630,7 +630,7 @@ def test_explicit_compress_bond():
         mps_compressed, truncation_error = mps.compress_bond(
             bond=bond_to_compress,
             cut=cut,
-            renormalise=True,
+            renormalize=True,
             return_truncation_error=True,
         )
         singular_values = mps.singular_values[bond_to_compress + 1]
@@ -651,7 +651,7 @@ def test_explicit_compress_bond():
         mps_compressed, truncation_error = mps.compress_bond(
             bond=bond_to_compress,
             cut=cut,
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         singular_value = mps_compressed.singular_values[bond_to_compress + 1]
@@ -670,7 +670,7 @@ def test_explicit_compress():
     """
 
     for _ in range(10):
-        renormalise = False
+        renormalize = False
         num_sites = 10
         phys_dim = 2
         chi_max = 3
@@ -682,7 +682,7 @@ def test_explicit_compress():
         mps_compressed, truncation_errors = mps.compress(
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             return_truncation_errors=True,
         )
         assert inner_product(mps, mps_compressed) <= 1
@@ -707,7 +707,7 @@ def test_explicit_compress_bond_accepts_a_list_spectrum():
     )
 
     compressed, truncation_error = mps.compress_bond(
-        bond=1, chi_max=8, cut=1e-16, renormalise=True, return_truncation_error=True
+        bond=1, chi_max=8, cut=1e-16, renormalize=True, return_truncation_error=True
     )
 
     assert np.isfinite(float(truncation_error))
@@ -715,14 +715,14 @@ def test_explicit_compress_bond_accepts_a_list_spectrum():
 
 
 def test_explicit_compress_bond_survives_a_zero_spectrum():
-    """An underflowed spectrum must not renormalise to NaN."""
+    """An underflowed spectrum must not renormalize to NaN."""
     mps = create_simple_product_state(4, which="+", form="Explicit")
     mps.singular_values[2] = np.zeros(
         len(np.atleast_1d(np.asarray(mps.singular_values[2], dtype=float)))
     )
 
     compressed, _ = mps.compress_bond(
-        bond=1, chi_max=8, cut=-1.0, renormalise=True, return_truncation_error=True
+        bond=1, chi_max=8, cut=-1.0, renormalize=True, return_truncation_error=True
     )
 
     spectrum = np.asarray(compressed.singular_values[2], dtype=float)

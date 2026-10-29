@@ -5,9 +5,9 @@ failures is a property of the code, not a Monte Carlo estimate, and "the
 logical error rate must not increase" is an exact check. The bond dimension
 is deliberately small: at ``chi_max=16`` the decoder is not converged, so
 the verdicts depend on how the truncation is carried out, and a change to
-the SVD, the orthogonality-centre moves or the contractor that alters the
+the SVD, the orthogonality-center moves or the contractor that alters the
 truncation moves them. The pinned values were produced by ``main`` and by
-the optimised branch alike (c5d2773 / 0ba5f0b, 2026-09-11).
+the optimized branch alike (c5d2773 / 0ba5f0b, 2026-09-11).
 """
 
 import numpy as np
@@ -30,17 +30,17 @@ def _verdicts(code, error_rate):
     verdicts = []
     for _ in range(SHOTS):
         error = generate_pauli_error_string(
-            len(code), error_rate, error_model="Depolarising", rng=rng
+            len(code), error_rate, error_model="Depolarizing", rng=rng
         )
         _, success = decode_css(
             code,
             error,
             chi_max=CHI_MAX,
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=error_rate,
-            renormalise=True,
+            renormalize=True,
             silent=True,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
             qubit_order_strategy="Natural",
         )
         verdicts.append(int(success))

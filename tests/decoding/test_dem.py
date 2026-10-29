@@ -219,7 +219,7 @@ def test_surface_code_circuit_level_matches_brute_force():
     23 mechanisms, 8 detectors, nullspace dimension 15 -- small enough to
     enumerate the full syndrome coset exactly. Every sampled syndrome's class
     masses must match, which exercises genuine hyperedges (undecomposed
-    depolarising errors flip up to 6 detectors here).
+    depolarizing errors flip up to 6 detectors here).
     """
     circuit = stim.Circuit.generated(
         "surface_code:rotated_memory_z",
@@ -328,7 +328,7 @@ def test_degree_one_detectors_pin_their_mechanism():
 def test_untouched_observable_is_deterministically_unflipped():
     """A declared observable no mechanism touches must carry flip 0.
 
-    Initialising it as |+> would split its mass 50/50 over an impossible
+    Initializing it as |+> would split its mass 50/50 over an impossible
     flip; the L1 slot here is declared (via L2's existence... the gap) but
     never referenced by any error.
     """

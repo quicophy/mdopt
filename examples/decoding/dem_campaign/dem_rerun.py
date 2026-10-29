@@ -108,10 +108,10 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
                 try:
                     masses, flips = decode_dem(problem, syn, chi_max=chi)
                 except ArithmeticError as exc:
-                    # A truncation artefact (negative class mass or a
+                    # A truncation artifact (negative class mass or a
                     # collapsed vector) at this rung: record it and move up
                     # the ladder rather than abort a multi-day run.
-                    rec[f"artefact_{chi}"] = str(exc)
+                    rec[f"artifact_{chi}"] = str(exc)
                     continue
                 norm = masses / masses.sum()
                 flips_by_chi[chi] = int(flips[0])
@@ -150,7 +150,7 @@ def run(tag, circuit, shots, seed, ladder=(16, 32, 64), escalate=128):
                     rec["chi"] = escalate
                     rec["dev_esc"] = float(np.max(np.abs(norm - prev_norm)))
                 except ArithmeticError as exc:
-                    rec[f"artefact_{escalate}"] = str(exc)
+                    rec[f"artifact_{escalate}"] = str(exc)
                 escalations += 1
             rec["t"] = round(time.perf_counter() - t0, 3)
             rec["mwpm"] = int(matcher.decode(syn)[0]) % 2

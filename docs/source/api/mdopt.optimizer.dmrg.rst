@@ -1,7 +1,7 @@
-mdopt.optimiser.dmrg module
+mdopt.optimizer.dmrg module
 ===========================
 
-.. automodule:: mdopt.optimiser.dmrg
+.. automodule:: mdopt.optimizer.dmrg
    :members:
    :undoc-members:
    :show-inheritance:

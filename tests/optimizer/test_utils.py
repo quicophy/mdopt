@@ -1,4 +1,4 @@
-"""Tests for the ``mdopt.optimiser.utils`` module."""
+"""Tests for the ``mdopt.optimizer.utils`` module."""
 
 import pytest
 import numpy as np
@@ -10,7 +10,7 @@ from mdopt.mps.utils import (
 )
 from mdopt.contractor.contractor import mps_mpo_contract
 from mdopt.utils.utils import mpo_to_matrix
-from mdopt.optimiser.utils import (
+from mdopt.optimizer.utils import (
     parity,
     SWAP,
     XOR_BULK,
@@ -24,8 +24,8 @@ from mdopt.optimiser.utils import (
 )
 
 
-def test_optimiser_utils_tensors():
-    """Test for the combinatorial optimisation operations."""
+def test_optimizer_utils_tensors():
+    """Test for the combinatorial optimization operations."""
     identity = np.eye(2).reshape((1, 1, 2, 2))
 
     copy_left = np.zeros(shape=(1, 2, 2, 2))
@@ -109,7 +109,7 @@ def test_optimiser_utils_tensors():
     assert np.allclose(op, expected)
 
 
-def test_optimiser_utils_parity():
+def test_optimizer_utils_parity():
     """Tests for the ``parity`` function."""
     bitstring = "000000"
     assert parity(bitstring, [0, 1, 2]) == 0
@@ -168,7 +168,7 @@ def test_random_constraints():
         )
 
 
-def test_optimiser_utils_constraint_string():
+def test_optimizer_utils_constraint_string():
     """Tests for the ``ConstraintString`` class."""
     tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     for _ in range(10):
@@ -237,7 +237,7 @@ def test_optimiser_utils_constraint_string():
             ConstraintString(constraints=tensors, sites=constraint_sites)
 
 
-def test_optimiser_utils_xor_projector():
+def test_optimizer_utils_xor_projector():
     """
     Test that contracting XOR_LEFT and XOR_RIGHT produces an operator that
     projects onto the even-parity subspace of two qubits.
@@ -270,7 +270,7 @@ def test_optimiser_utils_xor_projector():
             assert np.allclose(out, 0, atol=1e-12)
 
 
-def test_optimiser_utils_manual_xor_projector():
+def test_optimizer_utils_manual_xor_projector():
     """Test that the XOR_LEFT, SWAP, XOR_RIGHT MPOs produce the correct projector."""
     mpo = [XOR_LEFT, SWAP, XOR_RIGHT]
     computed_dense = mpo_to_matrix(mpo, interlace=False, group=True)
@@ -289,7 +289,7 @@ def test_optimiser_utils_manual_xor_projector():
     assert np.allclose(computed_dense, expected)
 
 
-def test_optimiser_utils_effective_dense_operator():
+def test_optimizer_utils_effective_dense_operator():
     """Test the effective dense operators for different XOR constraints on 8 bits."""
 
     mpo = [
@@ -351,7 +351,7 @@ def test_optimiser_utils_effective_dense_operator():
             )
 
 
-def test_optimiser_utils_swap_tensor():
+def test_optimizer_utils_swap_tensor():
     """Test the SWAP tensor."""
     mpo = [XOR_LEFT, SWAP, XOR_RIGHT]
     passing = ["000", "010", "101", "111"]
@@ -367,7 +367,7 @@ def test_optimiser_utils_swap_tensor():
             start_site=0,
             chi_max=1e4,
             cut=1e-17,
-            renormalise=False,
+            renormalize=False,
             inplace=False,
         )
         overlap = inner_product(
@@ -385,7 +385,7 @@ def test_optimiser_utils_swap_tensor():
             start_site=0,
             chi_max=1e4,
             cut=1e-17,
-            renormalise=False,
+            renormalize=False,
             inplace=False,
         )
         overlap = inner_product(
@@ -394,7 +394,7 @@ def test_optimiser_utils_swap_tensor():
         assert np.isclose(overlap, 0.0)
 
 
-def test_optimiser_utils_apply_constraints(rng):
+def test_optimizer_utils_apply_constraints(rng):
     """Test the application of XOR constraints to an MPS via MPS-MPO contraction."""
 
     for _ in range(100):
@@ -438,11 +438,11 @@ def test_optimiser_utils_apply_constraints(rng):
             mps=start_mps,
             logical_tensors=constraint_tensors,
             strings=[constraint_sites],
-            renormalise=True,
+            renormalize=True,
         )
 
         assert np.isclose(
-            np.abs(final_dense @ final_mps.dense(flatten=True, renormalise=True)), 1.0
+            np.abs(final_dense @ final_mps.dense(flatten=True, renormalize=True)), 1.0
         )
 
         for string in ["".join(f"{i:08b}") for i in range(2**num_sites)]:
@@ -458,3 +458,14 @@ def test_optimiser_utils_apply_constraints(rng):
                     inner_product(final_mps, create_custom_product_state(string=string))
                     > 0
                 )
+
+
+def test_optimizer_utils_apply_constraints_rejects_unknown_strategy():
+    """Unsupported constraint strategies must fail rather than use the naive path."""
+    with pytest.raises(ValueError, match="expected 'Naive' or 'Optimized'"):
+        apply_constraints(
+            mps=None,
+            strings=[],
+            logical_tensors=[],
+            strategy="unsupported",
+        )

@@ -80,12 +80,12 @@ _GAUGE_SEED_NAMESPACE = 0x9E3779B9
 
 
 def gauge_seed_sequences(seed, num_experiments):
-    """Per-shot seeds for stabiliser-gauge sampling.
+    """Per-shot seeds for stabilizer-gauge sampling.
 
     Deliberately rooted at different entropy from :func:`generate_errors`, which
     derives its per-shot streams from ``SeedSequence(seed)``. Sharing the root
     would hand each shot's gauge sampler the stream that produced that shot's
-    error, making the stabiliser choice a function of the error instead of an
+    error, making the stabilizer choice a function of the error instead of an
     independent draw.
     """
     return np.random.SeedSequence([seed, _GAUGE_SEED_NAMESPACE]).spawn(num_experiments)
@@ -175,7 +175,7 @@ def parse_arguments():
         "--qubit_order_strategy",
         type=str,
         default="Natural",
-        choices=["Natural", "Optimised"],
+        choices=["Natural", "Optimized"],
         help=(
             "Qubit order along the MPS chain: the code's natural order, or the "
             "reverse Cuthill-McKee order, which lowers the bond dimension the "
@@ -254,34 +254,34 @@ def run_single_experiment(
     seed=None,
     qubit_order_strategy="Natural",
 ):
-    """Run a single experiment (with a few random stabiliser gauges)."""
+    """Run a single experiment (with a few random stabilizer gauges)."""
     csp_code = get_csp_code(num_qubits, batch, code_id)
     rng = np.random.default_rng(seed)
 
     had_valid_attempt = False
     last_distribution = np.nan
 
-    def _decode(multiply_by_stabiliser: bool):
+    def _decode(multiply_by_stabilizer: bool):
         """Small helper to call decode_css with common args."""
         return decode_css(
             code=csp_code,
             error=error,
             chi_max=chi_max,
-            multiply_by_stabiliser=multiply_by_stabiliser,
+            multiply_by_stabilizer=multiply_by_stabilizer,
             bias_type=error_model,
             bias_prob=bias_prob,
-            renormalise=True,
+            renormalize=True,
             silent=silent,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
             tolerance=tolerance,
             cut=cut,
             qubit_order_strategy=qubit_order_strategy,
             rng=rng,
         )
 
-    # 1) First try: original error (no stabiliser)
+    # 1) First try: original error (no stabilizer)
     try:
-        logicals_distribution, success = _decode(multiply_by_stabiliser=False)
+        logicals_distribution, success = _decode(multiply_by_stabilizer=False)
         # Handle possible float "overlap" return (DMRG branch)
         if isinstance(success, float):
             success = int(success > 1.0 - 1e-5)
@@ -291,15 +291,15 @@ def run_single_experiment(
 
         if success == 1:
             if not silent:
-                logging.info("Decoding successful without stabiliser.")
+                logging.info("Decoding successful without stabilizer.")
             return logicals_distribution, 0  # failure = 0
     except Exception as e:
-        logging.error("Error during decoding (no stabiliser).", exc_info=True)
+        logging.error("Error during decoding (no stabilizer).", exc_info=True)
 
-    # 2) Gauge sampling: try a few random stabilisers
+    # 2) Gauge sampling: try a few random stabilizers
     for k in range(10):
         try:
-            logicals_distribution, success = _decode(multiply_by_stabiliser=True)
+            logicals_distribution, success = _decode(multiply_by_stabilizer=True)
             if isinstance(success, float):
                 success = int(success > 1.0 - 1e-6)
 
@@ -309,13 +309,13 @@ def run_single_experiment(
             if success == 1:
                 if not silent:
                     logging.info(
-                        "Decoding successful with random stabiliser (attempt %d).",
+                        "Decoding successful with random stabilizer (attempt %d).",
                         k + 1,
                     )
                 return logicals_distribution, 0  # failure = 0
         except Exception as ex:
             logging.error(
-                "Error during decoding with random stabiliser (attempt %d).",
+                "Error during decoding with random stabilizer (attempt %d).",
                 k + 1,
                 exc_info=True,
             )
@@ -363,13 +363,13 @@ def run_experiment(
         axis=0,
     )
 
-    # Derive a deterministic per-shot seed so that stabiliser-gauge retries
+    # Derive a deterministic per-shot seed so that stabilizer-gauge retries
     # inside each shot are reproducible from the experiment seed.
     #
     # The extra entropy word matters: generate_errors above derives its per-shot
     # streams from SeedSequence(seed), so spawning from SeedSequence(seed) here
     # would hand each shot's gauge sampler the very stream that produced that
-    # shot's error, making the stabiliser choice a deterministic function of the
+    # shot's error, making the stabilizer choice a deterministic function of the
     # error. Seeding from a distinct root keeps the two independent, and leaves
     # the error streams -- which existing datasets were generated from -- exactly
     # as they were.

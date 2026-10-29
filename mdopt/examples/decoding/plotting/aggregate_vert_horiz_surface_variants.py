@@ -53,9 +53,9 @@ PLOT_CHI = 32
 ALL_CHIS = [4, 8, 16, 32, 64, 128, 256, 512]
 
 BASELINE = ("Natural", "Naive")
-VERT = ("Natural", "Optimised")
-HORIZ = ("Optimised", "Naive")
-BOTH = ("Optimised", "Optimised")
+VERT = ("Natural", "Optimized")
+HORIZ = ("Optimized", "Naive")
+BOTH = ("Optimized", "Optimized")
 
 # Thesis-style plotting primitives
 CMAP = colormaps["viridis_r"]
@@ -64,7 +64,7 @@ MS = 4
 CAPSIZE = 2
 
 # Markers per strategy (so panels with multiple strategies stay distinguishable
-# beyond colour alone — useful in monochrome printing).
+# beyond color alone — useful in monochrome printing).
 M_BASE = "o"
 M_VERT = "s"
 M_HORIZ = "^"
@@ -72,7 +72,7 @@ M_BOTH = "D"
 
 
 def _strat_colors(n):
-    """n evenly-spaced colours from viridis_r."""
+    """n evenly-spaced colors from viridis_r."""
     if n == 1:
         return [CMAP(0.5)]
     return [CMAP(i / (n - 1)) for i in range(n)]
@@ -134,8 +134,8 @@ def main():
         if all(
             (c, p, o, v) in res
             for p in ps
-            for o in ("Natural", "Optimised")
-            for v in ("Naive", "Optimised")
+            for o in ("Natural", "Optimized")
+            for v in ("Naive", "Optimized")
         )
     ]
     print(f"chis loaded: {chis}")
@@ -184,7 +184,7 @@ def main():
 
     ord_colors = _strat_colors(2)
     for (ordering, ls, marker), color in zip(
-        [("Natural", "--", "o"), ("Optimised", "--", "s")], ord_colors
+        [("Natural", "--", "o"), ("Optimized", "--", "s")], ord_colors
     ):
         ys, sems, ubs, xs = [], [], [], []
         for p in ps:

@@ -24,7 +24,7 @@ import qecstruct as qec
 from tqdm import tqdm
 
 from mdopt.mps.utils import create_custom_product_state
-from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+from mdopt.optimizer.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
 from mdopt.decoding.decoding import (
     linear_code_constraint_sites,
     linear_code_prepare_message,
@@ -78,7 +78,7 @@ for l in tqdm(range(NUM_EXPERIMENTS)):
         constraint_sites,
         tensors,
         chi_max=CHI_MAX,
-        renormalise=True,
+        renormalize=True,
         strategy="Naive",
         silent=True,
         return_entropies_and_bond_dims=True,

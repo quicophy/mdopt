@@ -3,7 +3,7 @@ This module contains the :class:`DephasingDMRG` and the :class:`EffectiveDensity
 
 This algorithm's main feature is that it restricts the target-state search to
 the computational basis states domain.
-In particular, we use it to find the main component of a Matrix Product Density Operator (MPDO),
+In particular, we use it to find the main component of a matrix product density operator (MPDO),
 i.e., a computational basis state contributing the largest amplitude.
 
 In our notation, MPDO for ``n`` sites denotes the following object::
@@ -248,7 +248,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
         Performs matrix-vector multiplication.
 
         Computes ``effective_density_operator * |x> = |x'>``.
-        This function is used by ``scipy.sparse.linalg.eigsh`` to diagonalise
+        This function is used by ``scipy.sparse.linalg.eigsh`` to diagonalize
         the effective density operator with the Lanczos method, withouth generating the full matrix.
 
         Parameters
@@ -295,7 +295,7 @@ class EffectiveDensityOperator(scipy.sparse.linalg.LinearOperator):
 
 class DephasingDMRG:
     """
-    Class holding the Dephasing Density Matrix Renormalisation Group algorithm with two-site updates
+    Class holding the Dephasing Density Matrix Renormalization Group algorithm with two-site updates
     for a finite-size system with open-boundary conditions.
 
     Attributes
@@ -416,7 +416,7 @@ class DephasingDMRG:
         )
 
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i))
             initial_guess = self.mps.two_site_tensor_next(i).reshape(
                 effective_density_operator.shape[0]
             )
@@ -474,7 +474,7 @@ class DephasingDMRG:
                 )
             if eigenvectors is None:
                 # No restart worked. Either the operator is genuinely zero, in
-                # which case there is nothing to optimise here, or it is
+                # which case there is nothing to optimize here, or it is
                 # corrupted -- and corruption must not be skipped silently.
                 if not _operator_is_numerically_zero(
                     effective_density_operator, start_vector
@@ -505,7 +505,7 @@ class DephasingDMRG:
             x,
             chi_max=self.chi_max,
             cut=self.cut,
-            renormalise=True,
+            renormalize=True,
             return_truncation_error=True,
         )
 
@@ -514,7 +514,7 @@ class DephasingDMRG:
         if isinstance(self.mps, CanonicalMPS):
             # mps[i] = left_iso_i @ diag(s)  -> scale vR axis by s
             self.mps.tensors[i] = left_iso_i * s[None, None, :]
-            self.mps.orth_centre = i
+            self.mps.orth_center = i
             self.mps.tensors[j] = right_iso_j
 
         if isinstance(self.mps, ExplicitMPS):
@@ -540,7 +540,7 @@ class DephasingDMRG:
         right_environment = self.right_environments[i]
 
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i - 1))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i - 1))
             right_iso = self.mps.one_site_tensor(i)
         else:
             right_iso = self.mps.one_site_right_iso(i)
@@ -562,7 +562,7 @@ class DephasingDMRG:
         left_environment = self.left_environments[i]
 
         if isinstance(self.mps, CanonicalMPS):
-            self.mps = cast(CanonicalMPS, self.mps.move_orth_centre(i + 1))
+            self.mps = cast(CanonicalMPS, self.mps.move_orth_center(i + 1))
             left_iso = self.mps.one_site_tensor(i)
         else:
             left_iso = self.mps.one_site_left_iso(i)

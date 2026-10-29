@@ -49,10 +49,10 @@ def test_utils_svd():
         m = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
         num_sing_values = np.random.randint(1, 10)
 
-        _, s, _, _ = svd(m, chi_max=num_sing_values, renormalise=True)
+        _, s, _, _ = svd(m, chi_max=num_sing_values, renormalize=True)
         assert len(s) == num_sing_values
 
-        _, s, _, _ = svd(m, cut=1, renormalise=False)
+        _, s, _, _ = svd(m, cut=1, renormalize=False)
         for value in s:
             assert np.abs(value) > 1
 
@@ -63,8 +63,8 @@ def test_utils_svd():
     assert isinstance(trunc_err, float)
     assert trunc_err >= 0
 
-    # Check renormalisation with return_truncation_error
-    _, s, _, trunc_err = svd(m, renormalise=True, return_truncation_error=True)
+    # Check renormalization with return_truncation_error
+    _, s, _, trunc_err = svd(m, renormalize=True, return_truncation_error=True)
     assert np.isclose(np.linalg.norm(s), 1)
 
     # Check that truncation works when cut > all singular values
@@ -122,7 +122,7 @@ def test_utils_qr():
 
         dim = np.random.randint(low=10, high=100, size=2)
         mat = np.random.uniform(size=dim) + 1j * np.random.uniform(size=dim)
-        q, r, _ = qr(mat, renormalise=True)
+        q, r, _ = qr(mat, renormalize=True)
         assert np.isclose(np.linalg.norm(np.diag(r)), 1, atol=1e-10)
 
         with pytest.raises(ValueError):
@@ -146,7 +146,7 @@ def test_utils_split_two_site_tensor():
             chi_max=1e4,
             cut=1e-12,
             strategy="svd",
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         should_be_t = contract(
@@ -170,7 +170,7 @@ def test_utils_split_two_site_tensor():
             chi_max=chi_max,
             cut=1e-12,
             strategy="svd",
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         assert truncation_error > 0
@@ -187,7 +187,7 @@ def test_utils_split_two_site_tensor():
             chi_max=1e4,
             cut=cut,
             strategy="svd",
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         assert truncation_error >= 0
@@ -205,7 +205,7 @@ def test_utils_split_two_site_tensor():
             chi_max=1e4,
             cut=cut,
             strategy="svd",
-            renormalise=True,
+            renormalize=True,
             return_truncation_error=True,
         )
         assert np.isclose(np.linalg.norm(singular_values), 1)
@@ -220,7 +220,7 @@ def test_utils_split_two_site_tensor():
             chi_max=1e4,
             cut=1e-12,
             strategy="qr",
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         should_be_t = contract(
@@ -243,7 +243,7 @@ def test_utils_split_two_site_tensor():
             chi_max=chi_max,
             cut=1e-12,
             strategy="qr",
-            renormalise=False,
+            renormalize=False,
             return_truncation_error=True,
         )
         should_be_t = contract(
@@ -265,7 +265,7 @@ def test_utils_split_two_site_tensor():
             chi_max=1e4,
             cut=1e-12,
             strategy="qr",
-            renormalise=True,
+            renormalize=True,
             return_truncation_error=True,
         )
         should_be_t = contract(
@@ -397,14 +397,14 @@ def test_utils_mpo_from_matrix():
         mpo = mpo_from_matrix(
             matrix,
             interlaced=True,
-            orthogonalise=False,
+            orthogonalize=False,
             num_sites=num_sites,
             phys_dim=phys_dim,
         )
         mpo_iso = mpo_from_matrix(
             matrix,
             interlaced=True,
-            orthogonalise=True,
+            orthogonalize=True,
             num_sites=num_sites,
             phys_dim=phys_dim,
         )
@@ -553,7 +553,7 @@ def test_utils_mpo_to_matrix():
         assert np.isclose(abs(np.linalg.norm(matrix_3 - matrix_03)), 0, atol=1e-6)
 
 
-def test_create_random_mpo_rng_is_honoured():
+def test_create_random_mpo_rng_is_honored():
     """A passed generator must control every distribution and be reproducible."""
     for which in ("uniform", "normal", "randint"):
         first = create_random_mpo(
@@ -692,7 +692,7 @@ def test_svd_nonfinite_input_takes_the_fallback_chain():
 
 
 def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
-    """A matrix of the decoders' centre-tensor shape with a spectrum spanning
+    """A matrix of the decoders' center-tensor shape with a spectrum spanning
     sixteen orders of magnitude and a numerically null tail."""
     spectrum = np.concatenate([np.logspace(0, -16, rank), np.zeros(cols - rank)])
     left, _ = np.linalg.qr(rng.normal(size=(rows, cols)))
@@ -702,7 +702,7 @@ def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
 
 def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
     """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
-    decoders' centre tensors take. A small deterministic check for the default
+    decoders' center tensors take. A small deterministic check for the default
     suite; the allocator-churn stress version is opt-in and runs in a
     subprocess (see below)."""
     for _ in range(3):
@@ -721,7 +721,7 @@ def test_svd_under_allocator_churn_in_a_subprocess():
     the allocator churns.
 
     NumPy's ``linalg.qr`` on the Accelerate framework (macOS arm64 wheels)
-    intermittently returned a factorisation whose product was not the input,
+    intermittently returned a factorization whose product was not the input,
     and died with SIGBUS, on matrices of this kind, and Accelerate's SVD
     tripped malloc's heap check on the decoders' matrices. A native crash of
     that sort would terminate pytest, so the loop runs in a subprocess and a

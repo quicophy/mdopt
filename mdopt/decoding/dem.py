@@ -1,4 +1,4 @@
-"""Decode stim detector error models with an MPS marginaliser.
+"""Decode stim detector error models with an MPS marginalizer.
 
 A detector error model (DEM) is a purely classical decoding problem: each
 error mechanism is a bit ``m_i`` that fires independently with prior ``p_i``,
@@ -8,11 +8,11 @@ likelihood decoding asks for the observable-flip pattern whose total
 probability mass, summed over all mechanism sets consistent with the observed
 syndrome, is largest.
 
-The tensor-network realisation flattens the mechanisms onto one MPS chain --
+The tensor-network realization flattens the mechanisms onto one MPS chain --
 one site per mechanism, plus one logical site per observable at the front --
 and reuses the parity-check machinery of the code decoders: detectors become
 XOR constraints, observables become COPY/XOR readouts, and the mechanisms are
-marginalised away. Unlike the code decoders, the prior is applied as *linear*
+marginalized away. Unlike the code decoders, the prior is applied as *linear*
 weights, so the readout is the exact class probability mass ``sum(w)`` rather
 than the amplitude form ``sum(sqrt(w))``; MAP against the literature is the
 target here. Contraction is exact at large ``chi_max``; the cost of finite
@@ -30,14 +30,14 @@ import stim
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import create_custom_product_state
-from mdopt.optimiser.utils import (
+from mdopt.optimizer.utils import (
     COPY_LEFT,
     SWAP,
     XOR_BULK,
     XOR_LEFT,
     XOR_RIGHT,
 )
-from mdopt.optimiser.utils import apply_constraints, optimise_qubit_order
+from mdopt.optimizer.utils import apply_constraints, optimize_qubit_order
 
 
 @dataclass
@@ -215,7 +215,7 @@ def decode_dem(
     syndrome: np.ndarray,
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
-    renormalise: bool = True,
+    renormalize: bool = True,
     silent: bool = True,
     tolerance: float = float(1e-12),
     representative: Optional[np.ndarray] = None,
@@ -267,7 +267,7 @@ def decode_dem(
     # Change of variables: the XOR constraints project onto EVEN parity, i.e.
     # the zero-syndrome sector. Writing every consistent mechanism set as
     # m = base XOR f puts the free variable f exactly in that sector, so the
-    # chain carries f (initialised all-zero) and each site is weighted by the
+    # chain carries f (initialized all-zero) and each site is weighted by the
     # prior of m_i = base_i XOR f_i:
     #     base_i = 0 ->  (1-p_i, p_i)  for f_i = (0, 1)
     #     base_i = 1 ->  (p_i, 1-p_i)
@@ -324,9 +324,9 @@ def decode_dem(
                 logicals_tensors,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 silent=silent,
-                strategy="Optimised",
+                strategy="Optimized",
             ),
         )
     mps = cast(
@@ -337,22 +337,22 @@ def decode_dem(
             constraints_tensors,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
             silent=silent,
-            strategy="Optimised",
+            strategy="Optimized",
         ),
     )
 
     logical_mps = mps.marginal(
-        sites_to_marginalise=list(range(num_obs, num_obs + num_mech)),
-        renormalise=renormalise,
+        sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
+        renormalize=renormalize,
     ).reverse()
     dense = np.atleast_1d(
-        np.real(np.asarray(logical_mps.dense(flatten=True, renormalise=False)))
+        np.real(np.asarray(logical_mps.dense(flatten=True, renormalize=False)))
     )
 
     # Every tensor in the exact contraction is non-negative, so a materially
-    # negative class mass can only be a truncation artefact; taking abs()
+    # negative class mass can only be a truncation artifact; taking abs()
     # would convert it into posterior weight that could even win the argmax.
     # Reject it loudly and clamp only round-off-scale negatives.
     if not np.isfinite(dense).all() or float(np.max(dense)) <= 0.0:
@@ -372,15 +372,15 @@ def decode_dem(
     for j, row in enumerate(problem.observable_rows):
         if row and int(np.sum(base[row]) % 2):
             obs_offset |= 1 << j
-    relabelled = np.empty_like(dense)
+    relabeled = np.empty_like(dense)
     for index in range(dense.size):
-        relabelled[index ^ obs_offset] = dense[index]
+        relabeled[index ^ obs_offset] = dense[index]
 
-    best = int(np.argmax(relabelled))
+    best = int(np.argmax(relabeled))
     # After reverse(), the first MPS logical site (observable 0) is the LAST
     # dense index bit, so bit j of the flat index is observable j.
     flips = np.array([(best >> j) & 1 for j in range(num_obs)], dtype=int)
-    return relabelled, flips
+    return relabeled, flips
 
 
 def _detector_parities(problem: DemProblem, mechanisms: np.ndarray) -> np.ndarray:
@@ -414,7 +414,7 @@ def order_mechanisms(
 
     Returns the reordered problem and ``perm``, where ``perm[i]`` is the
     original mechanism index placed at chain position ``i``. The class
-    posterior is invariant under this relabelling (pinned by
+    posterior is invariant under this relabeling (pinned by
     ``test_ordering_leaves_the_posterior_invariant``); only the contraction
     cost changes.
 
@@ -425,11 +425,11 @@ def order_mechanisms(
     "bandwidth"
         Reverse Cuthill-McKee on the mechanism interaction graph, where two
         mechanisms interact when some detector or observable contains both --
-        the same bandwidth minimiser the code decoders use for qubit order.
+        the same bandwidth minimizer the code decoders use for qubit order.
 
     Measured caveat: on circuit-level DEMs, RCM makes the spans WORSE (at
     surface d=3, 9 rounds: mean span 111 natural vs 415 reordered). The
-    high-degree detectors form cliques the minimiser cannot break, while
+    high-degree detectors form cliques the minimizer cannot break, while
     stim's native order is time-ordered and already sits near the
     time-locality floor of roughly one round's worth of mechanisms per
     constraint. Bandwidth ordering is kept for DEMs without time structure
@@ -448,7 +448,7 @@ def order_mechanisms(
     incidence = np.zeros((len(rows), problem.num_mechanisms), dtype=np.uint8)
     for r, row in enumerate(rows):
         incidence[r, row] = 1
-    perm = optimise_qubit_order(incidence)
+    perm = optimize_qubit_order(incidence)
 
     inverse = np.argsort(perm)
     reordered = DemProblem(

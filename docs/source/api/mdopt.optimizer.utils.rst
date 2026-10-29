@@ -1,7 +1,7 @@
-mdopt.optimiser.utils module
+mdopt.optimizer.utils module
 ============================
 
-.. automodule:: mdopt.optimiser.utils
+.. automodule:: mdopt.optimizer.utils
    :members:
    :undoc-members:
    :show-inheritance:

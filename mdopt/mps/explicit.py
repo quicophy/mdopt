@@ -44,9 +44,9 @@ class ExplicitMPS:
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
     singular_values : List[List]
         The singular values at each of the bonds, ``singular_values[i]`` is left of ``tensors[i]``.
-        Each singular values list at each bond is normalised to 1.
+        Each singular values list at each bond is normalized to 1.
     tolerance : float
-        Absolute tolerance of the normalisation of the singular value spectrum at each bond.
+        Absolute tolerance of the normalization of the singular value spectrum at each bond.
     num_sites : int
         Number of sites.
     num_bonds : int
@@ -61,7 +61,7 @@ class ExplicitMPS:
     ValueError
         If any of the MPS tensors is not three-dimensional.
     ValueError
-        If any of the singular-values tensors is not normalised within the `tolerance` attribute.
+        If any of the singular-values tensors is not normalized within the `tolerance` attribute.
     """
 
     def __init__(
@@ -217,17 +217,17 @@ class ExplicitMPS:
         )
 
     def two_site_right_iso_iter(self) -> Iterable:
-        """Iterator over the two-site right isometries for every site and its right neighbour."""
+        """Iterator over the two-site right isometries for every site and its right neighbor."""
         return (self.two_site_right_iso(i) for i in range(self.num_sites))
 
     def two_site_left_iso_iter(self) -> Iterable:
-        """Iterator over the two-site left isometries for every site and its right neighbour."""
+        """Iterator over the two-site left isometries for every site and its right neighbor."""
         return (self.two_site_left_iso(i) for i in range(self.num_sites))
 
     def dense(
         self,
         flatten: bool = True,
-        renormalise: bool = False,
+        renormalize: bool = False,
         norm: Union[None, float, Literal["fro", "nuc"]] = 2,
     ) -> np.ndarray:
         """
@@ -239,10 +239,10 @@ class ExplicitMPS:
         ----------
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
-        renormalise : bool
-            Whether to renormalise the resulting tensor.
+        renormalize : bool
+            Whether to renormalize the resulting tensor.
         norm : Union[str, int]
-            Which norm to use for renormalisation of the final tensor.
+            Which norm to use for renormalization of the final tensor.
         """
         tensors = list(self.one_site_right_iso_iter())
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), tensors)
@@ -251,7 +251,7 @@ class ExplicitMPS:
         if flatten:
             dense = dense.flatten()
 
-        if renormalise:
+        if renormalize:
             n = float(np.linalg.norm(dense, ord=norm))
             if n > 1e-17:
                 dense /= n
@@ -322,7 +322,7 @@ class ExplicitMPS:
 
         return CanonicalMPS(
             list(self.one_site_right_iso_iter()),
-            orth_centre=0,
+            orth_center=0,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
@@ -336,50 +336,50 @@ class ExplicitMPS:
 
         return CanonicalMPS(
             list(self.one_site_left_iso_iter()),
-            orth_centre=self.num_sites - 1,
+            orth_center=self.num_sites - 1,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
 
-    def mixed_canonical(self, orth_centre: int) -> CanonicalMPS:
+    def mixed_canonical(self, orth_center: int) -> CanonicalMPS:
         """
         Returns the current MPS in the mixed-canonical form
-        with the orthogonality centre being located at ``orth_centre``.
+        with the orthogonality center being located at ``orth_center``.
 
         Parameters
         ----------
-        orth_centre_index : int
+        orth_center_index : int
             An integer which can take values ``0, 1, ..., num_sites-1``.
-            Denotes the position of the orthogonality centre --
+            Denotes the position of the orthogonality center --
             the only non-isometry in the new canonical MPS.
         """
-        if orth_centre not in range(self.num_sites):
+        if orth_center not in range(self.num_sites):
             raise ValueError(
-                f"Orthogonality centre index given {orth_centre}, "
+                f"Orthogonality center index given {orth_center}, "
                 f"with the number of sites in the MPS {self.num_sites}."
             )
 
         mixed_can_mps = []
 
         # Left side: diag(Λ[i]) @ Γ[i]  == scale vL axis
-        for i in range(orth_centre):
+        for i in range(orth_center):
             mixed_can_mps.append(self.one_site_left_iso(i))
 
-        # Centre: diag(Λ[oc]) @ Γ[oc] @ diag(Λ[oc+1])
-        sL = np.asarray(self.singular_values[orth_centre], dtype=self.dtype)
-        sR = np.asarray(self.singular_values[orth_centre + 1], dtype=self.dtype)
-        centre = self.tensors[orth_centre]
-        centre = sL[:, None, None] * centre
-        centre = centre * sR[None, None, :]
-        mixed_can_mps.append(centre)
+        # Center: diag(Λ[oc]) @ Γ[oc] @ diag(Λ[oc+1])
+        sL = np.asarray(self.singular_values[orth_center], dtype=self.dtype)
+        sR = np.asarray(self.singular_values[orth_center + 1], dtype=self.dtype)
+        center = self.tensors[orth_center]
+        center = sL[:, None, None] * center
+        center = center * sR[None, None, :]
+        mixed_can_mps.append(center)
 
         # Right side: Γ[i] @ diag(Λ[i+1]) == scale vR axis
-        for i in range(orth_centre + 1, self.num_sites):
+        for i in range(orth_center + 1, self.num_sites):
             mixed_can_mps.append(self.one_site_right_iso(i))
 
         return CanonicalMPS(
             mixed_can_mps,
-            orth_centre=orth_centre,
+            orth_center=orth_center,
             tolerance=self.tolerance,
             chi_max=self.chi_max,
         )
@@ -431,15 +431,15 @@ class ExplicitMPS:
 
         sL = np.asarray(self.singular_values[site], dtype=self.dtype)
         sR = np.asarray(self.singular_values[site + 1], dtype=self.dtype)
-        centre = self.tensors[site]
-        centre = sL[:, None, None] * centre
-        centre = centre * sR[None, None, :]
+        center = self.tensors[site]
+        center = sL[:, None, None] * center
+        center = center * sR[None, None, :]
 
         return contract(
             "ijk, jl, ilk",
-            centre,
+            center,
             operator,
-            np.conjugate(centre),
+            np.conjugate(center),
             optimize=[(0, 1), (0, 1)],
         )
 
@@ -450,7 +450,7 @@ class ExplicitMPS:
     ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
-        (not necessarily unitary) on the given site and its next neighbour.
+        (not necessarily unitary) on the given site and its next neighbor.
         The operator has legs ``(UL, DL, UR, DR)``, where ``L``, ``R``, ``U``, ``D``
         stand for "left", "right", "up", "down" accordingly.
 
@@ -492,18 +492,18 @@ class ExplicitMPS:
         left = sL[:, None, None] * left
         left = left * sM[None, None, :]
 
-        two_site_orthogonality_centre = contract(
+        two_site_orthogonality_center = contract(
             "ijk, klm -> ijlm", left, self.tensors[site + 1], optimize=[(0, 1)]
         )
-        two_site_orthogonality_centre = (
-            two_site_orthogonality_centre * sR[None, None, None, :]
+        two_site_orthogonality_center = (
+            two_site_orthogonality_center * sR[None, None, None, :]
         )
 
         return contract(
             "ijkl, jmkn, imnl",
-            two_site_orthogonality_centre,
+            two_site_orthogonality_center,
             operator,
-            np.conjugate(two_site_orthogonality_centre),
+            np.conjugate(two_site_orthogonality_center),
             optimize=[(0, 1), (0, 1)],
         )
 
@@ -512,7 +512,7 @@ class ExplicitMPS:
         bond: int,
         chi_max: float = int(1e4),
         cut: float = float(1e-17),
-        renormalise: bool = False,
+        renormalize: bool = False,
         return_truncation_error: bool = False,
     ) -> Tuple["ExplicitMPS", Optional[float]]:
         """
@@ -527,15 +527,15 @@ class ExplicitMPS:
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.
-        renormalise: bool
-            Whether to renormalise the singular value spectrum after the cut.
+        renormalize: bool
+            Whether to renormalize the singular value spectrum after the cut.
         return_truncation_error : bool
             Whether to return the truncation error.
 
         Returns
         -------
         compressed_mps: ExplicitMPS
-            The new compressed Matrix Product State.
+            The new compressed matrix product state.
         truncation_error : Optional[float]
             The truncation error.
             Returned only if `return_truncation_error` is True.
@@ -561,7 +561,7 @@ class ExplicitMPS:
         tensor_right = self.tensors[bond + 1]
 
         # The spectra are stored as plain lists by some constructors and as
-        # arrays by others; comparing a list against `cut` raises, so normalise
+        # arrays by others; comparing a list against `cut` raises, so normalize
         # the type here. `int` on the count matches the cast in
         # :func:`mdopt.utils.utils.split_two_site_tensor`, and keeps a float
         # `chi_max` from reaching a slice.
@@ -571,11 +571,11 @@ class ExplicitMPS:
         residual_spectrum = spectrum[max_num:]
         truncation_error = float(np.linalg.norm(residual_spectrum) ** 2)
 
-        if renormalise:
+        if renormalize:
             spectrum_norm = float(np.linalg.norm(singular_values_new))
             # A spectrum that has underflowed to zero would give 0/0 here and
             # fill the state with NaNs; leave it be, as the other
-            # renormalisation sites do.
+            # renormalization sites do.
             if spectrum_norm > 0:
                 singular_values_new = singular_values_new / spectrum_norm
 
@@ -595,7 +595,7 @@ class ExplicitMPS:
         self,
         chi_max: float = int(1e4),
         cut: float = float(1e-17),
-        renormalise: bool = False,
+        renormalize: bool = False,
         return_truncation_errors: bool = False,
     ) -> Tuple["ExplicitMPS", List[Optional[float]]]:
         """
@@ -607,15 +607,15 @@ class ExplicitMPS:
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.
-        renormalise: bool
-            Whether to renormalise the singular value spectrum after the cut.
+        renormalize: bool
+            Whether to renormalize the singular value spectrum after the cut.
         return_truncation_errors : bool
             Whether to return the list of truncation errors (for each bond).
 
         Returns
         -------
         compressed_mps: CanonicalMPS
-            The new compressed Matrix Product State.
+            The new compressed matrix product state.
         truncation_errors : Optional[List[float]]
             The truncation errors.
             Returned only if `return_truncation_errors` is set to True.
@@ -628,7 +628,7 @@ class ExplicitMPS:
                 bond=bond,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 return_truncation_error=True,
             )
             truncation_errors.append(truncation_error)
@@ -640,10 +640,10 @@ class ExplicitMPS:
 
     def marginal(
         self,
-        sites_to_marginalise: List[int],
-        renormalise: bool = False,
+        sites_to_marginalize: List[int],
+        renormalize: bool = False,
     ) -> Union["ExplicitMPS", "CanonicalMPS"]:  # type: ignore
         """Computes a marginal over a subset of sites of an MPS via CanonicalMPS path."""
         return self.right_canonical().marginal(
-            sites_to_marginalise=sites_to_marginalise, renormalise=renormalise
+            sites_to_marginalize=sites_to_marginalize, renormalize=renormalize
         )

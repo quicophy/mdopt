@@ -189,7 +189,7 @@ def run_or_load() -> dict:
     return results
 
 
-def summarise(results: dict):
+def summarize(results: dict):
     """
     Two-level averaging: one LER per code, then mean-of-means + SEM.
     Handles per-N sample counts at p=1e-4 from reps_low_p.
@@ -221,7 +221,7 @@ def summarise(results: dict):
 
 def main():
     results = run_or_load()
-    ps, summary = summarise(results)
+    ps, summary = summarize(results)
 
     cmap = mpl.colormaps["viridis_r"]
     ns = results.get("ns", NS)

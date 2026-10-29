@@ -1,4 +1,4 @@
-"""Tests for the ``mdopt.optimiser.dmrg`` module."""
+"""Tests for the ``mdopt.optimizer.dmrg`` module."""
 
 import pytest
 import numpy as np
@@ -7,11 +7,11 @@ from scipy.sparse.linalg import ArpackError
 
 from mdopt.examples.ising.ising import IsingExact, IsingMPO
 from mdopt.mps.utils import create_simple_product_state
-from mdopt.optimiser.dmrg import DMRG as dmrg
-from mdopt.optimiser.dmrg import EffectiveOperator, _nonzero_start_vector
+from mdopt.optimizer.dmrg import DMRG as dmrg
+from mdopt.optimizer.dmrg import EffectiveOperator, _nonzero_start_vector
 
 
-def test_optimiser_effective_operator():
+def test_optimizer_effective_operator():
     """Test for the ``__init__`` method of the ``EffectiveOperator`` class."""
 
     left_environment = np.random.uniform(low=0, high=1, size=(2, 3, 2))
@@ -56,11 +56,11 @@ def test_optimiser_effective_operator():
         )
 
 
-def test_optimiser_ground_states():
+def test_optimizer_ground_states():
     """
     Test how DMRG finds the ground state of a 1D Ising model.
     Check that physical observables are correct and the MPS ground state
-    corresponds to the one given by virtue of exact diagonalisation.
+    corresponds to the one given by virtue of exact diagonalization.
     """
 
     for _ in range(5):
@@ -88,13 +88,13 @@ def test_optimiser_ground_states():
         assert np.allclose(
             np.array(
                 [
-                    ising_exact.x_magnetisation(i, ground_state_exact)
+                    ising_exact.x_magnetization(i, ground_state_exact)
                     for i in range(num_sites)
                 ]
             ),
             np.array(
                 [
-                    ising_mpo.x_magnetisation(i, ground_state_mps)
+                    ising_mpo.x_magnetization(i, ground_state_mps)
                     for i in range(num_sites)
                 ]
             ),
@@ -103,13 +103,13 @@ def test_optimiser_ground_states():
         assert np.allclose(
             np.array(
                 [
-                    ising_exact.z_magnetisation(i, ground_state_exact)
+                    ising_exact.z_magnetization(i, ground_state_exact)
                     for i in range(num_sites)
                 ]
             ),
             np.array(
                 [
-                    ising_mpo.z_magnetisation(i, ground_state_mps)
+                    ising_mpo.z_magnetization(i, ground_state_mps)
                     for i in range(num_sites)
                 ]
             ),

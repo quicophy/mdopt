@@ -64,7 +64,7 @@ def _zip_first(left, right, mpo_left, mpo_right, backend):
     return out.sum(axis=2).transpose(0, 2, 4, 3, 1)  # i p r q m
 
 
-def _zip_step(centre, right, mpo_tensor, backend):
+def _zip_step(center, right, mpo_tensor, backend):
     """One zip-up sweep step, ``ijkl, lmn, komp -> ijpon`` (see _zip_first).
 
     On the NumPy backend the MPO tensor is contracted with the right MPS
@@ -79,7 +79,7 @@ def _zip_step(centre, right, mpo_tensor, backend):
             "ijkl, lmn, komp -> ijpon",
             ((0, 1), (0, 1)),
             backend,
-            centre,
+            center,
             right,
             mpo_tensor,
         )
@@ -87,7 +87,7 @@ def _zip_step(centre, right, mpo_tensor, backend):
     ops = np.tensordot(
         mpo_tensor.transpose(0, 3, 1, 2), right, axes=(3, 1)
     )  # k p o l n
-    return np.tensordot(centre, ops, axes=([2, 3], [0, 3]))  # i j p o n
+    return np.tensordot(center, ops, axes=([2, 3], [0, 3]))  # i j p o n
 
 
 def apply_one_site_operator(tensor: np.ndarray, operator: np.ndarray) -> np.ndarray:
@@ -256,7 +256,7 @@ def apply_two_site_unitary(
         t_with,
         chi_max=chi_max,
         cut=cut,
-        renormalise=False,
+        renormalize=False,
         return_truncation_error=True,
     )
     b_1_updated = _contract_cached(
@@ -277,7 +277,7 @@ def mps_mpo_contract(
     mps: Union[ExplicitMPS, CanonicalMPS],
     mpo: List,
     start_site: int = 0,
-    renormalise: bool = False,
+    renormalize: bool = False,
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     inplace: bool = False,
@@ -286,15 +286,15 @@ def mps_mpo_contract(
     Applies an MPO to an MPS.
 
     Applies an operator (not necessarily unitary) in the MPO format
-    to a canonical MPS with the orthogonality centre at site ``start_site``
-    while optionally renormalising singular values at each bond.
+    to a canonical MPS with the orthogonality center at site ``start_site``
+    while optionally renormalizing singular values at each bond.
     Returning the updated MPS in the canonical form.
 
     Note, this algorithm goes from left to right.
     In order to run from right to left, reverse both the MPS and the MPO manually.
 
     The initial configuration looks as follows with
-    ``---O---`` depicting the orthogonality centre::
+    ``---O---`` depicting the orthogonality center::
 
         ...---( )---O----( )---( )---...---( )---...
                     |     |     |           |
@@ -316,8 +316,8 @@ def mps_mpo_contract(
         and L, R, U, D stand for "left", "right", "up", "down".
     start_site : int
         Index of the starting site.
-    renormalise : bool
-        Whether to renormalise the singular values after each contraction
+    renormalize : bool
+        Whether to renormalize the singular values after each contraction
         involving two neigbouring MPS sites.
     chi_max : int
         Maximum bond dimension to keep.
@@ -349,12 +349,12 @@ def mps_mpo_contract(
     if isinstance(mps, ExplicitMPS):
         mps = mps.mixed_canonical(start_site)
     assert isinstance(mps, CanonicalMPS)
-    if mps.orth_centre != start_site:
+    if mps.orth_center != start_site:
         # inplace: this function owns `mps` by now (copied above unless the
         # caller asked for inplace, in which case it handed ownership over).
         mps = cast(
             CanonicalMPS,
-            mps.move_orth_centre(start_site, renormalise=False, inplace=True),
+            mps.move_orth_center(start_site, renormalize=False, inplace=True),
         )
 
     for i, tensor in enumerate(mpo):
@@ -375,7 +375,7 @@ def mps_mpo_contract(
             mps.tensors = [A.to_device(T) for T in mps.tensors]
             mpo = [A.to_device(T) for T in mpo]
 
-        orth_centre_index = start_site
+        orth_center_index = start_site
 
         two_site_mps_mpo_tensor = _zip_first(
             mps.tensors[start_site],
@@ -394,76 +394,76 @@ def mps_mpo_contract(
 
         # Sweep across the MPO
         for i in range(len(mpo) - 2):
-            mps.tensors[orth_centre_index], singular_values, b_r = (
+            mps.tensors[orth_center_index], singular_values, b_r = (
                 split_two_site_tensor(
                     two_site_mps_mpo_tensor,
                     chi_max=chi_max,
                     cut=cut,
-                    renormalise=renormalise,
+                    renormalize=renormalize,
                 )
             )
             if A.GPU:
                 with A.stream():
-                    mps.tensors[orth_centre_index] = A.to_device(
-                        mps.tensors[orth_centre_index]
+                    mps.tensors[orth_center_index] = A.to_device(
+                        mps.tensors[orth_center_index]
                     )
                     b_r = A.to_device(b_r)
                     singular_values = A.to_device(np.asarray(singular_values))
 
-            orth_centre_index += 1
-            mps.orth_centre = orth_centre_index
+            orth_center_index += 1
+            mps.orth_center = orth_center_index
 
             # Replace diag(s) @ b_r with broadcast multiply (no diag allocation)
-            mps.tensors[orth_centre_index] = (
+            mps.tensors[orth_center_index] = (
                 b_r * singular_values[:, None, None]
             ).reshape(
                 (
                     len(singular_values),
                     mpo[i + 1].shape[3],
                     mpo[i + 1].shape[1],
-                    mps.tensors[orth_centre_index + 1].shape[0],
+                    mps.tensors[orth_center_index + 1].shape[0],
                 )
             )
 
             two_site_mps_mpo_tensor = _zip_step(
-                mps.tensors[orth_centre_index],
-                mps.tensors[orth_centre_index + 1],
+                mps.tensors[orth_center_index],
+                mps.tensors[orth_center_index + 1],
                 mpo[i + 2],
                 backend,
             ).reshape(
                 (
                     len(singular_values),
-                    mps.tensors[orth_centre_index].shape[1],
+                    mps.tensors[orth_center_index].shape[1],
                     mpo[i + 2].shape[3],
-                    mps.tensors[orth_centre_index + 1].shape[2] * mpo[i + 2].shape[1],
+                    mps.tensors[orth_center_index + 1].shape[2] * mpo[i + 2].shape[1],
                 )
             )
 
         # Final split and update last tensor
-        mps.tensors[orth_centre_index], singular_values, b_r = split_two_site_tensor(
+        mps.tensors[orth_center_index], singular_values, b_r = split_two_site_tensor(
             two_site_mps_mpo_tensor,
             chi_max=chi_max,
             cut=cut,
-            renormalise=renormalise,
+            renormalize=renormalize,
         )
         if A.GPU:
             with A.stream():
-                mps.tensors[orth_centre_index] = A.to_device(
-                    mps.tensors[orth_centre_index]
+                mps.tensors[orth_center_index] = A.to_device(
+                    mps.tensors[orth_center_index]
                 )
                 b_r = A.to_device(b_r)
                 singular_values = A.to_device(np.asarray(singular_values))
-        mps.tensors[orth_centre_index + 1] = b_r * singular_values[:, None, None]
-        mps.orth_centre = orth_centre_index + 1
+        mps.tensors[orth_center_index + 1] = b_r * singular_values[:, None, None]
+        mps.orth_center = orth_center_index + 1
 
-        # Renormalise orthogonality centre (GPU-safe)
-        if renormalise:
+        # Renormalize orthogonality center (GPU-safe)
+        if renormalize:
             # stay on device if GPU
             norm = (A.to_device if A.GPU else np.asarray)(
-                np.linalg.norm(mps.tensors[orth_centre_index])
+                np.linalg.norm(mps.tensors[orth_center_index])
             )
             if norm != 0:
-                mps.tensors[orth_centre_index] /= norm
+                mps.tensors[orth_center_index] /= norm
 
         # Barrier so timing includes device completion
         A.synchronize()

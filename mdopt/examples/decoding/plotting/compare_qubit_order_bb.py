@@ -1,5 +1,5 @@
 """
-Compare natural vs. optimised qubit ordering for the [[72, 12, 6]] BB code.
+Compare natural vs. optimized qubit ordering for the [[72, 12, 6]] BB code.
 
 Metrics reported:
   - Bandwidth of the combined parity check matrix (max span of any check)
@@ -33,7 +33,7 @@ from mdopt.decoding.decoding import (
     css_code_checks,
     decode_css,
 )
-from mdopt.optimiser.utils import optimise_qubit_order
+from mdopt.optimizer.utils import optimize_qubit_order
 
 # ── BB code parameters (Bravyi et al. 2024 [[72, 12, 6]] code) ────────────────
 ORDER_X = 6
@@ -87,7 +87,7 @@ def run_trials(code, error_rate, num_trials, rng, chi_max, qubit_order_strategy,
             cut=CUT,
             bias_type=BIAS_TYPE,
             bias_prob=BIAS_PROB,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             contraction_strategy="Naive",
             qubit_order_strategy=qubit_order_strategy,
@@ -137,7 +137,7 @@ def main():
 
     # ── Bandwidth ──────────────────────────────────────────────────────────────
     checks_x_nat, checks_z_nat = css_code_checks(code, qubit_perm=None)
-    perm = optimise_qubit_order(H)
+    perm = optimize_qubit_order(H)
     checks_x_opt, checks_z_opt = css_code_checks(code, qubit_perm=perm)
 
     bw_nat = bandwidth(checks_x_nat, checks_z_nat)
@@ -147,7 +147,7 @@ def main():
 
     print(f"\n── Bandwidth (max MPO span) ──────────────────────")
     print(f"  Natural:   max_span={bw_nat:4d},  total_span={ts_nat:6d}")
-    print(f"  Optimised: max_span={bw_opt:4d},  total_span={ts_opt:6d}")
+    print(f"  Optimized: max_span={bw_opt:4d},  total_span={ts_opt:6d}")
     print(
         f"  Reduction: max_span {100 * (bw_nat - bw_opt) / bw_nat:.1f}%,"
         f"  total_span {100 * (ts_nat - ts_opt) / ts_nat:.1f}%"
@@ -166,7 +166,7 @@ def main():
         code, ERROR_RATE, NUM_TRIALS, rng_nat, CHI_MAX, "Natural", "Natural"
     )
     ler_opt, sem_opt, t_opt = run_trials(
-        code, ERROR_RATE, NUM_TRIALS, rng_opt, CHI_MAX, "Optimised", "Optimised"
+        code, ERROR_RATE, NUM_TRIALS, rng_opt, CHI_MAX, "Optimized", "Optimized"
     )
 
     print(f"\n── Results ───────────────────────────────────────")
@@ -174,7 +174,7 @@ def main():
         f"  Natural:   LER={ler_nat:.6f} ± {sem_nat:.6f},  avg time/decode={t_nat:.3f}s"
     )
     print(
-        f"  Optimised: LER={ler_opt:.6f} ± {sem_opt:.6f},  avg time/decode={t_opt:.3f}s"
+        f"  Optimized: LER={ler_opt:.6f} ± {sem_opt:.6f},  avg time/decode={t_opt:.3f}s"
     )
     if ler_nat > 0 and ler_opt > 0:
         print(f"  LER ratio (nat/opt): {ler_nat / ler_opt:.2f}×")

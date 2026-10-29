@@ -39,8 +39,13 @@ Regenerating the results
 
 .. code-block:: bash
 
+   export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1   # one BLAS thread per process
    python scripts/run_notebooks.py --inplace --timeout 172800   # all of them
    python scripts/run_notebooks.py --inplace examples/decoding/shor.ipynb
+
+Without the thread limits every worker process of the pooled cells starts a
+full-width OpenBLAS pool, the cores are oversubscribed many times over, and the
+pooled notebooks run about twice as slowly as the times below.
 
 ``--inplace`` writes the executed outputs back into the notebook. Commit the
 notebook afterwards; the next push to ``main`` opens the sync PR, and the docs
@@ -48,11 +53,11 @@ follow once it is merged.
 
 ``--timeout`` is the limit per cell, in seconds. Its default of 1800 (or
 ``MDOPT_NB_TIMEOUT``, if set) suits the fast CI workloads, but at full scale
-the longest cells below run for hours -- the surface-code threshold sweep
-alone took 26.6 h -- so a full regeneration needs a limit well above that;
-the last one allowed two days.
+the longest cells below run for hours -- the surface-code bond-dimension sweep
+alone took 4.5 h -- so a full regeneration needs a limit well above that; the
+last one allowed two days.
 
-Expect this to take hours: the last full run took about 34 hours. Measured on
+Expect this to take hours: the last full run took about 11.6 hours. Measured on
 an M-series laptop (10 cores: 4 performance, 6 efficiency), one notebook at a
 time, with one BLAS thread per process:
 
@@ -61,14 +66,15 @@ notebook                     full run
 ===========================  ==============================================================
 ``main_component``           4 s
 ``quantum_five_qubit``       7 s
-``ground_state``             9 s
+``ground_state``             10 s
 ``shor``                     10 s
-``mps-rand-circ``            14 s
+``mps-rand-circ``            15 s
 ``dephasing_dmrg_debug_bb``  1.5 min
-``quantum_three_qubit``      4.6 min
-``classical_ldpc``           2.8 h (the truncation sweep 2.2 h, the BP comparison 36 min)
-``maxbonddim``               3.2 h
-``quantum_surface``          27.4 h (the threshold sweep alone 26.6 h, at chi_max = 128)
+``quantum_three_qubit``      4.9 min
+``dem_decoding``             33 min (the logical-error-rate sweep 32 min)
+``classical_ldpc``           2.9 h (the truncation sweep 2.3 h, the BP comparison 36 min)
+``maxbonddim``               2.3 h
+``quantum_surface``          5.7 h (the L = 3 bond-dimension sweep 4.5 h, the threshold run 41 min)
 ===========================  ==============================================================
 
 ``classical_ldpc`` and ``quantum_surface`` end with a cell that regenerates
@@ -98,7 +104,7 @@ protected and rejects direct pushes. Its full contract:
 * **There is only ever one.** Consecutive drifts force-push the same branch,
   updating the open PR in place.
 * **It cleans up after itself.** If the drift disappears (a notebook reverted,
-  or synchronised another way), the next run closes the stale PR and deletes
+  or synchronized another way), the next run closes the stale PR and deletes
   the branch, so outdated copies cannot be merged.
 * **Merging it does not loop.** The merge triggers a run that finds no drift
   and exits without committing.
@@ -108,7 +114,7 @@ protected and rejects direct pushes. Its full contract:
 * **Manual dispatch:** ``gh workflow run docs-sync.yml --ref main`` runs the
   sync on demand.
 
-One trap to know: GitHub honours CI-skip markers (such as ``[skip ci]``)
+One trap to know: GitHub honors CI-skip markers (such as ``[skip ci]``)
 anywhere in a commit message, and a squash merge concatenates every branch
 commit's title and body into one message. A commit that merely *quotes* such a
 marker therefore silences all workflows on the merge push -- including this

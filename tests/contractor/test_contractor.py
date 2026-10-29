@@ -160,7 +160,7 @@ def test_contractor_mps_mpo_contract():
         psi_init = create_state_vector(num_sites)
         start_site = np.random.randint(0, num_sites - 1)
         mps_init = mps_from_dense(
-            psi_init, phys_dim=phys_dim, form="Mixed-canonical", orth_centre=start_site
+            psi_init, phys_dim=phys_dim, form="Mixed-canonical", orth_center=start_site
         )
 
         mpo_length = np.random.randint(2, num_sites - start_site + 1)
@@ -177,14 +177,14 @@ def test_contractor_mps_mpo_contract():
         full_mpo = identities_l + mpo + identities_r
 
         mps_fin = mps_mpo_contract(
-            mps=mps_init, mpo=mpo, start_site=start_site, renormalise=False
+            mps=mps_init, mpo=mpo, start_site=start_site, renormalize=False
         )
         mps_fin_1 = mps_mpo_contract(
-            mps=mps_init, mpo=mpo, start_site=start_site, renormalise=True
+            mps=mps_init, mpo=mpo, start_site=start_site, renormalize=True
         )
 
-        # orthogonality centre tensor for norm check
-        orthogonality_centre = _to_numpy(
+        # orthogonality center tensor for norm check
+        orthogonality_center = _to_numpy(
             mps_fin_1.tensors[int(start_site + mpo_length - 1)]
         )
 
@@ -205,4 +205,4 @@ def test_contractor_mps_mpo_contract():
         mps_fin_dense = _to_numpy(mps_fin.dense())
         assert np.isclose(np.linalg.norm(mps_fin_dense - psi_fin), 0, atol=1e-7)
 
-        assert np.isclose(np.linalg.norm(orthogonality_centre), 1.0)
+        assert np.isclose(np.linalg.norm(orthogonality_center), 1.0)

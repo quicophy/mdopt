@@ -87,7 +87,7 @@ the top two rungs disagreed:
  "dev_<chi>": max posterior change from the previous rung,
  "map", "margin", "chi": the value and rung finally used,
  "dev_esc": present when escalated to chi=128,
- "artefact_<chi>": present when that rung raised ArithmeticError,
+ "artifact_<chi>": present when that rung raised ArithmeticError,
  "mwpm", "bm", "t"}
 ```
 

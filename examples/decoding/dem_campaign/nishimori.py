@@ -71,11 +71,11 @@ def run(distance, p, shots, chi=128, seed=0):
                 rec["map"] = int(flips[0])
             except ArithmeticError as exc:
                 # A collapsed or negative class-mass vector is a truncation
-                # artefact of this chi: record it and score the shot as a
+                # artifact of this chi: record it and score the shot as a
                 # failure rather than abort the cell (and every cell after
                 # it, since the resume would replay the same shot).
                 rec["map"] = 1 - truth
-                rec["artefact"] = str(exc)[:80]
+                rec["artifact"] = str(exc)[:80]
             rec["mwpm"] = int(matcher.decode(syndrome)[0]) % 2
             rec["t"] = round(time.perf_counter() - t0, 4)
             sink.write(json.dumps(rec) + "\n")

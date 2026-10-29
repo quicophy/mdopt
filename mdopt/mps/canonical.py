@@ -19,11 +19,11 @@ Hereafter, saying a MPS is in a canonical form will mean one of the following.
         ---(*)---     ---
 
     3) Mixed-canonical: all but one tensors are left or right isometries.
-    This exceptional tensor will be hereafter called the **orthogonality centre**.
+    This exceptional tensor will be hereafter called the **orthogonality center**.
 
     Note, that in the diagrams, a tensor with a star inside means that it is complex-conjugated.
 
-    A Matrix Product State is thus stored as a list of three-dimensional tensors
+    A matrix product state is thus stored as a list of three-dimensional tensors
     as shown in the following diagram::
 
                i    i+1
@@ -59,8 +59,8 @@ class CanonicalMPS:
     tensors : List[np.ndarray]
         The tensors of the MPS, one per each physical site.
         Each tensor has legs (virtual left, physical, virtual right), in short ``(vL, i, vR)``.
-    orth_centre : Optional[int]
-        Position of the orthogonality centre, does not support negative indexing.
+    orth_center : Optional[int]
+        Position of the orthogonality center, does not support negative indexing.
         As a convention, this attribute is taken ``0`` for a right-canonical form,
         ``len(tensors) - 1`` for a left-canonical form, ``None`` for a product state.
     tolerance : float
@@ -79,7 +79,7 @@ class CanonicalMPS:
     Raises
     ------
     ValueError
-        If the orthogonality centre position does not correspond to the number of sites.
+        If the orthogonality center position does not correspond to the number of sites.
     ValueError
         If any of the tensors does not have three dimensions.
     """
@@ -87,22 +87,22 @@ class CanonicalMPS:
     def __init__(
         self,
         tensors: List[np.ndarray],
-        orth_centre: Optional[int] = None,
+        orth_center: Optional[int] = None,
         tolerance: float = float(1e-12),
         chi_max: int = int(1e4),
     ) -> None:
         self.tensors = tensors
         self.num_sites = len(tensors)
         self.num_bonds = self.num_sites - 1
-        self.orth_centre = orth_centre
+        self.orth_center = orth_center
         self.dtype = tensors[0].dtype
         self.tolerance = tolerance
         self.chi_max = chi_max
 
-        if orth_centre and orth_centre not in range(self.num_sites):
+        if orth_center and orth_center not in range(self.num_sites):
             raise ValueError(
-                f"The orthogonality centre index must reside anywhere from site 0 "
-                f"to {self.num_sites - 1}, the one given is at position {orth_centre}."
+                f"The orthogonality center index must reside anywhere from site 0 "
+                f"to {self.num_sites - 1}, the one given is at position {orth_center}."
             )
 
         for i, tensor in enumerate(tensors):
@@ -144,7 +144,7 @@ class CanonicalMPS:
         Returns a copy of the current MPS.
         """
         return CanonicalMPS(
-            deepcopy(self.tensors), self.orth_centre, self.tolerance, self.chi_max
+            deepcopy(self.tensors), self.orth_center, self.tolerance, self.chi_max
         )
 
     def reverse(self) -> "CanonicalMPS":
@@ -152,11 +152,11 @@ class CanonicalMPS:
         Returns a reversed version of the current MPS.
         """
         reversed_tensors = [np.transpose(tensor) for tensor in reversed(self.tensors)]
-        # `is not None`, not truthiness: a centre at site 0 is a centre.
-        if self.orth_centre is not None:
-            reversed_orth_centre = (self.num_sites - 1) - self.orth_centre
+        # `is not None`, not truthiness: a center at site 0 is a center.
+        if self.orth_center is not None:
+            reversed_orth_center = (self.num_sites - 1) - self.orth_center
             return CanonicalMPS(
-                reversed_tensors, reversed_orth_centre, self.tolerance, self.chi_max
+                reversed_tensors, reversed_orth_center, self.tolerance, self.chi_max
             )
 
         return CanonicalMPS(reversed_tensors, None, self.tolerance, self.chi_max)
@@ -167,7 +167,7 @@ class CanonicalMPS:
         """
         conjugated_tensors = [np.conjugate(mps_tensor) for mps_tensor in self.tensors]
         return CanonicalMPS(
-            conjugated_tensors, self.orth_centre, self.tolerance, self.chi_max
+            conjugated_tensors, self.orth_center, self.tolerance, self.chi_max
         )
 
     def one_site_tensor(self, site: int) -> np.ndarray:
@@ -229,20 +229,20 @@ class CanonicalMPS:
 
     def two_site_tensor_next_iter(self) -> Iterable:
         """
-        Returns an iterator over the two-site tensors for every site and its right neighbour.
+        Returns an iterator over the two-site tensors for every site and its right neighbor.
         """
         return (self.two_site_tensor_next(i) for i in range(self.num_sites - 1))
 
     def two_site_tensor_prev_iter(self) -> Iterable:
         """
-        Returns an iterator over the two-site tensors for every site and its left neighbour.
+        Returns an iterator over the two-site tensors for every site and its left neighbor.
         """
         return (self.two_site_tensor_prev(i) for i in range(1, self.num_sites))
 
     def dense(
         self,
         flatten: bool = True,
-        renormalise: bool = False,
+        renormalize: bool = False,
         norm: Union[None, float, Literal["fro", "nuc"]] = 2,
     ) -> np.ndarray:
         """
@@ -254,10 +254,10 @@ class CanonicalMPS:
         ----------
         flatten : bool
             Whether to merge all the physical indices to form a vector or not.
-        renormalise : bool
-            Whether to renormalise the resulting tensor.
+        renormalize : bool
+            Whether to renormalize the resulting tensor.
         norm : Any
-            The order of the norm to use while renormalising, see ``numpy.linalg.norm``.
+            The order of the norm to use while renormalizing, see ``numpy.linalg.norm``.
         """
         dense = reduce(lambda a, b: np.tensordot(a, b, (-1, 0)), self.tensors)
         dense = dense.squeeze()
@@ -265,7 +265,7 @@ class CanonicalMPS:
         if flatten:
             dense = dense.flatten()
 
-        if renormalise:
+        if renormalize:
             n = float(np.linalg.norm(dense, ord=norm))
             if n > 1e-17:
                 dense /= n
@@ -314,13 +314,13 @@ class CanonicalMPS:
         """
         return self.explicit(tolerance=tolerance).entanglement_entropy()
 
-    def check_orth_centre(self) -> Optional[Union[int, List[int]]]:
+    def check_orth_center(self) -> Optional[Union[int, List[int]]]:
         """
-        Checks the current position of the orthogonality centre by checking each tensor
+        Checks the current position of the orthogonality center by checking each tensor
         for the isometry conditions.
-        Note, this method does not update the current instance's ``orth_centre`` attribute.
+        Note, this method does not update the current instance's ``orth_center`` attribute.
         """
-        orth_centres, flags_left, flags_right = mdopt.mps.utils.find_orth_centre(  # type: ignore
+        orth_centers, flags_left, flags_right = mdopt.mps.utils.find_orth_center(  # type: ignore
             self, return_orth_flags=True
         )
 
@@ -341,30 +341,30 @@ class CanonicalMPS:
         if all(flags_left) and all(flags_right):
             return 0
 
-        return orth_centres
+        return orth_centers
 
-    def move_orth_centre(
+    def move_orth_center(
         self,
         final_pos: int,
         return_singular_values: bool = False,
-        renormalise: bool = True,
+        renormalize: bool = True,
         inplace: bool = False,
     ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[np.ndarray]]]:
         """
-        Moves the orthogonality centre from its current position to ``final_pos``.
+        Moves the orthogonality center from its current position to ``final_pos``.
 
         Returns a new version of the current :class:`CanonicalMPS` instance with
-        the orthogonality centre moved from ``self.orth_centre`` to ``final_pos``,
+        the orthogonality center moved from ``self.orth_center`` to ``final_pos``,
         returns also the singular value tensors from every covered bond as well.
 
         Parameters
         ----------
         final_pos : int
-            Final position of the orthogonality centre.
+            Final position of the orthogonality center.
         return_singular_values : bool
             Whether to return the singular values obtained at each involved bond.
-        renormalise : bool
-            Whether to renormalise singular values during each SVD.
+        renormalize : bool
+            Whether to renormalize singular values during each SVD.
         inplace : bool
             Whether a rightward move may overwrite this instance's tensors
             instead of deep-copying them first (a leftward move builds a new
@@ -376,92 +376,91 @@ class CanonicalMPS:
         ValueError
             If ``final_pos`` does not match the MPS length.
         ValueError
-            If ``self.orth_centre`` is still ``None`` after the search.
+            If ``self.orth_center`` is still ``None`` after the search.
         """
         if final_pos not in range(self.num_sites):
             raise ValueError(
-                "The final position of the orthogonality centre should be"
+                "The final position of the orthogonality center should be"
                 f"from 0 to {self.num_sites - 1}, given {final_pos}."
             )
 
         singular_values: List[np.ndarray] = []
 
-        if self.orth_centre is None:
-            self.orth_centre = self.check_orth_centre()  # type: ignore
-        if self.orth_centre is None:
-            raise ValueError("The orthogonality centre value is set to None.")
+        if self.orth_center is None:
+            self.orth_center = self.check_orth_center()  # type: ignore
+        if self.orth_center is None:
+            raise ValueError("The orthogonality center value is set to None.")
 
-        if self.orth_centre < final_pos:
-            begin, final = self.orth_centre, final_pos
+        if self.orth_center < final_pos:
+            begin, final = self.orth_center, final_pos
             mps = self if inplace else self.copy()
-        elif self.orth_centre > final_pos:
+        elif self.orth_center > final_pos:
             mps = self.reverse()
-            begin = cast(int, mps.orth_centre)
+            begin = cast(int, mps.orth_center)
             final = (self.num_sites - 1) - final_pos
         else:
             return self
 
-        # A move factors the centre alone, (chi_l*d, chi_r), instead of the
-        # two-site tensor whenever the right neighbour is an isometry: the
-        # centre's singular values then ARE the two-site tensor's (theta =
+        # A move factors the center alone, (chi_l*d, chi_r), instead of the
+        # two-site tensor whenever the right neighbor is an isometry: the
+        # center's singular values then ARE the two-site tensor's (theta =
         # C B with B B^dag = 1 gives theta theta^dag = C C^dag), so the
-        # renormalised spectrum, the cut and the chi_max count all come out
+        # renormalized spectrum, the cut and the chi_max count all come out
         # identical, and the move is the two-site SVD's answer at a fraction
         # of the cost. That covers the DMRG sweeps' one-step moves and the
-        # explicit-form conversion, which ask for renormalised spectra.
+        # explicit-form conversion, which ask for renormalized spectra.
 
         for i in range(begin, final):
-            centre = mps.tensors[i]
-            chi_l, phys, chi_r = centre.shape
+            center = mps.tensors[i]
+            chi_l, phys, chi_r = center.shape
             # A collapsed bond (dimension 0) has nothing to factor; the SVD
             # branch carries that degenerate shape through unchanged.
-            # chi_r <= chi_max: with an isometric neighbour the revealed rank
+            # chi_r <= chi_max: with an isometric neighbor the revealed rank
             # is at most chi_r, so this integer check rules out any move that
-            # would have to truncate before the factorisation is attempted.
+            # would have to truncate before the factorization is attempted.
             if 0 < chi_r <= self.chi_max and chi_l * phys > 0:
                 # The single-site spectrum is the bond's Schmidt spectrum
-                # only if the right neighbour is an isometry. The bias
+                # only if the right neighbor is an isometry. The bias
                 # appliers break that on every site they touch, so it is
                 # checked (a chi^2 * d * chi Gram product, cheaper than the
                 # SVD it enables) rather than assumed: with an isometric
-                # neighbour this move is exactly the two-site SVD's answer
+                # neighbor this move is exactly the two-site SVD's answer
                 # (same cut, same chi_max); otherwise the two-site SVD below
                 # runs, exactly as before. After one traversal the chain is
                 # canonical and every later move takes the fast path.
-                neighbour = mps.tensors[i + 1]
-                flat = neighbour.reshape(neighbour.shape[0], -1)
+                neighbor = mps.tensors[i + 1]
+                flat = neighbor.reshape(neighbor.shape[0], -1)
                 # An inexact dtype: integer or boolean tensors are valid input
                 # (the SVD promotes them), and the in-place subtraction below
                 # must not fail on them. No copy for float or complex.
                 gram_dtype = np.result_type(flat.dtype, 1.0)
                 flat_inexact = np.asarray(flat, dtype=gram_dtype)
                 gram = flat_inexact @ flat_inexact.conj().T
-                # ||G - I||_F <= 1e-12, the criterion find_orth_centre uses.
+                # ||G - I||_F <= 1e-12, the criterion find_orth_center uses.
                 # The Frobenius norm bounds the spectral deviation of the
-                # neighbour from an isometry; a componentwise maximum does not
+                # neighbor from an isometry; a componentwise maximum does not
                 # (for a 400-dimensional Gram matrix it can be 400x smaller).
                 gram[np.diag_indices_from(gram)] -= 1.0
                 if np.linalg.norm(gram) <= 1e-12:
                     u_l, s_bond, v_h, _ = svd(
-                        centre.reshape(chi_l * phys, chi_r),
+                        center.reshape(chi_l * phys, chi_r),
                         chi_max=self.chi_max,
-                        renormalise=renormalise,
+                        renormalize=renormalize,
                     )
                     singular_values.append(s_bond)
                     keep = len(s_bond)
                     mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
                     # diag(s) @ (v_h . B): same idiom as the SVD branch below.
                     mps.tensors[i + 1] = (
-                        np.tensordot(v_h, neighbour, axes=(1, 0))
-                        * s_bond[:, None, None]
+                        np.tensordot(v_h, neighbor, axes=(1, 0)) * s_bond[:, None, None]
                     )
-                    mps.orth_centre = i + 1
+                    mps.orth_center = i + 1
                     continue
             two_site_tensor = mps.two_site_tensor_next(i)
             u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
                 two_site_tensor,
                 chi_max=self.chi_max,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 strategy="svd",
                 return_truncation_error=True,
             )
@@ -470,9 +469,9 @@ class CanonicalMPS:
 
             # diag(s) @ v_r  -->  scale rows (axis 0) by s
             mps.tensors[i + 1] = v_r * singular_values_bond[:, None, None]
-            mps.orth_centre = i + 1
+            mps.orth_center = i + 1
 
-        if cast(int, self.orth_centre) > final_pos:
+        if cast(int, self.orth_center) > final_pos:
             mps = mps.reverse()
             singular_values = list(reversed(singular_values))
 
@@ -481,51 +480,51 @@ class CanonicalMPS:
 
         return mps
 
-    def move_orth_centre_to_border(
-        self, renormalise: bool = True
+    def move_orth_center_to_border(
+        self, renormalize: bool = True
     ) -> Tuple["CanonicalMPS", str]:
         """
-        Moves the orthogonality centre from its current position to the closest border.
+        Moves the orthogonality center from its current position to the closest border.
 
         Parameters
         ----------
-        renormalise : bool
-            Whether to renormalise singular values during each SVD.
+        renormalize : bool
+            Whether to renormalize singular values during each SVD.
 
         Notes
         -----
         Returns a new version of the current :class:`CanonicalMPS` instance with
-        the orthogonality centre moved to the closest (from the current position) border.
+        the orthogonality center moved to the closest (from the current position) border.
         """
-        if self.orth_centre is None:
-            self.orth_centre = self.check_orth_centre()  # type: ignore
-            if self.orth_centre is None:
+        if self.orth_center is None:
+            self.orth_center = self.check_orth_center()  # type: ignore
+            if self.orth_center is None:
                 raise ValueError("There is no orthogonality center present.")
-        elif self.orth_centre == 0:
+        elif self.orth_center == 0:
             return self.copy(), "first"
-        elif self.orth_centre == self.num_sites - 1:
+        elif self.orth_center == self.num_sites - 1:
             return self.copy(), "last"
         else:
-            if (self.orth_centre is not None) and (
-                self.orth_centre <= int(self.num_bonds / 2)
+            if (self.orth_center is not None) and (
+                self.orth_center <= int(self.num_bonds / 2)
             ):
-                mps = self.move_orth_centre(
+                mps = self.move_orth_center(
                     final_pos=0,
                     return_singular_values=False,
-                    renormalise=renormalise,
+                    renormalize=renormalize,
                 )
                 return cast("CanonicalMPS", mps), "first"
 
-            mps = self.move_orth_centre(
+            mps = self.move_orth_center(
                 final_pos=self.num_sites - 1,
                 return_singular_values=False,
-                renormalise=renormalise,
+                renormalize=renormalize,
             )
 
         return cast("CanonicalMPS", mps), "last"
 
     def explicit(
-        self, tolerance: float = float(1e-12), renormalise: bool = True
+        self, tolerance: float = float(1e-12), renormalize: bool = True
     ) -> "mdopt.mps.explicit.ExplicitMPS":  # type: ignore
         """
         Transforms a :class:`CanonicalMPS` instance into a :class:`ExplicitMPS` instance.
@@ -536,29 +535,29 @@ class CanonicalMPS:
         ----------
         tolerance : float
             Numerical tolerance for the singular values.
-        renormalise : bool
-            Whether to renormalise singular values during each SVD.
+        renormalize : bool
+            Whether to renormalize singular values during each SVD.
         """
-        mps_canonical, border = self.move_orth_centre_to_border(renormalise=renormalise)
+        mps_canonical, border = self.move_orth_center_to_border(renormalize=renormalize)
 
         if border == "first":
-            self.orth_centre = 0
+            self.orth_center = 0
             mps_canonical, singular_values = cast(
                 Tuple[CanonicalMPS, List[np.ndarray]],
-                self.move_orth_centre(
+                self.move_orth_center(
                     self.num_sites - 1,
                     return_singular_values=True,
-                    renormalise=renormalise,
+                    renormalize=renormalize,
                 ),
             )
         else:
-            self.orth_centre = self.num_sites - 1
+            self.orth_center = self.num_sites - 1
             mps_canonical, singular_values = cast(
                 Tuple[CanonicalMPS, List[np.ndarray]],
-                self.move_orth_centre(
+                self.move_orth_center(
                     0,
                     return_singular_values=True,
-                    renormalise=renormalise,
+                    renormalize=renormalize,
                 ),
             )
 
@@ -591,39 +590,39 @@ class CanonicalMPS:
             tolerance=tolerance,
         )  # type: ignore
 
-    def right_canonical(self, renormalise: bool = True) -> "CanonicalMPS":
+    def right_canonical(self, renormalize: bool = True) -> "CanonicalMPS":
         """
         Returns the current MPS in the right-canonical form.
         See eq.19 in `[1]`_ for reference.
         """
-        return cast(CanonicalMPS, self.move_orth_centre(0, renormalise=renormalise))
+        return cast(CanonicalMPS, self.move_orth_center(0, renormalize=renormalize))
 
-    def left_canonical(self, renormalise: bool = True) -> "CanonicalMPS":
+    def left_canonical(self, renormalize: bool = True) -> "CanonicalMPS":
         """
         Returns the current MPS in the left-canonical form.
         See eq.19 in `[1]`_ for reference.
         """
         return cast(
             CanonicalMPS,
-            self.move_orth_centre(self.num_sites - 1, renormalise=renormalise),
+            self.move_orth_center(self.num_sites - 1, renormalize=renormalize),
         )
 
     def mixed_canonical(
-        self, orth_centre: int, renormalise: bool = True
+        self, orth_center: int, renormalize: bool = True
     ) -> "CanonicalMPS":
         """
         Returns the current MPS in the mixed-canonical form
-        with the orthogonality centre being located at ``orth_centre``.
+        with the orthogonality center being located at ``orth_center``.
 
         Parameters
         ----------
-        orth_centre_index : int
+        orth_center_index : int
             An integer which can take values ``0, 1, ..., num_sites-1``.
-            Denotes the position of the orthogonality centre --
+            Denotes the position of the orthogonality center --
             the only non-isometry in the new canonical MPS.
         """
         return cast(
-            CanonicalMPS, self.move_orth_centre(orth_centre, renormalise=renormalise)
+            CanonicalMPS, self.move_orth_center(orth_center, renormalize=renormalize)
         )
 
     def norm(self) -> float:
@@ -631,11 +630,11 @@ class CanonicalMPS:
         Computes the norm of the current MPS, that is,
         the modulus squared of its inner product with itself.
         """
-        if self.orth_centre:
+        if self.orth_center:
             norm = contract(
                 "ijk, ijk",
-                np.conjugate(self.tensors[self.orth_centre]),
-                self.tensors[self.orth_centre],
+                np.conjugate(self.tensors[self.orth_center]),
+                self.tensors[self.orth_center],
             )
             return float(abs(norm))
         return float(abs(mdopt.mps.utils.inner_product(self, self)))  # type: ignore
@@ -676,12 +675,12 @@ class CanonicalMPS:
                 f"while the one given has {operator.ndim}."
             )
 
-        orthogonality_centre = self.mixed_canonical(site).tensors[site]
+        orthogonality_center = self.mixed_canonical(site).tensors[site]
         return contract(
             "ijk, jl, ilk",
-            orthogonality_centre,
+            orthogonality_center,
             operator,
-            np.conjugate(orthogonality_centre),
+            np.conjugate(orthogonality_center),
             optimize=[(0, 1), (0, 1)],
         )
 
@@ -692,7 +691,7 @@ class CanonicalMPS:
     ) -> Union[float, np.complex128]:
         """
         Computes an expectation value of an arbitrary two-site operator
-        (not necessarily unitary) on the given site and its next neighbour.
+        (not necessarily unitary) on the given site and its next neighbor.
         The operator has legs ``(UL, DL, UR, DR)``, where ``L``, ``R``, ``U``, ``D``
         stand for "left", "right", "up", "down" accordingly.
 
@@ -727,7 +726,7 @@ class CanonicalMPS:
             )
 
         mps_mixed = self.mixed_canonical(site)
-        two_site_orthogonality_centre = contract(
+        two_site_orthogonality_center = contract(
             "ijk, klm -> ijlm",
             mps_mixed.tensors[site],
             mps_mixed.tensors[site + 1],
@@ -737,9 +736,9 @@ class CanonicalMPS:
 
         return contract(
             "ijkl, jmkn, imnl",
-            two_site_orthogonality_centre,
+            two_site_orthogonality_center,
             operator,
-            np.conjugate(two_site_orthogonality_centre),
+            np.conjugate(two_site_orthogonality_center),
             optimize=[(0, 1), (0, 1)],
         )
 
@@ -748,7 +747,7 @@ class CanonicalMPS:
         bond: int,
         chi_max: int = int(1e4),
         cut: float = float(1e-17),
-        renormalise: bool = False,
+        renormalize: bool = False,
         strategy: str = "svd",
         return_truncation_error: bool = False,
     ) -> Tuple["CanonicalMPS", Optional[float]]:
@@ -763,8 +762,8 @@ class CanonicalMPS:
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.
-        renormalise: bool
-            Whether to renormalise the singular value spectrum after the cut.
+        renormalize: bool
+            Whether to renormalize the singular value spectrum after the cut.
         strategy : str
             Which strategy to use for decomposition at the bond.
             Available options: ``svd``, ``qr`` and ``svd_advanced``.
@@ -774,7 +773,7 @@ class CanonicalMPS:
         Returns
         -------
         compressed_mps: CanonicalMPS
-            The new compressed Matrix Product State.
+            The new compressed matrix product state.
         truncation_error : Optional[float]
             The truncation error.
             Returned only if `return_truncation_error` is set to True.
@@ -802,12 +801,12 @@ class CanonicalMPS:
         if strategy not in ["svd", "qr", "svd_advanced"]:
             raise ValueError(f"Unsupported compression strategy: {strategy}")
 
-        mps_compressed = self.move_orth_centre(
-            final_pos=bond, return_singular_values=False, renormalise=False
+        mps_compressed = self.move_orth_center(
+            final_pos=bond, return_singular_values=False, renormalize=False
         )
         mps_compressed = cast("CanonicalMPS", mps_compressed)
 
-        tensor_left = mps_compressed.tensors[bond]  # the orthogonality centre
+        tensor_left = mps_compressed.tensors[bond]  # the orthogonality center
         tensor_right = mps_compressed.tensors[bond + 1]
 
         if strategy == "svd":
@@ -818,7 +817,7 @@ class CanonicalMPS:
                 tensor=two_site_tensor,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 strategy=strategy,
                 return_truncation_error=return_truncation_error,
             )
@@ -836,7 +835,7 @@ class CanonicalMPS:
                 tensor=two_site_tensor,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 strategy=strategy,
                 return_truncation_error=return_truncation_error,
             )
@@ -855,14 +854,14 @@ class CanonicalMPS:
                 mat=tensor_left_mat,
                 cut=cut,
                 chi_max=chi_max,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 return_truncation_error=return_truncation_error,
             )
             iso_right_0, sing_vals_right, iso_right_1, _ = svd(
                 mat=tensor_right_mat,
                 cut=cut,
                 chi_max=chi_max,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 return_truncation_error=return_truncation_error,
             )
 
@@ -876,7 +875,7 @@ class CanonicalMPS:
                 mat=two_site_tensor,
                 cut=cut,
                 chi_max=chi_max,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 return_truncation_error=return_truncation_error,
             )
 
@@ -902,7 +901,7 @@ class CanonicalMPS:
         self,
         chi_max: int = int(1e4),
         cut: float = float(1e-17),
-        renormalise: bool = False,
+        renormalize: bool = False,
         strategy: str = "svd",
         return_truncation_errors: bool = False,
     ) -> Tuple["CanonicalMPS", List[Optional[float]]]:
@@ -915,8 +914,8 @@ class CanonicalMPS:
             The maximum bond dimension to keep.
         cut : float
             Singular values smaller than this will be discarded.
-        renormalise: bool
-            Whether to renormalise the singular value spectrum after the cut.
+        renormalize: bool
+            Whether to renormalize the singular value spectrum after the cut.
         strategy : str
             Which strategy to use for decomposition at the bond.
             Available options: ``svd``, ``qr`` and ``svd_advanced``.
@@ -926,7 +925,7 @@ class CanonicalMPS:
         Returns
         -------
         compressed_mps: CanonicalMPS
-            The new compressed Matrix Product State.
+            The new compressed matrix product state.
         truncation_errors : Optional[List[float]]
             The truncation errors.
             Returned only if `return_truncation_errors` is set to True.
@@ -940,7 +939,7 @@ class CanonicalMPS:
             raise ValueError(f"Unsupported compression strategy: {strategy}")
 
         truncation_errors = []
-        mps_compressed, position = self.move_orth_centre_to_border(renormalise=False)
+        mps_compressed, position = self.move_orth_center_to_border(renormalize=False)
 
         if position == "last":
             mps_compressed = mps_compressed.reverse()
@@ -950,7 +949,7 @@ class CanonicalMPS:
                 bond=bond,
                 chi_max=chi_max,
                 cut=cut,
-                renormalise=renormalise,
+                renormalize=renormalize,
                 strategy=strategy,
                 return_truncation_error=True,
             )
@@ -967,8 +966,8 @@ class CanonicalMPS:
 
     def marginal(
         self,
-        sites_to_marginalise: List[int],
-        renormalise: bool = False,
+        sites_to_marginalize: List[int],
+        renormalize: bool = False,
     ) -> "CanonicalMPS":
         r"""
         Computes a marginal over a subset of sites of an MPS.
@@ -976,10 +975,10 @@ class CanonicalMPS:
 
         Parameters
         ----------
-        sites_to_marginalise : List[int]
-            The sites to marginalise over.
-        renormalise : bool
-            Whether to renormalise the resulting MPS.
+        sites_to_marginalize : List[int]
+            The sites to marginalize over.
+        renormalize : bool
+            Whether to renormalize the resulting MPS.
 
         Notes
         -----
@@ -995,7 +994,7 @@ class CanonicalMPS:
         new_tensor = tensordot(traced, neighbor, axes=([1],[0]))
         yields the expected dimensions.
 
-        An example of marginalising is shown in the following diagram::
+        An example of marginalizing is shown in the following diagram::
 
             ---(0)---(1)---(2)---(3)---    ---(2)---(3)---
                 |     |     |     |     ->     |     |
@@ -1003,19 +1002,19 @@ class CanonicalMPS:
                (t)   (t)
 
         Here, the ``(t)`` (trace) tensor is a tensor consisting af all 1's
-        and normalised by the square root of the physical dimension.
+        and normalized by the square root of the physical dimension.
         """
-        if not sites_to_marginalise:
+        if not sites_to_marginalize:
             return self
 
         sites_all = list(range(self.num_sites))
-        if set(sites_to_marginalise) - set(sites_all):
+        if set(sites_to_marginalize) - set(sites_all):
             raise ValueError(
-                "The list of sites to marginalise must be a subset of the list of all sites."
+                "The list of sites to marginalize must be a subset of the list of all sites."
             )
 
         # Process marginalized sites in descending order to avoid index shifts.
-        for site in sorted(sites_to_marginalise, reverse=True):
+        for site in sorted(sites_to_marginalize, reverse=True):
             phys_dim = self.tensors[site].shape[1]
             trace_tensor = np.ones(phys_dim) / np.sqrt(phys_dim)
             # Trace out the physical legs.
@@ -1044,15 +1043,15 @@ class CanonicalMPS:
 
             self.num_sites = len(self.tensors)
             self.num_bonds = self.num_sites - 1
-            self.orth_centre = self.num_sites - 1
+            self.orth_center = self.num_sites - 1
 
-            if renormalise:
-                orth_centre_norm = float(np.linalg.norm(self.tensors[self.orth_centre]))
-                # Marginalising a long chain of small amplitudes can underflow
-                # the orthogonality centre to zero. Dividing then yields 0/0 and
+            if renormalize:
+                orth_center_norm = float(np.linalg.norm(self.tensors[self.orth_center]))
+                # Marginalizing a long chain of small amplitudes can underflow
+                # the orthogonality center to zero. Dividing then yields 0/0 and
                 # poisons the whole state with NaNs, so leave it alone -- the
-                # other renormalisation sites guard the same way.
-                if orth_centre_norm > 0:
-                    self.tensors[self.orth_centre] /= orth_centre_norm
+                # other renormalization sites guard the same way.
+                if orth_center_norm > 0:
+                    self.tensors[self.orth_center] /= orth_center_norm
 
         return self

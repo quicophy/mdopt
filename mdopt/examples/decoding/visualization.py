@@ -1,4 +1,4 @@
-"""This module allows visualising the MPS decoder and parity check MPOs for a CSS code."""
+"""This module allows visualizing the MPS decoder and parity check MPOs for a CSS code."""
 
 import numpy as np
 from matrex import msro
@@ -11,17 +11,17 @@ from mdopt.decoding.decoding import (
 
 
 def plot_parity_check_mpo(
-    code: CssCode, optimise_order=False, return_matrix=False, plot_type="both"
+    code: CssCode, optimize_order=False, return_matrix=False, plot_type="both"
 ):
     """
-    Plots the parity check MPOs for a CSS code with optional order optimisation.
+    Plots the parity check MPOs for a CSS code with optional order optimization.
 
     Parameters
     ----------
     code : CssCode
         The quantum CSS code object.
-    optimise_order : bool, optional
-        Whether to optimise the order of applying the constraints.
+    optimize_order : bool, optional
+        Whether to optimize the order of applying the constraints.
     return_matrix : bool, optional
         Whether to return the MPO location matrix.
     plot_type : str, optional
@@ -34,7 +34,7 @@ def plot_parity_check_mpo(
     Notes
     -----
     - The first sublist corresponds to specific tensor types:
-        - XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT (for stabiliser parity check sites)
+        - XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT (for stabilizer parity check sites)
         - COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT (for logical parity check sites)
     """
 
@@ -76,7 +76,7 @@ def plot_parity_check_mpo(
         (num_constraint_checks + num_logical_checks, num_sites)
     )
 
-    if optimise_order:
+    if optimize_order:
         mpo_matrix = np.zeros((num_constraint_checks + num_logical_checks, num_sites))
         for row_idx, sublist in enumerate(logicals_sites):
             for sublist_indices in sublist:
@@ -87,15 +87,15 @@ def plot_parity_check_mpo(
                 for index in sublist_indices:
                     mpo_matrix[row_idx + num_logical_checks][index] = 1
 
-        optimised_order = msro(mpo_matrix)
+        optimized_order = msro(mpo_matrix)
 
         logical_indices = list(range(num_logical_checks))
         constraint_indices = list(
             range(num_logical_checks, num_logical_checks + num_constraint_checks)
         )
 
-        logicals_order = [i for i in optimised_order if i in logical_indices]
-        constraints_order = [i for i in optimised_order if i in constraint_indices]
+        logicals_order = [i for i in optimized_order if i in logical_indices]
+        constraints_order = [i for i in optimized_order if i in constraint_indices]
 
         logicals_sites = [logicals_sites[i] for i in logicals_order]
         constraint_sites = [
@@ -154,12 +154,12 @@ def plot_parity_check_mpo(
     cbar = plt.colorbar(im, ax=ax, ticks=np.arange(0, len(tensor_types) + 1))
     cbar.ax.set_yticklabels(["None"] + tensor_types)
 
-    ax.set_xlabel("MPS Site Index")
-    ax.set_ylabel("Parity Check Index")
+    ax.set_xlabel("MPS site index")
+    ax.set_ylabel("Parity check index")
     plot_title_part = "X and Z parts" if plot_type == "both" else f"{plot_type}-part"
     ax.set_title(
-        f"Parity Check MPO Structure ({plot_title_part}, "
-        f"{'optimised' if optimise_order else 'Unoptimised'})"
+        f"Parity check MPO structure ({plot_title_part}, "
+        f"{'optimized' if optimize_order else 'Unoptimized'})"
     )
 
     ax.xaxis.set_ticks_position("top")

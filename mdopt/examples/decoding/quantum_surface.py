@@ -128,7 +128,7 @@ def parse_arguments():
         "--qubit_order_strategy",
         type=str,
         default="Natural",
-        choices=["Natural", "Optimised"],
+        choices=["Natural", "Optimized"],
         help=(
             "Qubit order along the MPS chain: the code's natural order, or the "
             "reverse Cuthill-McKee order, which lowers the bond dimension the "
@@ -171,12 +171,15 @@ def run_single_experiment(
     tolerance,
     cut,
     qubit_order_strategy="Natural",
+    seed=None,
 ):
     """Run a single experiment.
 
-    ``qubit_order_strategy="Optimised"`` orders the qubits along the chain by
+    ``qubit_order_strategy="Optimized"`` orders the qubits along the chain by
     reverse Cuthill-McKee before decoding, which cuts the bond dimension the
     contraction needs; the default keeps the campaign's natural order.
+    ``seed`` seeds the random stabilizer of the multiply-by-stabilizer
+    fallback, so a run that needs it is still reproducible.
     """
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
@@ -186,12 +189,12 @@ def run_single_experiment(
             code=surface_code,
             error=error,
             chi_max=chi_max,
-            multiply_by_stabiliser=False,
+            multiply_by_stabilizer=False,
             bias_type=error_model,
             bias_prob=bias_prob,
-            renormalise=True,
+            renormalize=True,
             silent=silent,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
             tolerance=tolerance,
             cut=cut,
             qubit_order_strategy=qubit_order_strategy,
@@ -199,22 +202,23 @@ def run_single_experiment(
     except Exception as e:
         logging.error(f"Error during decoding: {e}", exc_info=True)
         try:
-            logging.info("Trying to decode with multiply_by_stabiliser=True.")
+            logging.info("Trying to decode with multiply_by_stabilizer=True.")
             logicals_distribution, success = decode_css(
                 code=surface_code,
                 error=error,
                 chi_max=chi_max,
-                multiply_by_stabiliser=True,
+                multiply_by_stabilizer=True,
+                rng=np.random.default_rng(seed),
                 bias_type=error_model,
                 bias_prob=bias_prob,
-                renormalise=True,
+                renormalize=True,
                 silent=silent,
-                contraction_strategy="Optimised",
+                contraction_strategy="Optimized",
                 tolerance=tolerance,
                 cut=cut,
                 qubit_order_strategy=qubit_order_strategy,
             )
-            logging.info("Decoding finished with multiply_by_stabiliser=True.")
+            logging.info("Decoding finished with multiply_by_stabilizer=True.")
         except Exception as ex:
             logging.error(
                 f"Decoding has not been completed due to: {ex}", exc_info=True

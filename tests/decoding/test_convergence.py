@@ -2,11 +2,11 @@
 
 These run the decoders at production-size bond dimensions on instances whose
 verdict is known to be sensitive to the numerical details of the truncation
-(a wrong singular-vector basis, a corrupted factorisation, a changed
+(a wrong singular-vector basis, a corrupted factorization, a changed
 tie-break) even when every cheap unit test and every fingerprint in
 ``benchmarks/`` passes. They take tens of minutes each and are skipped
 unless ``MDOPT_RUN_SLOW=1`` is set; run them before merging any change to
-the SVD, the orthogonality-centre moves or the contractor.
+the SVD, the orthogonality-center moves or the contractor.
 """
 
 import os
@@ -43,11 +43,11 @@ def test_bb_72_12_6_natural_order_single_error_converges_in_chi():
             code,
             error,
             chi_max=chi_max,
-            bias_type="Depolarising",
+            bias_type="Depolarizing",
             bias_prob=0.01,
-            renormalise=True,
+            renormalize=True,
             silent=True,
-            contraction_strategy="Optimised",
+            contraction_strategy="Optimized",
             qubit_order_strategy="Natural",
         )
         posterior = np.asarray(posterior, dtype=float).ravel()

@@ -26,7 +26,7 @@ from scipy.stats import sem
 from tqdm import tqdm
 
 from mdopt.mps.utils import create_custom_product_state
-from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+from mdopt.optimizer.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
 from mdopt.decoding.decoding import (
     linear_code_constraint_sites,
     linear_code_prepare_message,
@@ -118,8 +118,8 @@ for p in p_grid:
             cs,
             tensors,
             chi_max=CHI_MAX,
-            renormalise=True,
-            strategy="Optimised",
+            renormalize=True,
+            strategy="Optimized",
             silent=True,
         )
         _, success = decode_message(

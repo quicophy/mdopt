@@ -27,7 +27,7 @@ def test_assets_root_is_not_the_package_directory():
     assert not paths.assets_root().is_relative_to(package_dir)
 
 
-def test_environment_override_is_honoured(tmp_path, monkeypatch):
+def test_environment_override_is_honored(tmp_path, monkeypatch):
     """A cluster can point the lookup at scratch storage."""
     (tmp_path / "decoding").mkdir()
     monkeypatch.setenv("MDOPT_EXAMPLES_ASSETS", str(tmp_path))

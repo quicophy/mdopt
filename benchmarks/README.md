@@ -1,15 +1,15 @@
 # Benchmarks
 
 `bench_suite.py` is the profiling and correctness harness behind the
-optimisation work. Every workload is deterministic (fixed seeds) and returns a
-*fingerprint*; `baseline.json` holds the fingerprints of the unoptimised code,
+optimization work. Every workload is deterministic (fixed seeds) and returns a
+*fingerprint*; `baseline.json` holds the fingerprints of the unoptimized code,
 and a change is only accepted if the fingerprints still match.
 
 | Workload | What it exercises | Contract |
 | --- | --- | --- |
 | `surface_bitflip` | 5x5 surface code, bit-flip noise, 6 shots, χ = 64, natural qubit order | verdicts exact, posterior entries within 1e-2 |
-| `css_optimised` | the same code under `qubit_order_strategy="Optimised"` (reverse Cuthill-McKee) | as above |
-| `shor_depolarising` | Shor code, depolarising noise, 40 shots, χ = 128: the dense-readout path | as above |
+| `css_optimized` | the same code under `qubit_order_strategy="Optimized"` (reverse Cuthill-McKee) | as above |
+| `shor_depolarizing` | Shor code, depolarizing noise, 40 shots, χ = 128: the dense-readout path | as above |
 | `classical_ldpc` | three random (3,4) LDPC codes, XOR constraints + dephasing-DMRG readout | overlaps exact to 1e-10 |
 | `dmrg_ground_state` | DMRG on a 24-site transverse-field Ising chain | energy exact to 1e-10 |
 | `dem_d3` | circuit-level detector error model, d=3 r=3 p=0.8%, eight busiest syndromes, χ = 32 | verdicts exact, class masses within 1e-2 |
@@ -40,7 +40,7 @@ gitignored; `summary.json` there keeps the last wall time per workload.
 
 ## Writing a baseline from the reference code
 
-The baseline must come from code *without* the optimisations under test.
+The baseline must come from code *without* the optimizations under test.
 With a clean checkout of `main` next to this one:
 
 ```bash

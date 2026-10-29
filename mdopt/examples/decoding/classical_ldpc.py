@@ -43,7 +43,7 @@ sys.path.append(examples_path_beluga)
 
 try:
     from mdopt.mps.utils import create_custom_product_state
-    from mdopt.optimiser.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
+    from mdopt.optimizer.utils import SWAP, XOR_BULK, XOR_LEFT, XOR_RIGHT
     from mdopt.examples.paths import data_dir
     from mdopt.decoding.decoding import (
         linear_code_parity_matrix_dense,
@@ -143,8 +143,8 @@ def run_single_experiment(
         strings=code_constraint_sites,
         logical_tensors=tensors,
         chi_max=chi_max,
-        renormalise=True,
-        strategy="Optimised",
+        renormalize=True,
+        strategy="Optimized",
         silent=True,
     )
 

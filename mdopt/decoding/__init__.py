@@ -1,15 +1,15 @@
 """Decoding of classical and quantum error-correcting codes with MPS.
 
-This package provides the error-based decoders for CSS and custom stabiliser
+This package provides the error-based decoders for CSS and custom stabilizer
 codes (:mod:`mdopt.decoding.decoding`) and the detector-error-model decoder
 for circuit-level noise (:mod:`mdopt.decoding.dem`).
 """
 
 from mdopt.decoding.decoding import (
     apply_bitflip_bias,
-    apply_depolarising_bias,
+    apply_depolarizing_bias,
     css_code_logicals,
-    css_code_stabilisers,
+    css_code_stabilizers,
     decode_css,
     decode_custom,
     decode_message,

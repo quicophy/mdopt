@@ -36,7 +36,7 @@ from mdopt.decoding.decoding import (
     generate_pauli_error_string,
     css_code_checks,
 )
-from mdopt.optimiser.utils import optimise_qubit_order
+from mdopt.optimizer.utils import optimize_qubit_order
 
 LATTICE_SIZE = 5
 PICKLE = f"data/cache/vert_horiz_surface_L{LATTICE_SIZE}_data.pkl"
@@ -44,8 +44,8 @@ SEED = 42
 NUM_WORKERS = 8
 chi_max_list = [4, 8, 16, 32]
 p_list = [1e-3, 3e-3, 1e-2, 3e-2]
-orderings = ["Natural", "Optimised"]
-verticals = ["Naive", "Optimised"]
+orderings = ["Natural", "Optimized"]
+verticals = ["Naive", "Optimized"]
 CUT = 1e-10
 TOLERANCE = 1e-10
 BIAS_TYPE = "Bitflip"
@@ -72,7 +72,7 @@ def _decode_one_cell(args):
             cut=CUT,
             bias_type=BIAS_TYPE,
             bias_prob=p,
-            renormalise=True,
+            renormalize=True,
             silent=True,
             contraction_strategy=vertical,
             qubit_order_strategy=ordering,
@@ -116,7 +116,7 @@ def main():
         for c in cols:
             Hz[r, c] = 1
     H = np.vstack([Hx, Hz])
-    perm = optimise_qubit_order(H)
+    perm = optimize_qubit_order(H)
 
     cx_nat, cz_nat = css_code_checks(code, qubit_perm=None)
     cx_opt, cz_opt = css_code_checks(code, qubit_perm=perm)
@@ -125,7 +125,7 @@ def main():
     bw_nat = (ms(cx_nat + cz_nat), ts(cx_nat + cz_nat))
     bw_opt = (ms(cx_opt + cz_opt), ts(cx_opt + cz_opt))
     print(f"  Natural:   max_span={bw_nat[0]:4d}, total_span={bw_nat[1]:6d}")
-    print(f"  Optimised: max_span={bw_opt[0]:4d}, total_span={bw_opt[1]:6d}")
+    print(f"  Optimized: max_span={bw_opt[0]:4d}, total_span={bw_opt[1]:6d}")
     print(
         f"  Reduction: max {100 * (bw_nat[0] - bw_opt[0]) / bw_nat[0]:.1f}%, "
         f"total {100 * (bw_nat[1] - bw_opt[1]) / bw_nat[1]:.1f}%"
@@ -199,7 +199,7 @@ def main():
                 "trials_per_p": TRIALS_PER_P,
                 "lattice_size": LATTICE_SIZE,
                 "bandwidth_natural": bw_nat,
-                "bandwidth_optimised": bw_opt,
+                "bandwidth_optimized": bw_opt,
                 "n_qubits": n,
             },
             fh,
