@@ -1680,8 +1680,8 @@ def decode_css(
             f"The error acts on {len(error)} qubits, expected {num_qubits}."
         )
 
-    # A misspelled strategy must not fall through to the natural ordering:
-    # "Optimised" would silently disable the requested optimization.
+    # A misspelled strategy must not fall through to the natural ordering,
+    # which would silently disable the requested optimization.
     if qubit_order_strategy not in QUBIT_ORDER_STRATEGIES:
         raise ValueError(
             f"Unknown qubit_order_strategy {qubit_order_strategy!r}; expected "

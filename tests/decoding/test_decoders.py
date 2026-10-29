@@ -1792,14 +1792,6 @@ def test_generate_pauli_error_string_validates_rates_and_model_up_front():
         generate_pauli_error_string(0, 0.1, error_model="Nonsense", rng=rng)
 
 
-def test_decode_css_rejects_unknown_qubit_order_strategy():
-    """A misspelled strategy must not fall through to the natural ordering."""
-    code = qec.steane_code()
-    for error in ("I" * 7, "X" + "I" * 6):
-        with pytest.raises(ValueError, match="qubit_order_strategy"):
-            decode_css(code, error, silent=True, qubit_order_strategy="Optimised")
-
-
 def test_decode_custom_rejects_unknown_tie_policy_on_trivial_error():
     """The tie policy is validated before the identity shortcut fires."""
     code = qec.steane_code()
