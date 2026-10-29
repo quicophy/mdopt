@@ -16,7 +16,3 @@ Entry points
 - :mod:`mdopt.optimizer` — optimization via DMRG-like routines and the parity-check MPO tensors
 - :mod:`mdopt.contractor` — tensor-network contraction utilities
 - :mod:`mdopt.utils` — shared tensor utilities
-
-The decoder modules used to live at ``mdopt.examples.decoding.decoding`` and
-``mdopt.examples.decoding.dem``. Those paths still work but emit a
-``DeprecationWarning``; import from :mod:`mdopt.decoding`.

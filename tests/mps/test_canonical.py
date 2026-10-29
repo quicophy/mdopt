@@ -999,7 +999,7 @@ def test_move_orth_center_matches_svd_path_on_non_canonical_chains():
     that must truncate at chi_max has to take the two-site SVD; the fast
     path may only handle moves that truncate nothing."""
     from mdopt.mps.utils import mps_from_dense
-    from mdopt.examples.decoding.decoding import apply_depolarizing_bias
+    from mdopt.decoding.decoding import apply_depolarizing_bias
 
     rng = np.random.default_rng(5)
     vec = rng.standard_normal(2**8)

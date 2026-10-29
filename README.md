@@ -147,8 +147,6 @@ print(predicted_flips, observables[0].astype(int))
 - `mdopt.utils` — truncated SVD/QR and tensor helpers.
 - `mdopt.examples` — the runnable campaign scripts behind the example notebooks.
 
-The decoder modules used to live at `mdopt.examples.decoding.decoding` and `mdopt.examples.decoding.dem`. Those import paths still work, but emit a `DeprecationWarning` and will be removed in a future release; import from `mdopt.decoding` instead.
-
 ## Examples
 
 The [examples](https://github.com/quicophy/mdopt/tree/main/examples) folder contains full workflows that demonstrate typical use cases, such as quantum / classical LDPC code decoding, ground state search for the quantum Ising model and random quantum circuit simulation. Each example is fully documented and serves as a starting point for building your own experiments. The shell scripts in [`examples/decoding`](https://github.com/quicophy/mdopt/tree/main/examples/decoding) run the Monte Carlo campaigns behind the notebooks, locally (`*.sh`) or as Slurm jobs (`*_cc.sh`), and the detector-error-model harnesses live in `examples/decoding/dem_campaign`.
