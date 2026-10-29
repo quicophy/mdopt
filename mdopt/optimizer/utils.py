@@ -282,6 +282,11 @@ def apply_constraints(
         Returned only if ``return_entropies_and_bond_dims`` is set to ``True``.
     """
 
+    if strategy not in ("Naive", "Optimized"):
+        raise ValueError(
+            f"Unknown strategy {strategy!r}; expected 'Naive' or 'Optimized'."
+        )
+
     entropies = []
     bond_dims = []
 

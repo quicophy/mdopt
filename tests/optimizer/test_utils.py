@@ -458,3 +458,15 @@ def test_optimizer_utils_apply_constraints(rng):
                     inner_product(final_mps, create_custom_product_state(string=string))
                     > 0
                 )
+
+
+@pytest.mark.parametrize("strategy", ["Optimised", "unsupported"])
+def test_optimizer_utils_apply_constraints_rejects_unknown_strategy(strategy):
+    """Unsupported constraint strategies must fail rather than use the naive path."""
+    with pytest.raises(ValueError, match="expected 'Naive' or 'Optimized'"):
+        apply_constraints(
+            mps=None,
+            strings=[],
+            logical_tensors=[],
+            strategy=strategy,
+        )
