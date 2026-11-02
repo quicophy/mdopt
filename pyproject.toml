@@ -65,7 +65,7 @@ docs = [
     "sphinxcontrib-napoleon>=0.7,<0.8",
     "nbsphinx>=0.9.2,<0.10",
     "pygments>=2.20.0,<3",
-    "ipython>=9.17.1,<10",
+    "ipython>=9.18.0,<10",
     "pydata-sphinx-theme>=0.21.0,<0.24.0",
 ]
 
