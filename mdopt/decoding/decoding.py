@@ -2367,9 +2367,18 @@ def decode_custom(
     # branch above scores the same shot as a success. Instead ask the question
     # dense readout asks -- is the identity among the maximizers? -- by pulling
     # both amplitudes out of the logical MPS directly, which costs O(k chi^2) and
-    # needs no enumeration of the 4^k classes.
+    # needs no enumeration of the 4^k classes. The identity amplitude is taken
+    # signed, after the global sign fix, and clamped at zero like the dense
+    # readout's entries: a negative identity amplitude is a truncation artifact
+    # and must score as a failure on this path too, not clear the bar on its
+    # modulus. On the [[72,12,6]] code at chi_max=64 that difference alone
+    # changed the verdict on a quarter of the shots.
     mps_dmrg_target = create_simple_product_state(num_logical_sites, which="0")
-    amplitude_identity = abs(inner_product(mps_dmrg_target, logical_mps))
+    amplitude_identity = max(
+        _global_sign(logical_mps)
+        * float(np.real(inner_product(mps_dmrg_target, logical_mps))),
+        0.0,
+    )
 
     # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
     # mirroring the dense branch.
