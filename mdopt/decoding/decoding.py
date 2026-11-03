@@ -1417,17 +1417,20 @@ def _global_sign(logical_mps) -> float:
 
     An exact run produces only non-negative amplitudes, so their sum -- the
     overlap with the all-plus product state, ``O(k chi^2)`` -- is positive. A
-    heavily truncated run can nevertheless come back as minus the posterior:
-    on the [[225,9]] hypergraph-product code at chi_max=32, a third of the
-    shots had every class negative, with the dominant one at exactly ``-1``.
-    The mechanism is truncation, not a sign error in the contractor: when the
-    configuration carrying almost all of the mass is killed by a later
-    constraint, what survives are components the earlier chi cuts kept only
-    to noise accuracy, sign included. Such a shot is unconverged, and the
-    negative-amplitude warning says so; but a readout that treats negative
-    amplitudes as artifacts would discard every class and score it as a
-    failure systematically, where the modulus-based readouts would not. The
-    sum fixes the sign first so that all readouts judge the shot alike.
+    truncated run can nevertheless come back as minus the posterior: on the
+    [[225,9]] hypergraph-product code at chi_max=32 a third of the shots had
+    every class negative, and CSP codes at chi_max=64 under the "Optimized"
+    constraint order showed the same on 8 of 20 shots. The mechanism is
+    truncation, not a sign error in the contractor: when the configuration
+    carrying almost all of the mass is killed by a late constraint, what
+    survives are components the earlier chi cuts kept only to the accuracy of
+    the discarded weight, sign included. The result often *looks* converged
+    (negative entries at 1e-13 of the peak once the sign is fixed), so the
+    negative-amplitude warning does not catch it; the sign of the sum is the
+    only signal, and such a shot's class weights deserve no more trust than
+    its sign. Clamping without this check discarded every class and scored
+    the shot on noise; fixing the sign first makes every readout judge it the
+    same way and lets the dense readout warn about it.
     """
     plus = create_simple_product_state(len(logical_mps), which="+")
     total = float(np.real(inner_product(plus, logical_mps)))
@@ -1450,8 +1453,11 @@ def _dense_readout(
         logical_signed = -logical_signed
         if not silent:
             LOGGER.warning(
-                "The logical MPS came back with a global sign flip; corrected "
-                "before clamping so the posterior is not discarded."
+                "The logical MPS came back with a global sign flip at chi_max=%d: "
+                "the posterior was rebuilt from truncation residue and its class "
+                "weights are unreliable. Corrected before clamping; consider a "
+                "larger chi_max or another constraint order for this instance.",
+                chi_max,
             )
 
     # An exact run cannot produce a negative amplitude: every tensor in the
