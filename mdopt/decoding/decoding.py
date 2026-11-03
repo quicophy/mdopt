@@ -1065,8 +1065,8 @@ KNOWN_ERROR_MODELS = frozenset(
 )
 TIE_POLICIES = ("optimistic", "fractional", "pessimistic")
 # "Dense" forces the dense readout regardless of dense_readout_max_sites;
-# "Dephasing DMRG" reads out densely up to that many logical sites and by
-# DMRG beyond it; "Optima TT" is reserved and not implemented.
+# "Dephasing DMRG" and "Optima TT" read out densely up to that many logical
+# sites and by the named search beyond it.
 OPTIMIZERS = ("Dephasing DMRG", "Dense", "Optima TT")
 QUBIT_ORDER_STRATEGIES = ("Natural", "Optimized")
 
@@ -1318,6 +1318,211 @@ def max_product_readout(logical_mps, beam_width: int = 4):
     return best_bits, best_amplitude
 
 
+def _right_orthogonalize(cores: List[np.ndarray]) -> List[np.ndarray]:
+    """Return cores equal to ``cores`` as a state, with every core but the first
+    a right isometry (``sum_{p, r} B[l, p, r] conj(B[l', p, r]) = delta``).
+
+    A sweep of LQ factorizations from the right end, each one pushing its
+    triangular factor into the left neighbor. Exact: nothing is truncated, so
+    unlike :meth:`CanonicalMPS.move_orth_center` this neither depends on the
+    MPS's ``chi_max`` nor renormalizes the state.
+    """
+    cores = [np.asarray(core) for core in cores]
+    for i in range(len(cores) - 1, 0, -1):
+        chi_l, phys, chi_r = cores[i].shape
+        # LQ of the (chi_l, phys * chi_r) matrix via QR of its transpose.
+        q_factor, r_factor = np.linalg.qr(cores[i].reshape(chi_l, phys * chi_r).T)
+        cores[i] = q_factor.T.reshape(-1, phys, chi_r)
+        cores[i - 1] = np.tensordot(cores[i - 1], r_factor.T, axes=(2, 0))
+    return cores
+
+
+def _optima_tt_sweep(cores: List[np.ndarray], num_candidates: int):
+    """One left-to-right Optima TT pass over right-orthogonal ``cores``.
+
+    Returns ``(bitstrings, values)`` for the ``num_candidates`` prefixes kept
+    at the last site; ``values`` are the exact signed amplitudes.
+    """
+    state = np.ones((1, 1), dtype=np.result_type(cores[0].dtype, 1.0))
+    prefixes = [""]
+    log_scale = 0.0
+    for core in cores:
+        chi_r = core.shape[2]
+        state = np.einsum("kl,lpr->kpr", state, core).reshape(-1, chi_r)
+        prefixes = [
+            prefix + str(value) for prefix in prefixes for value in range(core.shape[1])
+        ]
+        # With the remaining cores right-orthogonal, a row's squared norm is
+        # the total squared amplitude of every completion of its prefix.
+        masses = np.einsum("kr,kr->k", np.abs(state), np.abs(state))
+        if masses.size > num_candidates:
+            keep = np.argsort(-masses, kind="stable")[:num_candidates]
+            state = state[keep]
+            prefixes = [prefixes[i] for i in keep]
+        # Keep the running matrix O(1) in scale so a long chain can neither
+        # overflow nor underflow; the scale is restored at the end.
+        scale = float(np.max(np.abs(state)))
+        if scale == 0.0:
+            return prefixes, np.zeros(len(prefixes))
+        state /= scale
+        log_scale += np.log(scale)
+    values = np.real(state[:, 0]) * np.exp(log_scale)
+    return prefixes, values
+
+
+def optima_tt_readout(logical_mps, num_candidates: int = 100):
+    """Search the logical MPS for its largest basis-state amplitude by Optima TT.
+
+    Optima TT (Chertkov, Ryzhakov and Oseledets, 2022) is a beam search whose
+    score is exact: with the chain orthogonalized toward the sweep's start,
+    each surviving prefix carries a vector whose squared norm is the total
+    squared amplitude of every basis state completing it, so prefixes are
+    ranked by the mass they lead to rather than by a bound on it. The sweep
+    runs in both directions and keeps ``num_candidates`` prefixes per site;
+    the amplitudes it reports are exact signed values, so nothing has to be
+    rescored at the end. Cost ``O(k d chi^3)``, dominated by the
+    orthogonalization.
+
+    The candidates are ranked by signed amplitude, after the state's global
+    sign has been fixed by :func:`_global_sign`. A remaining negative amplitude
+    is a truncation artifact in this pipeline (see :func:`max_amplitude_bound`),
+    and ranking by sign keeps one from ever being reported as the MAP class,
+    as the dense readout's clamping does.
+
+    Returns
+    -------
+    candidates : list of (str, float)
+        Distinct basis states found by either sweep with their exact signed
+        amplitudes, best first. At most ``2 * num_candidates`` entries.
+    """
+    if isinstance(logical_mps, ExplicitMPS):
+        logical_mps = logical_mps.right_canonical()
+    cores = list(logical_mps.tensors)
+    num_candidates = max(1, num_candidates)
+    sign = _global_sign(logical_mps)
+
+    found: dict[str, float] = {}
+    bits, values = _optima_tt_sweep(_right_orthogonalize(cores), num_candidates)
+    found.update(zip(bits, sign * values))
+    # The right-to-left pass is the same sweep on the mirrored chain.
+    mirrored = [core.transpose(2, 1, 0) for core in reversed(cores)]
+    bits, values = _optima_tt_sweep(_right_orthogonalize(mirrored), num_candidates)
+    found.update((prefix[::-1], value) for prefix, value in zip(bits, sign * values))
+
+    return sorted(found.items(), key=lambda item: -item[1])
+
+
+def _global_sign(logical_mps) -> float:
+    """The sign the logical MPS must be multiplied by to make its posterior positive.
+
+    An exact run produces only non-negative amplitudes, so their sum -- the
+    overlap with the all-plus product state, ``O(k chi^2)`` -- is positive. A
+    heavily truncated run can nevertheless come back as minus the posterior:
+    on the [[225,9]] hypergraph-product code at chi_max=32, a third of the
+    shots had every class negative, with the dominant one at exactly ``-1``.
+    The mechanism is truncation, not a sign error in the contractor: when the
+    configuration carrying almost all of the mass is killed by a later
+    constraint, what survives are components the earlier chi cuts kept only
+    to noise accuracy, sign included. Such a shot is unconverged, and the
+    negative-amplitude warning says so; but a readout that treats negative
+    amplitudes as artifacts would discard every class and score it as a
+    failure systematically, where the modulus-based readouts would not. The
+    sum fixes the sign first so that all readouts judge the shot alike.
+    """
+    plus = create_simple_product_state(len(logical_mps), which="+")
+    total = float(np.real(inner_product(plus, logical_mps)))
+    return -1.0 if total < 0 else 1.0
+
+
+def _dense_readout(
+    logical_mps, chi_max: int, tie_policy: str, renormalize: bool, silent: bool
+):
+    """Read the logical class out of the full ``2**k``-entry amplitude vector.
+
+    Returns the clamped amplitude vector and the shot's success score under
+    ``tie_policy``.
+    """
+    logical_signed = np.real(
+        np.asarray(logical_mps.dense(flatten=True, renormalize=renormalize, norm=2))
+    )
+    sign = _global_sign(logical_mps)
+    if sign < 0:
+        logical_signed = -logical_signed
+        if not silent:
+            LOGGER.warning(
+                "The logical MPS came back with a global sign flip; corrected "
+                "before clamping so the posterior is not discarded."
+            )
+
+    # An exact run cannot produce a negative amplitude: every tensor in the
+    # pipeline is non-negative and marginalization traces against all-ones.
+    # A negative one is therefore a truncation artifact and a direct signal
+    # that chi_max is too small for this instance -- the cheapest
+    # convergence diagnostic available, since the vector is already here.
+    # Negative entries are clamped to zero, never folded with abs: an
+    # unconverged negative component must not be able to become the
+    # reported MAP class, and a negative identity entry scores as a
+    # failure rather than as a spurious success.
+    most_negative = float(np.min(logical_signed))
+    logical_dense = np.maximum(logical_signed, 0.0)
+    peak = float(np.max(logical_dense))
+
+    # Reported before the collapse guard: a vector driven entirely negative
+    # is both unconverged and, once clamped, collapsed.
+    if most_negative < -1e-12 * max(peak, 1.0) and not silent:
+        LOGGER.warning(
+            "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
+            "is not converged for this instance.",
+            most_negative,
+            100.0 * abs(most_negative) / max(peak, 1e-300),
+            chi_max,
+        )
+
+    # A collapsed posterior carries no information. Truncation is what
+    # destroys it: at low chi_max a whole site tensor can be driven to zero.
+    if not np.isfinite(peak) or peak == 0.0:
+        # Scoring must stop here. Every entry of an all-zero vector is within
+        # eps of the maximum, so the identity would be "among the maximizers"
+        # and the shot would score a success -- turning numerical collapse
+        # into a correctly decoded shot and biasing the failure rate
+        # downward, invisibly when silent=True. Report the failure instead.
+        if not silent:
+            LOGGER.warning(
+                "The logical posterior collapsed to zero at chi_max=%d; this "
+                "shot carries no information and is scored as a failure.",
+                chi_max,
+            )
+        return logical_dense, 0.0
+
+    # Normalize to the peak so that tie tolerances are scale-independent.
+    # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
+    # collapse guard but have every entry within the fixed 1e-12 absolute
+    # tolerance of the maximum, marking all classes as tied.
+    logical_normed = logical_dense / peak
+
+    # find global maximum amplitude (always 1.0 after normalization)
+    max_amp = np.max(logical_normed)
+
+    # treat identity logical as success if it is among the maximizers
+    # (within some numerical tolerance)
+    # Same tolerance as decode_css, so both decoders call a tie the same way.
+    eps = max(1e-9 * max_amp, 1e-12)
+    is_map_identity = logical_normed[0] >= max_amp - eps
+    degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
+    score = _score_tie(is_map_identity, degeneracy, tie_policy)
+
+    if degeneracy > 1 and not silent:
+        LOGGER.warning(
+            "The MAP set is %d-fold degenerate; scored under the '%s' policy as %.4f.",
+            degeneracy,
+            tie_policy,
+            score,
+        )
+
+    # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
+    return logical_dense, score
+
+
 class _ReadoutResult:
     """What the logical readout settled on.
 
@@ -1339,16 +1544,22 @@ def _logical_readout(
     num_restarts: int,
     silent: bool,
     beam_width: int = 4,
+    method: str = "Dephasing DMRG",
+    num_candidates: int = 100,
 ):
     """Find the largest-amplitude computational basis state of ``logical_mps``.
 
-    Tries the cheap route first. :func:`max_product_readout` proposes a basis
-    state and :func:`max_amplitude_bound` caps what any basis state could reach;
-    when the two agree the proposal is provably optimal and the search is over,
-    at ``O(k d chi^2)`` and with no variational sweep at all. Only when that
-    bracket stays open does Dephasing DMRG run, and its answer is then taken
-    together with the beam-search one, so the result is never worse than DMRG
-    alone.
+    With ``method="Optima TT"`` the answer is :func:`optima_tt_readout`'s best
+    candidate, certified when it meets :func:`max_amplitude_bound`, and no
+    other search runs: that is the point of selecting it.
+
+    Otherwise tries the cheap route first. :func:`max_product_readout`
+    proposes a basis state and :func:`max_amplitude_bound` caps what any basis
+    state could reach; when the two agree the proposal is provably optimal and
+    the search is over, at ``O(k d chi^2)`` and with no variational sweep at
+    all. Only when that bracket stays open does Dephasing DMRG run, and its
+    answer is then taken together with the beam-search one, so the result is
+    never worse than DMRG alone.
 
     Returns
     -------
@@ -1360,6 +1571,45 @@ def _logical_readout(
         Whether the amplitude provably equals the maximum over all basis states.
     """
     bound = max_amplitude_bound(logical_mps)
+
+    if method == "Optima TT":
+        candidates = optima_tt_readout(logical_mps, num_candidates=num_candidates)
+        bits, value = candidates[0]
+        # Exact value, so a candidate list is enough to score the shot; the
+        # modulus matches what the other readouts report.
+        amplitude = abs(float(value))
+        certified = amplitude >= bound * (1 - 1e-9)
+        if not silent:
+            most_negative = float(candidates[-1][1])
+            if most_negative < -1e-12 * max(amplitude, 1.0):
+                LOGGER.warning(
+                    "Negative logical amplitude %.3e (%.1f%% of the peak) among "
+                    "the Optima TT candidates: chi_max=%d is not converged for "
+                    "this instance.",
+                    most_negative,
+                    100.0 * abs(most_negative) / max(amplitude, 1e-300),
+                    chi_max,
+                )
+            if certified:
+                LOGGER.info(
+                    "Readout settled by Optima TT: |<s*|psi>| = %.6e matches the "
+                    "upper bound, so no basis state can do better.",
+                    amplitude,
+                )
+            else:
+                LOGGER.warning(
+                    "Optima TT reached %.6e against an upper bound of %.6e; the "
+                    "maximizer may have been missed. Consider raising "
+                    "num_candidates.",
+                    amplitude,
+                    bound,
+                )
+        return (
+            _ReadoutResult(create_custom_product_state(bits), logical_mps),
+            amplitude,
+            certified,
+        )
+
     bits, amplitude = max_product_readout(logical_mps, beam_width=beam_width)
 
     if amplitude >= bound * (1 - 1e-9):
@@ -1583,6 +1833,7 @@ def decode_css(
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 30,
     num_restarts: int = 8,
+    num_candidates: int = 100,
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
 ):
@@ -1633,15 +1884,19 @@ def decode_css(
         reads it out densely while the logical MPS has at most
         ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
         "Dense" forces the dense readout regardless of the size (the caller
-        accepts the 4**k memory cost); "Optima TT" is reserved and raises
-        NotImplementedError.
+        accepts the 4**k memory cost); "Optima TT" reads it out densely up to
+        the same threshold and by :func:`optima_tt_readout` beyond it.
     tolerance : float
         The tolerance for the MPS classes.
     dense_readout_max_sites : int
         Read the logical class out by dense contraction while the logical MPS has
-        at most this many sites, and by Dephasing DMRG beyond it. The default
-        keeps the usual behavior; setting it to 0 forces the DMRG path, which is
-        how the two readouts can be compared on a code small enough to check.
+        at most this many sites, and by the chosen search beyond it. The default
+        keeps the usual behavior; setting it to 0 forces the search path, which
+        is how the readouts can be compared on a code small enough to check.
+    num_restarts : int
+        Product states the Dephasing DMRG readout is restarted from.
+    num_candidates : int
+        Prefixes the Optima TT readout keeps per site in each sweep.
     rng : np.random.Generator, optional
         Source of randomness for ``multiply_by_stabilizer``. Pass the same
         generator used to sample the error if the run needs to be reproducible;
@@ -1738,6 +1993,7 @@ def decode_css(
         tolerance=tolerance,
         dense_readout_max_sites=dense_readout_max_sites,
         num_restarts=num_restarts,
+        num_candidates=num_candidates,
         tie_policy=tie_policy,
         rng=rng,
     )
@@ -1761,6 +2017,7 @@ def decode_custom(
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 12,
     num_restarts: int = 8,
+    num_candidates: int = 100,
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
 ):
@@ -1807,14 +2064,18 @@ def decode_custom(
         reads it out densely while the logical MPS has at most
         ``dense_readout_max_sites`` sites and by Dephasing DMRG beyond that;
         "Dense" forces the dense readout regardless of the size (the caller
-        accepts the 4**k memory cost); "Optima TT" is reserved and raises
-        NotImplementedError.
+        accepts the 4**k memory cost); "Optima TT" reads it out densely up to
+        the same threshold and by :func:`optima_tt_readout` beyond it.
     tolerance : float
         The tolerance for the MPS classes.
     dense_readout_max_sites : int
         Read the logical class out by dense contraction while the logical MPS has
-        at most this many sites, and by Dephasing DMRG beyond it. See
+        at most this many sites, and by the chosen search beyond it. See
         :func:`decode_css`.
+    num_restarts : int
+        Product states the Dephasing DMRG readout is restarted from.
+    num_candidates : int
+        Prefixes the Optima TT readout keeps per site in each sweep.
 
     Returns
     -------
@@ -1915,9 +2176,6 @@ def decode_custom(
         raise ValueError(
             f"Unknown optimizer {optimizer!r}; expected one of {OPTIMIZERS}."
         )
-    if optimizer == "Optima TT":
-        raise NotImplementedError("Optima TT is not implemented yet.")
-
     if _identity_fast_path_fires(error, bias_prob):
         if not silent:
             LOGGER.info("No error detected.")
@@ -2071,84 +2329,12 @@ def decode_custom(
         LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
     if optimizer == "Dense" or num_logical_sites <= dense_readout_max_sites:
-        logical_signed = np.real(
-            np.asarray(logical_mps.dense(flatten=True, renormalize=renormalize, norm=2))
-        )
-
-        # An exact run cannot produce a negative amplitude: every tensor in the
-        # pipeline is non-negative and marginalization traces against all-ones.
-        # A negative one is therefore a truncation artifact and a direct signal
-        # that chi_max is too small for this instance -- the cheapest
-        # convergence diagnostic available, since the vector is already here.
-        # Negative entries are clamped to zero, never folded with abs: an
-        # unconverged negative component must not be able to become the
-        # reported MAP class, and a negative identity entry scores as a
-        # failure rather than as a spurious success.
-        most_negative = float(np.min(logical_signed))
-        logical_dense = np.maximum(logical_signed, 0.0)
-        peak = float(np.max(logical_dense))
-
-        # Reported before the collapse guard: a vector driven entirely negative
-        # is both unconverged and, once clamped, collapsed.
-        if most_negative < -1e-12 * max(peak, 1.0) and not silent:
-            LOGGER.warning(
-                "Negative logical amplitude %.3e (%.1f%% of the peak): chi_max=%d "
-                "is not converged for this instance.",
-                most_negative,
-                100.0 * abs(most_negative) / max(peak, 1e-300),
-                chi_max,
-            )
-
-        # A collapsed posterior carries no information. Truncation is what
-        # destroys it: at low chi_max a whole site tensor can be driven to zero.
-        if not np.isfinite(peak) or peak == 0.0:
-            # Scoring must stop here. Every entry of an all-zero vector is within
-            # eps of the maximum, so the identity would be "among the maximizers"
-            # and the shot would score a success -- turning numerical collapse
-            # into a correctly decoded shot and biasing the failure rate
-            # downward, invisibly when silent=True. Report the failure instead.
-            if not silent:
-                LOGGER.warning(
-                    "The logical posterior collapsed to zero at chi_max=%d; this "
-                    "shot carries no information and is scored as a failure.",
-                    chi_max,
-                )
-            return logical_dense, 0.0
-
-        # Normalize to the peak so that tie tolerances are scale-independent.
-        # Partially underflowed vectors (peak ~1e-200) would otherwise pass the
-        # collapse guard but have every entry within the fixed 1e-12 absolute
-        # tolerance of the maximum, marking all classes as tied.
-        logical_normed = logical_dense / peak
-
-        # find global maximum amplitude (always 1.0 after normalization)
-        max_amp = np.max(logical_normed)
-
-        # treat identity logical as success if it is among the maximizers
-        # (within some numerical tolerance)
-        # Same tolerance as decode_css, so both decoders call a tie the same way.
-        eps = max(1e-9 * max_amp, 1e-12)
-        is_map_identity = logical_normed[0] >= max_amp - eps
-        degeneracy = int(np.count_nonzero(logical_normed >= max_amp - eps))
-        score = _score_tie(is_map_identity, degeneracy, tie_policy)
-
-        if degeneracy > 1 and not silent:
-            LOGGER.warning(
-                "The MAP set is %d-fold degenerate; scored under the '%s' "
-                "policy as %.4f.",
-                degeneracy,
-                tie_policy,
-                score,
-            )
-
-        result = logical_dense, score
-        return result
-        # Encoding: 0 -> I, 1 -> X, 2 -> Z, 3 -> Y, where the number is np.argmax(logical_dense).
+        return _dense_readout(logical_mps, chi_max, tie_policy, renormalize, silent)
 
     if tie_policy != "optimistic":
         raise NotImplementedError(
-            f"tie_policy={tie_policy!r} is not supported on the Dephasing DMRG "
-            "path; the DMRG readout does not enumerate all tied classes and "
+            f"tie_policy={tie_policy!r} is not supported on the {optimizer} "
+            "path; the search readouts do not enumerate all tied classes and "
             "therefore cannot implement 'fractional' or 'pessimistic' scoring. "
             "Use tie_policy='optimistic' or raise dense_readout_max_sites to "
             "at least the number of logical sites so that the dense branch "
@@ -2165,9 +2351,11 @@ def decode_custom(
         num_runs,
         num_restarts,
         silent,
+        method=optimizer,
+        num_candidates=num_candidates,
     )
 
-    # DMRG returns a single basis state, so on a degenerate posterior it lands on
+    # The search returns a single basis state, so on a degenerate posterior it lands on
     # whichever tied class its sweep reached first. Comparing only that state
     # with the identity would then score a tie as a failure, while the dense
     # branch above scores the same shot as a success. Instead ask the question
@@ -2196,7 +2384,7 @@ def decode_custom(
 
     bound = max_amplitude_bound(logical_mps)
     if not silent and not certified:
-        if amplitude_found < bound * (1 - 1e-6):
+        if amplitude_found < bound * (1 - 1e-6) and optimizer == "Dephasing DMRG":
             LOGGER.warning(
                 "Dephasing DMRG reached %.6e but the maximum is at most %.6e; "
                 "the sweep may have stopped at a local optimum. Consider raising "
@@ -2206,16 +2394,18 @@ def decode_custom(
             )
         if is_map_identity and amplitude_identity < bound * (1 - 1e-6):
             LOGGER.warning(
-                "Success here rests on DMRG's estimate: the identity amplitude "
+                "Success here rests on %s's estimate: the identity amplitude "
                 "%.6e clears |<s*|psi>| but not the upper bound %.6e.",
+                optimizer,
                 amplitude_identity,
                 bound,
             )
 
     if not silent:
         LOGGER.info(
-            "Dephasing DMRG finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
+            "%s finished: |<s*|psi>| = %.6e, |<0|psi>| = %.6e, "
             "identity in the MAP set: %s",
+            optimizer,
             amplitude_found,
             amplitude_identity,
             bool(is_map_identity),

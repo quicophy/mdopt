@@ -20,7 +20,7 @@ import qecstruct as qec
 from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import inner_product
+from mdopt.mps.utils import inner_product, mps_from_dense
 
 from mdopt.decoding.decoding import (
     str_to_bool,
@@ -32,6 +32,7 @@ from mdopt.decoding.decoding import (
     generate_pauli_error_string,
     max_amplitude_bound,
     max_product_readout,
+    optima_tt_readout,
     _score_tie,
     multiply_pauli_strings,
 )
@@ -1516,8 +1517,8 @@ def test_generate_pauli_error_string_models():
         generate_pauli_error_string(10, 0.3, error_model="Nonsense", rng=rng)
 
 
-def test_decode_css_dmrg_readout_agrees_with_dense():
-    """Forcing the Dephasing-DMRG readout must reproduce the dense verdicts."""
+def test_decode_css_search_readouts_agree_with_dense():
+    """Forcing the Dephasing-DMRG or Optima TT readout must reproduce the dense verdicts."""
     code = qec.shor_code()
     rng = np.random.default_rng(21)
     checked = 0
@@ -1537,17 +1538,20 @@ def test_decode_css_dmrg_readout_agrees_with_dense():
             num_runs=2,
         )
         assert dmrg[1] == dense[1], error
+        optima = decode_css(
+            code,
+            error,
+            chi_max=64,
+            bias_prob=0.08,
+            renormalize=True,
+            silent=True,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+        )
+        assert optima[1] == dense[1], error
         checked += 1
     assert checked == 6
 
-    with pytest.raises(NotImplementedError, match="Optima TT"):
-        decode_css(
-            code,
-            "X" + "I" * 8,
-            optimizer="Optima TT",
-            dense_readout_max_sites=0,
-            silent=True,
-        )
     with pytest.raises(ValueError, match="optimizer"):
         decode_css(
             code,
@@ -1843,8 +1847,8 @@ def test_optimizer_is_validated_before_the_shortcut_and_dense_forces_readout():
     trivial = "I" * 9
     with pytest.raises(ValueError, match="optimizer"):
         decode_css(code, trivial, optimizer="Nonsense", silent=True)
-    with pytest.raises(NotImplementedError, match="Optima TT"):
-        decode_css(code, trivial, optimizer="Optima TT", silent=True)
+    # Every implemented optimizer takes the trivial-error shortcut.
+    assert decode_css(code, trivial, optimizer="Optima TT", silent=True)[1] == 1.0
     # With the dense threshold at 0 the default optimizer takes the DMRG path,
     # while "Dense" still returns the full 4**k posterior.
     error = "X" + "I" * 8
@@ -1855,3 +1859,116 @@ def test_optimizer_is_validated_before_the_shortcut_and_dense_forces_readout():
     assert success == 1.0
     reference, _ = decode_css(code, error, silent=True)
     assert np.allclose(posterior, reference)
+
+
+def test_optima_tt_readout_reports_exact_signed_amplitudes():
+    """Every candidate's value is the exact amplitude, and the ranking is by sign.
+
+    The state has a planted positive peak and a larger-modulus negative entry
+    on a positive background, so a readout that ranked by modulus would put
+    the negative entry first. It is also handed over in explicit form once,
+    which the readout must accept.
+    """
+    rng = np.random.default_rng(3)
+    for num_sites, form in (
+        (5, "Right-canonical"),
+        (8, "Right-canonical"),
+        (6, "Explicit"),
+    ):
+        vector = 5e-3 * rng.random(size=2**num_sites)
+        peak, trough = rng.choice(2**num_sites, size=2, replace=False)
+        vector[peak], vector[trough] = 0.9, -0.95
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form=form)
+        # The MPS may carry the vector up to a global sign, which the readout
+        # undoes from the sum of amplitudes; score against the sign-fixed vector.
+        dense = np.asarray(mps.dense(flatten=True), dtype=float)
+        dense = dense if dense.sum() > 0 else -dense
+
+        candidates = optima_tt_readout(mps, num_candidates=4)
+        bits, value = candidates[0]
+        assert int(bits, 2) == int(np.argmax(dense))
+        assert value == pytest.approx(dense.max(), rel=1e-9)
+        assert len({b for b, _ in candidates}) == len(candidates) <= 8
+        for bits, value in candidates:
+            assert value == pytest.approx(dense[int(bits, 2)], rel=1e-9, abs=1e-15)
+
+
+def test_optima_tt_readout_is_certified_on_converged_runs(caplog):
+    """On an exact run Optima TT meets the amplitude bound, so no DMRG is needed."""
+    code = qec.steane_code()
+    rng = np.random.default_rng(11)
+    checked = 0
+    for _ in range(10):
+        error = generate_pauli_error_string(
+            len(code), 0.15, error_model="Depolarizing", rng=rng
+        )
+        if error == "I" * len(code):
+            continue
+        caplog.clear()
+        with caplog.at_level(logging.INFO):
+            engine, _ = decode_css(
+                code,
+                error,
+                chi_max=int(1e4),
+                bias_type="Depolarizing",
+                bias_prob=0.15,
+                renormalize=True,
+                silent=False,
+                optimizer="Optima TT",
+                dense_readout_max_sites=0,
+            )
+        messages = [r.message for r in caplog.records]
+        assert any("settled by Optima TT" in m for m in messages)
+        assert not any("Dephasing DMRG" in m for m in messages)
+
+        logical_mps = engine.mps_target
+        true_max = np.asarray(logical_mps.dense(flatten=True), dtype=float).max()
+        _, value = optima_tt_readout(logical_mps)[0]
+        assert value == pytest.approx(true_max, rel=1e-9)
+        checked += 1
+    assert checked >= 5
+
+
+def test_readouts_are_invariant_to_a_global_sign_flip():
+    """A logical MPS handed back as minus the posterior must decode the same.
+
+    Heavily truncated runs on the [[225,9]] hypergraph-product code came back
+    as minus the posterior. Clamping negatives then discarded every class and
+    scored the shot as a failure, while the modulus-based readouts did not;
+    ranking Optima TT candidates by signed value would have picked a noise
+    entry. Both readouts now fix the sign from the sum of amplitudes first.
+    """
+    from mdopt.decoding.decoding import _dense_readout
+
+    code = qec.shor_code()
+    rng = np.random.default_rng(5)
+    checked = 0
+    for _ in range(6):
+        error = generate_pauli_error_string(len(code), 0.12, rng=rng)
+        if error == "I" * len(code):
+            continue
+        engine, _ = decode_css(
+            code,
+            error,
+            chi_max=64,
+            bias_prob=0.12,
+            renormalize=True,
+            silent=True,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+        )
+        logical_mps = engine.mps_target
+        flipped = logical_mps.copy()
+        flipped.tensors[0] = -flipped.tensors[0]
+
+        vector, score = _dense_readout(logical_mps, 64, "optimistic", True, True)
+        vector_flipped, score_flipped = _dense_readout(
+            flipped, 64, "optimistic", True, True
+        )
+        assert np.allclose(vector_flipped, vector)
+        assert score_flipped == score
+
+        assert optima_tt_readout(flipped)[0] == optima_tt_readout(logical_mps)[0]
+        checked += 1
+    assert checked >= 4
