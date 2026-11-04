@@ -2432,7 +2432,10 @@ def test_depolarizing_bias_records_its_truncation_in_the_certificate():
     state = create_simple_product_state(4, "0")
     tiny_bias = TruncationCertificate()
     apply_depolarizing_bias(state.copy(), [0, 2], 3e-26, certificate=tiny_bias)
-    assert len(tiny_bias.terms) == 1
+    # One step for the move of the orthogonality center (nothing to discard
+    # on a product state) and one per biased pair.
+    assert len(tiny_bias.terms) == 3
+    assert tiny_bias.terms[0][0] == 0.0
     assert tiny_bias.discarded > 1e-14  # sqrt(p/3) components were dropped
     assert np.isclose(tiny_bias.survival, 1.0, rtol=1e-6)
 
@@ -2575,3 +2578,119 @@ def test_dmrg_readout_returns_the_basis_state_it_scored():
     assert np.isclose(modulus, abs(vector[0]))
     for tensor in result.mps.tensors:
         assert np.count_nonzero(tensor) == 1
+
+
+def _dense_depolarizing_bias(vector, sites, prob):
+    """The bias operators applied exactly to a dense state vector."""
+    from mdopt.decoding.decoding import depolarizing_bias
+
+    num_sites = int(round(np.log2(vector.size)))
+    psi = vector.reshape((2,) * num_sites)
+    operator = depolarizing_bias(prob_bias=prob)  # [j, l, n, o]: (j, l) in, (n, o) out
+    for site in sites:
+        psi = np.tensordot(psi, operator, axes=([site, site + 1], [0, 1]))
+        psi = np.moveaxis(psi, [num_sites - 2, num_sites - 1], [site, site + 1])
+    return psi.ravel()
+
+
+def _measured_relative_error(certificate, truncated, exact):
+    """The error the certificate bounds: the truncated state with its
+    renormalizations undone against the exact one, relative to the former."""
+    bound = certificate.finalize(float(np.linalg.norm(truncated)))
+    undone = np.exp(certificate.log_scale) * truncated
+    return float(np.linalg.norm(undone - exact) / np.linalg.norm(undone)), bound
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+@pytest.mark.parametrize(
+    "state, prob",
+    [("random", 0.1), ("product", 3e-26)],
+    ids=["center-move-truncation", "split-cutoff-truncation"],
+)
+def test_depolarizing_bias_bound_covers_the_measured_error(renormalize, state, prob):
+    """The bias applier's bound holds against a dense reference: with the
+    orthogonality center at the far end and chi_max=2 its move to the first
+    biased site truncates a random state, and at a tiny bias the splits'
+    SVD cutoff drops the sqrt(p/3) components of a product state."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    sites = [0, 2, 4]
+    if state == "random":
+        vector = np.random.default_rng(7).normal(size=2**6)
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form="Left-canonical")
+        mps.chi_max = 2
+    else:
+        mps = create_simple_product_state(6, "0")
+        vector = mps.dense(flatten=True)
+    exact = _dense_depolarizing_bias(vector, sites, prob)
+
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        mps, sites, prob, renormalize=renormalize, certificate=certificate
+    )
+    measured, bound = _measured_relative_error(
+        certificate, biased.dense(flatten=True), exact
+    )
+    assert len(certificate.terms) == 1 + len(sites)
+    assert certificate.discarded > 0
+    assert 0 < measured <= bound * (1 + 1e-9)
+    # The applier normalizes the pair it just split; on a product input (the
+    # decoders' case) the pairs are disjoint, so that normalizes the state.
+    if renormalize and state == "product":
+        assert np.isclose(np.linalg.norm(biased.dense(flatten=True)), 1.0)
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+def test_constraint_sweep_bound_covers_the_measured_error(renormalize):
+    """``apply_constraints`` with logical gains: the center move to the first
+    string truncates (chi_max=2 on a random state centered at the far end),
+    the zip-up truncates, and the bound still covers the error against the
+    untruncated sweep in both renormalization modes."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    strings = [[[0], [2, 4], [1, 3], [5]], [[1], [2, 4], [3], [5]]]
+    gain = float(np.sqrt(2.0))
+    vector = np.random.default_rng(11).random(size=2**6) + 0.1
+    vector /= np.linalg.norm(vector)
+    exact = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=int(1e4),
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        gain=gain,
+    ).dense(flatten=True)
+
+    mps = mps_from_dense(vector, form="Left-canonical")
+    mps.chi_max = 2
+    certificate = TruncationCertificate()
+    swept = apply_constraints(
+        mps,
+        strings,
+        tensors,
+        chi_max=2,
+        cut=0.0,
+        renormalize=renormalize,
+        silent=True,
+        certificate=certificate,
+        gain=gain,
+    )
+    measured, bound = _measured_relative_error(
+        certificate, swept.dense(flatten=True), exact
+    )
+    assert len(certificate.terms) == len(strings)
+    assert certificate.discarded > 0
+    assert np.isclose(certificate.log_gain, len(strings) * np.log(gain))
+    assert 0 < measured <= bound * (1 + 1e-9)

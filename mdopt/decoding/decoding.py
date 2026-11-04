@@ -223,11 +223,16 @@ def apply_depolarizing_bias(
     renormalize : bool
         Whether to renormalize spectra during contraction.
     certificate : Optional[TruncationCertificate]
-        When given, what the two-site splits discard and the factor the state
-        is renormalized by are recorded in it as one step of unit gain, so a
-        truncation-error bound covers the prior's initialization too (the
-        splits use the SVD's default cutoff, which bites for biases below
-        about 1e-24).
+        When given, the move of the orthogonality center to the first biased
+        site is recorded as one step (what its SVDs discard, no gain), and
+        every two-site split as one more step: the norm it discards in the
+        scale of its input, the factor the kept spectrum is renormalized by
+        (measured before the normalization, 1 when ``renormalize`` is off)
+        and the operator norm of that pair's bias operator as the gain, since
+        anything discarded earlier passes through the remaining bias
+        operators. So a truncation-error bound covers the prior's
+        initialization too (the splits use the SVD's default cutoff, which
+        bites for biases below about 1e-24).
 
     Raises
     ------
@@ -270,35 +275,57 @@ def apply_depolarizing_bias(
                 f"given {probability} at site {site}."
             )
 
-    mps = mps.mixed_canonical(orth_center=min(sites_to_bias))
-    discarded_total = 0.0
-    renormalization = 1.0
+    # The move to the first biased site truncates too (at the chain's chi_max
+    # and the SVD's cutoff); it is recorded as its own step, without gain,
+    # and without renormalizing, so that every factor the state is divided by
+    # is measured below where it is removed.
+    move_losses: List[float] = []
+    mps = cast(
+        CanonicalMPS,
+        mps.move_orth_center(
+            min(sites_to_bias),
+            renormalize=False,
+            discarded_norms=move_losses if certificate is not None else None,
+        ),
+    )
+    if certificate is not None:
+        certificate.record(sum(move_losses), 1.0, 1.0)
 
     for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+        bias_operator = depolarizing_bias(prob_bias=prob_bias)
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
             mps.tensors[site + 1],
-            depolarizing_bias(prob_bias=prob_bias),
+            bias_operator,
             optimize=[(0, 1), (0, 1)],
         )
+        # The split keeps the spectrum unnormalized so that the factor the
+        # SVD removes is measured, in the scale of this pair's input, before
+        # the center is renormalized; the discarded norm is in that scale too.
         mps.tensors[site], singular_values, b_r, discarded = split_two_site_tensor(
             two_site_tensor,
-            renormalize=renormalize,
+            renormalize=False,
             return_truncation_error=True,
         )
-        discarded_total += float(np.sqrt(max(discarded or 0.0, 0.0)))
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
         )
         mps.orth_center = site + 1
+        renormalization = 1.0
         if renormalize:
             center_norm = float(np.linalg.norm(mps.tensors[mps.orth_center]))
             if center_norm > 0:
                 mps.tensors[mps.orth_center] /= center_norm
-                renormalization *= center_norm
-    if certificate is not None:
-        certificate.record(discarded_total, renormalization, 1.0)
+                renormalization = center_norm
+        if certificate is not None:
+            # Whatever was discarded before this pair passes through its bias
+            # operator, whose norm exceeds one (about 1.05 at bias 1e-3 and
+            # 1.5 at 0.1), so that norm is the step's gain.
+            gain = float(np.linalg.norm(bias_operator.reshape(4, 4), 2))
+            certificate.record(
+                float(np.sqrt(max(discarded or 0.0, 0.0))), renormalization, gain
+            )
 
     return mps
 
