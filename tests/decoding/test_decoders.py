@@ -1972,3 +1972,71 @@ def test_readouts_are_invariant_to_a_global_sign_flip():
         assert optima_tt_readout(flipped)[0] == optima_tt_readout(logical_mps)[0]
         checked += 1
     assert checked >= 4
+
+
+def test_optima_tt_keeps_the_positive_class_at_the_last_site():
+    """With one candidate per site the mass ranking keeps the negative
+    artifact; the last site ranks by signed value, so the positive class the
+    dense readout picks is the one reported, and the verdicts agree."""
+    from mdopt.decoding.decoding import _dense_readout, _global_sign, _logical_readout
+    from mdopt.mps.utils import create_simple_product_state
+
+    vector = np.array([0.4, 0.4, 0.4, -1.0])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+    _, amplitude, _ = _logical_readout(
+        logical_mps, 2, 4, 1e-17, 1, 2, True, method="Optima TT", num_candidates=1
+    )
+    assert np.isclose(amplitude, vector[0])
+    identity = sign * float(
+        np.real(inner_product(create_simple_product_state(2, "0"), logical_mps))
+    )
+    assert max(identity, 0.0) >= amplitude * (1 - 1e-9)
+    assert _dense_readout(logical_mps, 4, "optimistic", True, True)[1] == 1.0
+
+
+def test_search_readouts_rescore_candidates_signed_and_clamped():
+    """Beam search and DMRG rank by modulus and both land on the negative
+    artifact here; the readout must fall through to the largest positive
+    class instead of scoring the artifact's modulus."""
+    from mdopt.decoding.decoding import _logical_readout
+
+    vector = np.array([-0.6, 0.7, -0.2, -0.2])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    engine, amplitude, certified = _logical_readout(
+        logical_mps, 2, 4, 1e-17, 1, 2, True
+    )
+    assert np.isclose(amplitude, -vector[0])
+    assert not certified
+    found = np.abs(np.asarray(engine.mps.dense(flatten=True)))
+    assert int(np.argmax(found)) == 0
+
+
+def test_global_sign_survives_a_tiny_scale():
+    from mdopt.decoding.decoding import _global_sign
+    from mdopt.mps.utils import create_custom_product_state
+
+    state = create_custom_product_state("0" * 200, form="Right-canonical")
+    state.tensors[0] = -1e-300 * state.tensors[0]
+    assert _global_sign(state) == -1.0
+    state.tensors[0] = -state.tensors[0]
+    assert _global_sign(state) == 1.0
+
+
+def test_optima_tt_returns_full_length_strings_for_a_collapsed_state():
+    rng = np.random.default_rng(3)
+    cores = [rng.random((1, 2, 2)), np.zeros((2, 2, 2)), rng.random((2, 2, 1))]
+    candidates = optima_tt_readout(CanonicalMPS(cores, orth_center=None), 2)
+    assert candidates and all(len(bits) == 3 for bits, _ in candidates)
+    assert all(value == 0.0 for _, value in candidates)
+
+
+def test_num_candidates_is_the_last_decoder_parameter():
+    """Inserting it earlier would shift positional tie_policy and rng callers."""
+    import inspect
+
+    for decoder in (decode_css, decode_custom):
+        names = list(inspect.signature(decoder).parameters)
+        assert names[-3:] == ["tie_policy", "rng", "num_candidates"]
