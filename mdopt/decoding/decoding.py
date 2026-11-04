@@ -1337,35 +1337,48 @@ def _right_orthogonalize(cores: List[np.ndarray]) -> List[np.ndarray]:
     return cores
 
 
-def _optima_tt_sweep(cores: List[np.ndarray], num_candidates: int):
+def _optima_tt_sweep(cores: List[np.ndarray], num_candidates: int, sign: float = 1.0):
     """One left-to-right Optima TT pass over right-orthogonal ``cores``.
 
     Returns ``(bitstrings, values)`` for the ``num_candidates`` prefixes kept
-    at the last site; ``values`` are the exact signed amplitudes.
+    at the last site; ``values`` are the exact signed amplitudes. Prefixes are
+    ranked by mass, except at the last site, where the values are complete
+    and the ranking is by signed amplitude (``sign`` times the value): on a
+    truncated posterior the largest modulus can belong to a negative
+    artifact, and keeping it would hide a smaller positive class.
     """
     state = np.ones((1, 1), dtype=np.result_type(cores[0].dtype, 1.0))
     prefixes = [""]
     log_scale = 0.0
-    for core in cores:
+    for index, core in enumerate(cores):
         chi_r = core.shape[2]
         state = np.einsum("kl,lpr->kpr", state, core).reshape(-1, chi_r)
         prefixes = [
             prefix + str(value) for prefix in prefixes for value in range(core.shape[1])
         ]
-        # With the remaining cores right-orthogonal, a row's squared norm is
-        # the total squared amplitude of every completion of its prefix.
-        masses = np.einsum("kr,kr->k", np.abs(state), np.abs(state))
-        if masses.size > num_candidates:
-            keep = np.argsort(-masses, kind="stable")[:num_candidates]
-            state = state[keep]
-            prefixes = [prefixes[i] for i in keep]
-        # Keep the running matrix O(1) in scale so a long chain can neither
-        # overflow nor underflow; the scale is restored at the end.
+        # Keep the running matrix O(1) in scale before anything is squared, so
+        # a long chain can neither overflow nor underflow and the pruning does
+        # not depend on the global scale; the scale is restored at the end.
         scale = float(np.max(np.abs(state)))
         if scale == 0.0:
+            # Collapsed: no completion of any prefix carries amplitude. Return
+            # full-length strings so a product state of the right size can
+            # still be built from them.
+            tail = "0" * (len(cores) - index - 1)
+            prefixes = [prefix + tail for prefix in prefixes[:num_candidates]]
             return prefixes, np.zeros(len(prefixes))
         state /= scale
         log_scale += np.log(scale)
+        if index == len(cores) - 1:
+            ranking = -sign * np.real(state[:, 0])
+        else:
+            # With the remaining cores right-orthogonal, a row's squared norm
+            # is the total squared amplitude of every completion of its prefix.
+            ranking = -np.einsum("kr,kr->k", np.abs(state), np.abs(state))
+        if ranking.size > num_candidates:
+            keep = np.argsort(ranking, kind="stable")[:num_candidates]
+            state = state[keep]
+            prefixes = [prefixes[i] for i in keep]
     values = np.real(state[:, 0]) * np.exp(log_scale)
     return prefixes, values
 
@@ -1402,11 +1415,13 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     sign = _global_sign(logical_mps)
 
     found: dict[str, float] = {}
-    bits, values = _optima_tt_sweep(_right_orthogonalize(cores), num_candidates)
+    bits, values = _optima_tt_sweep(_right_orthogonalize(cores), num_candidates, sign)
     found.update(zip(bits, sign * values))
     # The right-to-left pass is the same sweep on the mirrored chain.
     mirrored = [core.transpose(2, 1, 0) for core in reversed(cores)]
-    bits, values = _optima_tt_sweep(_right_orthogonalize(mirrored), num_candidates)
+    bits, values = _optima_tt_sweep(
+        _right_orthogonalize(mirrored), num_candidates, sign
+    )
     found.update((prefix[::-1], value) for prefix, value in zip(bits, sign * values))
 
     return sorted(found.items(), key=lambda item: -item[1])
@@ -1432,9 +1447,32 @@ def _global_sign(logical_mps) -> float:
     the shot on noise; fixing the sign first makes every readout judge it the
     same way and lets the dense readout warn about it.
     """
-    plus = create_simple_product_state(len(logical_mps), which="+")
-    total = float(np.real(inner_product(plus, logical_mps)))
-    return -1.0 if total < 0 else 1.0
+    mps = (
+        logical_mps.right_canonical()
+        if isinstance(logical_mps, ExplicitMPS)
+        else logical_mps
+    )
+    vector = np.ones(1, dtype=np.result_type(mps.tensors[0].dtype, 1.0))
+    for core in mps.tensors:
+        # Contract the all-ones vector into each physical leg, rescaling the
+        # running vector by a positive factor: the normalized |+> overlap
+        # carries 2**(-k/2), which can underflow a tiny but representable
+        # posterior to -0.0 and lose the sign.
+        vector = vector @ np.asarray(core).sum(axis=1)
+        scale = float(np.max(np.abs(vector)))
+        if scale > 0.0:
+            vector = vector / scale
+    return -1.0 if float(np.real(vector[0])) < 0 else 1.0
+
+
+def _warn_global_sign_flip(chi_max: int) -> None:
+    LOGGER.warning(
+        "The logical MPS came back with a global sign flip at chi_max=%d: "
+        "the posterior was rebuilt from truncation residue and its class "
+        "weights are unreliable. Corrected before scoring; consider a "
+        "larger chi_max or another constraint order for this instance.",
+        chi_max,
+    )
 
 
 def _dense_readout(
@@ -1452,13 +1490,7 @@ def _dense_readout(
     if sign < 0:
         logical_signed = -logical_signed
         if not silent:
-            LOGGER.warning(
-                "The logical MPS came back with a global sign flip at chi_max=%d: "
-                "the posterior was rebuilt from truncation residue and its class "
-                "weights are unreliable. Corrected before clamping; consider a "
-                "larger chi_max or another constraint order for this instance.",
-                chi_max,
-            )
+            _warn_global_sign_flip(chi_max)
 
     # An exact run cannot produce a negative amplitude: every tensor in the
     # pipeline is non-negative and marginalization traces against all-ones.
@@ -1577,13 +1609,25 @@ def _logical_readout(
         Whether the amplitude provably equals the maximum over all basis states.
     """
     bound = max_amplitude_bound(logical_mps)
+    sign = _global_sign(logical_mps)
+    if sign < 0 and not silent:
+        _warn_global_sign_flip(chi_max)
+
+    def rescored(product_state) -> float:
+        # The amplitude of a found basis state, signed after the global sign
+        # fix and clamped at zero like the dense readout's entries. A negative
+        # one is a truncation artifact and must not clear the bar on its
+        # modulus; decode_custom compares the identity against this value, so
+        # every search readout judges a shot the way the dense one does.
+        return max(
+            sign * float(np.real(inner_product(product_state, logical_mps))), 0.0
+        )
 
     if method == "Optima TT":
         candidates = optima_tt_readout(logical_mps, num_candidates=num_candidates)
+        # Exact signed values, best first after the sign fix.
         bits, value = candidates[0]
-        # Exact value, so a candidate list is enough to score the shot; the
-        # modulus matches what the other readouts report.
-        amplitude = abs(float(value))
+        amplitude = max(float(value), 0.0)
         certified = amplitude >= bound * (1 - 1e-9)
         if not silent:
             most_negative = float(candidates[-1][1])
@@ -1596,9 +1640,16 @@ def _logical_readout(
                     100.0 * abs(most_negative) / max(amplitude, 1e-300),
                     chi_max,
                 )
-            if certified:
+            if amplitude == 0.0:
+                LOGGER.warning(
+                    "Every Optima TT candidate is negative after the sign fix "
+                    "at chi_max=%d: the posterior is unconverged and the shot "
+                    "is scored as a failure.",
+                    chi_max,
+                )
+            elif certified:
                 LOGGER.info(
-                    "Readout settled by Optima TT: |<s*|psi>| = %.6e matches the "
+                    "Readout settled by Optima TT: <s*|psi> = %.6e matches the "
                     "upper bound, so no basis state can do better.",
                     amplitude,
                 )
@@ -1616,30 +1667,26 @@ def _logical_readout(
             certified,
         )
 
-    bits, amplitude = max_product_readout(logical_mps, beam_width=beam_width)
-
-    if amplitude >= bound * (1 - 1e-9):
+    bits, modulus = max_product_readout(logical_mps, beam_width=beam_width)
+    beam_state = create_custom_product_state(bits)
+    amplitude = rescored(beam_state)
+    if modulus >= bound * (1 - 1e-9) and amplitude > 0.0:
         if not silent:
             LOGGER.info(
                 "Readout settled by beam search: |<s*|psi>| = %.6e matches the "
                 "upper bound, so no basis state can do better.",
-                amplitude,
+                modulus,
             )
-        return (
-            _ReadoutResult(create_custom_product_state(bits), logical_mps),
-            amplitude,
-            True,
-        )
-
+        return _ReadoutResult(beam_state, logical_mps), amplitude, True
     if not silent:
         LOGGER.info(
             "Beam search reached %.6e against an upper bound of %.6e; "
             "falling back to Dephasing DMRG.",
-            amplitude,
+            modulus,
             bound,
         )
     try:
-        engine, dmrg_amplitude = _dmrg_readout(
+        engine, dmrg_modulus = _dmrg_readout(
             logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
         )
     except Exception as error:  # pylint: disable=broad-except
@@ -1663,19 +1710,29 @@ def _logical_readout(
                 "result |<s*|psi>| = %.6e, which is not certified optimal.",
                 type(error).__name__,
                 str(error)[:80],
-                amplitude,
+                modulus,
             )
-        return (
-            _ReadoutResult(create_custom_product_state(bits), logical_mps),
-            amplitude,
-            False,
+        return _ReadoutResult(beam_state, logical_mps), amplitude, False
+    dmrg_amplitude = rescored(engine.mps)
+    if dmrg_amplitude > 0.0 and dmrg_amplitude >= amplitude:
+        return engine, dmrg_amplitude, dmrg_modulus >= bound * (1 - 1e-9)
+    if amplitude > 0.0:
+        return _ReadoutResult(beam_state, logical_mps), amplitude, False
+    # Both searches rank by modulus and both landed on a negative artifact.
+    # Optima TT ranks its candidates by signed value, so its best one is the
+    # largest positive class it saw; a zero here is a collapsed posterior.
+    if not silent:
+        LOGGER.warning(
+            "Beam search and Dephasing DMRG both found a negative amplitude "
+            "after the sign fix at chi_max=%d; taking the best positive "
+            "Optima TT candidate instead.",
+            chi_max,
         )
-
-    if dmrg_amplitude >= amplitude:
-        return engine, dmrg_amplitude, dmrg_amplitude >= bound * (1 - 1e-9)
+    candidates = optima_tt_readout(logical_mps, num_candidates=num_candidates)
+    bits, value = candidates[0]
     return (
         _ReadoutResult(create_custom_product_state(bits), logical_mps),
-        amplitude,
+        max(float(value), 0.0),
         False,
     )
 
@@ -1839,9 +1896,9 @@ def decode_css(
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 30,
     num_restarts: int = 8,
-    num_candidates: int = 100,
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
+    num_candidates: int = 100,
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalization and
@@ -1901,13 +1958,13 @@ def decode_css(
         is how the readouts can be compared on a code small enough to check.
     num_restarts : int
         Product states the Dephasing DMRG readout is restarted from.
-    num_candidates : int
-        Prefixes the Optima TT readout keeps per site in each sweep.
     rng : np.random.Generator, optional
         Source of randomness for ``multiply_by_stabilizer``. Pass the same
         generator used to sample the error if the run needs to be reproducible;
         when omitted a fresh generator is created and the choice will differ
         between runs.
+    num_candidates : int
+        Prefixes the Optima TT readout keeps per site in each sweep.
 
     Raises
     ------
@@ -2023,9 +2080,9 @@ def decode_custom(
     tolerance: float = float(1e-12),
     dense_readout_max_sites: int = 12,
     num_restarts: int = 8,
-    num_candidates: int = 100,
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
+    num_candidates: int = 100,
 ):
     """
     This function performs error-based decoding for a custom quantum error-correcting code.
