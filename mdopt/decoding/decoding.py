@@ -1279,7 +1279,9 @@ def max_amplitude_bound(logical_mps) -> float:
     return float(vector.max())
 
 
-def max_product_readout(logical_mps, beam_width: int = 4):
+def max_product_readout(
+    logical_mps, beam_width: int = 4, return_candidates: bool = False
+):
     """Search the logical MPS for the largest-amplitude basis state, by beam search.
 
     Runs a max-product pass along the chain, keeping the ``beam_width`` best
@@ -1299,6 +1301,11 @@ def max_product_readout(logical_mps, beam_width: int = 4):
         The best basis state found.
     amplitude : float
         ``|<bitstring|logical_mps>|``, evaluated exactly.
+    candidates : list of (str, float)
+        Only with ``return_candidates``: every surviving beam with its exact
+        signed amplitude, so a caller can rescore them all (the largest
+        modulus may belong to a negative truncation artifact that hides a
+        smaller positive class).
     """
     beams = [(np.array([1.0]), "")]
     for tensor in logical_mps.tensors:
@@ -1310,12 +1317,18 @@ def max_product_readout(logical_mps, beam_width: int = 4):
         candidates.sort(key=lambda item: -float(item[0].max()))
         beams = candidates[: max(1, beam_width)]
 
-    best_bits, best_amplitude = None, -1.0
-    for _, bits in beams:
-        amplitude = abs(inner_product(create_custom_product_state(bits), logical_mps))
-        if amplitude > best_amplitude:
-            best_bits, best_amplitude = bits, amplitude
-    return best_bits, best_amplitude
+    scored = [
+        (bits, inner_product(create_custom_product_state(bits), logical_mps))
+        for _, bits in beams
+    ]
+    best_bits, best_value = max(scored, key=lambda item: abs(item[1]))
+    if return_candidates:
+        return (
+            best_bits,
+            abs(best_value),
+            [(bits, float(np.real(value))) for bits, value in scored],
+        )
+    return best_bits, abs(best_value)
 
 
 def _right_orthogonalize(cores: List[np.ndarray]) -> List[np.ndarray]:
@@ -1411,6 +1424,11 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     if isinstance(logical_mps, ExplicitMPS):
         logical_mps = logical_mps.right_canonical()
     cores = list(logical_mps.tensors)
+    if any(0 in core.shape for core in cores):
+        # A collapsed bond: no basis state carries any amplitude. The sweeps
+        # cannot run on empty cores, so report one full-length zero candidate
+        # and let the caller score the shot as a collapsed posterior.
+        return [("0" * len(cores), 0.0)]
     num_candidates = max(1, num_candidates)
     sign = _global_sign(logical_mps)
 
@@ -1646,7 +1664,9 @@ def _logical_readout(
         # Exact signed values, best first after the sign fix.
         bits, value = candidates[0]
         amplitude = max(float(value), 0.0)
-        certified = amplitude >= bound * (1 - 1e-9)
+        # A collapsed posterior (zero amplitude, zero bound) is not certified:
+        # nothing was found, rather than the maximum.
+        certified = amplitude > 0.0 and amplitude >= bound * (1 - 1e-9)
         if not silent:
             most_negative = float(candidates[-1][1])
             if most_negative < -1e-12 * max(amplitude, 1.0):
@@ -1685,10 +1705,21 @@ def _logical_readout(
             certified,
         )
 
-    bits, modulus = max_product_readout(logical_mps, beam_width=beam_width)
+    _, modulus, beam_candidates = max_product_readout(
+        logical_mps, beam_width=beam_width, return_candidates=True
+    )
+    # Every surviving beam is scored signed and clamped, not only the one with
+    # the largest modulus: that one can be a negative artifact while another
+    # beam is the largest positive class, and dropping it would let a smaller
+    # class (the identity, say) clear the bar later.
+    amplitude, _, bits = max(
+        (max(sign * value, 0.0), abs(value), candidate)
+        for candidate, value in beam_candidates
+    )
     beam_state = create_custom_product_state(bits)
-    amplitude = rescored(beam_state)
-    if modulus >= bound * (1 - 1e-9) and amplitude > 0.0:
+    # Certified only when the largest-modulus beam meets the bound AND is the
+    # positive class just chosen (amplitude == modulus up to rounding).
+    if modulus >= bound * (1 - 1e-9) and amplitude >= modulus * (1 - 1e-9):
         if not silent:
             LOGGER.info(
                 "Readout settled by beam search: |<s*|psi>| = %.6e matches the "
@@ -1786,13 +1817,15 @@ def _dmrg_readout(
 
     Returns
     -------
-    engine : DephasingDMRG
-        The engine of the best restart.
+    result : _ReadoutResult
+        Carries the basis state the best restart was scored on (rebuilt from
+        its bit string, so with no sweeps a still-superposed start cannot be
+        returned) and ``mps_target``.
     best_amplitude : float
         ``|<s*|logical_mps>|`` for the best basis state found.
     """
     rng = np.random.default_rng(0)
-    best_engine, best_amplitude, best_score = None, -1.0, -1.0
+    best_bits, best_amplitude, best_score = "0" * num_sites, -1.0, -1.0
 
     for restart in range(max(1, num_restarts)):
         if restart == 0:
@@ -1816,17 +1849,14 @@ def _dmrg_readout(
         # what the shot is scored with -- so that a negative artifact with
         # the largest modulus cannot hide a positive class another restart
         # found. The modulus is what the certification bound is compared to.
+        bits = _basis_string(engine.mps)
         overlap = float(
-            np.real(
-                inner_product(
-                    create_custom_product_state(_basis_string(engine.mps)), logical_mps
-                )
-            )
+            np.real(inner_product(create_custom_product_state(bits), logical_mps))
         )
         amplitude = abs(overlap)
         score = max(sign * overlap, 0.0)
         if (score, amplitude) > (best_score, best_amplitude):
-            best_engine, best_amplitude, best_score = engine, amplitude, score
+            best_bits, best_amplitude, best_score = bits, amplitude, score
 
     if not silent:
         LOGGER.info(
@@ -1834,7 +1864,10 @@ def _dmrg_readout(
             max(1, num_restarts),
             best_amplitude,
         )
-    return best_engine, best_amplitude
+    return (
+        _ReadoutResult(create_custom_product_state(best_bits), logical_mps),
+        best_amplitude,
+    )
 
 
 def decode_message(
