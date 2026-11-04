@@ -410,6 +410,10 @@ def apply_constraints(
             full_mpo = identities_l + mpo + identities_r
             mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
             mps_dense = mpo_dense @ mps_dense  # type: ignore[has-type]
+            if certificate is not None:
+                # Exact and unnormalized, but the gain still scales what
+                # earlier sweeps discarded and what ``survival`` divides out.
+                certificate.record(0.0, 1.0, gain)
             continue
 
         # Ensure orthogonality center is set and moved once per string

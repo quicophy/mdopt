@@ -2420,3 +2420,82 @@ def test_prior_reweighting_with_no_logicals_returns_the_scalar_posterior():
     reweighted = decode_custom(*code, silent=True, prior_reweighting="BP")
     assert np.allclose(plain[0], reweighted[0])
     assert plain[1] == reweighted[1] == 1
+
+
+def test_depolarizing_bias_records_its_truncation_in_the_certificate():
+    """The bias applier's two-site splits truncate at the SVD's default cutoff,
+    which bites for very small biases; with a certificate the loss is recorded
+    as a unit-gain step, so the bound covers the prior's initialization."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    state = create_simple_product_state(4, "0")
+    tiny_bias = TruncationCertificate()
+    apply_depolarizing_bias(state.copy(), [0, 2], 3e-26, certificate=tiny_bias)
+    assert len(tiny_bias.terms) == 1
+    assert tiny_bias.discarded > 1e-14  # sqrt(p/3) components were dropped
+    assert np.isclose(tiny_bias.survival, 1.0, rtol=1e-6)
+
+    plain_bias = TruncationCertificate()
+    apply_depolarizing_bias(state.copy(), [0, 2], 0.1, certificate=plain_bias)
+    assert plain_bias.discarded == 0.0
+
+    # And decode_css sees it. At this bias the dropped components ARE the
+    # error-consistent configurations: the weight-1 error is decoded wrongly,
+    # and before this the certificate reported a clean contraction for it.
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "XIIIIII",
+        chi_max=int(1e5),
+        bias_type="Depolarizing",
+        bias_prob=3e-26,
+        silent=True,
+        return_certificate=True,
+    )
+    assert certificate.discarded > 0
+    if score != 1:
+        assert certificate.bound > 1
+
+
+def test_dense_constraint_sweeps_record_their_gain():
+    """``apply_constraints(dense=True)`` truncates nothing but every constraint's
+    operator gain still scales what earlier sweeps discarded and what
+    ``survival`` divides out, so each dense constraint records a unit step."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    state = create_custom_product_state("++0110")
+    strings = [[[0], [2, 4], [1, 3], [5]], [[1], [2, 4], [3], [5]]]
+    gain = float(np.sqrt(2.0))
+    dense_certificate = TruncationCertificate()
+    dense = apply_constraints(
+        state.copy(),
+        strings,
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        dense=True,
+        renormalize=False,
+        silent=True,
+        certificate=dense_certificate,
+        gain=gain,
+    )
+    mps_certificate = TruncationCertificate()
+    swept = apply_constraints(
+        state.copy(),
+        strings,
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        renormalize=False,
+        silent=True,
+        certificate=mps_certificate,
+        gain=gain,
+    )
+    assert len(dense_certificate.terms) == len(strings)
+    assert np.isclose(dense_certificate.log_gain, len(strings) * np.log(gain))
+    assert np.isclose(dense_certificate.log_gain, mps_certificate.log_gain)
+    dense_vector = np.asarray(dense).ravel()
+    assert np.allclose(np.abs(dense_vector), np.abs(swept.dense(flatten=True)))

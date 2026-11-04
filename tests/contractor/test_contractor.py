@@ -233,4 +233,4 @@ def test_mps_mpo_contract_records_the_center_move_truncation():
         inplace=False,
         discarded_norms=discarded,
     )
-    assert np.isclose(max(discarded), tiny, rtol=1e-3)
+    assert np.isclose(max(discarded), tiny, rtol=1e-3, atol=0)

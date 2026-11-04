@@ -1118,7 +1118,7 @@ def test_move_orth_center_records_what_its_svds_discard():
     assert moved.orth_center == 0
     assert list(moved.bond_dimensions) == [1]
     assert len(discarded) == 1
-    assert np.isclose(discarded[0], tiny, rtol=1e-3)
+    assert np.isclose(discarded[0], tiny, rtol=1e-3, atol=0)
 
     # Nothing to drop, nothing reported.
     kept: list = []

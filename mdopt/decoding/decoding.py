@@ -203,6 +203,7 @@ def apply_depolarizing_bias(
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
     renormalize: bool = True,
+    certificate: Optional[TruncationCertificate] = None,
 ) -> CanonicalMPS:
     """
     The function which applies a depolarizing bias to a given MPS.
@@ -221,6 +222,12 @@ def apply_depolarizing_bias(
         If set to a number, applies it to all of the sites.
     renormalize : bool
         Whether to renormalize spectra during contraction.
+    certificate : Optional[TruncationCertificate]
+        When given, what the two-site splits discard and the factor the state
+        is renormalized by are recorded in it as one step of unit gain, so a
+        truncation-error bound covers the prior's initialization too (the
+        splits use the SVD's default cutoff, which bites for biases below
+        about 1e-24).
 
     Raises
     ------
@@ -264,6 +271,8 @@ def apply_depolarizing_bias(
             )
 
     mps = mps.mixed_canonical(orth_center=min(sites_to_bias))
+    discarded_total = 0.0
+    renormalization = 1.0
 
     for site, prob_bias in zip(sites_to_bias, prob_bias_list):
         two_site_tensor = contract(
@@ -273,11 +282,12 @@ def apply_depolarizing_bias(
             depolarizing_bias(prob_bias=prob_bias),
             optimize=[(0, 1), (0, 1)],
         )
-        mps.tensors[site], singular_values, b_r, _ = split_two_site_tensor(
+        mps.tensors[site], singular_values, b_r, discarded = split_two_site_tensor(
             two_site_tensor,
             renormalize=renormalize,
             return_truncation_error=True,
         )
+        discarded_total += float(np.sqrt(max(discarded or 0.0, 0.0)))
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
         )
@@ -286,6 +296,9 @@ def apply_depolarizing_bias(
             center_norm = float(np.linalg.norm(mps.tensors[mps.orth_center]))
             if center_norm > 0:
                 mps.tensors[mps.orth_center] /= center_norm
+                renormalization *= center_norm
+    if certificate is not None:
+        certificate.record(discarded_total, renormalization, 1.0)
 
     return mps
 
@@ -2089,17 +2102,21 @@ def _marginalize_with_weights(
     """
     tensors = list(mps.tensors)
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
+    # ``right`` is a single column throughout, so it is contracted into each
+    # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
+    # site, like :meth:`CanonicalMPS.marginal`.
     for first, weight in sorted(undo, key=lambda item: -item[0]):
         if weight.ndim == 1:
             trace = weight / np.sqrt(tensors[first].shape[1])
-            transfer = np.tensordot(tensors[first], trace, axes=([1], [0]))
+            site = np.tensordot(tensors[first], right, axes=([2], [0]))[:, :, 0]
+            right = np.tensordot(site, trace, axes=([1], [0]))[:, None]
         else:
             trace = weight / np.sqrt(
                 tensors[first].shape[1] * tensors[first + 1].shape[1]
             )
-            weighted = np.einsum("xz,mzr->xmr", trace, tensors[first + 1])
-            transfer = np.einsum("lxm,xmr->lr", tensors[first], weighted)
-        right = transfer @ right
+            second = np.tensordot(tensors[first + 1], right, axes=([2], [0]))[:, :, 0]
+            weighted = np.einsum("xz,mz->xm", trace, second)
+            right = np.einsum("lxm,xm->l", tensors[first], weighted)[:, None]
         if renormalize:
             norm = float(np.linalg.norm(right))
             if norm > 0:
@@ -2465,8 +2482,11 @@ def decode_custom(
         Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
         with the rigorous bound ``certificate.bound`` on the relative
         truncation error of the contracted state and the survival factor
-        ``certificate.survival`` the checks kept. A bound above one means the
-        posterior may be truncation residue; on the [[18,2]] bivariate
+        ``certificate.survival`` the checks kept. The certificate is always
+        computed, since the SVDs provide the discarded weights anyway, and
+        unless ``silent`` its bound is logged and a bound above one is
+        warned about: such a posterior may be truncation residue. This flag
+        only controls whether it is returned. On the [[18,2]] bivariate
         bicycle code no verdict with a bound below 100 was wrong and every
         sign-flipped shot had a bound above 1e8.
 
@@ -2688,6 +2708,7 @@ def decode_custom(
                 sites_to_bias=sites_to_bias,
                 prob_bias_list=bias_prob,
                 renormalize=renormalize,
+                certificate=certificate,
             )
 
     if not silent:
