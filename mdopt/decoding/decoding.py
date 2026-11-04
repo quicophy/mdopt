@@ -1459,10 +1459,27 @@ def _global_sign(logical_mps) -> float:
         # carries 2**(-k/2), which can underflow a tiny but representable
         # posterior to -0.0 and lose the sign.
         vector = vector @ np.asarray(core).sum(axis=1)
+        if vector.size == 0:
+            # A zero-width bond: the state collapsed, and a collapsed state
+            # has no sign. Scoring it as a failure is the caller's job.
+            return 1.0
         scale = float(np.max(np.abs(vector)))
         if scale > 0.0:
             vector = vector / scale
     return -1.0 if float(np.real(vector[0])) < 0 else 1.0
+
+
+def _basis_string(product_state) -> str:
+    """The basis state a bond-dimension-one MPS stands for, as a bit string.
+
+    A product state found by a search can carry a global sign of its own
+    (DMRG's output is not sign-fixed); scoring goes through the string so
+    that the candidate's sign never enters.
+    """
+    return "".join(
+        str(int(np.argmax(np.abs(np.asarray(tensor)[0, :, 0]))))
+        for tensor in product_state.tensors
+    )
 
 
 def _warn_global_sign_flip(chi_max: int) -> None:
@@ -1618,10 +1635,11 @@ def _logical_readout(
         # fix and clamped at zero like the dense readout's entries. A negative
         # one is a truncation artifact and must not clear the bar on its
         # modulus; decode_custom compares the identity against this value, so
-        # every search readout judges a shot the way the dense one does.
-        return max(
-            sign * float(np.real(inner_product(product_state, logical_mps))), 0.0
-        )
+        # every search readout judges a shot the way the dense one does. The
+        # state is rebuilt from its bit string so that a sign the search put
+        # on its own output (DMRG does) cannot flip the score.
+        positive = create_custom_product_state(_basis_string(product_state))
+        return max(sign * float(np.real(inner_product(positive, logical_mps))), 0.0)
 
     if method == "Optima TT":
         candidates = optima_tt_readout(logical_mps, num_candidates=num_candidates)
@@ -1685,10 +1703,13 @@ def _logical_readout(
             modulus,
             bound,
         )
+    engine = None
+    dmrg_amplitude = dmrg_modulus = 0.0
     try:
         engine, dmrg_modulus = _dmrg_readout(
-            logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent
+            logical_mps, num_sites, chi_max, cut, num_runs, num_restarts, silent, sign
         )
+        dmrg_amplitude = rescored(engine.mps)
     except Exception as error:  # pylint: disable=broad-except
         # ARPACK refuses to start ("error -9: Starting vector is zero") when
         # either the starting vector or the operator itself is numerically zero;
@@ -1704,6 +1725,9 @@ def _logical_readout(
         # already produced a valid basis state and its exact amplitude, so a
         # solver failure can degrade to that instead of taking the shot down
         # and being recorded as a decoding failure by the experiment drivers.
+        # A solver failure degrades to the beam result when that result is
+        # a positive class; when the beam hit a negative artifact, the
+        # signed Optima TT fallback below is still the right next step.
         if not silent:
             LOGGER.warning(
                 "Dephasing DMRG failed (%s: %s); keeping the beam-search "
@@ -1712,9 +1736,7 @@ def _logical_readout(
                 str(error)[:80],
                 modulus,
             )
-        return _ReadoutResult(beam_state, logical_mps), amplitude, False
-    dmrg_amplitude = rescored(engine.mps)
-    if dmrg_amplitude > 0.0 and dmrg_amplitude >= amplitude:
+    if engine is not None and dmrg_amplitude > 0.0 and dmrg_amplitude >= amplitude:
         return engine, dmrg_amplitude, dmrg_modulus >= bound * (1 - 1e-9)
     if amplitude > 0.0:
         return _ReadoutResult(beam_state, logical_mps), amplitude, False
@@ -1745,6 +1767,7 @@ def _dmrg_readout(
     num_runs: int,
     num_restarts: int,
     silent: bool,
+    sign: float = 1.0,
 ):
     """Find the largest-amplitude computational basis state by Dephasing DMRG.
 
@@ -1769,7 +1792,7 @@ def _dmrg_readout(
         ``|<s*|logical_mps>|`` for the best basis state found.
     """
     rng = np.random.default_rng(0)
-    best_engine, best_amplitude = None, -1.0
+    best_engine, best_amplitude, best_score = None, -1.0, -1.0
 
     for restart in range(max(1, num_restarts)):
         if restart == 0:
@@ -1789,9 +1812,21 @@ def _dmrg_readout(
             silent=True,
         )
         engine.run(num_iter=num_runs)
-        amplitude = abs(inner_product(engine.mps, logical_mps))
-        if amplitude > best_amplitude:
-            best_engine, best_amplitude = engine, amplitude
+        # Restarts are ranked by their sign-corrected, clamped amplitude --
+        # what the shot is scored with -- so that a negative artifact with
+        # the largest modulus cannot hide a positive class another restart
+        # found. The modulus is what the certification bound is compared to.
+        overlap = float(
+            np.real(
+                inner_product(
+                    create_custom_product_state(_basis_string(engine.mps)), logical_mps
+                )
+            )
+        )
+        amplitude = abs(overlap)
+        score = max(sign * overlap, 0.0)
+        if (score, amplitude) > (best_score, best_amplitude):
+            best_engine, best_amplitude, best_score = engine, amplitude, score
 
     if not silent:
         LOGGER.info(
@@ -2436,6 +2471,11 @@ def decode_custom(
         * float(np.real(inner_product(mps_dmrg_target, logical_mps))),
         0.0,
     )
+
+    # The identity is a candidate too: with a narrow search every candidate
+    # the sweeps kept can be a negative artifact while the identity is a
+    # positive class, and that must not read as a collapsed posterior.
+    amplitude_found = max(amplitude_found, amplitude_identity)
 
     # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
     # mirroring the dense branch.

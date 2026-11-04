@@ -20,7 +20,7 @@ import qecstruct as qec
 from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import inner_product, mps_from_dense
+from mdopt.mps.utils import create_custom_product_state, inner_product, mps_from_dense
 
 from mdopt.decoding.decoding import (
     str_to_bool,
@@ -2040,3 +2040,124 @@ def test_num_candidates_is_the_last_decoder_parameter():
     for decoder in (decode_css, decode_custom):
         names = list(inspect.signature(decoder).parameters)
         assert names[-3:] == ["tie_policy", "rng", "num_candidates"]
+
+
+def test_dmrg_ranks_restarts_by_the_signed_clamped_score():
+    """Restart 0 lands on the negative artifact with the largest modulus,
+    restart 1 on a smaller positive class; the positive one must be
+    returned, and the candidate state's own sign must not enter its score."""
+    from mdopt.decoding.decoding import (
+        _basis_string,
+        _dmrg_readout,
+        _global_sign,
+        _logical_readout,
+    )
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([0.5, -0.8, 0.3, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+
+    class FakeDMRG:
+        """Each restart 'converges' to a fixed basis state; the first one to
+        the artifact, every other one to the positive class."""
+
+        count = 0
+
+        def __init__(self, mps, mps_target, **kwargs):
+            self.mps = mps
+
+        def run(self, num_iter):
+            FakeDMRG.count += 1
+            self.mps = create_custom_product_state(
+                "01" if FakeDMRG.count == 1 else "00"
+            )
+
+    original = decoding.DephasingDMRG
+    decoding.DephasingDMRG = FakeDMRG
+    try:
+        engine, modulus = _dmrg_readout(logical_mps, 2, 4, 1e-17, 1, 2, True, sign)
+    finally:
+        decoding.DephasingDMRG = original
+    assert _basis_string(engine.mps) == "00"
+    assert np.isclose(modulus, abs(vector[0]))
+
+    class Negated:
+        def __init__(self, mps):
+            self.mps = mps
+
+    def negated_dmrg(*args, **kwargs):
+        state = create_custom_product_state("00")
+        state.tensors[0] = -state.tensors[0]
+        return Negated(state), abs(float(vector[0]))
+
+    original_readout = decoding._dmrg_readout
+    decoding._dmrg_readout = negated_dmrg
+    try:
+        _, amplitude, _ = _logical_readout(logical_mps, 2, 4, 1e-17, 1, 2, True)
+    finally:
+        decoding._dmrg_readout = original_readout
+    assert np.isclose(amplitude, abs(vector[0]))
+
+
+def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
+    from mdopt.decoding.decoding import _logical_readout
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([-0.6, 0.7, -0.2, -0.2])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+
+    def failing_dmrg(*args, **kwargs):
+        raise RuntimeError("ARPACK error -9")
+
+    original = decoding._dmrg_readout
+    decoding._dmrg_readout = failing_dmrg
+    try:
+        engine, amplitude, certified = _logical_readout(
+            logical_mps, 2, 4, 1e-17, 1, 2, True
+        )
+    finally:
+        decoding._dmrg_readout = original
+    assert np.isclose(amplitude, -vector[0])
+    assert not certified
+
+
+def test_identity_is_a_candidate_before_the_collapse_guard():
+    """A search that kept only negative artifacts must not turn a positive
+    identity class into a collapsed-posterior failure."""
+    import mdopt.decoding.decoding as decoding
+
+    def artifacts_only(logical_mps, *args, **kwargs):
+        return (
+            decoding._ReadoutResult(
+                create_custom_product_state("0" * len(logical_mps)), logical_mps
+            ),
+            0.0,
+            False,
+        )
+
+    original = decoding._logical_readout
+    decoding._logical_readout = artifacts_only
+    try:
+        _, score = decode_css(
+            qec.steane_code(),
+            "XIIIIII",
+            chi_max=int(1e4),
+            bias_prob=0.1,
+            silent=True,
+            dense_readout_max_sites=0,
+        )
+    finally:
+        decoding._logical_readout = original
+    assert score == 1
+
+
+def test_global_sign_tolerates_a_zero_width_bond():
+    from mdopt.decoding.decoding import _global_sign
+
+    collapsed = CanonicalMPS(
+        [np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=None
+    )
+    assert _global_sign(collapsed) == 1.0
