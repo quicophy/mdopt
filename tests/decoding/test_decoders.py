@@ -20,7 +20,12 @@ import qecstruct as qec
 from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import create_custom_product_state, inner_product, mps_from_dense
+from mdopt.mps.utils import (
+    create_custom_product_state,
+    create_simple_product_state,
+    inner_product,
+    mps_from_dense,
+)
 
 from mdopt.decoding.decoding import (
     str_to_bool,
@@ -29,6 +34,7 @@ from mdopt.decoding.decoding import (
     decode_css,
     decode_custom,
     depolarizing_bias,
+    create_bb_code,
     generate_pauli_error_string,
     max_amplitude_bound,
     max_product_readout,
@@ -2070,7 +2076,15 @@ def test_num_candidates_is_the_last_decoder_parameter():
 
     for decoder in (decode_css, decode_custom):
         names = list(inspect.signature(decoder).parameters)
-        assert names[-3:] == ["tie_policy", "rng", "num_candidates"]
+        assert names[names.index("tie_policy") :] == [
+            "tie_policy",
+            "rng",
+            "num_candidates",
+            "prior_reweighting",
+            "reweighting_floor",
+            "bp_iterations",
+            "return_certificate",
+        ]
 
 
 def test_dmrg_ranks_restarts_by_the_signed_clamped_score():
@@ -2192,3 +2206,145 @@ def test_global_sign_tolerates_a_zero_width_bond():
         [np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=None
     )
     assert _global_sign(collapsed) == 1.0
+
+
+def test_bp_marginals_are_exact_on_a_tree():
+    """Two checks b0+b1=1 and b1+b2=0 on three bits form a tree, where
+    sum-product is exact."""
+    from mdopt.decoding.decoding import _bp_site_marginals
+
+    p = 0.1
+    marginals = _bp_site_marginals(
+        3, [[0, 1], [1, 2]], np.array([1, 0]), np.full(3, p), iterations=20
+    )
+    weight_100 = p * (1 - p) ** 2
+    weight_011 = p**2 * (1 - p)
+    total = weight_100 + weight_011
+    assert np.allclose(
+        marginals, [weight_100 / total, weight_011 / total, weight_011 / total]
+    )
+
+
+@pytest.mark.parametrize("name", sorted(CODES))
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
+def test_prior_reweighting_changes_nothing_when_nothing_is_truncated(name, bias):
+    """The reweighting is undone exactly: at a bond dimension that truncates
+    nothing the posterior is the plain one, erasures included, and the
+    plain one is the brute-force posterior."""
+    code = CODES[name]()
+    first = ERRORS[name][0]
+    for error in ERRORS[name] + [first[:1] + "E" + first[2:]]:
+        kwargs = dict(
+            chi_max=int(1e5),
+            bias_type=bias,
+            bias_prob=0.1,
+            renormalize=True,
+            silent=True,
+        )
+        plain = _normalized(decode_css(code, error, **kwargs)[0])
+        reweighted = _normalized(
+            decode_css(code, error, prior_reweighting="BP", **kwargs)[0]
+        )
+        assert np.allclose(plain, reweighted, atol=1e-8)
+        if "E" not in error:
+            assert np.allclose(
+                plain, exact_posterior(code, error, bias, 0.1), atol=1e-6
+            )
+
+
+def test_prior_reweighting_removes_sign_flips_at_small_chi():
+    """On the [[18,2]] bivariate bicycle code at chi_max=4 the plain
+    contraction comes back globally sign-flipped on about one shot in seven;
+    the reweighted one on about one in fifty (measured on 229 shots against
+    the exact posterior, where it also cut the wrong verdicts from 100 to 22)."""
+    code = create_bb_code(3, 3, "x + y", "1 + x*y")
+    rng = np.random.default_rng(18)
+    flips = {"plain": 0, "reweighted": 0}
+    bounds = {"plain": [], "reweighted": []}
+    shots = 0
+    while shots < 60:
+        error = generate_pauli_error_string(len(code), 0.1, rng=rng)
+        if error == "I" * len(code):
+            continue
+        shots += 1
+        for name, extra in (("plain", {}), ("reweighted", {"prior_reweighting": "BP"})):
+            engine, _, certificate = decode_css(
+                code,
+                error,
+                chi_max=4,
+                bias_prob=0.1,
+                silent=True,
+                optimizer="Optima TT",
+                dense_readout_max_sites=0,
+                return_certificate=True,
+                **extra,
+            )
+            total = float(
+                np.real(
+                    inner_product(
+                        create_simple_product_state(len(engine.mps_target), "+"),
+                        engine.mps_target,
+                    )
+                )
+            )
+            flips[name] += total < 0
+            bounds[name].append(certificate.bound)
+    assert flips["plain"] >= 3
+    assert flips["reweighted"] < flips["plain"]
+    # The checks keep far more of the reweighted state, which the bound sees.
+    assert np.median(bounds["reweighted"]) < np.median(bounds["plain"])
+
+
+def test_certificate_is_tight_without_truncation_and_warns_with_it(caplog):
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "XIIIIII",
+        chi_max=int(1e5),
+        bias_prob=0.1,
+        silent=True,
+        return_certificate=True,
+    )
+    assert isinstance(certificate, TruncationCertificate)
+    assert score == 1
+    assert certificate.bound < 1e-6
+    assert 0 < certificate.survival <= 1
+
+    # The trivial-error fast path reports a clean certificate too.
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "IIIIIII",
+        bias_prob=0.1,
+        silent=True,
+        return_certificate=True,
+    )
+    assert score == 1 and certificate.bound == 0.0
+
+    code = create_bb_code(3, 3, "x + y", "1 + x*y")
+    with caplog.at_level(logging.WARNING, logger="mdopt.decoding.decoding"):
+        _, _, certificate = decode_css(
+            code,
+            "IIIIIIIIIIIIIIIIIX",
+            chi_max=2,
+            bias_prob=0.1,
+            silent=False,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+            return_certificate=True,
+        )
+    assert certificate.bound > 1
+    assert "truncation-error bound" in caplog.text
+
+
+def test_prior_reweighting_arguments_are_validated():
+    with pytest.raises(ValueError, match="prior_reweighting"):
+        decode_css(qec.steane_code(), "XIIIIII", prior_reweighting="BPP", silent=True)
+    with pytest.raises(ValueError, match="reweighting_floor"):
+        decode_css(
+            qec.steane_code(),
+            "XIIIIII",
+            prior_reweighting="BP",
+            reweighting_floor=0.7,
+            silent=True,
+        )

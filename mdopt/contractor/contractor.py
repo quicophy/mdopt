@@ -2,7 +2,7 @@
 This module contains the MPS-MPO contractor functions.
 """
 
-from typing import Union, List, Tuple, cast
+from typing import Optional, Union, List, Tuple, cast
 
 import numpy as np
 from opt_einsum import contract_expression
@@ -281,6 +281,7 @@ def mps_mpo_contract(
     chi_max: int = int(1e4),
     cut: float = float(1e-17),
     inplace: bool = False,
+    discarded_norms: Optional[List[float]] = None,
 ) -> Union[ExplicitMPS, CanonicalMPS]:
     """
     Applies an MPO to an MPS.
@@ -316,6 +317,21 @@ def mps_mpo_contract(
         and L, R, U, D stand for "left", "right", "up", "down".
     start_site : int
         Index of the starting site.
+    discarded_norms : Optional[List[float]]
+        When a list is given, the norm of what every truncation discards
+        (the root of its discarded weight, in the scale of the state as it
+        stands) is appended to it, one entry per SVD. Feeds
+        :class:`mdopt.optimizer.utils.TruncationCertificate`.
+    discarded_norms : Optional[List[float]]
+        When a list is given, the norm of what every truncation discards
+        (the root of its discarded weight, in the scale of the state as it
+        stands) is appended to it, one entry per SVD. Feeds
+        :class:`mdopt.optimizer.utils.TruncationCertificate`.
+    discarded_norms : Optional[List[float]]
+        When a list is given, the norm of what every truncation discards
+        (the root of its discarded weight, in the scale of the state as it
+        stands) is appended to it, one entry per SVD. Feeds
+        :class:`mdopt.optimizer.utils.TruncationCertificate`.
     renormalize : bool
         Whether to renormalize the singular values after each contraction
         involving two neigbouring MPS sites.
@@ -394,14 +410,17 @@ def mps_mpo_contract(
 
         # Sweep across the MPO
         for i in range(len(mpo) - 2):
-            mps.tensors[orth_center_index], singular_values, b_r = (
+            mps.tensors[orth_center_index], singular_values, b_r, discarded = (
                 split_two_site_tensor(
                     two_site_mps_mpo_tensor,
                     chi_max=chi_max,
                     cut=cut,
                     renormalize=renormalize,
+                    return_truncation_error=True,
                 )
             )
+            if discarded_norms is not None:
+                discarded_norms.append(float(np.sqrt(max(discarded, 0.0))))
             if A.GPU:
                 with A.stream():
                     mps.tensors[orth_center_index] = A.to_device(
@@ -440,12 +459,17 @@ def mps_mpo_contract(
             )
 
         # Final split and update last tensor
-        mps.tensors[orth_center_index], singular_values, b_r = split_two_site_tensor(
-            two_site_mps_mpo_tensor,
-            chi_max=chi_max,
-            cut=cut,
-            renormalize=renormalize,
+        mps.tensors[orth_center_index], singular_values, b_r, discarded = (
+            split_two_site_tensor(
+                two_site_mps_mpo_tensor,
+                chi_max=chi_max,
+                cut=cut,
+                renormalize=renormalize,
+                return_truncation_error=True,
+            )
         )
+        if discarded_norms is not None:
+            discarded_norms.append(float(np.sqrt(max(discarded, 0.0))))
         if A.GPU:
             with A.stream():
                 mps.tensors[orth_center_index] = A.to_device(
