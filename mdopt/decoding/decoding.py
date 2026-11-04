@@ -2474,8 +2474,12 @@ def decode_custom(
 
     # The identity is a candidate too: with a narrow search every candidate
     # the sweeps kept can be a negative artifact while the identity is a
-    # positive class, and that must not read as a collapsed posterior.
-    amplitude_found = max(amplitude_found, amplitude_identity)
+    # positive class, and that must not read as a collapsed posterior. When
+    # it wins outright, the returned state is the identity as well, so the
+    # verdict and ``engine.mps`` describe the same class.
+    if amplitude_identity > amplitude_found:
+        amplitude_found = amplitude_identity
+        engine = _ReadoutResult(mps_dmrg_target, logical_mps)
 
     # Collapse check: treat zero or non-finite amplitudes as posterior collapse,
     # mirroring the dense branch.

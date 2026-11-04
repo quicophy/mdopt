@@ -958,6 +958,37 @@ def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
     assert float(success) == 0.0
 
 
+def test_the_identity_state_is_returned_when_it_beats_the_search(monkeypatch):
+    """When the identity's amplitude beats every candidate the search kept,
+    the verdict is a success and the returned state must be the identity too,
+    not the weaker class the search settled on."""
+    from mdopt.decoding.decoding import _ReadoutResult, _basis_string
+
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+    decoding_module = sys.modules[decode_css.__module__]
+    real_readout = decoding_module._logical_readout
+
+    def weaker_readout(logical_mps, num_sites, *args, **kwargs):
+        real_readout(logical_mps, num_sites, *args, **kwargs)
+        weaker = create_custom_product_state("1" * num_sites)
+        return _ReadoutResult(weaker, logical_mps), 1e-6, False
+
+    monkeypatch.setattr(decoding_module, "_logical_readout", weaker_readout)
+    engine, success = decode_css(
+        code,
+        error,
+        chi_max=64,
+        bias_type="Depolarizing",
+        bias_prob=0.1,
+        renormalize=True,
+        silent=True,
+        dense_readout_max_sites=0,
+    )
+    assert success == 1
+    assert _basis_string(engine.mps) == "0" * len(engine.mps)
+
+
 def test_gauge_seeds_are_independent_of_the_error_seeds():
     """The stabilizer-gauge sampler must not reuse the error generator's stream.
 
