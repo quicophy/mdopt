@@ -320,17 +320,8 @@ def mps_mpo_contract(
     discarded_norms : Optional[List[float]]
         When a list is given, the norm of what every truncation discards
         (the root of its discarded weight, in the scale of the state as it
-        stands) is appended to it, one entry per SVD. Feeds
-        :class:`mdopt.optimizer.utils.TruncationCertificate`.
-    discarded_norms : Optional[List[float]]
-        When a list is given, the norm of what every truncation discards
-        (the root of its discarded weight, in the scale of the state as it
-        stands) is appended to it, one entry per SVD. Feeds
-        :class:`mdopt.optimizer.utils.TruncationCertificate`.
-    discarded_norms : Optional[List[float]]
-        When a list is given, the norm of what every truncation discards
-        (the root of its discarded weight, in the scale of the state as it
-        stands) is appended to it, one entry per SVD. Feeds
+        stands) is appended to it, one entry per SVD, the SVDs that move the
+        orthogonality center to ``start_site`` included. Feeds
         :class:`mdopt.optimizer.utils.TruncationCertificate`.
     renormalize : bool
         Whether to renormalize the singular values after each contraction
@@ -370,7 +361,12 @@ def mps_mpo_contract(
         # caller asked for inplace, in which case it handed ownership over).
         mps = cast(
             CanonicalMPS,
-            mps.move_orth_center(start_site, renormalize=False, inplace=True),
+            mps.move_orth_center(
+                start_site,
+                renormalize=False,
+                inplace=True,
+                discarded_norms=discarded_norms,
+            ),
         )
 
     for i, tensor in enumerate(mpo):

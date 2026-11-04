@@ -216,17 +216,22 @@ class ConstraintString:
 class TruncationCertificate:
     """A rigorous bound on the relative truncation error of a constraint sweep.
 
-    Every constraint MPO is a partial permutation in the computational basis
-    (operator norm at most one), and so is every partial application of one
+    Every check-constraint MPO is a partial permutation in the computational
+    basis (operator norm one), and so is every partial application of one
     inside the zip-up contraction, so the part an SVD discards propagates to
-    the end of the sweep with at most its own norm. Writing ``d_t`` for the
-    sum of discarded norms inside constraint ``t`` (in the scale of that
-    constraint's input) and ``r_u`` for the factor the state is renormalized
-    by after constraint ``u``, the final state satisfies
+    the end of the sweep with at most its own norm. A logical constraint has
+    operator norm ``sqrt(2)`` (its copy tensor sends ``|+>`` to ``sqrt(2)``
+    times a basis state), and every constraint's gain ``g_u`` is recorded
+    with it. Writing ``d_t`` for the sum of discarded norms inside constraint
+    ``t`` (the move of the orthogonality center to its start included, in the
+    scale of that constraint's input) and ``r_u`` for the factor the state is
+    renormalized by after constraint ``u``, the final state satisfies
 
-        ``||psi - psi_exact|| / ||psi|| <= sum_t d_t * S_{t-1} / (S_T * ||psi||)``
+        ``||psi - psi_exact|| / ||psi|| <= sum_t d_t * G_t * S_{t-1} / (S_T * ||psi||)``
 
-    with ``S_t = r_1 * ... * r_t``. The bound is loose, by about two orders
+    with ``S_t = r_1 * ... * r_t`` and ``G_t = g_t * ... * g_T``, since a
+    discarded component passes through at most the rest of its own
+    constraint and all later ones. The bound is loose, by about two orders
     of magnitude on the [[18,2]] bivariate bicycle code, but it ranks shots:
     there no verdict with a bound below 100 was wrong, the wrong rate climbs
     monotonically above that, and every globally sign-flipped posterior sat
@@ -238,34 +243,47 @@ class TruncationCertificate:
 
     def __init__(self) -> None:
         self.log_scale = 0.0
-        self.terms: List[tuple[float, float]] = []
+        self.log_gain = 0.0
+        self.final_norm = 1.0
+        self.terms: List[tuple[float, float, float]] = []
         self.bound = 0.0
 
-    def record(self, discarded: float, renormalization: float) -> None:
-        """One constraint: what its truncations discarded and the factor the
-        state was renormalized by afterwards (1 when it was not)."""
-        self.terms.append((float(discarded), self.log_scale))
+    def record(
+        self, discarded: float, renormalization: float, gain: float = 1.0
+    ) -> None:
+        """One constraint: what its truncations discarded, the factor the
+        state was renormalized by afterwards (1 when it was not) and the
+        operator norm of its MPO."""
+        self.terms.append((float(discarded), self.log_scale, self.log_gain))
         self.log_scale += (
             float(np.log(renormalization)) if renormalization > 0 else -np.inf
         )
+        self.log_gain += float(np.log(gain))
 
     @property
     def survival(self) -> float:
-        """The product of all renormalization factors: the mass fraction the
-        constraints kept, in amplitude units."""
-        return float(np.exp(self.log_scale))
+        """The mass fraction the constraints kept, in amplitude units: the
+        product of the renormalization factors and the final norm, with the
+        operator gains of the constraints divided out. It is the same number
+        whether or not the sweep renormalized."""
+        return float(np.exp(self.log_scale - self.log_gain) * self.final_norm)
 
     @property
     def discarded(self) -> float:
         """The sum of all discarded norms, in the original scale."""
-        return float(sum(d * np.exp(log_s) for d, log_s in self.terms))
+        return float(sum(d * np.exp(log_s) for d, log_s, _ in self.terms))
 
     def finalize(self, final_norm: float = 1.0) -> float:
         """Evaluate and store the bound for a final state of norm ``final_norm``."""
+        self.final_norm = float(final_norm)
         log_final = self.log_scale + (np.log(final_norm) if final_norm > 0 else -np.inf)
         with np.errstate(over="ignore", invalid="ignore"):
             self.bound = float(
-                sum(d * np.exp(log_s - log_final) for d, log_s in self.terms if d > 0)
+                sum(
+                    d * np.exp(self.log_gain - log_g + log_s - log_final)
+                    for d, log_s, log_g in self.terms
+                    if d > 0
+                )
             )
         if np.isnan(self.bound):
             self.bound = float("inf")
@@ -301,6 +319,7 @@ def apply_constraints(
     dense: bool = False,
     return_entropies_and_bond_dims: bool = False,
     certificate: Optional[TruncationCertificate] = None,
+    gain: float = 1.0,
 ) -> CanonicalMPS | np.ndarray:
     """
     This function applies logical constraints to an MPS.
@@ -335,6 +354,11 @@ def apply_constraints(
     certificate : Optional[TruncationCertificate]
         When given, every constraint's discarded norms and renormalization
         factor are recorded in it (see :class:`TruncationCertificate`).
+    gain : float
+        The operator norm of every constraint MPO in ``strings``, recorded
+        with the certificate: one for the check constraints (partial
+        permutations) and ``sqrt(2)`` for the logical constraints, which the
+        decoders pass.
 
     Returns
     -------
@@ -378,6 +402,7 @@ def apply_constraints(
         mpo = string.mpo()
 
         start_site = min(string.flat())
+        discarded: List[float] = []
         if dense:
             # Pad MPO with identities to full length and apply as a matrix
             identities_l = [IDENTITY for _ in range(start_site)]
@@ -426,10 +451,10 @@ def apply_constraints(
                 renormalize=False,
                 return_singular_values=False,
                 inplace=True,
+                discarded_norms=discarded if certificate is not None else None,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
-        discarded: List[float] = []
         mps = mps_mpo_contract(  # type: ignore
             mps=mps,
             mpo=mpo,
@@ -449,7 +474,7 @@ def apply_constraints(
                 mps.tensors[orth_center_index] = center / norm
             renormalization = float(norm)
         if certificate is not None:
-            certificate.record(sum(discarded), renormalization)
+            certificate.record(sum(discarded), renormalization, gain)
 
         if return_entropies_and_bond_dims:
             # Use a copy to avoid mutating `mps` during entropy computation

@@ -2348,3 +2348,75 @@ def test_prior_reweighting_arguments_are_validated():
             reweighting_floor=0.7,
             silent=True,
         )
+
+
+def test_logical_constraint_gain_is_the_dense_mpo_norm():
+    """The certificate records sqrt(2) as the operator norm of every logical
+    constraint and one for every check constraint; both numbers are pinned
+    here against the dense MPO of a five-site string."""
+    from mdopt.decoding.decoding import LOGICAL_CONSTRAINT_GAIN
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        ConstraintString,
+    )
+    from mdopt.utils.utils import mpo_to_matrix
+
+    sites = [[0], [1, 3], [2], [4]]
+    logical = ConstraintString([COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT], sites)
+    check = ConstraintString([XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT], sites)
+    norm = lambda string: np.linalg.norm(  # noqa: E731
+        mpo_to_matrix(string.mpo(), interlace=False, group=True), 2
+    )
+    assert np.isclose(norm(logical), LOGICAL_CONSTRAINT_GAIN)
+    assert np.isclose(norm(check), 1.0)
+
+
+def test_certificate_survival_does_not_depend_on_renormalization():
+    """``survival`` is the mass fraction the checks kept. Without per-constraint
+    renormalization it comes from the final norm instead of the recorded
+    factors, and the logical sweeps' sqrt(2) gain is divided out either way,
+    so both modes report the same number."""
+    code = qec.steane_code()
+    survivals = {}
+    for renormalize in (True, False):
+        _, score, certificate = decode_css(
+            code,
+            "XIIIIII",
+            chi_max=int(1e5),
+            bias_prob=0.1,
+            renormalize=renormalize,
+            silent=True,
+            return_certificate=True,
+        )
+        assert score == 1
+        assert certificate.bound < 1e-6
+        survivals[renormalize] = certificate.survival
+    assert 0 < survivals[True] < 1
+    assert np.isclose(survivals[True], survivals[False], rtol=1e-9)
+
+
+def test_prior_reweighting_keeps_the_plain_amplitude_scale():
+    """With ``renormalize=False`` the undo contraction carries the same
+    ``1/sqrt(d)`` trace factors as :meth:`CanonicalMPS.marginal`, so the
+    reweighted amplitudes equal the plain ones, not a power of two times them."""
+    kwargs = dict(chi_max=int(1e5), bias_prob=0.1, renormalize=False, silent=True)
+    plain, _ = decode_css(qec.steane_code(), "XIIIIII", **kwargs)
+    reweighted, _ = decode_css(
+        qec.steane_code(), "XIIIIII", prior_reweighting="BP", **kwargs
+    )
+    assert np.allclose(plain, reweighted, rtol=1e-9, atol=0)
+    assert 0 < np.max(plain) < 0.1  # unnormalized: the trace factors are in
+
+
+def test_prior_reweighting_with_no_logicals_returns_the_scalar_posterior():
+    """``decode_custom`` accepts empty logical lists; the reweighted path then
+    marginalizes every site and returns the same scalar as the plain one."""
+    code = (["XX", "ZZ"], [], [], "XI")
+    plain = decode_custom(*code, silent=True)
+    reweighted = decode_custom(*code, silent=True, prior_reweighting="BP")
+    assert np.allclose(plain[0], reweighted[0])
+    assert plain[1] == reweighted[1] == 1

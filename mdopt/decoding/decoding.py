@@ -1909,6 +1909,10 @@ def decode_message(
 
 
 PRIOR_REWEIGHTINGS = (None, "BP")
+# Operator norm of a logical-constraint MPO: its copy tensor sends |+> to
+# sqrt(2) times a basis state. Check constraints are partial permutations of
+# norm one. Pinned by a test against the dense MPO.
+LOGICAL_CONSTRAINT_GAIN = float(np.sqrt(2.0))
 
 
 def _bp_site_marginals(
@@ -2078,21 +2082,35 @@ def _marginalize_with_weights(
 
     The same contraction as :meth:`CanonicalMPS.marginal` followed by
     ``reverse``, with each error site (or qubit pair) contracted against its
-    weight; no SVD, so it is exact.
+    weight times the same ``1/sqrt(d)`` trace normalization per site, so the
+    amplitudes come out on the plain decoder's scale; no SVD, so it is exact.
+    With no logical sites the result is the one-site scalar MPS
+    :meth:`CanonicalMPS.marginal` returns.
     """
     tensors = list(mps.tensors)
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
     for first, weight in sorted(undo, key=lambda item: -item[0]):
         if weight.ndim == 1:
-            transfer = np.tensordot(tensors[first], weight, axes=([1], [0]))
+            trace = weight / np.sqrt(tensors[first].shape[1])
+            transfer = np.tensordot(tensors[first], trace, axes=([1], [0]))
         else:
-            weighted = np.einsum("xz,mzr->xmr", weight, tensors[first + 1])
+            trace = weight / np.sqrt(
+                tensors[first].shape[1] * tensors[first + 1].shape[1]
+            )
+            weighted = np.einsum("xz,mzr->xmr", trace, tensors[first + 1])
             transfer = np.einsum("lxm,xmr->lr", tensors[first], weighted)
         right = transfer @ right
         if renormalize:
             norm = float(np.linalg.norm(right))
             if norm > 0:
                 right = right / norm
+    if num_logicals == 0:
+        return CanonicalMPS(
+            [right.reshape(1, 1, 1)],
+            orth_center=0,
+            tolerance=mps.tolerance,
+            chi_max=mps.chi_max,
+        )
     last = np.tensordot(tensors[num_logicals - 1], right, axes=([2], [0]))
     if renormalize:
         norm = float(np.linalg.norm(last))
@@ -2686,6 +2704,7 @@ def decode_custom(
             silent=silent,
             strategy=contraction_strategy,
             certificate=certificate,
+            gain=LOGICAL_CONSTRAINT_GAIN,
         ),
     )
 
@@ -2703,6 +2722,7 @@ def decode_custom(
             silent=silent,
             strategy=contraction_strategy,
             certificate=certificate,
+            gain=LOGICAL_CONSTRAINT_GAIN,
         ),
     )
 
