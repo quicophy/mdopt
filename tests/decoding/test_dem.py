@@ -518,3 +518,109 @@ def test_bandwidth_ordering_accepts_a_mechanism_free_problem():
     )
     ordered, perm = order_mechanisms(problem, "bandwidth")
     assert perm.size == 0 and ordered.num_mechanisms == 0
+
+
+def _surface_round_problem(p=0.01, rounds=1, distance=3):
+    circuit = stim.Circuit.generated(
+        "surface_code:rotated_memory_z",
+        distance=distance,
+        rounds=rounds,
+        after_clifford_depolarization=p,
+        before_measure_flip_probability=p,
+        after_reset_flip_probability=p,
+    )
+    return circuit, dem_to_problem(
+        circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+    )
+
+
+def test_bp_reweighted_dem_matches_brute_force_and_keeps_more_mass():
+    """The BP posterior prior is divided out exactly in exact arithmetic, so
+    at full bond dimension the class masses equal the brute-force coset
+    masses (genuine hyperedges included): to 1e-9 with the clip floor at 1
+    (the prior itself, undo weights all one) and to 1e-3 at the default
+    floor, where the SVD's round-off cutoff on configurations the undo
+    scales back up by at most ten per site is the only error. The
+    certificate shows the reweighted contraction keeping a larger mass
+    fraction than the plain one."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    for circuit, problem in (_repetition_problem(), _surface_round_problem()):
+        sampler = circuit.compile_detector_sampler(seed=11)
+        detections, _ = sampler.sample(60, separate_observables=True)
+        checked = 0
+        for syndrome in detections:
+            syndrome = syndrome.astype(int)
+            if not syndrome.any() or checked >= 6:
+                continue
+            exact = _exact_class_masses(problem, syndrome)
+            plain, _, plain_cert = decode_dem(
+                problem, syndrome, chi_max=int(1e4), return_certificate=True
+            )
+            masses, flips, cert = decode_dem(
+                problem,
+                syndrome,
+                chi_max=int(1e4),
+                prior_reweighting="BP",
+                return_certificate=True,
+            )
+            assert isinstance(cert, TruncationCertificate)
+            assert np.allclose(
+                masses / masses.sum(), exact / exact.sum(), rtol=1e-3, atol=1e-6
+            )
+            assert flips.shape == (problem.num_observables,)
+            assert int(np.argmax(masses)) == int(np.argmax(exact))
+            unit, _ = decode_dem(
+                problem,
+                syndrome,
+                chi_max=int(1e4),
+                cut=0.0,
+                prior_reweighting="BP",
+                reweighting_floor=1.0,
+            )
+            assert np.allclose(unit / unit.sum(), plain / plain.sum(), atol=1e-9)
+            assert cert.bound < 1e-6 and plain_cert.bound < 1e-6
+            assert 0 < plain_cert.survival <= cert.survival <= 1 + 1e-9
+            checked += 1
+        assert checked >= 3
+
+
+def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
+    """At chi_max=2 the d=3, r=3 contraction keeps essentially nothing of the
+    syndrome-consistent mass: the decode either collapses (the raised error
+    carries the certificate) or returns with a bound above one, and the
+    reweighted decode at the same chi_max keeps a larger fraction."""
+    circuit, problem = _surface_round_problem(rounds=3)
+    sampler = circuit.compile_detector_sampler(seed=3)
+    detections, _ = sampler.sample(40, separate_observables=True)
+    syndrome = detections[int(np.argmax(detections.sum(axis=1)))].astype(int)
+    assert syndrome.sum() >= 3
+    try:
+        _, _, cert = decode_dem(problem, syndrome, chi_max=2, return_certificate=True)
+    except ArithmeticError as error:
+        cert = error.certificate
+    assert cert.bound > 1.0
+    try:
+        _, _, bp_cert = decode_dem(
+            problem,
+            syndrome,
+            chi_max=2,
+            prior_reweighting="BP",
+            return_certificate=True,
+        )
+    except ArithmeticError as error:
+        bp_cert = error.certificate
+    assert bp_cert.survival > cert.survival
+
+
+def test_decode_dem_signature_and_argument_validation():
+    _, problem = _repetition_problem()
+    syndrome = np.zeros(problem.num_detectors, dtype=int)
+    result = decode_dem(problem, syndrome)
+    assert len(result) == 2
+    result = decode_dem(problem, syndrome, return_certificate=True)
+    assert len(result) == 3 and result[2].bound < 1e-12
+    with pytest.raises(ValueError, match="prior_reweighting"):
+        decode_dem(problem, syndrome, prior_reweighting="OSD")
+    with pytest.raises(ValueError, match="reweighting_floor"):
+        decode_dem(problem, syndrome, prior_reweighting="BP", reweighting_floor=1.5)
