@@ -2192,3 +2192,79 @@ def test_global_sign_tolerates_a_zero_width_bond():
         [np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=None
     )
     assert _global_sign(collapsed) == 1.0
+
+
+def test_beam_readout_scores_every_surviving_candidate_signed():
+    """The largest-modulus beam is a negative artifact and a smaller positive
+    non-identity class sits among the other beams; it must be the beam
+    result, or the identity would clear the bar against DMRG later."""
+    from mdopt.decoding.decoding import (
+        _basis_string,
+        _global_sign,
+        _logical_readout,
+        max_product_readout,
+    )
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([0.5, -0.8, 0.6, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+
+    bits, modulus, candidates = max_product_readout(
+        logical_mps, beam_width=4, return_candidates=True
+    )
+    assert bits == "01" and np.isclose(modulus, abs(vector[1]))
+    assert sorted(candidates) == sorted(
+        (format(i, "02b"), sign * vector[i]) for i in range(4)
+    ) or np.allclose(sorted(v for _, v in candidates), sorted(sign * vector))
+
+    class IdentityDMRG:
+        def __init__(self, mps, mps_target, **kwargs):
+            self.mps = mps
+
+        def run(self, num_iter):
+            self.mps = create_custom_product_state("00")
+
+    original = decoding.DephasingDMRG
+    decoding.DephasingDMRG = IdentityDMRG
+    try:
+        result, amplitude, certified = _logical_readout(
+            logical_mps, 2, 4, 1e-17, 1, 1, True
+        )
+    finally:
+        decoding.DephasingDMRG = original
+    assert np.isclose(amplitude, abs(vector[2]))
+    assert _basis_string(result.mps) == "10"
+    assert not certified
+
+
+def test_optima_tt_readout_scores_a_collapsed_bond_as_a_failure():
+    """Cores of shapes (1, 2, 0) and (0, 2, 1) carry no amplitude at all; the
+    readout must report a full-length zero candidate, not raise in the sweep."""
+    from mdopt.decoding.decoding import _logical_readout, optima_tt_readout
+
+    collapsed = CanonicalMPS([np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=0)
+    assert optima_tt_readout(collapsed, num_candidates=4) == [("00", 0.0)]
+    result, amplitude, certified = _logical_readout(
+        collapsed, 2, 4, 1e-17, 1, 1, True, method="Optima TT"
+    )
+    assert amplitude == 0.0 and not certified
+    assert len(result.mps) == 2
+
+
+def test_dmrg_readout_returns_the_basis_state_it_scored():
+    """With no sweeps the first restart is still |++>, which is scored through
+    its bit string as |00>; the returned state must be that basis state."""
+    from mdopt.decoding.decoding import _basis_string, _dmrg_readout, _global_sign
+
+    vector = np.array([0.5, -0.8, 0.3, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    result, modulus = _dmrg_readout(
+        logical_mps, 2, 4, 1e-17, 0, 1, True, _global_sign(logical_mps)
+    )
+    assert _basis_string(result.mps) == "00"
+    assert np.isclose(modulus, abs(vector[0]))
+    for tensor in result.mps.tensors:
+        assert np.count_nonzero(tensor) == 1
