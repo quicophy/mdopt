@@ -184,7 +184,50 @@ def parse_arguments():
             "bivariate-bicycle code)."
         ),
     )
+    parser.add_argument(
+        "--prior_reweighting",
+        type=prior_reweighting_choice,
+        default=None,
+        choices=[None, "BP"],
+        help=(
+            "None keeps the plain error prior. BP replaces it by the "
+            "belief-propagation posterior marginals before the contraction and "
+            "undoes the change exactly at marginalization, so the truncation "
+            "error is no longer amplified by the inverse of the syndrome mass. "
+            "Tags the output file with _priorBP."
+        ),
+    )
+    parser.add_argument(
+        "--store_certificate",
+        action="store_true",
+        help=(
+            "Ask the decoder for its truncation certificate and store the "
+            "per-shot survival factor and rigorous relative-error bound in the "
+            "pickle (keys 'survival' and 'bound', NaN where the decode did not "
+            "complete). A bound above one marks a verdict that may be "
+            "truncation residue."
+        ),
+    )
     return parser.parse_args()
+
+
+def prior_reweighting_choice(value):
+    """argparse type for --prior_reweighting: the string 'None' means no reweighting."""
+    return None if value == "None" else value
+
+
+def certificate_values(outcome):
+    """Split a decode_css outcome into (distribution, success, survival, bound).
+
+    With ``return_certificate=True`` the decoder appends a TruncationCertificate
+    to its usual pair; without it the survival and bound are reported as NaN so
+    callers can treat both shapes alike.
+    """
+    if len(outcome) == 3:
+        distribution, success, certificate = outcome
+        return distribution, success, certificate.survival, certificate.bound
+    distribution, success = outcome
+    return distribution, success, np.nan, np.nan
 
 
 def get_csp_code(num_qubits: int, batch: int, code_id: int) -> CssCode:
@@ -253,58 +296,77 @@ def run_single_experiment(
     cut,
     seed=None,
     qubit_order_strategy="Natural",
+    prior_reweighting=None,
+    store_certificate=False,
 ):
-    """Run a single experiment (with a few random stabilizer gauges)."""
+    """Run a single experiment (with a few random stabilizer gauges).
+
+    Returns ``(logicals_distribution, failure, survival, bound)``; the last two
+    are the truncation certificate of the attempt whose verdict is reported
+    when ``store_certificate`` is set, and NaN otherwise (and whenever no
+    attempt completed).
+    """
     csp_code = get_csp_code(num_qubits, batch, code_id)
     rng = np.random.default_rng(seed)
 
     had_valid_attempt = False
     last_distribution = np.nan
+    last_survival, last_bound = np.nan, np.nan
 
     def _decode(multiply_by_stabilizer: bool):
         """Small helper to call decode_css with common args."""
-        return decode_css(
-            code=csp_code,
-            error=error,
-            chi_max=chi_max,
-            multiply_by_stabilizer=multiply_by_stabilizer,
-            bias_type=error_model,
-            bias_prob=bias_prob,
-            renormalize=True,
-            silent=silent,
-            contraction_strategy="Optimized",
-            tolerance=tolerance,
-            cut=cut,
-            qubit_order_strategy=qubit_order_strategy,
-            rng=rng,
+        return certificate_values(
+            decode_css(
+                code=csp_code,
+                error=error,
+                chi_max=chi_max,
+                multiply_by_stabilizer=multiply_by_stabilizer,
+                bias_type=error_model,
+                bias_prob=bias_prob,
+                renormalize=True,
+                silent=silent,
+                contraction_strategy="Optimized",
+                tolerance=tolerance,
+                cut=cut,
+                qubit_order_strategy=qubit_order_strategy,
+                rng=rng,
+                prior_reweighting=prior_reweighting,
+                return_certificate=store_certificate,
+            )
         )
 
     # 1) First try: original error (no stabilizer)
     try:
-        logicals_distribution, success = _decode(multiply_by_stabilizer=False)
+        logicals_distribution, success, survival, bound = _decode(
+            multiply_by_stabilizer=False
+        )
         # Handle possible float "overlap" return (DMRG branch)
         if isinstance(success, float):
             success = int(success > 1.0 - 1e-5)
 
         had_valid_attempt = True
         last_distribution = logicals_distribution
+        last_survival, last_bound = survival, bound
 
         if success == 1:
             if not silent:
                 logging.info("Decoding successful without stabilizer.")
-            return logicals_distribution, 0  # failure = 0
+            return logicals_distribution, 0, survival, bound  # failure = 0
     except Exception as e:
         logging.error("Error during decoding (no stabilizer).", exc_info=True)
 
     # 2) Gauge sampling: try a few random stabilizers
     for k in range(10):
         try:
-            logicals_distribution, success = _decode(multiply_by_stabilizer=True)
+            logicals_distribution, success, survival, bound = _decode(
+                multiply_by_stabilizer=True
+            )
             if isinstance(success, float):
                 success = int(success > 1.0 - 1e-6)
 
             had_valid_attempt = True
             last_distribution = logicals_distribution
+            last_survival, last_bound = survival, bound
 
             if success == 1:
                 if not silent:
@@ -312,7 +374,7 @@ def run_single_experiment(
                         "Decoding successful with random stabilizer (attempt %d).",
                         k + 1,
                     )
-                return logicals_distribution, 0  # failure = 0
+                return logicals_distribution, 0, survival, bound  # failure = 0
         except Exception as ex:
             logging.error(
                 "Error during decoding with random stabilizer (attempt %d).",
@@ -324,12 +386,12 @@ def run_single_experiment(
     if had_valid_attempt:
         if not silent:
             logging.info("Decoding failed after all gauge samples.")
-        return last_distribution, 1  # failure = 1
+        return last_distribution, 1, last_survival, last_bound  # failure = 1
 
     # 4) All attempts crashed
     if not silent:
         logging.info("Decoding has not been completed for this error.")
-    return np.nan, np.nan
+    return np.nan, np.nan, np.nan, np.nan
 
 
 def run_experiment(
@@ -348,12 +410,15 @@ def run_experiment(
     tolerance=0,
     cut=0,
     qubit_order_strategy="Natural",
+    prior_reweighting=None,
+    store_certificate=False,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
         f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
-        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id}"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id},"
+        f" PRIOR_REWEIGHTING={prior_reweighting}, STORE_CERTIFICATE={store_certificate}"
     )
 
     # pre-encode all errors into a compact uint8 array of
@@ -375,7 +440,12 @@ def run_experiment(
     # as they were.
     shot_seeds = gauge_seed_sequences(seed, num_experiments)
 
-    worker = partial(run_single_experiment, qubit_order_strategy=qubit_order_strategy)
+    worker = partial(
+        run_single_experiment,
+        qubit_order_strategy=qubit_order_strategy,
+        prior_reweighting=prior_reweighting,
+        store_certificate=store_certificate,
+    )
 
     args = [
         (
@@ -405,7 +475,7 @@ def run_experiment(
 
     failures = [result[1] for result in results]
 
-    return {
+    data = {
         "failures": failures,
         "errors_uint8": errors_uint8,
         "lattice_size": num_qubits,
@@ -419,7 +489,12 @@ def run_experiment(
         "batch": batch,
         "code_id": code_id,
         "qubit_order_strategy": qubit_order_strategy,
+        "prior_reweighting": prior_reweighting,
     }
+    if store_certificate:
+        data["survival"] = np.array([result[2] for result in results], dtype=float)
+        data["bound"] = np.array([result[3] for result in results], dtype=float)
+    return data
 
 
 def save_experiment_data(
@@ -436,16 +511,21 @@ def save_experiment_data(
     tolerance,
     cut,
     qubit_order_strategy="Natural",
+    prior_reweighting=None,
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
-    # The ordering changes the decoder's results, so it is recorded in the data
-    # itself; the filename tag is derived from the stored value.
+    # The ordering and the prior change the decoder's results, so both are
+    # recorded in the data itself; the filename tags are derived from the
+    # stored values. The prior tag keeps reweighted pickles out of the plain
+    # series when plotting scripts glob by lattice size, chi and rate.
     qubit_order_strategy = data.get("qubit_order_strategy", qubit_order_strategy)
     order_tag = (
         "" if qubit_order_strategy == "Natural" else f"_order{qubit_order_strategy}"
     )
-    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_codeid{code_id}_seed{seed}{order_tag}.pkl"
+    prior_reweighting = data.get("prior_reweighting", prior_reweighting)
+    prior_tag = f"_prior{prior_reweighting}" if prior_reweighting else ""
+    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_codeid{code_id}_seed{seed}{order_tag}{prior_tag}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -482,6 +562,8 @@ def main():
         args.tolerance,
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
+        prior_reweighting=args.prior_reweighting,
+        store_certificate=args.store_certificate,
     )
     save_experiment_data(
         experiment_data,
@@ -497,6 +579,7 @@ def main():
         args.tolerance,
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
+        prior_reweighting=args.prior_reweighting,
     )
 
 

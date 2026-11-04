@@ -137,7 +137,50 @@ def parse_arguments():
             "bivariate-bicycle code)."
         ),
     )
+    parser.add_argument(
+        "--prior_reweighting",
+        type=prior_reweighting_choice,
+        default=None,
+        choices=[None, "BP"],
+        help=(
+            "None keeps the plain error prior. BP replaces it by the "
+            "belief-propagation posterior marginals before the contraction and "
+            "undoes the change exactly at marginalization, so the truncation "
+            "error is no longer amplified by the inverse of the syndrome mass. "
+            "Tags the output file with _priorBP."
+        ),
+    )
+    parser.add_argument(
+        "--store_certificate",
+        action="store_true",
+        help=(
+            "Ask the decoder for its truncation certificate and store the "
+            "per-shot survival factor and rigorous relative-error bound in the "
+            "pickle (keys 'survival' and 'bound', NaN where the decode did not "
+            "complete). A bound above one marks a verdict that may be "
+            "truncation residue."
+        ),
+    )
     return parser.parse_args()
+
+
+def prior_reweighting_choice(value):
+    """argparse type for --prior_reweighting: the string 'None' means no reweighting."""
+    return None if value == "None" else value
+
+
+def certificate_values(outcome):
+    """Split a decode_css outcome into (distribution, success, survival, bound).
+
+    With ``return_certificate=True`` the decoder appends a TruncationCertificate
+    to its usual pair; without it the survival and bound are reported as NaN so
+    callers can treat both shapes alike.
+    """
+    if len(outcome) == 3:
+        distribution, success, certificate = outcome
+        return distribution, success, certificate.survival, certificate.bound
+    distribution, success = outcome
+    return distribution, success, np.nan, np.nan
 
 
 def generate_errors(lattice_size, error_rate, num_experiments, error_model, seed):
@@ -172,6 +215,8 @@ def run_single_experiment(
     cut,
     qubit_order_strategy="Natural",
     seed=None,
+    prior_reweighting=None,
+    store_certificate=False,
 ):
     """Run a single experiment.
 
@@ -180,35 +225,22 @@ def run_single_experiment(
     contraction needs; the default keeps the campaign's natural order.
     ``seed`` seeds the random stabilizer of the multiply-by-stabilizer
     fallback, so a run that needs it is still reproducible.
+
+    Returns ``(logicals_distribution, failure, survival, bound)``; the last two
+    come from the decoder's truncation certificate when ``store_certificate``
+    is set and are NaN otherwise (and whenever the decode did not complete).
     """
     rep_code = qec.repetition_code(lattice_size)
     surface_code = qec.hypergraph_product(rep_code, rep_code)
 
-    try:
-        logicals_distribution, success = decode_css(
-            code=surface_code,
-            error=error,
-            chi_max=chi_max,
-            multiply_by_stabilizer=False,
-            bias_type=error_model,
-            bias_prob=bias_prob,
-            renormalize=True,
-            silent=silent,
-            contraction_strategy="Optimized",
-            tolerance=tolerance,
-            cut=cut,
-            qubit_order_strategy=qubit_order_strategy,
-        )
-    except Exception as e:
-        logging.error(f"Error during decoding: {e}", exc_info=True)
-        try:
-            logging.info("Trying to decode with multiply_by_stabilizer=True.")
-            logicals_distribution, success = decode_css(
+    def _decode(multiply_by_stabilizer, rng=None):
+        return certificate_values(
+            decode_css(
                 code=surface_code,
                 error=error,
                 chi_max=chi_max,
-                multiply_by_stabilizer=True,
-                rng=np.random.default_rng(seed),
+                multiply_by_stabilizer=multiply_by_stabilizer,
+                rng=rng,
                 bias_type=error_model,
                 bias_prob=bias_prob,
                 renormalize=True,
@@ -217,6 +249,19 @@ def run_single_experiment(
                 tolerance=tolerance,
                 cut=cut,
                 qubit_order_strategy=qubit_order_strategy,
+                prior_reweighting=prior_reweighting,
+                return_certificate=store_certificate,
+            )
+        )
+
+    try:
+        logicals_distribution, success, survival, bound = _decode(False)
+    except Exception as e:
+        logging.error(f"Error during decoding: {e}", exc_info=True)
+        try:
+            logging.info("Trying to decode with multiply_by_stabilizer=True.")
+            logicals_distribution, success, survival, bound = _decode(
+                True, rng=np.random.default_rng(seed)
             )
             logging.info("Decoding finished with multiply_by_stabilizer=True.")
         except Exception as ex:
@@ -224,18 +269,19 @@ def run_single_experiment(
                 f"Decoding has not been completed due to: {ex}", exc_info=True
             )
             logicals_distribution, success = np.nan, np.nan
+            survival, bound = np.nan, np.nan
 
     if success == 1:
         if not silent:
             logging.info("Decoding successful.")
-        return logicals_distribution, 0
+        return logicals_distribution, 0, survival, bound
     if success == 0:
         if not silent:
             logging.info("Decoding failed.")
-        return logicals_distribution, 1
+        return logicals_distribution, 1, survival, bound
     if not silent:
         logging.info("Decoding has not been completed.")
-    return np.nan, np.nan
+    return np.nan, np.nan, np.nan, np.nan
 
 
 def run_experiment(
@@ -252,15 +298,23 @@ def run_experiment(
     tolerance=1e-8,
     cut=1e-8,
     qubit_order_strategy="Natural",
+    prior_reweighting=None,
+    store_certificate=False,
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
         f"Starting {num_experiments} experiments for LATTICE_SIZE={lattice_size},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob},"
-        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}"
+        f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed},"
+        f" PRIOR_REWEIGHTING={prior_reweighting}, STORE_CERTIFICATE={store_certificate}"
     )
 
-    worker = partial(run_single_experiment, qubit_order_strategy=qubit_order_strategy)
+    worker = partial(
+        run_single_experiment,
+        qubit_order_strategy=qubit_order_strategy,
+        prior_reweighting=prior_reweighting,
+        store_certificate=store_certificate,
+    )
 
     args = [
         (
@@ -291,7 +345,7 @@ def run_experiment(
     logicals_distributions = [result[0] for result in results]
     failures = [result[1] for result in results]
 
-    return {
+    data = {
         "logicals_distributions": logicals_distributions,
         "failures": failures,
         "lattice_size": lattice_size,
@@ -303,7 +357,12 @@ def run_experiment(
         "tolerance": tolerance,
         "cut": cut,
         "qubit_order_strategy": qubit_order_strategy,
+        "prior_reweighting": prior_reweighting,
     }
+    if store_certificate:
+        data["survival"] = np.array([result[2] for result in results], dtype=float)
+        data["bound"] = np.array([result[3] for result in results], dtype=float)
+    return data
 
 
 def save_experiment_data(
@@ -318,16 +377,21 @@ def save_experiment_data(
     tolerance,
     cut,
     qubit_order_strategy="Natural",
+    prior_reweighting=None,
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
-    # The ordering changes the decoder's results, so it is recorded in the data
-    # itself; the filename tag is derived from the stored value.
+    # The ordering and the prior change the decoder's results, so both are
+    # recorded in the data itself; the filename tags are derived from the
+    # stored values. The prior tag keeps reweighted pickles out of the plain
+    # series when plotting scripts glob by lattice size, chi and rate.
     qubit_order_strategy = data.get("qubit_order_strategy", qubit_order_strategy)
     order_tag = (
         "" if qubit_order_strategy == "Natural" else f"_order{qubit_order_strategy}"
     )
-    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_seed{seed}{order_tag}.pkl"
+    prior_reweighting = data.get("prior_reweighting", prior_reweighting)
+    prior_tag = f"_prior{prior_reweighting}" if prior_reweighting else ""
+    file_key = f"latticesize{lattice_size}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_seed{seed}{order_tag}{prior_tag}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -360,6 +424,8 @@ def main():
         args.tolerance,
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
+        prior_reweighting=args.prior_reweighting,
+        store_certificate=args.store_certificate,
     )
     save_experiment_data(
         experiment_data,
@@ -373,6 +439,7 @@ def main():
         args.tolerance,
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
+        prior_reweighting=args.prior_reweighting,
     )
 
 
