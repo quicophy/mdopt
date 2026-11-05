@@ -321,10 +321,16 @@ def apply_depolarizing_bias(
         if certificate is not None:
             # Whatever was discarded before this pair passes through its bias
             # operator, whose norm exceeds one (about 1.05 at bias 1e-3 and
-            # 1.5 at 0.1), so that norm is the step's gain.
+            # 1.5 at 0.1), so that norm is the step's gain in the bound. The
+            # exact operator maps a unit-norm basis pair to a unit-norm prior,
+            # so the step keeps all the mass: its mass gain is one and
+            # ``survival`` is not divided by the operator norm.
             gain = float(np.linalg.norm(bias_operator.reshape(4, 4), 2))
             certificate.record(
-                float(np.sqrt(max(discarded or 0.0, 0.0))), renormalization, gain
+                float(np.sqrt(max(discarded or 0.0, 0.0))),
+                renormalization,
+                gain,
+                mass_gain=1.0,
             )
 
     return mps

@@ -239,34 +239,49 @@ class TruncationCertificate:
     survival factor is the mechanism behind the sign flips: truncation is
     accurate relative to the mass present at the time, and the checks keep
     only ``S_T`` of it.
+
+    The operator norm is the worst case the bound needs; ``survival`` instead
+    divides out the factor by which each step would have changed the norm of
+    the exact state, its mass gain. For a check and a logical constraint the
+    two coincide (1 and ``sqrt(2)``); a bias operator has an operator norm
+    above one but maps a unit-norm basis pair to a unit-norm prior, so its
+    mass gain is one and it leaves ``survival`` alone.
     """
 
     def __init__(self) -> None:
         self.log_scale = 0.0
         self.log_gain = 0.0
+        self.log_mass_gain = 0.0
         self.final_norm = 1.0
         self.terms: List[tuple[float, float, float]] = []
         self.bound = 0.0
 
     def record(
-        self, discarded: float, renormalization: float, gain: float = 1.0
+        self,
+        discarded: float,
+        renormalization: float,
+        gain: float = 1.0,
+        mass_gain: Optional[float] = None,
     ) -> None:
         """One constraint: what its truncations discarded, the factor the
-        state was renormalized by afterwards (1 when it was not) and the
-        operator norm of its MPO."""
+        state was renormalized by afterwards (1 when it was not), the
+        operator norm of its MPO and, when it differs from that norm, the
+        factor by which the exact operator changes the norm of the state
+        (``survival`` divides this one out; it defaults to ``gain``)."""
         self.terms.append((float(discarded), self.log_scale, self.log_gain))
         self.log_scale += (
             float(np.log(renormalization)) if renormalization > 0 else -np.inf
         )
         self.log_gain += float(np.log(gain))
+        self.log_mass_gain += float(np.log(gain if mass_gain is None else mass_gain))
 
     @property
     def survival(self) -> float:
         """The mass fraction the constraints kept, in amplitude units: the
         product of the renormalization factors and the final norm, with the
-        operator gains of the constraints divided out. It is the same number
+        mass gains of the constraints divided out. It is the same number
         whether or not the sweep renormalized."""
-        return float(np.exp(self.log_scale - self.log_gain) * self.final_norm)
+        return float(np.exp(self.log_scale - self.log_mass_gain) * self.final_norm)
 
     @property
     def discarded(self) -> float:

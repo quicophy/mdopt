@@ -2400,6 +2400,37 @@ def test_logical_constraint_gain_is_the_dense_mpo_norm():
     assert np.isclose(norm(check), 1.0)
 
 
+def test_certificate_mass_gain_is_divided_out_of_survival_but_not_the_bound():
+    """A step's operator norm scales what earlier steps discarded, so it
+    belongs in the bound; ``survival`` divides out only the factor by which
+    the exact step changes the norm, which defaults to that norm."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(0.1, 1.0, gain=2.0, mass_gain=1.0)
+    certificate.record(0.0, 1.0, gain=1.0)
+    assert np.isclose(certificate.finalize(1.0), 0.2)
+    assert np.isclose(certificate.survival, 1.0)
+
+    defaulted = TruncationCertificate()
+    defaulted.record(0.1, 1.0, gain=2.0)
+    assert np.isclose(defaulted.finalize(1.0), 0.2)
+    assert np.isclose(defaulted.survival, 0.5)
+
+
+def test_depolarizing_bias_operator_norm_stays_out_of_survival():
+    """On the [[2,0]] code with error XI at bias 3/4 the exact sweep keeps half
+    of the mass: each basis-state pair becomes a unit-norm prior, so the bias
+    operators' norms (2 each here) must scale the bound only."""
+    from mdopt.decoding.decoding import decode_custom
+
+    *_, certificate = decode_custom(
+        ["XX", "ZZ"], [], [], "XI", bias_prob=0.75, return_certificate=True
+    )
+    assert np.isclose(certificate.survival, 0.5, rtol=1e-9)
+    assert certificate.log_gain > certificate.log_mass_gain
+
+
 def test_certificate_survival_does_not_depend_on_renormalization():
     """``survival`` is the mass fraction the checks kept. Without per-constraint
     renormalization it comes from the final norm instead of the recorded
