@@ -619,6 +619,141 @@ def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
     assert bp_cert.survival > cert.survival
 
 
+def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeypatch):
+    """A class mass below -1e-8 of the peak is a truncation artifact. The
+    default keeps the old contract (callers escalate on the exception);
+    ``negative_mass="clamp"`` takes the verdict of the positive classes and
+    reports the artifact's size through the certificate."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    _, problem = _repetition_problem()
+    syndrome = np.zeros(problem.num_detectors, dtype=int)
+    real_dense = CanonicalMPS.dense
+
+    def dense_with_an_artifact(self, *args, **kwargs):
+        out = np.array(real_dense(self, *args, **kwargs), dtype=float).copy()
+        out.flat[-1] = -0.25 * np.max(out)
+        return out
+
+    monkeypatch.setattr(CanonicalMPS, "dense", dense_with_an_artifact)
+    with pytest.raises(ArithmeticError, match="negative_mass='clamp'") as info:
+        decode_dem(problem, syndrome)
+    assert np.isclose(info.value.certificate.negativity, 0.25)
+    masses, flips, cert = decode_dem(
+        problem, syndrome, negative_mass="clamp", return_certificate=True
+    )
+    assert np.all(masses >= 0.0) and np.isclose(cert.negativity, 0.25)
+    assert np.array_equal(flips, np.zeros(problem.num_observables, dtype=int))
+    with pytest.raises(ValueError, match="negative_mass"):
+        decode_dem(problem, syndrome, negative_mass="abs")
+
+
+def test_certificate_bound_is_infinite_for_a_collapsed_final_state():
+    """``finalize(0.0)`` must not return zero through an empty sum: a state
+    with nothing left has no relative error to bound."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    assert TruncationCertificate().finalize(0.0) == np.inf
+    certificate = TruncationCertificate()
+    certificate.record(0.0, 1.0)
+    assert certificate.finalize(float("nan")) == np.inf
+    assert TruncationCertificate().finalize(1.0) == 0.0
+
+
+def test_incompatible_reweighting_floor_and_cap_are_rejected():
+    """Prior [0.4, 0.6], floor 1 (no reweighting at all) and cap 0.1 (the
+    unlikely branch at most 0.1) cannot both hold; overriding the floor
+    would give an undo ratio of 4 that the floor promised to exclude."""
+    problem = DemProblem(
+        probs=[0.6],
+        detector_rows=[[]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="incompatible"):
+        decode_dem(
+            problem,
+            np.array([0]),
+            prior_reweighting="BP",
+            reweighting_floor=1.0,
+            reweighting_cap=0.1,
+        )
+    # The defaults are always feasible.
+    decode_dem(problem, np.array([0]), prior_reweighting="BP")
+
+
+def test_zero_probability_mechanism_survives_the_reweighting_undo():
+    """A branch with zero prior has zero contracted weight; its undo weight
+    must not be 0/0, which would poison the chain with NaN."""
+    problem = DemProblem(
+        probs=[0.0, 0.1],
+        detector_rows=[[]],
+        observable_rows=[[0], [1]],
+        num_detectors=1,
+        num_observables=2,
+    )
+    plain_masses, plain_flips = decode_dem(problem, np.array([0]))
+    bp_masses, bp_flips = decode_dem(
+        problem, np.array([0]), prior_reweighting="BP", reweighting_floor=1.0
+    )
+    assert np.all(np.isfinite(bp_masses))
+    assert np.allclose(
+        plain_masses / plain_masses.sum(), bp_masses / bp_masses.sum(), atol=1e-12
+    )
+    assert np.array_equal(plain_flips, bp_flips)
+
+
+def test_dem_survival_is_the_kept_fraction_of_the_weights_mass():
+    """The chain starts from the prior weights, whose norm is not one, and a
+    pinned mechanism keeps one branch without any sweep: survival must be
+    measured against the unprojected weights and from the full final norm."""
+    obs_only = DemProblem(
+        probs=[0.1],
+        detector_rows=[[]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    _, _, cert = decode_dem(obs_only, np.array([0]), return_certificate=True)
+    assert np.isclose(cert.survival, 1.0, atol=1e-9)
+    pinned = DemProblem(
+        probs=[0.1],
+        detector_rows=[[0]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    _, _, cert = decode_dem(pinned, np.array([1]), return_certificate=True)
+    assert np.isclose(cert.survival, 0.1 / np.hypot(0.9, 0.1), atol=1e-9)
+    _, _, cert = decode_dem(pinned, np.array([0]), return_certificate=True)
+    assert np.isclose(cert.survival, 0.9 / np.hypot(0.9, 0.1), atol=1e-9)
+
+    # With sweeps, a pinned site outside every span and an exact contraction:
+    # survival is the norm of the even-parity (syndrome-consistent) part of
+    # the weight state over the norm of the whole weight state.
+    problem = DemProblem(
+        probs=[0.1, 0.2, 0.15, 0.3],
+        detector_rows=[[0, 1], [1, 2], [3]],
+        observable_rows=[[0], [3]],
+        num_detectors=3,
+        num_observables=2,
+    )
+    syndrome = np.array([1, 0, 1])
+    base = solve_representative(problem, syndrome)
+    weights = np.array(
+        [[1 - p, p] if b == 0 else [p, 1 - p] for p, b in zip(problem.probs, base)]
+    )
+    kept = 0.0
+    for f in itertools.product((0, 1), repeat=4):
+        if all(sum(f[i] for i in row) % 2 == 0 for row in problem.detector_rows):
+            kept += float(np.prod([weights[i, f[i]] ** 2 for i in range(4)]))
+    expected = np.sqrt(kept) / float(np.prod(np.linalg.norm(weights, axis=1)))
+    _, _, cert = decode_dem(problem, syndrome, chi_max=64, return_certificate=True)
+    assert cert.bound < 1e-9
+    assert np.isclose(cert.survival, expected, rtol=1e-9)
+
+
 def test_decode_dem_signature_and_argument_validation():
     _, problem = _repetition_problem()
     syndrome = np.zeros(problem.num_detectors, dtype=int)

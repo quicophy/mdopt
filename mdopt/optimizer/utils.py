@@ -295,7 +295,13 @@ class TruncationCertificate:
     def finalize(self, final_norm: float = 1.0) -> float:
         """Evaluate and store the bound for a final state of norm ``final_norm``."""
         self.final_norm = float(final_norm)
-        log_final = self.log_scale + (np.log(final_norm) if final_norm > 0 else -np.inf)
+        if not np.isfinite(self.final_norm) or self.final_norm <= 0.0:
+            # Nothing positive is left to compare the discards with: the
+            # relative error of a collapsed state is undefined, not zero,
+            # even when no discard was recorded.
+            self.bound = float("inf")
+            return self.bound
+        log_final = self.log_scale + np.log(self.final_norm)
         with np.errstate(over="ignore", invalid="ignore"):
             self.bound = float(
                 sum(
