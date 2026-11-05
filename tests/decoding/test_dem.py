@@ -391,10 +391,10 @@ def test_dem_error_paths_raise_precisely():
     with pytest.raises(ValueError, match="representative"):
         decode_dem(problem, np.array([1, 0]), representative=np.array([0, 0, 0]))
 
-    # chi_max=1 destroys the class-mass vector, which must be loud --
-    # either as a collapse or as a materially negative mass, never as a
-    # silently abs()'d posterior.
-    with pytest.raises(ArithmeticError, match="collapsed|not converged"):
+    # chi_max=1 destroys the class-mass vector: nothing positive survives,
+    # which is loud (a collapse). A merely negative mass is clamped and
+    # reported through the certificate instead, never silently abs()'d.
+    with pytest.raises(ArithmeticError, match="collapsed"):
         decode_dem(problem, np.array([1, 0]), chi_max=1)
 
     # Ordering: natural is the identity, unknown strategies are rejected.
@@ -596,7 +596,13 @@ def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
     syndrome = detections[int(np.argmax(detections.sum(axis=1)))].astype(int)
     assert syndrome.sum() >= 3
     try:
-        _, _, cert = decode_dem(problem, syndrome, chi_max=2, return_certificate=True)
+        masses, _, cert = decode_dem(
+            problem, syndrome, chi_max=2, return_certificate=True
+        )
+        # A negative class mass is clamped, never a verdict in itself, and
+        # its size is reported for the caller to gate on.
+        assert np.all(masses >= 0.0)
+        assert cert.negativity >= 0.0
     except ArithmeticError as error:
         cert = error.certificate
     assert cert.bound > 1.0
@@ -620,6 +626,7 @@ def test_decode_dem_signature_and_argument_validation():
     assert len(result) == 2
     result = decode_dem(problem, syndrome, return_certificate=True)
     assert len(result) == 3 and result[2].bound < 1e-12
+    assert result[2].negativity == 0.0
     with pytest.raises(ValueError, match="prior_reweighting"):
         decode_dem(problem, syndrome, prior_reweighting="OSD")
     with pytest.raises(ValueError, match="reweighting_floor"):

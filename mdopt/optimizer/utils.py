@@ -255,6 +255,10 @@ class TruncationCertificate:
         self.final_norm = 1.0
         self.terms: List[tuple[float, float, float]] = []
         self.bound = 0.0
+        # The most negative class mass as a fraction of the peak, set by a
+        # readout that clamps negatives (decode_dem); 0 for an exact
+        # contraction, since every exact class mass is non-negative.
+        self.negativity = 0.0
 
     def record(
         self,

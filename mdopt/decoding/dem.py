@@ -22,6 +22,7 @@ central performance question (see arXiv:2310.10722 for the 3D-tensor-network
 view of the same problem).
 """
 
+import logging
 from dataclasses import dataclass, field
 from typing import cast, Dict, FrozenSet, List, Optional, Tuple
 
@@ -30,6 +31,8 @@ import stim
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import create_custom_product_state
+
+LOGGER = logging.getLogger(__name__)
 from mdopt.optimizer.utils import (
     COPY_LEFT,
     SWAP,
@@ -272,9 +275,14 @@ def decode_dem(
         The number of flooding iterations.
     return_certificate : bool
         Also return the :class:`~mdopt.optimizer.utils.TruncationCertificate`
-        of the contraction. It is always computed; a collapsed or negative
-        class-mass vector raises ``ArithmeticError`` with the certificate
-        attached as its ``certificate`` attribute.
+        of the contraction. It is always computed; a collapsed class-mass
+        vector (nothing positive, or not finite) raises ``ArithmeticError``
+        with the certificate attached as its ``certificate`` attribute. A
+        negative class mass is a truncation artifact: it is clamped to zero
+        before the argmax and its size relative to the peak is stored as the
+        certificate's ``negativity`` (0 for an exact contraction), so a
+        caller can gate or escalate on it the way it does on ``bound`` and
+        ``survival``.
 
     Returns
     -------
@@ -486,13 +494,15 @@ def decode_dem(
         np.real(np.asarray(logical_mps.dense(flatten=True, renormalize=False)))
     )
 
-    # Every tensor in the exact contraction is non-negative, so a materially
-    # negative class mass can only be a truncation artifact; taking abs()
-    # would convert it into posterior weight that could even win the argmax.
-    # Reject it loudly and clamp only round-off-scale negatives: with
-    # thousands of classes read out of a truncated chain (12 observables give
-    # 4096), entries at 1e-10 of the peak are accumulation noise, so the line
-    # is drawn at 1e-8 of the peak, far below any residue-built class.
+    # Every tensor in the exact contraction is non-negative, so a negative
+    # class mass can only be a truncation artifact; taking abs() would turn
+    # it into posterior weight that could even win the argmax. It is clamped
+    # to zero instead, and its size relative to the peak is reported through
+    # the certificate: the verdict still stands on the positive classes, and
+    # the caller decides whether a negativity of 1e-10 (accumulation noise
+    # over thousands of classes; 12 observables give 4096) or of 0.3 (an
+    # unconverged chain) is acceptable. Only a collapsed vector, with nothing
+    # positive to choose from, has no verdict to give.
     if not np.isfinite(dense).all() or float(np.max(dense)) <= 0.0:
         error = ArithmeticError(
             f"The class-mass vector collapsed at chi_max={chi_max} "
@@ -502,14 +512,18 @@ def decode_dem(
         raise error
     peak = float(np.max(dense))
     most_negative = float(np.min(dense))
-    if most_negative < -1e-8 * peak:
-        error = ArithmeticError(
-            f"Negative class mass {most_negative:.3e} at chi_max={chi_max} "
-            f"(truncation-error bound {certificate.bound:.2e}): the contraction "
-            "is not converged; raise chi_max or use prior_reweighting='BP'."
+    certificate.negativity = max(0.0, -most_negative / peak)
+    if certificate.negativity > 1e-8 and not silent:
+        LOGGER.warning(
+            "Negative class mass %.3e (%.1f%% of the peak) at chi_max=%d "
+            "(truncation-error bound %.2e): the contraction is not converged; "
+            "the mass is clamped and the verdict should be gated on the "
+            "certificate.",
+            most_negative,
+            100.0 * certificate.negativity,
+            chi_max,
+            certificate.bound,
         )
-        error.certificate = certificate  # type: ignore[attr-defined]
-        raise error
     dense = np.clip(dense, 0.0, None)
 
     # Relabel from f-classes to m-classes: XOR in the representative's own
