@@ -1724,9 +1724,10 @@ def _logical_readout(
                 )
             if amplitude == 0.0:
                 LOGGER.warning(
-                    "Every Optima TT candidate is negative after the sign fix "
-                    "at chi_max=%d: the posterior is unconverged and the shot "
-                    "is scored as a failure.",
+                    "Optima TT found no positive candidate after the sign fix "
+                    "at chi_max=%d: the posterior is unconverged or collapsed. "
+                    "The readout returns amplitude 0; the caller still weighs "
+                    "the identity before judging the shot.",
                     chi_max,
                 )
             elif certified:
@@ -1762,8 +1763,14 @@ def _logical_readout(
     )
     beam_state = create_custom_product_state(bits)
     # Certified only when the largest-modulus beam meets the bound AND is the
-    # positive class just chosen (amplitude == modulus up to rounding).
-    if modulus >= bound * (1 - 1e-9) and amplitude >= modulus * (1 - 1e-9):
+    # positive class just chosen (amplitude == modulus up to rounding). A
+    # collapsed posterior has bound, modulus and amplitude all zero and must
+    # stay uncertified: nothing was found, rather than the maximum.
+    if (
+        amplitude > 0.0
+        and modulus >= bound * (1 - 1e-9)
+        and amplitude >= modulus * (1 - 1e-9)
+    ):
         if not silent:
             LOGGER.info(
                 "Readout settled by beam search: |<s*|psi>| = %.6e matches the "
@@ -1805,24 +1812,28 @@ def _logical_readout(
         # signed Optima TT fallback below is still the right next step.
         if not silent:
             LOGGER.warning(
-                "Dephasing DMRG failed (%s: %s); keeping the beam-search "
-                "result |<s*|psi>| = %.6e, which is not certified optimal.",
+                "Dephasing DMRG failed (%s: %s); the beam search's best "
+                "positive candidate, <s*|psi> = %.6e, stands in when it is "
+                "positive, and Optima TT is asked otherwise. Neither is "
+                "certified optimal.",
                 type(error).__name__,
                 str(error)[:80],
-                modulus,
+                amplitude,
             )
     if engine is not None and dmrg_amplitude > 0.0 and dmrg_amplitude >= amplitude:
         return engine, dmrg_amplitude, dmrg_modulus >= bound * (1 - 1e-9)
     if amplitude > 0.0:
         return _ReadoutResult(beam_state, logical_mps), amplitude, False
-    # Both searches rank by modulus and both landed on a negative artifact.
-    # Optima TT ranks its candidates by signed value, so its best one is the
-    # largest positive class it saw; a zero here is a collapsed posterior.
+    # Both searches rank by modulus and neither produced a positive class:
+    # each landed on a negative artifact, or DMRG failed. Optima TT ranks its
+    # candidates by signed value, so its best one is the largest positive
+    # class it saw; a zero here is a collapsed posterior.
     if not silent:
         LOGGER.warning(
-            "Beam search and Dephasing DMRG both found a negative amplitude "
-            "after the sign fix at chi_max=%d; taking the best positive "
-            "Optima TT candidate instead.",
+            "Neither the beam search nor Dephasing DMRG (%s) produced a "
+            "positive candidate after the sign fix at chi_max=%d; taking the "
+            "best positive Optima TT candidate instead.",
+            "failed" if engine is None else "found none",
             chi_max,
         )
     candidates = optima_tt_readout(logical_mps, num_candidates=num_candidates)

@@ -2140,14 +2140,18 @@ def test_dmrg_ranks_restarts_by_the_signed_clamped_score():
     original_readout = decoding._dmrg_readout
     decoding._dmrg_readout = negated_dmrg
     try:
-        _, amplitude, _ = _logical_readout(logical_mps, 2, 4, 1e-17, 1, 2, True)
+        result, amplitude, _ = _logical_readout(logical_mps, 2, 4, 1e-17, 1, 2, True)
     finally:
         decoding._dmrg_readout = original_readout
+    # The beam supplies the same positive 00 amplitude, so the value alone
+    # would not notice a negated DMRG candidate clamped to zero: the DMRG
+    # result itself must be the one returned, scored by its bit string.
+    assert isinstance(result, Negated)
     assert np.isclose(amplitude, abs(vector[0]))
 
 
 def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
-    from mdopt.decoding.decoding import _logical_readout
+    from mdopt.decoding.decoding import _basis_string, _logical_readout
     import mdopt.decoding.decoding as decoding
 
     vector = np.array([-0.6, 0.7, -0.2, -0.2])
@@ -2157,14 +2161,35 @@ def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
     def failing_dmrg(*args, **kwargs):
         raise RuntimeError("ARPACK error -9")
 
+    # With two sites and beam width 4 every class survives the beam, which
+    # would hand over its own positive candidate; a beam that kept only a
+    # class negative after the sign fix (here the sign is -1) forces the
+    # Optima TT fallback.
+    def negative_only_beam(logical_mps, beam_width=4, return_candidates=False):
+        return None, abs(vector[1]), [("01", float(vector[1]))]
+
+    optima_calls = []
+    original_optima = decoding.optima_tt_readout
+
+    def counted_optima(*args, **kwargs):
+        optima_calls.append(args)
+        return original_optima(*args, **kwargs)
+
     original = decoding._dmrg_readout
+    original_beam = decoding.max_product_readout
     decoding._dmrg_readout = failing_dmrg
+    decoding.max_product_readout = negative_only_beam
+    decoding.optima_tt_readout = counted_optima
     try:
         engine, amplitude, certified = _logical_readout(
             logical_mps, 2, 4, 1e-17, 1, 2, True
         )
     finally:
         decoding._dmrg_readout = original
+        decoding.max_product_readout = original_beam
+        decoding.optima_tt_readout = original_optima
+    assert len(optima_calls) == 1
+    assert _basis_string(engine.mps) == "00"
     assert np.isclose(amplitude, -vector[0])
     assert not certified
 
