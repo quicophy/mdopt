@@ -349,6 +349,7 @@ class CanonicalMPS:
         return_singular_values: bool = False,
         renormalize: bool = True,
         inplace: bool = False,
+        discarded_norms: Optional[List[float]] = None,
     ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[np.ndarray]]]:
         """
         Moves the orthogonality center from its current position to ``final_pos``.
@@ -370,6 +371,11 @@ class CanonicalMPS:
             instead of deep-copying them first (a leftward move builds a new
             object either way and leaves this instance unmoved). The returned
             object is the one to use in both cases.
+        discarded_norms : Optional[List[float]]
+            When a list is given, the norm of what every SVD of the move
+            discards (the root of its discarded weight) is appended to it. A
+            move truncates too, at ``chi_max`` and the SVD's cutoff, and a
+            truncation-error accounting must see it.
 
         Raises
         ------
@@ -442,12 +448,15 @@ class CanonicalMPS:
                 # (for a 400-dimensional Gram matrix it can be 400x smaller).
                 gram[np.diag_indices_from(gram)] -= 1.0
                 if np.linalg.norm(gram) <= 1e-12:
-                    u_l, s_bond, v_h, _ = svd(
+                    u_l, s_bond, v_h, discarded = svd(
                         center.reshape(chi_l * phys, chi_r),
                         chi_max=self.chi_max,
                         renormalize=renormalize,
+                        return_discarded_norm=True,
                     )
                     singular_values.append(s_bond)
+                    if discarded_norms is not None:
+                        discarded_norms.append(float(max(discarded or 0.0, 0.0)))
                     keep = len(s_bond)
                     mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
                     # diag(s) @ (v_h . B): same idiom as the SVD branch below.
@@ -457,14 +466,16 @@ class CanonicalMPS:
                     mps.orth_center = i + 1
                     continue
             two_site_tensor = mps.two_site_tensor_next(i)
-            u_l, singular_values_bond, v_r, _ = split_two_site_tensor(
+            u_l, singular_values_bond, v_r, discarded = split_two_site_tensor(
                 two_site_tensor,
                 chi_max=self.chi_max,
                 renormalize=renormalize,
                 strategy="svd",
-                return_truncation_error=True,
+                return_discarded_norm=True,
             )
             singular_values.append(singular_values_bond)
+            if discarded_norms is not None:
+                discarded_norms.append(float(max(discarded or 0.0, 0.0)))
             mps.tensors[i] = u_l
 
             # diag(s) @ v_r  -->  scale rows (axis 0) by s

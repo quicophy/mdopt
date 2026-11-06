@@ -20,7 +20,12 @@ import qecstruct as qec
 from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import create_custom_product_state, inner_product, mps_from_dense
+from mdopt.mps.utils import (
+    create_custom_product_state,
+    create_simple_product_state,
+    inner_product,
+    mps_from_dense,
+)
 
 from mdopt.decoding.decoding import (
     str_to_bool,
@@ -29,6 +34,7 @@ from mdopt.decoding.decoding import (
     decode_css,
     decode_custom,
     depolarizing_bias,
+    create_bb_code,
     generate_pauli_error_string,
     max_amplitude_bound,
     max_product_readout,
@@ -2078,7 +2084,15 @@ def test_num_candidates_is_the_last_decoder_parameter():
 
     for decoder in (decode_css, decode_custom):
         names = list(inspect.signature(decoder).parameters)
-        assert names[-3:] == ["tie_policy", "rng", "num_candidates"]
+        assert names[names.index("tie_policy") :] == [
+            "tie_policy",
+            "rng",
+            "num_candidates",
+            "prior_reweighting",
+            "reweighting_floor",
+            "bp_iterations",
+            "return_certificate",
+        ]
 
 
 def test_dmrg_ranks_restarts_by_the_signed_clamped_score():
@@ -2231,6 +2245,333 @@ def test_global_sign_tolerates_a_zero_width_bond():
     assert _global_sign(collapsed) == 1.0
 
 
+def test_bp_marginals_are_exact_on_a_tree():
+    """Two checks b0+b1=1 and b1+b2=0 on three bits form a tree, where
+    sum-product is exact."""
+    from mdopt.decoding.decoding import _bp_site_marginals
+
+    p = 0.1
+    marginals = _bp_site_marginals(
+        3, [[0, 1], [1, 2]], np.array([1, 0]), np.full(3, p), iterations=20
+    )
+    weight_100 = p * (1 - p) ** 2
+    weight_011 = p**2 * (1 - p)
+    total = weight_100 + weight_011
+    assert np.allclose(
+        marginals, [weight_100 / total, weight_011 / total, weight_011 / total]
+    )
+
+
+@pytest.mark.parametrize("name", sorted(CODES))
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
+def test_prior_reweighting_changes_nothing_when_nothing_is_truncated(name, bias):
+    """The reweighting is undone exactly: at a bond dimension that truncates
+    nothing the posterior is the plain one, erasures included, and the
+    plain one is the brute-force posterior."""
+    code = CODES[name]()
+    first = ERRORS[name][0]
+    for error in ERRORS[name] + [first[:1] + "E" + first[2:]]:
+        kwargs = dict(
+            chi_max=int(1e5),
+            bias_type=bias,
+            bias_prob=0.1,
+            renormalize=True,
+            silent=True,
+        )
+        plain = _normalized(decode_css(code, error, **kwargs)[0])
+        reweighted = _normalized(
+            decode_css(code, error, prior_reweighting="BP", **kwargs)[0]
+        )
+        assert np.allclose(plain, reweighted, atol=1e-8)
+        if "E" not in error:
+            assert np.allclose(
+                plain, exact_posterior(code, error, bias, 0.1), atol=1e-6
+            )
+
+
+def test_prior_reweighting_removes_sign_flips_at_small_chi():
+    """On the [[18,2]] bivariate bicycle code at chi_max=4 the plain
+    contraction comes back globally sign-flipped on about one shot in seven;
+    the reweighted one on about one in fifty (measured on 229 shots against
+    the exact posterior, where it also cut the wrong verdicts from 100 to 22)."""
+    code = create_bb_code(3, 3, "x + y", "1 + x*y")
+    rng = np.random.default_rng(18)
+    flips = {"plain": 0, "reweighted": 0}
+    bounds = {"plain": [], "reweighted": []}
+    shots = 0
+    while shots < 60:
+        error = generate_pauli_error_string(len(code), 0.1, rng=rng)
+        if error == "I" * len(code):
+            continue
+        shots += 1
+        for name, extra in (("plain", {}), ("reweighted", {"prior_reweighting": "BP"})):
+            engine, _, certificate = decode_css(
+                code,
+                error,
+                chi_max=4,
+                bias_prob=0.1,
+                silent=True,
+                optimizer="Optima TT",
+                dense_readout_max_sites=0,
+                return_certificate=True,
+                **extra,
+            )
+            total = float(
+                np.real(
+                    inner_product(
+                        create_simple_product_state(len(engine.mps_target), "+"),
+                        engine.mps_target,
+                    )
+                )
+            )
+            flips[name] += total < 0
+            bounds[name].append(certificate.bound)
+    assert flips["plain"] >= 3
+    assert flips["reweighted"] < flips["plain"]
+    # The checks keep far more of the reweighted state, which the bound sees.
+    assert np.median(bounds["reweighted"]) < np.median(bounds["plain"])
+
+
+def test_certificate_is_tight_without_truncation_and_warns_with_it(caplog):
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "XIIIIII",
+        chi_max=int(1e5),
+        bias_prob=0.1,
+        silent=True,
+        return_certificate=True,
+    )
+    assert isinstance(certificate, TruncationCertificate)
+    assert score == 1
+    assert certificate.bound < 1e-6
+    assert 0 < certificate.survival <= 1
+
+    # The trivial-error fast path reports a clean certificate too.
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "IIIIIII",
+        bias_prob=0.1,
+        silent=True,
+        return_certificate=True,
+    )
+    assert score == 1 and certificate.bound == 0.0
+
+    code = create_bb_code(3, 3, "x + y", "1 + x*y")
+    with caplog.at_level(logging.WARNING, logger="mdopt.decoding.decoding"):
+        _, _, certificate = decode_css(
+            code,
+            "IIIIIIIIIIIIIIIIIX",
+            chi_max=2,
+            bias_prob=0.1,
+            silent=False,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+            return_certificate=True,
+        )
+    assert certificate.bound > 1
+    assert "truncation-error bound" in caplog.text
+
+
+def test_prior_reweighting_arguments_are_validated():
+    with pytest.raises(ValueError, match="prior_reweighting"):
+        decode_css(qec.steane_code(), "XIIIIII", prior_reweighting="BPP", silent=True)
+    with pytest.raises(ValueError, match="reweighting_floor"):
+        decode_css(
+            qec.steane_code(),
+            "XIIIIII",
+            prior_reweighting="BP",
+            reweighting_floor=0.7,
+            silent=True,
+        )
+
+
+def test_logical_constraint_gain_is_the_dense_mpo_norm():
+    """The certificate records sqrt(2) as the operator norm of every logical
+    constraint and one for every check constraint; both numbers are pinned
+    here against the dense MPO of a five-site string."""
+    from mdopt.decoding.decoding import LOGICAL_CONSTRAINT_GAIN
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        ConstraintString,
+    )
+    from mdopt.utils.utils import mpo_to_matrix
+
+    sites = [[0], [1, 3], [2], [4]]
+    logical = ConstraintString([COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT], sites)
+    check = ConstraintString([XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT], sites)
+    norm = lambda string: np.linalg.norm(  # noqa: E731
+        mpo_to_matrix(string.mpo(), interlace=False, group=True), 2
+    )
+    assert np.isclose(norm(logical), LOGICAL_CONSTRAINT_GAIN)
+    assert np.isclose(norm(check), 1.0)
+
+
+def test_certificate_mass_gain_is_divided_out_of_survival_but_not_the_bound():
+    """A step's operator norm scales what earlier steps discarded, so it
+    belongs in the bound; ``survival`` divides out only the factor by which
+    the exact step changes the norm, which defaults to that norm."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(0.1, 1.0, gain=2.0, mass_gain=1.0)
+    certificate.record(0.0, 1.0, gain=1.0)
+    assert np.isclose(certificate.finalize(1.0), 0.2)
+    assert np.isclose(certificate.survival, 1.0)
+
+    defaulted = TruncationCertificate()
+    defaulted.record(0.1, 1.0, gain=2.0)
+    assert np.isclose(defaulted.finalize(1.0), 0.2)
+    assert np.isclose(defaulted.survival, 0.5)
+
+
+def test_depolarizing_bias_operator_norm_stays_out_of_survival():
+    """On the [[2,0]] code with error XI at bias 3/4 the exact sweep keeps half
+    of the mass: each basis-state pair becomes a unit-norm prior, so the bias
+    operators' norms (2 each here) must scale the bound only."""
+    from mdopt.decoding.decoding import decode_custom
+
+    *_, certificate = decode_custom(
+        ["XX", "ZZ"], [], [], "XI", bias_prob=0.75, return_certificate=True
+    )
+    assert np.isclose(certificate.survival, 0.5, rtol=1e-9)
+    assert certificate.log_gain > certificate.log_mass_gain
+
+
+def test_certificate_survival_does_not_depend_on_renormalization():
+    """``survival`` is the mass fraction the checks kept. Without per-constraint
+    renormalization it comes from the final norm instead of the recorded
+    factors, and the logical sweeps' sqrt(2) gain is divided out either way,
+    so both modes report the same number."""
+    code = qec.steane_code()
+    survivals = {}
+    for renormalize in (True, False):
+        _, score, certificate = decode_css(
+            code,
+            "XIIIIII",
+            chi_max=int(1e5),
+            bias_prob=0.1,
+            renormalize=renormalize,
+            silent=True,
+            return_certificate=True,
+        )
+        assert score == 1
+        assert certificate.bound < 1e-6
+        survivals[renormalize] = certificate.survival
+    assert 0 < survivals[True] < 1
+    assert np.isclose(survivals[True], survivals[False], rtol=1e-9)
+
+
+def test_prior_reweighting_keeps_the_plain_amplitude_scale():
+    """With ``renormalize=False`` the undo contraction carries the same
+    ``1/sqrt(d)`` trace factors as :meth:`CanonicalMPS.marginal`, so the
+    reweighted amplitudes equal the plain ones, not a power of two times them."""
+    kwargs = dict(chi_max=int(1e5), bias_prob=0.1, renormalize=False, silent=True)
+    plain, _ = decode_css(qec.steane_code(), "XIIIIII", **kwargs)
+    reweighted, _ = decode_css(
+        qec.steane_code(), "XIIIIII", prior_reweighting="BP", **kwargs
+    )
+    assert np.allclose(plain, reweighted, rtol=1e-9, atol=0)
+    assert 0 < np.max(plain) < 0.1  # unnormalized: the trace factors are in
+
+
+def test_prior_reweighting_with_no_logicals_returns_the_scalar_posterior():
+    """``decode_custom`` accepts empty logical lists; the reweighted path then
+    marginalizes every site and returns the same scalar as the plain one."""
+    code = (["XX", "ZZ"], [], [], "XI")
+    plain = decode_custom(*code, silent=True)
+    reweighted = decode_custom(*code, silent=True, prior_reweighting="BP")
+    assert np.allclose(plain[0], reweighted[0])
+    assert plain[1] == reweighted[1] == 1
+
+
+def test_depolarizing_bias_records_its_truncation_in_the_certificate():
+    """The bias applier's two-site splits truncate at the SVD's default cutoff,
+    which bites for very small biases; with a certificate the loss is recorded
+    as a unit-gain step, so the bound covers the prior's initialization."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    state = create_simple_product_state(4, "0")
+    tiny_bias = TruncationCertificate()
+    apply_depolarizing_bias(state.copy(), [0, 2], 3e-26, certificate=tiny_bias)
+    # One step for the move of the orthogonality center (nothing to discard
+    # on a product state) and one per biased pair.
+    assert len(tiny_bias.terms) == 3
+    assert tiny_bias.terms[0][0] == 0.0
+    assert tiny_bias.discarded > 1e-14  # sqrt(p/3) components were dropped
+    assert np.isclose(tiny_bias.survival, 1.0, rtol=1e-6)
+
+    plain_bias = TruncationCertificate()
+    apply_depolarizing_bias(state.copy(), [0, 2], 0.1, certificate=plain_bias)
+    assert plain_bias.discarded == 0.0
+
+    # And decode_css sees it. At this bias the dropped components ARE the
+    # error-consistent configurations: the weight-1 error is decoded wrongly,
+    # and before this the certificate reported a clean contraction for it.
+    _, score, certificate = decode_css(
+        qec.steane_code(),
+        "XIIIIII",
+        chi_max=int(1e5),
+        bias_type="Depolarizing",
+        bias_prob=3e-26,
+        silent=True,
+        return_certificate=True,
+    )
+    assert certificate.discarded > 0
+    if score != 1:
+        assert certificate.bound > 1
+
+
+def test_dense_constraint_sweeps_record_their_gain():
+    """``apply_constraints(dense=True)`` truncates nothing but every constraint's
+    operator gain still scales what earlier sweeps discarded and what
+    ``survival`` divides out, so each dense constraint records a unit step."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    state = create_custom_product_state("++0110")
+    strings = [[[0], [2, 4], [1, 3], [5]], [[1], [2, 4], [3], [5]]]
+    gain = float(np.sqrt(2.0))
+    dense_certificate = TruncationCertificate()
+    dense = apply_constraints(
+        state.copy(),
+        strings,
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        dense=True,
+        renormalize=False,
+        silent=True,
+        certificate=dense_certificate,
+        gain=gain,
+    )
+    mps_certificate = TruncationCertificate()
+    swept = apply_constraints(
+        state.copy(),
+        strings,
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        renormalize=False,
+        silent=True,
+        certificate=mps_certificate,
+        gain=gain,
+    )
+    assert len(dense_certificate.terms) == len(strings)
+    assert np.isclose(dense_certificate.log_gain, len(strings) * np.log(gain))
+    assert np.isclose(dense_certificate.log_gain, mps_certificate.log_gain)
+    dense_vector = np.asarray(dense).ravel()
+    assert np.allclose(np.abs(dense_vector), np.abs(swept.dense(flatten=True)))
+
+
 def test_beam_readout_scores_every_surviving_candidate_signed():
     """The largest-modulus beam is a negative artifact and a smaller positive
     non-identity class sits among the other beams; it must be the beam
@@ -2306,6 +2647,374 @@ def test_dmrg_readout_returns_the_basis_state_it_scored():
     assert np.isclose(modulus, abs(vector[0]))
     for tensor in result.mps.tensors:
         assert np.count_nonzero(tensor) == 1
+
+
+def _dense_depolarizing_bias(vector, sites, prob):
+    """The bias operators applied exactly to a dense state vector."""
+    from mdopt.decoding.decoding import depolarizing_bias
+
+    num_sites = int(round(np.log2(vector.size)))
+    psi = vector.reshape((2,) * num_sites)
+    operator = depolarizing_bias(prob_bias=prob)  # [j, l, n, o]: (j, l) in, (n, o) out
+    for site in sites:
+        psi = np.tensordot(psi, operator, axes=([site, site + 1], [0, 1]))
+        psi = np.moveaxis(psi, [num_sites - 2, num_sites - 1], [site, site + 1])
+    return psi.ravel()
+
+
+def _measured_relative_error(certificate, truncated, exact):
+    """The error the certificate bounds: the truncated state with its
+    renormalizations undone against the exact one, relative to the former."""
+    bound = certificate.finalize(float(np.linalg.norm(truncated)))
+    undone = np.exp(certificate.log_scale) * truncated
+    return float(np.linalg.norm(undone - exact) / np.linalg.norm(undone)), bound
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+@pytest.mark.parametrize(
+    "state, prob",
+    [("random", 0.1), ("product", 3e-26)],
+    ids=["center-move-truncation", "split-cutoff-truncation"],
+)
+def test_depolarizing_bias_bound_covers_the_measured_error(renormalize, state, prob):
+    """The bias applier's bound holds against a dense reference: with the
+    orthogonality center at the far end and chi_max=2 its move to the first
+    biased site truncates a random state, and at a tiny bias the splits'
+    SVD cutoff drops the sqrt(p/3) components of a product state."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    sites = [0, 2, 4]
+    if state == "random":
+        vector = np.random.default_rng(7).normal(size=2**6)
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form="Left-canonical")
+        mps.chi_max = 2
+    else:
+        mps = create_simple_product_state(6, "0")
+        vector = mps.dense(flatten=True)
+    exact = _dense_depolarizing_bias(vector, sites, prob)
+
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        mps, sites, prob, renormalize=renormalize, certificate=certificate
+    )
+    measured, bound = _measured_relative_error(
+        certificate, biased.dense(flatten=True), exact
+    )
+    assert len(certificate.terms) == 1 + len(sites)
+    assert certificate.discarded > 0
+    assert 0 < measured <= bound * (1 + 1e-9)
+    # The applier normalizes the pair it just split; on a product input (the
+    # decoders' case) the pairs are disjoint, so that normalizes the state.
+    if renormalize and state == "product":
+        assert np.isclose(np.linalg.norm(biased.dense(flatten=True)), 1.0)
+
+
+def test_depolarizing_bias_moves_the_center_into_every_pair():
+    """Without renormalization the first pair's scale (0.75 here) stays in
+    the center it left behind; the next pair's split then measures its loss
+    in the scale of a right-isometric block, not of the state, and the
+    bound used to come out below the error by that factor. The center is
+    moved into each pair, and the move's own loss is charged to the pair."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    mps = create_custom_product_state("++00", form="Right-canonical")
+    vector = np.asarray(mps.dense(flatten=True), dtype=float)
+    exact = _dense_depolarizing_bias(
+        _dense_depolarizing_bias(vector, [0], 0.75), [2], 3e-26
+    )
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        mps, [0, 2], [0.75, 3e-26], renormalize=False, certificate=certificate
+    )
+    measured, bound = _measured_relative_error(
+        certificate, biased.dense(flatten=True), exact
+    )
+    assert len(certificate.terms) == 3
+    assert 0 < measured <= bound * (1 + 1e-9)
+
+
+def test_discarded_norms_survive_underflow_of_their_squares():
+    """A discarded singular value of 1e-170 has a square below the smallest
+    float; the certificate collectors ask for the norm itself."""
+    from mdopt.utils.utils import split_two_site_tensor, svd
+
+    spectrum = np.diag([1e-160, 1e-170])
+    _, _, _, squared = svd(spectrum, chi_max=1, cut=0.0, return_truncation_error=True)
+    assert squared == 0.0
+    _, _, _, norm = svd(spectrum, chi_max=1, cut=0.0, return_discarded_norm=True)
+    assert np.isclose(norm, 1e-170, rtol=1e-12, atol=0.0)
+    _, _, _, norm = split_two_site_tensor(
+        spectrum.reshape(1, 2, 2, 1), chi_max=1, cut=0.0, return_discarded_norm=True
+    )
+    assert np.isclose(norm, 1e-170, rtol=1e-12, atol=0.0)
+    # A huge discard overflows to an infinite squared error, not an exception.
+    _, _, _, squared = svd(
+        np.diag([1e160, 1e160]), chi_max=1, return_truncation_error=True
+    )
+    assert squared == np.inf
+    # The QR residual is a norm already: 4 for a rank-one split of diag(10, 4),
+    # measured before the optional renormalization.
+    for renormalize in (False, True):
+        _, _, residual, _ = split_two_site_tensor(
+            np.diag([10.0, 4.0]).reshape(1, 2, 2, 1),
+            chi_max=1,
+            strategy="qr",
+            renormalize=renormalize,
+            return_discarded_norm=True,
+        )
+        assert np.isclose(residual, 4.0)
+
+    # Through a center move: a two-site state with a unit retained Schmidt
+    # value and a 1e-170 one, truncated to a single value by the move.
+    left = np.zeros((1, 2, 2))
+    left[0, 0, 0] = left[0, 1, 1] = 1.0
+    center = np.zeros((2, 2, 1))
+    center[0, 0, 0], center[1, 1, 0] = 1.0, 1e-170
+    mps = CanonicalMPS([left, center], orth_center=1, chi_max=1)
+    discarded: list = []
+    mps.move_orth_center(0, renormalize=False, discarded_norms=discarded)
+    assert any(np.isclose(d, 1e-170, rtol=1e-6, atol=0.0) for d in discarded)
+
+
+def test_certificate_scales_cancel_in_log_space():
+    """A mass gain and a final norm both near the float floor give a survival
+    of one and a finite bound; the same scales passed as logs give the same."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(0.0, 1.0, mass_gain=1e-310)
+    assert certificate.finalize(1e-310) == 0.0
+    assert np.isclose(certificate.survival, 1.0)
+
+    logged = TruncationCertificate()
+    logged.record(0.0, 1.0, log_mass_gain=-2000.0)
+    assert logged.finalize(log_final_norm=-2000.0) == 0.0
+    assert np.isclose(logged.survival, 1.0)
+    assert logged.final_norm == 0.0  # the number underflows, the log does not
+    with pytest.raises(ValueError, match="either mass_gain or log_mass_gain"):
+        logged.record(0.0, 1.0, mass_gain=1.0, log_mass_gain=0.0)
+    assert TruncationCertificate().finalize(log_final_norm=-np.inf) == np.inf
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+def test_constraint_sweep_bound_covers_the_measured_error(renormalize):
+    """``apply_constraints`` with logical gains: the center move to the first
+    string truncates (chi_max=2 on a random state centered at the far end),
+    the zip-up truncates, and the bound still covers the error against the
+    untruncated sweep in both renormalization modes."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    strings = [[[0], [2, 4], [1, 3], [5]], [[1], [2, 4], [3], [5]]]
+    gain = float(np.sqrt(2.0))
+    vector = np.random.default_rng(11).random(size=2**6) + 0.1
+    vector /= np.linalg.norm(vector)
+    exact = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=int(1e4),
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        gain=gain,
+    ).dense(flatten=True)
+
+    mps = mps_from_dense(vector, form="Left-canonical")
+    mps.chi_max = 2
+    certificate = TruncationCertificate()
+    swept = apply_constraints(
+        mps,
+        strings,
+        tensors,
+        chi_max=2,
+        cut=0.0,
+        renormalize=renormalize,
+        silent=True,
+        certificate=certificate,
+        gain=gain,
+    )
+    measured, bound = _measured_relative_error(
+        certificate, swept.dense(flatten=True), exact
+    )
+    # Two terms per constraint: the move before its MPO and the zip-up.
+    assert len(certificate.terms) == 2 * len(strings)
+    assert certificate.discarded > 0
+    assert np.isclose(certificate.log_gain, len(strings) * np.log(gain))
+    assert 0 < measured <= bound * (1 + 1e-9)
+
+
+def test_certificate_sums_each_term_as_one_exponential():
+    """A loss of 1e-310 against a final norm of 1e-310 is a relative error of
+    one; exponentiating the scale on its own would make it infinite. A zero
+    loss recorded at a scale whose exponential overflows is skipped, not
+    turned into NaN."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(1e-310, 1.0)
+    assert np.isclose(certificate.finalize(1e-310), 1.0)
+    assert np.isclose(certificate.discarded, 1e-310, atol=0.0)
+
+    certificate = TruncationCertificate()
+    for _ in range(3):
+        certificate.record(1.0, 1e300)
+    certificate.record(0.0, 1.0)
+    assert not np.isnan(certificate.discarded)
+    assert not np.isnan(certificate.finalize(1.0))
+
+
+def test_discarded_norm_keeps_the_imaginary_part():
+    """A rank-one QR of diag(10, 4j) discards a residual of norm 4; casting
+    to a real dtype before taking the magnitude would report zero."""
+    from mdopt.utils.utils import _stable_norm, qr, split_two_site_tensor
+
+    assert np.isclose(_stable_norm(np.array([3j, 4.0])), 5.0)
+    _, _, residual = qr(np.diag([10.0, 4j]), chi_max=1, return_truncation_error=True)
+    assert np.isclose(residual, 4.0)
+    _, _, residual, _ = split_two_site_tensor(
+        np.diag([10.0, 4j]).reshape(1, 2, 2, 1),
+        chi_max=1,
+        strategy="qr",
+        return_discarded_norm=True,
+    )
+    assert np.isclose(residual, 4.0)
+
+
+def test_zip_up_losses_are_not_scaled_by_a_gain_below_one():
+    """An XOR string over both sites of (|00> + 0.5 |11>) / n keeps that
+    state up to a sign; at chi_max=1 the zip-up discards the |11> part, a
+    relative error of one half. Recorded with a (declared) gain of 0.1 the
+    bound would shrink to 0.05; the zip-up's loss belongs to the term that
+    no gain multiplies."""
+    from mdopt.optimizer.utils import (
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    vector = np.array([1.0, 0.0, 0.0, 0.5])
+    vector /= np.linalg.norm(vector)
+    strings = [[[0], [], [], [1]]]
+    tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    exact = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=int(1e4),
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+    ).dense(flatten=True)
+    certificate = TruncationCertificate()
+    swept = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=1,
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        certificate=certificate,
+        gain=0.1,
+    )
+    kept = swept.dense(flatten=True)
+    bound = certificate.finalize(float(np.linalg.norm(kept)))
+    measured = float(np.linalg.norm(kept - exact) / np.linalg.norm(kept))
+    assert np.isclose(measured, 0.5)
+    assert np.isclose(bound, 0.5)
+    # The zip-up's loss is the second term of the constraint, recorded at
+    # gain one; the first (the move before the MPO) carries the 0.1.
+    assert len(certificate.terms) == 2 and certificate.terms[0][0] == 0.0
+
+
+def test_a_known_center_is_moved_into_the_move_term():
+    """With the orthogonality center known and away from the string, the
+    move to its first site truncates at chi_max=2; its loss must land in the
+    constraint's move term (the one the MPO's gain multiplies), not be
+    folded into the zip-up by the contractor's own move."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    vector = np.random.default_rng(11).random(size=2**6) + 0.1
+    vector /= np.linalg.norm(vector)
+    mps = mps_from_dense(vector, form="Left-canonical")
+    mps.orth_center = mps.num_sites - 1
+    mps.chi_max = 2
+    certificate = TruncationCertificate()
+    apply_constraints(
+        mps,
+        [[[0], [2, 4], [1, 3], [5]]],
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        chi_max=2,
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        certificate=certificate,
+        gain=float(np.sqrt(2.0)),
+    )
+    assert len(certificate.terms) == 2
+    assert certificate.terms[0][0] > 0.0
+
+
+def test_bias_mass_gain_is_measured_on_the_pair():
+    """|++> is not a basis pair: at bias 3/4 the operator doubles its norm,
+    so an untruncated sweep must still report a survival of one (it reported
+    two with the mass gain fixed at one)."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        create_simple_product_state(num_sites=2, which="+"),
+        sites_to_bias=[0],
+        prob_bias_list=[0.75],
+        renormalize=False,
+        certificate=certificate,
+    )
+    final_norm = float(np.linalg.norm(biased.dense(flatten=True)))
+    assert np.isclose(final_norm, 2.0)
+    certificate.finalize(final_norm)
+    assert np.isclose(certificate.survival, 1.0, rtol=1e-9)
+    assert certificate.bound < 1e-9
+
+
+def test_weighted_marginalization_requires_every_error_site():
+    """On an all-bond-one chain a skipped site would vanish from the trace
+    without a shape error; the helper must refuse incomplete, overlapping or
+    out-of-range weights and accept a complete set."""
+    from mdopt.decoding.decoding import _marginalize_with_weights
+
+    state = create_custom_product_state("0" + "+" * 4, form="Right-canonical")
+    full = [(1, np.ones(2)), (2, np.ones((2, 2))), (4, np.ones(2))]
+    result = _marginalize_with_weights(state, 1, full, renormalize=False)
+    assert result.num_sites == 1
+    for bad in (
+        [(1, np.ones(2)), (3, np.ones(2))],
+        [(1, np.ones(2)), (2, np.ones((2, 2))), (3, np.ones(2)), (4, np.ones(2))],
+        [(1, np.ones(2)), (2, np.ones((2, 2))), (4, np.ones(2)), (5, np.ones(2))],
+    ):
+        with pytest.raises(ValueError, match="exactly once"):
+            _marginalize_with_weights(state, 1, bad, renormalize=False)
 
 
 def test_optima_tt_readout_rejects_non_qubit_chains():
