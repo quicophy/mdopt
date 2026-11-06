@@ -2996,3 +2996,22 @@ def test_bias_mass_gain_is_measured_on_the_pair():
     certificate.finalize(final_norm)
     assert np.isclose(certificate.survival, 1.0, rtol=1e-9)
     assert certificate.bound < 1e-9
+
+
+def test_weighted_marginalization_requires_every_error_site():
+    """On an all-bond-one chain a skipped site would vanish from the trace
+    without a shape error; the helper must refuse incomplete, overlapping or
+    out-of-range weights and accept a complete set."""
+    from mdopt.decoding.decoding import _marginalize_with_weights
+
+    state = create_custom_product_state("0" + "+" * 4, form="Right-canonical")
+    full = [(1, np.ones(2)), (2, np.ones((2, 2))), (4, np.ones(2))]
+    result = _marginalize_with_weights(state, 1, full, renormalize=False)
+    assert result.num_sites == 1
+    for bad in (
+        [(1, np.ones(2)), (3, np.ones(2))],
+        [(1, np.ones(2)), (2, np.ones((2, 2))), (3, np.ones(2)), (4, np.ones(2))],
+        [(1, np.ones(2)), (2, np.ones((2, 2))), (4, np.ones(2)), (5, np.ones(2))],
+    ):
+        with pytest.raises(ValueError, match="exactly once"):
+            _marginalize_with_weights(state, 1, bad, renormalize=False)

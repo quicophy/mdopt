@@ -2210,6 +2210,19 @@ def _marginalize_with_weights(
     :meth:`CanonicalMPS.marginal` returns.
     """
     tensors = list(mps.tensors)
+    # Every error site must be traced exactly once: on a chain whose bonds
+    # are all one, a site the weights skip would drop out of the contraction
+    # silently (the bond dimensions still match) and the amplitudes would be
+    # the trace over the remaining sites only.
+    covered: List[int] = []
+    for first, weight in undo:
+        covered.extend([first] if weight.ndim == 1 else [first, first + 1])
+    expected = list(range(num_logicals, len(tensors)))
+    if sorted(covered) != expected:
+        raise ValueError(
+            f"The undo weights must cover each error site {expected[0] if expected else 'none'}"
+            f"..{expected[-1] if expected else ''} exactly once, given sites {sorted(covered)}."
+        )
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
     # ``right`` is a single column throughout, so it is contracted into each
     # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
