@@ -3015,3 +3015,14 @@ def test_weighted_marginalization_requires_every_error_site():
     ):
         with pytest.raises(ValueError, match="exactly once"):
             _marginalize_with_weights(state, 1, bad, renormalize=False)
+
+
+def test_optima_tt_readout_rejects_non_qubit_chains():
+    """The candidates are bit strings, so a qutrit chain is refused up front
+    instead of ending in a ValueError from the basis-state constructor."""
+    rng = np.random.default_rng(5)
+    vector = rng.random(27)
+    vector /= np.linalg.norm(vector)
+    qutrits = mps_from_dense(vector, phys_dim=3, form="Right-canonical")
+    with pytest.raises(ValueError, match="qubit chains only"):
+        optima_tt_readout(qutrits, 4)
