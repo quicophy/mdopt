@@ -20,7 +20,7 @@ import qecstruct as qec
 from qldpc.codes import SurfaceCode
 
 from mdopt.mps.canonical import CanonicalMPS
-from mdopt.mps.utils import inner_product
+from mdopt.mps.utils import create_custom_product_state, inner_product, mps_from_dense
 
 from mdopt.decoding.decoding import (
     str_to_bool,
@@ -32,6 +32,7 @@ from mdopt.decoding.decoding import (
     generate_pauli_error_string,
     max_amplitude_bound,
     max_product_readout,
+    optima_tt_readout,
     _score_tie,
     multiply_pauli_strings,
 )
@@ -957,6 +958,37 @@ def test_a_collapsed_posterior_is_not_a_success_on_the_dmrg_path(monkeypatch):
     assert float(success) == 0.0
 
 
+def test_the_identity_state_is_returned_when_it_beats_the_search(monkeypatch):
+    """When the identity's amplitude beats every candidate the search kept,
+    the verdict is a success and the returned state must be the identity too,
+    not the weaker class the search settled on."""
+    from mdopt.decoding.decoding import _ReadoutResult, _basis_string
+
+    code = qec.steane_code()
+    error = "X" + "I" * (len(code) - 1)
+    decoding_module = sys.modules[decode_css.__module__]
+    real_readout = decoding_module._logical_readout
+
+    def weaker_readout(logical_mps, num_sites, *args, **kwargs):
+        real_readout(logical_mps, num_sites, *args, **kwargs)
+        weaker = create_custom_product_state("1" * num_sites)
+        return _ReadoutResult(weaker, logical_mps), 1e-6, False
+
+    monkeypatch.setattr(decoding_module, "_logical_readout", weaker_readout)
+    engine, success = decode_css(
+        code,
+        error,
+        chi_max=64,
+        bias_type="Depolarizing",
+        bias_prob=0.1,
+        renormalize=True,
+        silent=True,
+        dense_readout_max_sites=0,
+    )
+    assert success == 1
+    assert _basis_string(engine.mps) == "0" * len(engine.mps)
+
+
 def test_gauge_seeds_are_independent_of_the_error_seeds():
     """The stabilizer-gauge sampler must not reuse the error generator's stream.
 
@@ -1516,8 +1548,8 @@ def test_generate_pauli_error_string_models():
         generate_pauli_error_string(10, 0.3, error_model="Nonsense", rng=rng)
 
 
-def test_decode_css_dmrg_readout_agrees_with_dense():
-    """Forcing the Dephasing-DMRG readout must reproduce the dense verdicts."""
+def test_decode_css_search_readouts_agree_with_dense():
+    """Forcing the Dephasing-DMRG or Optima TT readout must reproduce the dense verdicts."""
     code = qec.shor_code()
     rng = np.random.default_rng(21)
     checked = 0
@@ -1537,17 +1569,20 @@ def test_decode_css_dmrg_readout_agrees_with_dense():
             num_runs=2,
         )
         assert dmrg[1] == dense[1], error
+        optima = decode_css(
+            code,
+            error,
+            chi_max=64,
+            bias_prob=0.08,
+            renormalize=True,
+            silent=True,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+        )
+        assert optima[1] == dense[1], error
         checked += 1
     assert checked == 6
 
-    with pytest.raises(NotImplementedError, match="Optima TT"):
-        decode_css(
-            code,
-            "X" + "I" * 8,
-            optimizer="Optima TT",
-            dense_readout_max_sites=0,
-            silent=True,
-        )
     with pytest.raises(ValueError, match="optimizer"):
         decode_css(
             code,
@@ -1843,8 +1878,8 @@ def test_optimizer_is_validated_before_the_shortcut_and_dense_forces_readout():
     trivial = "I" * 9
     with pytest.raises(ValueError, match="optimizer"):
         decode_css(code, trivial, optimizer="Nonsense", silent=True)
-    with pytest.raises(NotImplementedError, match="Optima TT"):
-        decode_css(code, trivial, optimizer="Optima TT", silent=True)
+    # Every implemented optimizer takes the trivial-error shortcut.
+    assert decode_css(code, trivial, optimizer="Optima TT", silent=True)[1] == 1.0
     # With the dense threshold at 0 the default optimizer takes the DMRG path,
     # while "Dense" still returns the full 4**k posterior.
     error = "X" + "I" * 8
@@ -1855,3 +1890,430 @@ def test_optimizer_is_validated_before_the_shortcut_and_dense_forces_readout():
     assert success == 1.0
     reference, _ = decode_css(code, error, silent=True)
     assert np.allclose(posterior, reference)
+
+
+def test_optima_tt_readout_reports_exact_signed_amplitudes():
+    """Every candidate's value is the exact amplitude, and the ranking is by sign.
+
+    The state has a planted positive peak and a larger-modulus negative entry
+    on a positive background, so a readout that ranked by modulus would put
+    the negative entry first. It is also handed over in explicit form once,
+    which the readout must accept.
+    """
+    rng = np.random.default_rng(3)
+    for num_sites, form in (
+        (5, "Right-canonical"),
+        (8, "Right-canonical"),
+        (6, "Explicit"),
+    ):
+        vector = 5e-3 * rng.random(size=2**num_sites)
+        peak, trough = rng.choice(2**num_sites, size=2, replace=False)
+        vector[peak], vector[trough] = 0.9, -0.95
+        vector /= np.linalg.norm(vector)
+        mps = mps_from_dense(vector, form=form)
+        # The MPS may carry the vector up to a global sign, which the readout
+        # undoes from the sum of amplitudes; score against the sign-fixed vector.
+        dense = np.asarray(mps.dense(flatten=True), dtype=float)
+        dense = dense if dense.sum() > 0 else -dense
+
+        candidates = optima_tt_readout(mps, num_candidates=4)
+        bits, value = candidates[0]
+        assert int(bits, 2) == int(np.argmax(dense))
+        assert value == pytest.approx(dense.max(), rel=1e-9)
+        assert len({b for b, _ in candidates}) == len(candidates) <= 8
+        for bits, value in candidates:
+            assert value == pytest.approx(dense[int(bits, 2)], rel=1e-9, abs=1e-15)
+
+
+def test_optima_tt_readout_is_certified_on_converged_runs(caplog):
+    """On an exact run Optima TT meets the amplitude bound, so no DMRG is needed."""
+    code = qec.steane_code()
+    rng = np.random.default_rng(11)
+    checked = 0
+    for _ in range(10):
+        error = generate_pauli_error_string(
+            len(code), 0.15, error_model="Depolarizing", rng=rng
+        )
+        if error == "I" * len(code):
+            continue
+        caplog.clear()
+        with caplog.at_level(logging.INFO):
+            engine, _ = decode_css(
+                code,
+                error,
+                chi_max=int(1e4),
+                bias_type="Depolarizing",
+                bias_prob=0.15,
+                renormalize=True,
+                silent=False,
+                optimizer="Optima TT",
+                dense_readout_max_sites=0,
+            )
+        messages = [r.message for r in caplog.records]
+        assert any("settled by Optima TT" in m for m in messages)
+        assert not any("Dephasing DMRG" in m for m in messages)
+
+        logical_mps = engine.mps_target
+        true_max = np.asarray(logical_mps.dense(flatten=True), dtype=float).max()
+        _, value = optima_tt_readout(logical_mps)[0]
+        assert value == pytest.approx(true_max, rel=1e-9)
+        checked += 1
+    assert checked >= 5
+
+
+def test_readouts_are_invariant_to_a_global_sign_flip():
+    """A logical MPS handed back as minus the posterior must decode the same.
+
+    Heavily truncated runs on the [[225,9]] hypergraph-product code came back
+    as minus the posterior. Clamping negatives then discarded every class and
+    scored the shot as a failure, while the modulus-based readouts did not;
+    ranking Optima TT candidates by signed value would have picked a noise
+    entry. Both readouts now fix the sign from the sum of amplitudes first.
+    """
+    from mdopt.decoding.decoding import _dense_readout
+
+    code = qec.shor_code()
+    rng = np.random.default_rng(5)
+    checked = 0
+    for _ in range(6):
+        error = generate_pauli_error_string(len(code), 0.12, rng=rng)
+        if error == "I" * len(code):
+            continue
+        engine, _ = decode_css(
+            code,
+            error,
+            chi_max=64,
+            bias_prob=0.12,
+            renormalize=True,
+            silent=True,
+            optimizer="Optima TT",
+            dense_readout_max_sites=0,
+        )
+        logical_mps = engine.mps_target
+        flipped = logical_mps.copy()
+        flipped.tensors[0] = -flipped.tensors[0]
+
+        vector, score = _dense_readout(logical_mps, 64, "optimistic", True, True)
+        vector_flipped, score_flipped = _dense_readout(
+            flipped, 64, "optimistic", True, True
+        )
+        assert np.allclose(vector_flipped, vector)
+        assert score_flipped == score
+
+        assert optima_tt_readout(flipped)[0] == optima_tt_readout(logical_mps)[0]
+        checked += 1
+    assert checked >= 4
+
+
+def test_optima_tt_keeps_the_positive_class_at_the_last_site():
+    """With one candidate per site the mass ranking keeps the negative
+    artifact; the last site ranks by signed value, so the positive class the
+    dense readout picks is the one reported, and the verdicts agree."""
+    from mdopt.decoding.decoding import _dense_readout, _global_sign, _logical_readout
+    from mdopt.mps.utils import create_simple_product_state
+
+    vector = np.array([0.4, 0.4, 0.4, -1.0])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+    _, amplitude, _ = _logical_readout(
+        logical_mps, 2, 4, 1e-17, 1, 2, True, method="Optima TT", num_candidates=1
+    )
+    assert np.isclose(amplitude, vector[0])
+    identity = sign * float(
+        np.real(inner_product(create_simple_product_state(2, "0"), logical_mps))
+    )
+    assert max(identity, 0.0) >= amplitude * (1 - 1e-9)
+    assert _dense_readout(logical_mps, 4, "optimistic", True, True)[1] == 1.0
+
+
+def test_search_readouts_rescore_candidates_signed_and_clamped():
+    """Beam search and DMRG rank by modulus and both land on the negative
+    artifact here; the readout must fall through to the largest positive
+    class instead of scoring the artifact's modulus."""
+    from mdopt.decoding.decoding import _logical_readout
+
+    vector = np.array([-0.6, 0.7, -0.2, -0.2])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    engine, amplitude, certified = _logical_readout(
+        logical_mps, 2, 4, 1e-17, 1, 2, True
+    )
+    assert np.isclose(amplitude, -vector[0])
+    assert not certified
+    found = np.abs(np.asarray(engine.mps.dense(flatten=True)))
+    assert int(np.argmax(found)) == 0
+
+
+def test_global_sign_survives_a_tiny_scale():
+    """The first hundred cores carry a factor 1e-30 each, so a running
+    overlap that is not rescaled underflows to zero by the eleventh site;
+    the last hundred carry 1e30 each, so the full overlap is a representable
+    minus one. Only the per-site rescaling keeps the sign."""
+    from mdopt.decoding.decoding import _global_sign
+    from mdopt.mps.utils import create_custom_product_state
+
+    state = create_custom_product_state("0" * 200, form="Right-canonical")
+    for site in range(100):
+        state.tensors[site] = 1e-30 * state.tensors[site]
+    for site in range(100, 200):
+        state.tensors[site] = 1e30 * state.tensors[site]
+    state.tensors[0] = -state.tensors[0]
+    assert _global_sign(state) == -1.0
+    state.tensors[0] = -state.tensors[0]
+    assert _global_sign(state) == 1.0
+
+
+def test_optima_tt_returns_full_length_strings_for_a_collapsed_state():
+    rng = np.random.default_rng(3)
+    cores = [rng.random((1, 2, 2)), np.zeros((2, 2, 2)), rng.random((2, 2, 1))]
+    candidates = optima_tt_readout(CanonicalMPS(cores, orth_center=None), 2)
+    assert candidates and all(len(bits) == 3 for bits, _ in candidates)
+    assert all(value == 0.0 for _, value in candidates)
+
+
+def test_num_candidates_is_the_last_decoder_parameter():
+    """Inserting it earlier would shift positional tie_policy and rng callers."""
+    import inspect
+
+    for decoder in (decode_css, decode_custom):
+        names = list(inspect.signature(decoder).parameters)
+        assert names[-3:] == ["tie_policy", "rng", "num_candidates"]
+
+
+def test_dmrg_ranks_restarts_by_the_signed_clamped_score():
+    """Restart 0 lands on the negative artifact with the largest modulus,
+    restart 1 on a smaller positive class; the positive one must be
+    returned, and the candidate state's own sign must not enter its score."""
+    from mdopt.decoding.decoding import (
+        _basis_string,
+        _dmrg_readout,
+        _global_sign,
+        _logical_readout,
+    )
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([0.5, -0.8, 0.3, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+
+    class FakeDMRG:
+        """Each restart 'converges' to a fixed basis state; the first one to
+        the artifact, every other one to the positive class."""
+
+        count = 0
+
+        def __init__(self, mps, mps_target, **kwargs):
+            self.mps = mps
+
+        def run(self, num_iter):
+            FakeDMRG.count += 1
+            self.mps = create_custom_product_state(
+                "01" if FakeDMRG.count == 1 else "00"
+            )
+
+    original = decoding.DephasingDMRG
+    decoding.DephasingDMRG = FakeDMRG
+    try:
+        engine, modulus = _dmrg_readout(logical_mps, 2, 4, 1e-17, 1, 2, True, sign)
+    finally:
+        decoding.DephasingDMRG = original
+    assert _basis_string(engine.mps) == "00"
+    assert np.isclose(modulus, abs(vector[0]))
+
+    class Negated:
+        def __init__(self, mps):
+            self.mps = mps
+
+    def negated_dmrg(*args, **kwargs):
+        state = create_custom_product_state("00")
+        state.tensors[0] = -state.tensors[0]
+        return Negated(state), abs(float(vector[0]))
+
+    original_readout = decoding._dmrg_readout
+    decoding._dmrg_readout = negated_dmrg
+    try:
+        result, amplitude, _ = _logical_readout(logical_mps, 2, 4, 1e-17, 1, 2, True)
+    finally:
+        decoding._dmrg_readout = original_readout
+    # The beam supplies the same positive 00 amplitude, so the value alone
+    # would not notice a negated DMRG candidate clamped to zero: the DMRG
+    # result itself must be the one returned, scored by its bit string.
+    assert isinstance(result, Negated)
+    assert np.isclose(amplitude, abs(vector[0]))
+
+
+def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
+    from mdopt.decoding.decoding import _basis_string, _logical_readout
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([-0.6, 0.7, -0.2, -0.2])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+
+    def failing_dmrg(*args, **kwargs):
+        raise RuntimeError("ARPACK error -9")
+
+    # With two sites and beam width 4 every class survives the beam, which
+    # would hand over its own positive candidate; a beam that kept only a
+    # class negative after the sign fix (here the sign is -1) forces the
+    # Optima TT fallback.
+    def negative_only_beam(logical_mps, beam_width=4, return_candidates=False):
+        # The candidate's value is its actual overlap with the MPS handed in,
+        # not the dense entry: mps_from_dense may carry the vector up to a
+        # global sign, and the readout fixes that sign from the state itself.
+        value = float(np.asarray(logical_mps.dense(flatten=True), dtype=float)[0b01])
+        return None, abs(value), [("01", value)]
+
+    optima_calls = []
+    original_optima = decoding.optima_tt_readout
+
+    def counted_optima(*args, **kwargs):
+        optima_calls.append(args)
+        return original_optima(*args, **kwargs)
+
+    original = decoding._dmrg_readout
+    original_beam = decoding.max_product_readout
+    decoding._dmrg_readout = failing_dmrg
+    decoding.max_product_readout = negative_only_beam
+    decoding.optima_tt_readout = counted_optima
+    try:
+        engine, amplitude, certified = _logical_readout(
+            logical_mps, 2, 4, 1e-17, 1, 2, True
+        )
+    finally:
+        decoding._dmrg_readout = original
+        decoding.max_product_readout = original_beam
+        decoding.optima_tt_readout = original_optima
+    assert len(optima_calls) == 1
+    assert _basis_string(engine.mps) == "00"
+    assert np.isclose(amplitude, -vector[0])
+    assert not certified
+
+
+def test_identity_is_a_candidate_before_the_collapse_guard():
+    """A search that kept only negative artifacts must not turn a positive
+    identity class into a collapsed-posterior failure."""
+    import mdopt.decoding.decoding as decoding
+
+    def artifacts_only(logical_mps, *args, **kwargs):
+        return (
+            decoding._ReadoutResult(
+                create_custom_product_state("0" * len(logical_mps)), logical_mps
+            ),
+            0.0,
+            False,
+        )
+
+    original = decoding._logical_readout
+    decoding._logical_readout = artifacts_only
+    try:
+        _, score = decode_css(
+            qec.steane_code(),
+            "XIIIIII",
+            chi_max=int(1e4),
+            bias_prob=0.1,
+            silent=True,
+            dense_readout_max_sites=0,
+        )
+    finally:
+        decoding._logical_readout = original
+    assert score == 1
+
+
+def test_global_sign_tolerates_a_zero_width_bond():
+    from mdopt.decoding.decoding import _global_sign
+
+    collapsed = CanonicalMPS(
+        [np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=None
+    )
+    assert _global_sign(collapsed) == 1.0
+
+
+def test_beam_readout_scores_every_surviving_candidate_signed():
+    """The largest-modulus beam is a negative artifact and a smaller positive
+    non-identity class sits among the other beams; it must be the beam
+    result, or the identity would clear the bar against DMRG later."""
+    from mdopt.decoding.decoding import (
+        _basis_string,
+        _global_sign,
+        _logical_readout,
+        max_product_readout,
+    )
+    import mdopt.decoding.decoding as decoding
+
+    vector = np.array([0.5, -0.8, 0.6, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    sign = _global_sign(logical_mps)
+
+    bits, modulus, candidates = max_product_readout(
+        logical_mps, beam_width=4, return_candidates=True
+    )
+    assert bits == "01" and np.isclose(modulus, abs(vector[1]))
+    found = dict(candidates)
+    assert sorted(found) == ["00", "01", "10", "11"]
+    for i in range(4):
+        assert np.isclose(found[format(i, "02b")], sign * vector[i])
+
+    class IdentityDMRG:
+        def __init__(self, mps, mps_target, **kwargs):
+            self.mps = mps
+
+        def run(self, num_iter):
+            self.mps = create_custom_product_state("00")
+
+    original = decoding.DephasingDMRG
+    decoding.DephasingDMRG = IdentityDMRG
+    try:
+        result, amplitude, certified = _logical_readout(
+            logical_mps, 2, 4, 1e-17, 1, 1, True
+        )
+    finally:
+        decoding.DephasingDMRG = original
+    assert np.isclose(amplitude, abs(vector[2]))
+    assert _basis_string(result.mps) == "10"
+    assert not certified
+
+
+def test_optima_tt_readout_scores_a_collapsed_bond_as_a_failure():
+    """Cores of shapes (1, 2, 0) and (0, 2, 1) carry no amplitude at all; the
+    readout must report a full-length zero candidate, not raise in the sweep."""
+    from mdopt.decoding.decoding import _logical_readout, optima_tt_readout
+
+    collapsed = CanonicalMPS([np.zeros((1, 2, 0)), np.zeros((0, 2, 1))], orth_center=0)
+    assert optima_tt_readout(collapsed, num_candidates=4) == [("00", 0.0)]
+    result, amplitude, certified = _logical_readout(
+        collapsed, 2, 4, 1e-17, 1, 1, True, method="Optima TT"
+    )
+    assert amplitude == 0.0 and not certified
+    assert len(result.mps) == 2
+
+
+def test_dmrg_readout_returns_the_basis_state_it_scored():
+    """With no sweeps the first restart is still |++>, which is scored through
+    its bit string as |00>; the returned state must be that basis state."""
+    from mdopt.decoding.decoding import _basis_string, _dmrg_readout, _global_sign
+
+    vector = np.array([0.5, -0.8, 0.3, 0.1])
+    vector /= np.linalg.norm(vector)
+    logical_mps = mps_from_dense(vector, form="Right-canonical")
+    result, modulus = _dmrg_readout(
+        logical_mps, 2, 4, 1e-17, 0, 1, True, _global_sign(logical_mps)
+    )
+    assert _basis_string(result.mps) == "00"
+    assert np.isclose(modulus, abs(vector[0]))
+    for tensor in result.mps.tensors:
+        assert np.count_nonzero(tensor) == 1
+
+
+def test_optima_tt_readout_rejects_non_qubit_chains():
+    """The candidates are bit strings, so a qutrit chain is refused up front
+    instead of ending in a ValueError from the basis-state constructor."""
+    rng = np.random.default_rng(5)
+    vector = rng.random(27)
+    vector /= np.linalg.norm(vector)
+    qutrits = mps_from_dense(vector, phys_dim=3, form="Right-canonical")
+    with pytest.raises(ValueError, match="qubit chains only"):
+        optima_tt_readout(qutrits, 4)
