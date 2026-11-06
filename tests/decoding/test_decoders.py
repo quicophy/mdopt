@@ -2152,7 +2152,11 @@ def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
     # class negative after the sign fix (here the sign is -1) forces the
     # Optima TT fallback.
     def negative_only_beam(logical_mps, beam_width=4, return_candidates=False):
-        return None, abs(vector[1]), [("01", float(vector[1]))]
+        # The candidate's value is its actual overlap with the MPS handed in,
+        # not the dense entry: mps_from_dense may carry the vector up to a
+        # global sign, and the readout fixes that sign from the state itself.
+        value = float(np.asarray(logical_mps.dense(flatten=True), dtype=float)[0b01])
+        return None, abs(value), [("01", value)]
 
     optima_calls = []
     original_optima = decoding.optima_tt_readout
