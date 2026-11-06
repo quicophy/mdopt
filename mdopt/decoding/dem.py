@@ -471,10 +471,12 @@ def decode_dem(
     # of those weights as the mass gain of this weighting step makes
     # ``survival`` the fraction of that mass kept by the pinned branches,
     # the constraints and the truncations together.
-    weights_norm = (
-        float(np.prod(np.linalg.norm(contracted, axis=1))) if num_mech else 1.0
+    # The product of thousands of site norms underflows (3,000 mechanisms at
+    # probability 0.5 give 2^-1500), so the gain is accumulated as a log.
+    log_weights_norm = (
+        float(np.sum(np.log(np.linalg.norm(contracted, axis=1)))) if num_mech else 0.0
     )
-    certificate.record(0.0, 1.0, 1.0, mass_gain=weights_norm)
+    certificate.record(0.0, 1.0, 1.0, log_mass_gain=log_weights_norm)
 
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
@@ -523,7 +525,7 @@ def decode_dem(
             certificate=certificate,
         ),
     )
-    certificate.finalize(_full_norm(mps))
+    certificate.finalize(log_final_norm=_log_full_norm(mps))
 
     if undo:
         logical_mps = _marginalize_with_weights(mps, num_obs, undo, renormalize)
@@ -600,22 +602,26 @@ def decode_dem(
     return relabeled, flips
 
 
-def _full_norm(mps: CanonicalMPS) -> float:
-    """The norm of the whole chain, not only of its orthogonality center.
+def _log_full_norm(mps: CanonicalMPS) -> float:
+    """The log-norm of the whole chain, not only of its orthogonality center.
 
     After the sweeps every site a constraint string reached is an isometry,
     so the center carries their norm; a site no string reached (a pinned
     mechanism outside every span, or every site when no sweep was needed)
     is still a bond-dimension-one tensor carrying its own weight, and an
     isometric bond-dimension-one tensor has norm one, so multiplying in the
-    norms of all such sites is exact either way.
+    norms of all such sites is exact either way. The norms are summed as
+    logs: a chain of thousands of pinned sites has a norm far below the
+    smallest float, which is a finite log-norm, not a collapse.
     """
     center = mps.orth_center
-    norm = 1.0 if center is None else float(np.linalg.norm(mps.tensors[center]))
+    norms = [] if center is None else [float(np.linalg.norm(mps.tensors[center]))]
     for site, tensor in enumerate(mps.tensors):
         if site != center and tensor.shape[0] == 1 and tensor.shape[-1] == 1:
-            norm *= float(np.linalg.norm(tensor))
-    return norm
+            norms.append(float(np.linalg.norm(tensor)))
+    if any(norm <= 0.0 or not np.isfinite(norm) for norm in norms):
+        return -np.inf
+    return float(np.sum(np.log(norms))) if norms else 0.0
 
 
 def _detector_parities(problem: DemProblem, mechanisms: np.ndarray) -> np.ndarray:

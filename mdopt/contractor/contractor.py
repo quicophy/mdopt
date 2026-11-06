@@ -412,11 +412,11 @@ def mps_mpo_contract(
                     chi_max=chi_max,
                     cut=cut,
                     renormalize=renormalize,
-                    return_truncation_error=True,
+                    return_discarded_norm=True,
                 )
             )
             if discarded_norms is not None:
-                discarded_norms.append(float(np.sqrt(max(discarded, 0.0))))
+                discarded_norms.append(float(max(discarded, 0.0)))
             if A.GPU:
                 with A.stream():
                     mps.tensors[orth_center_index] = A.to_device(
@@ -461,11 +461,11 @@ def mps_mpo_contract(
                 chi_max=chi_max,
                 cut=cut,
                 renormalize=renormalize,
-                return_truncation_error=True,
+                return_discarded_norm=True,
             )
         )
         if discarded_norms is not None:
-            discarded_norms.append(float(np.sqrt(max(discarded, 0.0))))
+            discarded_norms.append(float(max(discarded, 0.0)))
         if A.GPU:
             with A.stream():
                 mps.tensors[orth_center_index] = A.to_device(

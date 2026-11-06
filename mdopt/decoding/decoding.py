@@ -292,6 +292,22 @@ def apply_depolarizing_bias(
         certificate.record(sum(move_losses), 1.0, 1.0)
 
     for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+        # The previous split left the center on its right site (or further
+        # away, for pairs that are not consecutive). The split below measures
+        # what it discards in the scale of its input, so the pair must carry
+        # the state's scale: the center is moved into it, without
+        # renormalizing, and what that move discards is charged to this
+        # pair's step (it passes through the same bias operator).
+        pair_moves: List[float] = []
+        if mps.orth_center != site:
+            mps = cast(
+                CanonicalMPS,
+                mps.move_orth_center(
+                    site,
+                    renormalize=False,
+                    discarded_norms=pair_moves if certificate is not None else None,
+                ),
+            )
         bias_operator = depolarizing_bias(prob_bias=prob_bias)
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
@@ -306,7 +322,7 @@ def apply_depolarizing_bias(
         mps.tensors[site], singular_values, b_r, discarded = split_two_site_tensor(
             two_site_tensor,
             renormalize=False,
-            return_truncation_error=True,
+            return_discarded_norm=True,
         )
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
@@ -327,7 +343,7 @@ def apply_depolarizing_bias(
             # ``survival`` is not divided by the operator norm.
             gain = float(np.linalg.norm(bias_operator.reshape(4, 4), 2))
             certificate.record(
-                float(np.sqrt(max(discarded or 0.0, 0.0))),
+                float(max(discarded or 0.0, 0.0)) + sum(pair_moves),
                 renormalization,
                 gain,
                 mass_gain=1.0,

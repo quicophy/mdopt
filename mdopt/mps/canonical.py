@@ -452,13 +452,11 @@ class CanonicalMPS:
                         center.reshape(chi_l * phys, chi_r),
                         chi_max=self.chi_max,
                         renormalize=renormalize,
-                        return_truncation_error=True,
+                        return_discarded_norm=True,
                     )
                     singular_values.append(s_bond)
                     if discarded_norms is not None:
-                        discarded_norms.append(
-                            float(np.sqrt(max(discarded or 0.0, 0.0)))
-                        )
+                        discarded_norms.append(float(max(discarded or 0.0, 0.0)))
                     keep = len(s_bond)
                     mps.tensors[i] = u_l.reshape(chi_l, phys, keep)
                     # diag(s) @ (v_h . B): same idiom as the SVD branch below.
@@ -473,11 +471,11 @@ class CanonicalMPS:
                 chi_max=self.chi_max,
                 renormalize=renormalize,
                 strategy="svd",
-                return_truncation_error=True,
+                return_discarded_norm=True,
             )
             singular_values.append(singular_values_bond)
             if discarded_norms is not None:
-                discarded_norms.append(float(np.sqrt(max(discarded or 0.0, 0.0))))
+                discarded_norms.append(float(max(discarded or 0.0, 0.0)))
             mps.tensors[i] = u_l
 
             # diag(s) @ v_r  -->  scale rows (axis 0) by s

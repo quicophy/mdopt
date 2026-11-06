@@ -704,6 +704,31 @@ def test_zero_probability_mechanism_survives_the_reweighting_undo():
     assert np.array_equal(plain_flips, bp_flips)
 
 
+def test_long_pinned_chain_keeps_a_finite_certificate():
+    """2,200 probability-0.5 mechanisms, each pinned by its own detector: no
+    sweep runs, the retained norm is 2^-2200 and the weights norm 2^-1100,
+    both far below the smallest float. The certificate works in logs, so
+    the bound stays zero (nothing was truncated) and survival is the exact
+    2^-1100, underflowing to zero without passing through infinity or NaN."""
+    num = 2200
+    problem = DemProblem(
+        probs=[0.5] * num,
+        detector_rows=[[i] for i in range(num)],
+        observable_rows=[[0]],
+        num_detectors=num,
+        num_observables=1,
+    )
+    _, _, cert = decode_dem(problem, np.zeros(num, dtype=int), return_certificate=True)
+    assert cert.bound == 0.0
+    assert np.isfinite(cert.log_final_norm)
+    # The pinned sites keep 0.5 each; the observable's logical sites add an
+    # O(1) factor on top of the 2^-2200.
+    assert abs(cert.log_final_norm - num * np.log(0.5)) < 5.0
+    log_survival = cert.log_scale - cert.log_mass_gain + cert.log_final_norm
+    assert abs(log_survival - num * np.log(0.5 / np.hypot(0.5, 0.5))) < 5.0
+    assert np.isfinite(cert.survival) and cert.survival >= 0.0
+
+
 def test_dem_survival_is_the_kept_fraction_of_the_weights_mass():
     """The chain starts from the prior weights, whose norm is not one, and a
     pinned mechanism keeps one branch without any sweep: survival must be

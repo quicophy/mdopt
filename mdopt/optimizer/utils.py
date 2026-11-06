@@ -253,6 +253,7 @@ class TruncationCertificate:
         self.log_gain = 0.0
         self.log_mass_gain = 0.0
         self.final_norm = 1.0
+        self.log_final_norm = 0.0
         self.terms: List[tuple[float, float, float]] = []
         self.bound = 0.0
         # The most negative class mass as a fraction of the peak, set by a
@@ -266,42 +267,67 @@ class TruncationCertificate:
         renormalization: float,
         gain: float = 1.0,
         mass_gain: Optional[float] = None,
+        log_mass_gain: Optional[float] = None,
     ) -> None:
         """One constraint: what its truncations discarded, the factor the
         state was renormalized by afterwards (1 when it was not), the
         operator norm of its MPO and, when it differs from that norm, the
         factor by which the exact operator changes the norm of the state
-        (``survival`` divides this one out; it defaults to ``gain``)."""
+        (``survival`` divides this one out; it defaults to ``gain``). A mass
+        gain that would underflow as a number (the norm of thousands of site
+        weights) is passed as its logarithm instead."""
+        if mass_gain is not None and log_mass_gain is not None:
+            raise ValueError("Pass either mass_gain or log_mass_gain, not both.")
         self.terms.append((float(discarded), self.log_scale, self.log_gain))
         self.log_scale += (
             float(np.log(renormalization)) if renormalization > 0 else -np.inf
         )
         self.log_gain += float(np.log(gain))
-        self.log_mass_gain += float(np.log(gain if mass_gain is None else mass_gain))
+        if log_mass_gain is None:
+            log_mass_gain = float(np.log(gain if mass_gain is None else mass_gain))
+        self.log_mass_gain += float(log_mass_gain)
 
     @property
     def survival(self) -> float:
         """The mass fraction the constraints kept, in amplitude units: the
         product of the renormalization factors and the final norm, with the
         mass gains of the constraints divided out. It is the same number
-        whether or not the sweep renormalized."""
-        return float(np.exp(self.log_scale - self.log_mass_gain) * self.final_norm)
+        whether or not the sweep renormalized. The scales cancel in the
+        exponent, so a tiny final norm against a tiny mass gain is one, not
+        an overflow."""
+        with np.errstate(over="ignore", under="ignore"):
+            return float(
+                np.exp(self.log_scale - self.log_mass_gain + self.log_final_norm)
+            )
 
     @property
     def discarded(self) -> float:
         """The sum of all discarded norms, in the original scale."""
         return float(sum(d * np.exp(log_s) for d, log_s, _ in self.terms))
 
-    def finalize(self, final_norm: float = 1.0) -> float:
-        """Evaluate and store the bound for a final state of norm ``final_norm``."""
-        self.final_norm = float(final_norm)
-        if not np.isfinite(self.final_norm) or self.final_norm <= 0.0:
+    def finalize(
+        self, final_norm: float = 1.0, log_final_norm: Optional[float] = None
+    ) -> float:
+        """Evaluate and store the bound for a final state of norm ``final_norm``
+        (or of log-norm ``log_final_norm``, for a chain whose norm underflows)."""
+        if log_final_norm is None:
+            self.final_norm = float(final_norm)
+            self.log_final_norm = (
+                float(np.log(self.final_norm))
+                if np.isfinite(self.final_norm) and self.final_norm > 0.0
+                else -np.inf
+            )
+        else:
+            self.log_final_norm = float(log_final_norm)
+            with np.errstate(under="ignore"):
+                self.final_norm = float(np.exp(self.log_final_norm))
+        if not np.isfinite(self.log_final_norm):
             # Nothing positive is left to compare the discards with: the
             # relative error of a collapsed state is undefined, not zero,
             # even when no discard was recorded.
             self.bound = float("inf")
             return self.bound
-        log_final = self.log_scale + np.log(self.final_norm)
+        log_final = self.log_scale + self.log_final_norm
         with np.errstate(over="ignore", invalid="ignore"):
             self.bound = float(
                 sum(

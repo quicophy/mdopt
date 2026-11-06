@@ -2166,7 +2166,11 @@ def test_dmrg_failure_after_a_negative_beam_hit_falls_back_to_optima_tt():
     # class negative after the sign fix (here the sign is -1) forces the
     # Optima TT fallback.
     def negative_only_beam(logical_mps, beam_width=4, return_candidates=False):
-        return None, abs(vector[1]), [("01", float(vector[1]))]
+        # The candidate's value is its actual overlap with the MPS handed in,
+        # not the dense entry: mps_from_dense may carry the vector up to a
+        # global sign, and the readout fixes that sign from the state itself.
+        value = float(np.asarray(logical_mps.dense(flatten=True), dtype=float)[0b01])
+        return None, abs(value), [("01", value)]
 
     optima_calls = []
     original_optima = decoding.optima_tt_readout
@@ -2696,6 +2700,80 @@ def test_depolarizing_bias_bound_covers_the_measured_error(renormalize, state, p
     # decoders' case) the pairs are disjoint, so that normalizes the state.
     if renormalize and state == "product":
         assert np.isclose(np.linalg.norm(biased.dense(flatten=True)), 1.0)
+
+
+def test_depolarizing_bias_moves_the_center_into_every_pair():
+    """Without renormalization the first pair's scale (0.75 here) stays in
+    the center it left behind; the next pair's split then measures its loss
+    in the scale of a right-isometric block, not of the state, and the
+    bound used to come out below the error by that factor. The center is
+    moved into each pair, and the move's own loss is charged to the pair."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    mps = create_custom_product_state("++00", form="Right-canonical")
+    vector = np.asarray(mps.dense(flatten=True), dtype=float)
+    exact = _dense_depolarizing_bias(
+        _dense_depolarizing_bias(vector, [0], 0.75), [2], 3e-26
+    )
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        mps, [0, 2], [0.75, 3e-26], renormalize=False, certificate=certificate
+    )
+    measured, bound = _measured_relative_error(
+        certificate, biased.dense(flatten=True), exact
+    )
+    assert len(certificate.terms) == 3
+    assert 0 < measured <= bound * (1 + 1e-9)
+
+
+def test_discarded_norms_survive_underflow_of_their_squares():
+    """A discarded singular value of 1e-170 has a square below the smallest
+    float; the certificate collectors ask for the norm itself."""
+    from mdopt.utils.utils import split_two_site_tensor, svd
+
+    spectrum = np.diag([1e-160, 1e-170])
+    _, _, _, squared = svd(spectrum, chi_max=1, cut=0.0, return_truncation_error=True)
+    assert squared == 0.0
+    _, _, _, norm = svd(spectrum, chi_max=1, cut=0.0, return_discarded_norm=True)
+    assert np.isclose(norm, 1e-170, rtol=1e-12)
+    _, _, _, norm = split_two_site_tensor(
+        spectrum.reshape(1, 2, 2, 1), chi_max=1, cut=0.0, return_discarded_norm=True
+    )
+    assert np.isclose(norm, 1e-170, rtol=1e-12)
+
+    # Through a center move: a two-site state with Schmidt values 1 and
+    # 1e-10 scaled to 1e-160 overall, truncated to one Schmidt value.
+    vector = np.array([1.0, 0.0, 0.0, 1e-10])
+    vector /= np.linalg.norm(vector)
+    mps = mps_from_dense(vector, form="Right-canonical")
+    mps.tensors[mps.orth_center] = mps.tensors[mps.orth_center] * 1e-160
+    mps.chi_max = 1
+    discarded: list = []
+    mps.move_orth_center(
+        mps.num_sites - 1, renormalize=False, discarded_norms=discarded
+    )
+    assert any(np.isclose(d, 1e-170, rtol=1e-6) for d in discarded)
+
+
+def test_certificate_scales_cancel_in_log_space():
+    """A mass gain and a final norm both near the float floor give a survival
+    of one and a finite bound; the same scales passed as logs give the same."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(0.0, 1.0, mass_gain=1e-310)
+    assert certificate.finalize(1e-310) == 0.0
+    assert np.isclose(certificate.survival, 1.0)
+
+    logged = TruncationCertificate()
+    logged.record(0.0, 1.0, log_mass_gain=-2000.0)
+    assert logged.finalize(log_final_norm=-2000.0) == 0.0
+    assert np.isclose(logged.survival, 1.0)
+    assert logged.final_norm == 0.0  # the number underflows, the log does not
+    with pytest.raises(ValueError, match="either mass_gain or log_mass_gain"):
+        logged.record(0.0, 1.0, mass_gain=1.0, log_mass_gain=0.0)
+    assert TruncationCertificate().finalize(log_final_norm=-np.inf) == np.inf
 
 
 @pytest.mark.parametrize("renormalize", [True, False])
