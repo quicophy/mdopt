@@ -2306,3 +2306,14 @@ def test_dmrg_readout_returns_the_basis_state_it_scored():
     assert np.isclose(modulus, abs(vector[0]))
     for tensor in result.mps.tensors:
         assert np.count_nonzero(tensor) == 1
+
+
+def test_optima_tt_readout_rejects_non_qubit_chains():
+    """The candidates are bit strings, so a qutrit chain is refused up front
+    instead of ending in a ValueError from the basis-state constructor."""
+    rng = np.random.default_rng(5)
+    vector = rng.random(27)
+    vector /= np.linalg.norm(vector)
+    qutrits = mps_from_dense(vector, phys_dim=3, form="Right-canonical")
+    with pytest.raises(ValueError, match="qubit chains only"):
+        optima_tt_readout(qutrits, 4)
