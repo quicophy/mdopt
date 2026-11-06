@@ -268,20 +268,28 @@ class TruncationCertificate:
         gain: float = 1.0,
         mass_gain: Optional[float] = None,
         log_mass_gain: Optional[float] = None,
+        log_renormalization: Optional[float] = None,
     ) -> None:
         """One constraint: what its truncations discarded, the factor the
         state was renormalized by afterwards (1 when it was not), the
         operator norm of its MPO and, when it differs from that norm, the
         factor by which the exact operator changes the norm of the state
         (``survival`` divides this one out; it defaults to ``gain``). A mass
-        gain that would underflow as a number (the norm of thousands of site
-        weights) is passed as its logarithm instead."""
+        gain or a renormalization that would underflow as a number (the norm
+        of thousands of site weights) is passed as its logarithm instead."""
         if mass_gain is not None and log_mass_gain is not None:
             raise ValueError("Pass either mass_gain or log_mass_gain, not both.")
+        if log_renormalization is not None and renormalization != 1.0:
+            raise ValueError(
+                "Pass either renormalization or log_renormalization, not both."
+            )
         self.terms.append((float(discarded), self.log_scale, self.log_gain))
-        self.log_scale += (
-            float(np.log(renormalization)) if renormalization > 0 else -np.inf
-        )
+        if log_renormalization is not None:
+            self.log_scale += float(log_renormalization)
+        else:
+            self.log_scale += (
+                float(np.log(renormalization)) if renormalization > 0 else -np.inf
+            )
         self.log_gain += float(np.log(gain))
         if log_mass_gain is None:
             log_mass_gain = float(np.log(gain if mass_gain is None else mass_gain))
@@ -302,8 +310,14 @@ class TruncationCertificate:
 
     @property
     def discarded(self) -> float:
-        """The sum of all discarded norms, in the original scale."""
-        return float(sum(d * np.exp(log_s) for d, log_s, _ in self.terms))
+        """The sum of all discarded norms, in the original scale. Each term
+        is exponentiated as one logarithm, so a loss at a scale whose
+        exponential alone would overflow stays finite, and a zero loss is
+        skipped rather than multiplied by an infinite scale."""
+        with np.errstate(over="ignore", divide="ignore"):
+            return float(
+                sum(np.exp(np.log(d) + log_s) for d, log_s, _ in self.terms if d > 0)
+            )
 
     def finalize(
         self, final_norm: float = 1.0, log_final_norm: Optional[float] = None
@@ -328,10 +342,13 @@ class TruncationCertificate:
             self.bound = float("inf")
             return self.bound
         log_final = self.log_scale + self.log_final_norm
-        with np.errstate(over="ignore", invalid="ignore"):
+        # Each term is one exponential of (log loss + log gains + log scale -
+        # log final norm): a loss of 1e-310 against a final norm of 1e-310 is
+        # one, not infinity times a tiny number.
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
             self.bound = float(
                 sum(
-                    d * np.exp(self.log_gain - log_g + log_s - log_final)
+                    np.exp(np.log(d) + self.log_gain - log_g + log_s - log_final)
                     for d, log_s, log_g in self.terms
                     if d > 0
                 )
@@ -475,6 +492,7 @@ def apply_constraints(
             # non-isometric site, or site 0 when every site is isometric --
             # comes from the site norms alone. Same tolerance as the scan.
             mps.orth_center = _product_state_orth_center(mps)
+        moves: List[float] = []
         if mps.orth_center is None:
             orth_centers, flags_left, flags_right = find_orth_center(
                 mps, return_orth_flags=True
@@ -506,7 +524,7 @@ def apply_constraints(
                 renormalize=False,
                 return_singular_values=False,
                 inplace=True,
-                discarded_norms=discarded if certificate is not None else None,
+                discarded_norms=moves if certificate is not None else None,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
@@ -529,7 +547,13 @@ def apply_constraints(
                 mps.tensors[orth_center_index] = center / norm
             renormalization = float(norm)
         if certificate is not None:
-            certificate.record(sum(discarded), renormalization, gain)
+            # What the move before the MPO discarded passes through the MPO,
+            # so it is recorded with the MPO's gain; what the zip-up itself
+            # discarded does not, and recording it with that gain would
+            # shrink it whenever the gain is below one. The renormalization
+            # applies after both, so it goes with the second term.
+            certificate.record(sum(moves), 1.0, gain)
+            certificate.record(sum(discarded), renormalization, 1.0)
 
         if return_entropies_and_bond_dims:
             # Use a copy to avoid mutating `mps` during entropy computation

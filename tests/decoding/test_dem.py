@@ -706,10 +706,12 @@ def test_zero_probability_mechanism_survives_the_reweighting_undo():
 
 def test_long_pinned_chain_keeps_a_finite_certificate():
     """2,200 probability-0.5 mechanisms, each pinned by its own detector: no
-    sweep runs, the retained norm is 2^-2200 and the weights norm 2^-1100,
-    both far below the smallest float. The certificate works in logs, so
-    the bound stays zero (nothing was truncated) and survival is the exact
-    2^-1100, underflowing to zero without passing through infinity or NaN."""
+    sweep runs, and each site keeps 1/sqrt(2) of its unit-norm weight state,
+    so the retained mass is 2^-1100, far below the smallest float. The
+    pinned weights are factored out of the chain into the certificate's log
+    scale, so the chain itself stays at order one, the bound stays zero
+    (nothing was truncated) and survival is the exact 2^-1100, underflowing
+    to zero without passing through infinity or NaN."""
     num = 2200
     problem = DemProblem(
         probs=[0.5] * num,
@@ -721,9 +723,11 @@ def test_long_pinned_chain_keeps_a_finite_certificate():
     _, _, cert = decode_dem(problem, np.zeros(num, dtype=int), return_certificate=True)
     assert cert.bound == 0.0
     assert np.isfinite(cert.log_final_norm)
-    # The pinned sites keep 0.5 each; the observable's logical sites add an
-    # O(1) factor on top of the 2^-2200.
-    assert abs(cert.log_final_norm - num * np.log(0.5)) < 5.0
+    # The chain is unit-norm sites throughout; the observable's logical
+    # sites add an O(1) factor. The pinned weights sit in the log scale.
+    assert abs(cert.log_final_norm) < 5.0
+    # (plus the logical sweep's own O(1) renormalization)
+    assert abs(cert.log_scale - num * np.log(0.5 / np.hypot(0.5, 0.5))) < 5.0
     log_survival = cert.log_scale - cert.log_mass_gain + cert.log_final_norm
     assert abs(log_survival - num * np.log(0.5 / np.hypot(0.5, 0.5))) < 5.0
     assert np.isfinite(cert.survival) and cert.survival >= 0.0
@@ -791,3 +795,89 @@ def test_decode_dem_signature_and_argument_validation():
         decode_dem(problem, syndrome, prior_reweighting="OSD")
     with pytest.raises(ValueError, match="reweighting_floor"):
         decode_dem(problem, syndrome, prior_reweighting="BP", reweighting_floor=1.5)
+
+
+def test_reweighted_branches_keep_a_floored_zero_branch():
+    """With a prior of 1e-20 on the zero branch the clip's upper end rounds
+    to one and BP's marginal sits there; forming the zero branch by
+    subtraction would erase it although the floor keeps half of it."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1e-20, 1.0]])
+    contracted = _reweighted_branches(
+        priors, np.array([1.0]), 0.5, 0.5, np.array([True])
+    )
+    assert contracted[0, 0] == 0.5e-20
+    assert contracted[0, 1] == 1.0
+    pinned = _reweighted_branches(priors, np.array([1.0]), 0.5, 0.5, np.array([False]))
+    assert np.array_equal(pinned, priors)
+
+
+def _truncating_problem(extra_pinned: int = 0) -> tuple[DemProblem, np.ndarray]:
+    """Three overlapping three-mechanism detectors (chi_max=3 truncates), plus
+    ``extra_pinned`` independent mechanisms of probability one half, each on
+    its own quiet detector, which pin them to their unfired branch."""
+    probs = [0.1, 0.2, 0.15, 0.3, 0.25] + [0.5] * extra_pinned
+    detector_rows = [[0, 1, 2], [1, 2, 3], [2, 3, 4]] + [
+        [5 + k] for k in range(extra_pinned)
+    ]
+    problem = DemProblem(
+        probs=probs,
+        detector_rows=detector_rows,
+        observable_rows=[[0], [4]],
+        num_detectors=3 + extra_pinned,
+        num_observables=2,
+    )
+    return problem, np.array([1, 0, 1] + [0] * extra_pinned)
+
+
+def test_pinned_sites_outside_every_sweep_do_not_inflate_the_bound():
+    """Appending independent pinned mechanisms of probability one half leaves
+    every truncation unchanged, so the bound must not change either (with the
+    site weights carried in the chain it grew by 2^N)."""
+    problem, syndrome = _truncating_problem()
+    _, _, plain = decode_dem(problem, syndrome, chi_max=3, return_certificate=True)
+    assert 0 < plain.bound < np.inf
+    padded, syndrome = _truncating_problem(extra_pinned=8)
+    _, _, cert = decode_dem(padded, syndrome, chi_max=3, return_certificate=True)
+    assert np.isclose(cert.bound, plain.bound, rtol=1e-6)
+    # The pinned branches each keep half of their site's weight state.
+    assert np.isclose(cert.survival, plain.survival * (0.5 / np.hypot(0.5, 0.5)) ** 8)
+
+
+def test_a_pinned_mechanism_with_a_tiny_prior_keeps_a_finite_certificate():
+    """A single pinned mechanism of probability 1e-200 that fired: no
+    truncation, so the bound is zero and the survival is its (tiny, nonzero)
+    weight; squaring that weight inside a norm would report a collapse."""
+    problem = DemProblem(
+        probs=[1e-200],
+        detector_rows=[[0]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    masses, flips, cert = decode_dem(problem, np.array([1]), return_certificate=True)
+    assert cert.bound == 0.0
+    assert np.isclose(cert.survival, 1e-200, rtol=1e-9)
+    assert flips[0] == 1 and masses[1] > 0.0
+
+
+def test_decode_dem_logs_the_certificate_when_not_silent(caplog):
+    import logging
+
+    problem, syndrome = _truncating_problem()
+    with caplog.at_level(logging.INFO, logger="mdopt.decoding.dem"):
+        decode_dem(problem, syndrome, chi_max=int(1e4), silent=False)
+        assert any("Truncation-error bound" in r.message for r in caplog.records)
+        assert all(
+            r.levelno < logging.WARNING for r in caplog.records if "bound" in r.message
+        )
+        caplog.clear()
+        _, _, cert = decode_dem(
+            problem, syndrome, chi_max=3, silent=False, return_certificate=True
+        )
+    assert cert.bound > 1.0
+    assert any(
+        r.levelno == logging.WARNING and "not certified" in r.message
+        for r in caplog.records
+    )

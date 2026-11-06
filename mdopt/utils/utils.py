@@ -36,7 +36,9 @@ def _stable_norm(values: np.ndarray) -> float:
     a discarded singular value of 1e-170 comes back as a norm of zero; the
     entries are scaled by their maximum before squaring instead.
     """
-    values = np.abs(np.asarray(values, dtype=float).ravel())
+    # The magnitude is taken before the cast to a real dtype, so a complex
+    # residual keeps its imaginary part.
+    values = np.abs(np.asarray(values)).astype(float).ravel()
     if values.size == 0:
         return 0.0
     peak = float(values.max())

@@ -2847,7 +2847,95 @@ def test_constraint_sweep_bound_covers_the_measured_error(renormalize):
     measured, bound = _measured_relative_error(
         certificate, swept.dense(flatten=True), exact
     )
-    assert len(certificate.terms) == len(strings)
+    # Two terms per constraint: the move before its MPO and the zip-up.
+    assert len(certificate.terms) == 2 * len(strings)
     assert certificate.discarded > 0
     assert np.isclose(certificate.log_gain, len(strings) * np.log(gain))
     assert 0 < measured <= bound * (1 + 1e-9)
+
+
+def test_certificate_sums_each_term_as_one_exponential():
+    """A loss of 1e-310 against a final norm of 1e-310 is a relative error of
+    one; exponentiating the scale on its own would make it infinite. A zero
+    loss recorded at a scale whose exponential overflows is skipped, not
+    turned into NaN."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    certificate.record(1e-310, 1.0)
+    assert np.isclose(certificate.finalize(1e-310), 1.0)
+    assert np.isclose(certificate.discarded, 1e-310)
+
+    certificate = TruncationCertificate()
+    for _ in range(3):
+        certificate.record(1.0, 1e300)
+    certificate.record(0.0, 1.0)
+    assert not np.isnan(certificate.discarded)
+    assert not np.isnan(certificate.finalize(1.0))
+
+
+def test_discarded_norm_keeps_the_imaginary_part():
+    """A rank-one QR of diag(10, 4j) discards a residual of norm 4; casting
+    to a real dtype before taking the magnitude would report zero."""
+    from mdopt.utils.utils import _stable_norm, qr, split_two_site_tensor
+
+    assert np.isclose(_stable_norm(np.array([3j, 4.0])), 5.0)
+    _, _, residual = qr(np.diag([10.0, 4j]), chi_max=1, return_truncation_error=True)
+    assert np.isclose(residual, 4.0)
+    _, _, residual, _ = split_two_site_tensor(
+        np.diag([10.0, 4j]).reshape(1, 2, 2, 1),
+        chi_max=1,
+        strategy="qr",
+        return_discarded_norm=True,
+    )
+    assert np.isclose(residual, 4.0)
+
+
+def test_zip_up_losses_are_not_scaled_by_a_gain_below_one():
+    """An XOR string over both sites of (|00> + 0.5 |11>) / n keeps that
+    state up to a sign; at chi_max=1 the zip-up discards the |11> part, a
+    relative error of one half. Recorded with a (declared) gain of 0.1 the
+    bound would shrink to 0.05; the zip-up's loss belongs to the term that
+    no gain multiplies."""
+    from mdopt.optimizer.utils import (
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    vector = np.array([1.0, 0.0, 0.0, 0.5])
+    vector /= np.linalg.norm(vector)
+    strings = [[[0], [], [], [1]]]
+    tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
+    exact = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=int(1e4),
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+    ).dense(flatten=True)
+    certificate = TruncationCertificate()
+    swept = apply_constraints(
+        mps_from_dense(vector, form="Right-canonical"),
+        strings,
+        tensors,
+        chi_max=1,
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        certificate=certificate,
+        gain=0.1,
+    )
+    kept = swept.dense(flatten=True)
+    bound = certificate.finalize(float(np.linalg.norm(kept)))
+    measured = float(np.linalg.norm(kept - exact) / np.linalg.norm(kept))
+    assert np.isclose(measured, 0.5)
+    assert np.isclose(bound, 0.5)
+    # The zip-up's loss is the second term of the constraint, recorded at
+    # gain one; the first (the move before the MPO) carries the 0.1.
+    assert len(certificate.terms) == 2 and certificate.terms[0][0] == 0.0

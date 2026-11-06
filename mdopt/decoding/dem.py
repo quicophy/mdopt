@@ -31,6 +31,7 @@ import stim
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import create_custom_product_state
+from mdopt.utils.utils import _stable_norm
 
 LOGGER = logging.getLogger(__name__)
 from mdopt.optimizer.utils import (
@@ -414,31 +415,15 @@ def decode_dem(
         # where the representative has a 0, f=0 where it has a 1) gets at
         # most `cap`, so the likely branch is never scaled back by more than
         # 1 / (1 - cap) at marginalization.
-        lower = reweighting_floor * priors[:, 1]
-        upper = 1.0 - reweighting_floor * priors[:, 0]
-        fired_is_one = priors[:, 1] < priors[:, 0]
-        upper = np.where(fired_is_one, np.minimum(upper, reweighting_cap), upper)
-        lower = np.where(fired_is_one, lower, np.maximum(lower, 1.0 - reweighting_cap))
         free = np.ones(num_mech, dtype=bool)
         free[list(pinned)] = False
-        infeasible = np.flatnonzero(free & (lower > upper + 1e-12))
-        if infeasible.size:
-            i = int(infeasible[0])
-            raise ValueError(
-                f"reweighting_floor={reweighting_floor} and reweighting_cap="
-                f"{reweighting_cap} are incompatible for mechanism {i} with prior "
-                f"{priors[i].tolist()}: the floor keeps its firing marginal in "
-                f"[{reweighting_floor * priors[i, 1]:.3g}, "
-                f"{1.0 - reweighting_floor * priors[i, 0]:.3g}] while the cap "
-                f"requires it {'<=' if fired_is_one[i] else '>='} "
-                f"{reweighting_cap if fired_is_one[i] else 1.0 - reweighting_cap:.3g}."
-            )
-        marginal = np.clip(marginal, lower, upper)
+        contracted = _reweighted_branches(
+            priors, marginal, reweighting_floor, reweighting_cap, free
+        )
         for i in range(num_mech):
             if i in pinned:
                 undo.append((offset + i, np.ones(2)))
                 continue
-            contracted[i] = [1.0 - marginal[i], marginal[i]]
             # A branch with zero prior has zero contracted weight too (the
             # floor is relative) and carries no amplitude, so its undo
             # weight is immaterial; zero keeps 0/0 out of the chain.
@@ -453,30 +438,45 @@ def decode_dem(
                     ),
                 )
             )
+    # Every site is given its weights at unit norm, so the chain starts as a
+    # unit-norm product state: the truncation certificate then measures each
+    # discard in the scale of the orthogonality center it was cut from, and
+    # the final norm it compares them with is that same scale, while
+    # ``survival`` is the final norm times the pinned weights factored out
+    # below: the fraction of the unprojected weight state's norm that the
+    # pinned branches, the constraints and the truncations kept. The class masses
+    # keep their ratios, which is all the readout and the undo use. The row
+    # norms are taken with ``hypot``: a weight of 1e-200 must not vanish by
+    # being squared.
+    site_norms = np.hypot(contracted[:, 0], contracted[:, 1])
+    weights = contracted / np.where(site_norms > 0.0, site_norms, 1.0)[:, None]
+    # A pinned site keeps its f=0 branch only, and that branch's weight is
+    # taken out of the chain as a scalar (the site stays the unit |0>): it
+    # is what the pinning kept of the site's weight state, so ``survival``
+    # must include it, while the bound compares discards with the chain's
+    # own scale, which must not. Recorded as the renormalization of a
+    # step before any sweep, in log form (2,200 sites at one half give
+    # 2^-1100), it enters every later discard's scale and cancels in the
+    # bound, and it keeps the chain itself at order one. A zero weight is a
+    # branch with zero prior: the site is zeroed and the chain collapses.
+    log_pinned_weight = 0.0
     for i in range(num_mech):
         if i in pinned:
             # f_i is forced to 0; only its prior's f=0 branch contributes.
-            mps.tensors[offset + i] = mps.tensors[offset + i] * contracted[i, 0]
+            if weights[i, 0] > 0.0:
+                log_pinned_weight += float(np.log(weights[i, 0]))
+            else:
+                mps.tensors[offset + i] = mps.tensors[offset + i] * 0.0
+                log_pinned_weight = -np.inf
             continue
         weight_matrix = np.array(
-            [[contracted[i, 0], contracted[i, 1]], [contracted[i, 1], contracted[i, 0]]]
+            [[weights[i, 0], weights[i, 1]], [weights[i, 1], weights[i, 0]]]
         )
         mps.tensors[offset + i] = np.einsum(
             "ab, ibj -> iaj", weight_matrix, mps.tensors[offset + i]
         )
     certificate = TruncationCertificate()
-    # The chain does not start from a unit-norm state: each mechanism site
-    # carries its contracted weights (the prior, or the BP marginal), and
-    # the pinned sites keep one branch only. Recording the unprojected norm
-    # of those weights as the mass gain of this weighting step makes
-    # ``survival`` the fraction of that mass kept by the pinned branches,
-    # the constraints and the truncations together.
-    # The product of thousands of site norms underflows (3,000 mechanisms at
-    # probability 0.5 give 2^-1500), so the gain is accumulated as a log.
-    log_weights_norm = (
-        float(np.sum(np.log(np.linalg.norm(contracted, axis=1)))) if num_mech else 0.0
-    )
-    certificate.record(0.0, 1.0, 1.0, log_mass_gain=log_weights_norm)
+    certificate.record(0.0, 1.0, 1.0, log_renormalization=log_pinned_weight)
 
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
@@ -526,6 +526,23 @@ def decode_dem(
         ),
     )
     certificate.finalize(log_final_norm=_log_full_norm(mps))
+    if not silent:
+        if certificate.bound > 1.0:
+            LOGGER.warning(
+                "Truncation-error bound %.3e (survival %.3e) at chi_max=%d: the "
+                "class masses are not certified; raise chi_max or gate on the "
+                "certificate.",
+                certificate.bound,
+                certificate.survival,
+                chi_max,
+            )
+        else:
+            LOGGER.info(
+                "Truncation-error bound %.3e, survival %.3e at chi_max=%d.",
+                certificate.bound,
+                certificate.survival,
+                chi_max,
+            )
 
     if undo:
         logical_mps = _marginalize_with_weights(mps, num_obs, undo, renormalize)
@@ -602,6 +619,52 @@ def decode_dem(
     return relabeled, flips
 
 
+def _reweighted_branches(
+    priors: np.ndarray,
+    marginal: np.ndarray,
+    reweighting_floor: float,
+    reweighting_cap: float,
+    free: np.ndarray,
+) -> np.ndarray:
+    """The two branch weights per mechanism that the reweighted chain contracts.
+
+    BP's firing marginal is clipped into ``[floor * P(1), 1 - floor * P(0)]``,
+    so both branches keep at least the fraction ``floor`` of their prior
+    weight and no undo ratio exceeds ``1 / floor``; the a-priori unlikely
+    branch (the mechanism firing where the representative has a 0, or not
+    firing where it has a 1) gets at most ``cap``, so the likely branch is
+    never scaled back by more than ``1 / (1 - cap)`` at marginalization.
+    Pinned mechanisms (``free`` false) keep their priors. The zero branch is
+    formed by subtraction, which can erase a floor-protected prior below
+    1e-16 when the clip's upper end rounds to one, so the floor is enforced
+    on it directly as well.
+    """
+    lower = reweighting_floor * priors[:, 1]
+    upper = 1.0 - reweighting_floor * priors[:, 0]
+    fired_is_one = priors[:, 1] < priors[:, 0]
+    upper = np.where(fired_is_one, np.minimum(upper, reweighting_cap), upper)
+    lower = np.where(fired_is_one, lower, np.maximum(lower, 1.0 - reweighting_cap))
+    infeasible = np.flatnonzero(free & (lower > upper + 1e-12))
+    if infeasible.size:
+        i = int(infeasible[0])
+        raise ValueError(
+            f"reweighting_floor={reweighting_floor} and reweighting_cap="
+            f"{reweighting_cap} are incompatible for mechanism {i} with prior "
+            f"{priors[i].tolist()}: the floor keeps its firing marginal in "
+            f"[{reweighting_floor * priors[i, 1]:.3g}, "
+            f"{1.0 - reweighting_floor * priors[i, 0]:.3g}] while the cap "
+            f"requires it {'<=' if fired_is_one[i] else '>='} "
+            f"{reweighting_cap if fired_is_one[i] else 1.0 - reweighting_cap:.3g}."
+        )
+    marginal = np.clip(marginal, lower, upper)
+    contracted = priors.copy()
+    contracted[free, 1] = marginal[free]
+    contracted[free, 0] = np.maximum(
+        1.0 - marginal[free], reweighting_floor * priors[free, 0]
+    )
+    return contracted
+
+
 def _log_full_norm(mps: CanonicalMPS) -> float:
     """The log-norm of the whole chain, not only of its orthogonality center.
 
@@ -615,10 +678,10 @@ def _log_full_norm(mps: CanonicalMPS) -> float:
     smallest float, which is a finite log-norm, not a collapse.
     """
     center = mps.orth_center
-    norms = [] if center is None else [float(np.linalg.norm(mps.tensors[center]))]
+    norms = [] if center is None else [_stable_norm(mps.tensors[center])]
     for site, tensor in enumerate(mps.tensors):
         if site != center and tensor.shape[0] == 1 and tensor.shape[-1] == 1:
-            norms.append(float(np.linalg.norm(tensor)))
+            norms.append(_stable_norm(tensor))
     if any(norm <= 0.0 or not np.isfinite(norm) for norm in norms):
         return -np.inf
     return float(np.sum(np.log(norms))) if norms else 0.0
