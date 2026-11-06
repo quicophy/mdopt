@@ -644,17 +644,23 @@ def _reweighted_branches(
     fired_is_one = priors[:, 1] < priors[:, 0]
     upper = np.where(fired_is_one, np.minimum(upper, reweighting_cap), upper)
     lower = np.where(fired_is_one, lower, np.maximum(lower, 1.0 - reweighting_cap))
-    infeasible = np.flatnonzero(free & (lower > upper + 1e-12))
+    # The floor and the cap conflict exactly when the floor keeps more of the
+    # capped branch than the cap allows; compared directly, so that a prior
+    # of 1e-14 against a cap of 1e-20 is rejected (an absolute tolerance on
+    # the clip window would let it through with an undo ratio of 1e6) and
+    # the round-off of ``1 - floor * P(0)`` rejects nothing valid.
+    capped_weight = reweighting_floor * np.where(
+        fired_is_one, priors[:, 1], priors[:, 0]
+    )
+    infeasible = np.flatnonzero(free & (capped_weight > reweighting_cap))
     if infeasible.size:
         i = int(infeasible[0])
         raise ValueError(
             f"reweighting_floor={reweighting_floor} and reweighting_cap="
             f"{reweighting_cap} are incompatible for mechanism {i} with prior "
-            f"{priors[i].tolist()}: the floor keeps its firing marginal in "
-            f"[{reweighting_floor * priors[i, 1]:.3g}, "
-            f"{1.0 - reweighting_floor * priors[i, 0]:.3g}] while the cap "
-            f"requires it {'<=' if fired_is_one[i] else '>='} "
-            f"{reweighting_cap if fired_is_one[i] else 1.0 - reweighting_cap:.3g}."
+            f"{priors[i].tolist()}: the floor keeps at least "
+            f"{capped_weight[i]:.3g} of its {'firing' if fired_is_one[i] else 'quiet'} "
+            f"branch while the cap allows at most {reweighting_cap:.3g}."
         )
     marginal = np.clip(marginal, lower, upper)
     contracted = priors.copy()

@@ -519,6 +519,11 @@ def apply_constraints(
             if isinstance(orth_centers, list) and len(orth_centers) > 1:
                 mps.orth_center = orth_centers[0]
 
+        # The move to the string's first site happens here, whether the
+        # center was just found or already known, so that what it discards
+        # is the move term (it passes through this MPO) rather than a loss
+        # the contractor's own move would mix into the zip-up term.
+        if mps.orth_center != start_site:
             mps = mps.move_orth_center(
                 final_pos=start_site,
                 renormalize=False,

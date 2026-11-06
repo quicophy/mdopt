@@ -2864,7 +2864,7 @@ def test_certificate_sums_each_term_as_one_exponential():
     certificate = TruncationCertificate()
     certificate.record(1e-310, 1.0)
     assert np.isclose(certificate.finalize(1e-310), 1.0)
-    assert np.isclose(certificate.discarded, 1e-310)
+    assert np.isclose(certificate.discarded, 1e-310, atol=0.0)
 
     certificate = TruncationCertificate()
     for _ in range(3):
@@ -2939,3 +2939,60 @@ def test_zip_up_losses_are_not_scaled_by_a_gain_below_one():
     # The zip-up's loss is the second term of the constraint, recorded at
     # gain one; the first (the move before the MPO) carries the 0.1.
     assert len(certificate.terms) == 2 and certificate.terms[0][0] == 0.0
+
+
+def test_a_known_center_is_moved_into_the_move_term():
+    """With the orthogonality center known and away from the string, the
+    move to its first site truncates at chi_max=2; its loss must land in the
+    constraint's move term (the one the MPO's gain multiplies), not be
+    folded into the zip-up by the contractor's own move."""
+    from mdopt.optimizer.utils import (
+        COPY_LEFT,
+        SWAP,
+        XOR_BULK,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    vector = np.random.default_rng(11).random(size=2**6) + 0.1
+    vector /= np.linalg.norm(vector)
+    mps = mps_from_dense(vector, form="Left-canonical")
+    mps.orth_center = mps.num_sites - 1
+    mps.chi_max = 2
+    certificate = TruncationCertificate()
+    apply_constraints(
+        mps,
+        [[[0], [2, 4], [1, 3], [5]]],
+        [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        chi_max=2,
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+        certificate=certificate,
+        gain=float(np.sqrt(2.0)),
+    )
+    assert len(certificate.terms) == 2
+    assert certificate.terms[0][0] > 0.0
+
+
+def test_bias_mass_gain_is_measured_on_the_pair():
+    """|++> is not a basis pair: at bias 3/4 the operator doubles its norm,
+    so an untruncated sweep must still report a survival of one (it reported
+    two with the mass gain fixed at one)."""
+    from mdopt.decoding.decoding import apply_depolarizing_bias
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    certificate = TruncationCertificate()
+    biased = apply_depolarizing_bias(
+        create_simple_product_state(num_sites=2, which="+"),
+        sites_to_bias=[0],
+        prob_bias_list=[0.75],
+        renormalize=False,
+        certificate=certificate,
+    )
+    final_norm = float(np.linalg.norm(biased.dense(flatten=True)))
+    assert np.isclose(final_norm, 2.0)
+    certificate.finalize(final_norm)
+    assert np.isclose(certificate.survival, 1.0, rtol=1e-9)
+    assert certificate.bound < 1e-9

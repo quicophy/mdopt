@@ -37,7 +37,7 @@ from mdopt.optimizer.utils import (
     apply_constraints,
     optimize_qubit_order,
 )
-from mdopt.utils.utils import split_two_site_tensor
+from mdopt.utils.utils import _stable_norm, split_two_site_tensor
 from mdopt.optimizer.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
 from mdopt.optimizer.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
@@ -312,6 +312,19 @@ def apply_depolarizing_bias(
                 ),
             )
         bias_operator = depolarizing_bias(prob_bias=prob_bias)
+        # The pair carries the state's scale (the center is in it), so the
+        # ratio of its norms after and before the operator is the factor by
+        # which the exact operator changes the norm of the whole state: one
+        # for a basis pair, which it maps to a unit-norm prior, and the
+        # actual change for a superposition (|++> at bias 3/4 is doubled).
+        pair_norm = _stable_norm(
+            contract(
+                "ijk, klm -> ijlm",
+                mps.tensors[site],
+                mps.tensors[site + 1],
+                optimize=[(0, 1)],
+            )
+        )
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
@@ -319,6 +332,7 @@ def apply_depolarizing_bias(
             bias_operator,
             optimize=[(0, 1), (0, 1)],
         )
+        mass_gain = _stable_norm(two_site_tensor) / pair_norm if pair_norm > 0 else 1.0
         # The split keeps the spectrum unnormalized so that the factor the
         # SVD removes is measured, in the scale of this pair's input, before
         # the center is renormalized; the discarded norm is in that scale too.
@@ -340,16 +354,15 @@ def apply_depolarizing_bias(
         if certificate is not None:
             # Whatever was discarded before this pair passes through its bias
             # operator, whose norm exceeds one (about 1.05 at bias 1e-3 and
-            # 1.5 at 0.1), so that norm is the step's gain in the bound. The
-            # exact operator maps a unit-norm basis pair to a unit-norm prior,
-            # so the step keeps all the mass: its mass gain is one and
-            # ``survival`` is not divided by the operator norm.
+            # 1.5 at 0.1), so that norm is the step's gain in the bound,
+            # while ``survival`` divides out only the norm change measured
+            # on the pair above (one for a basis pair).
             gain = float(np.linalg.norm(bias_operator.reshape(4, 4), 2))
             certificate.record(
                 float(max(discarded or 0.0, 0.0)) + sum(pair_moves),
                 renormalization,
                 gain,
-                mass_gain=1.0,
+                mass_gain=mass_gain,
             )
 
     return mps

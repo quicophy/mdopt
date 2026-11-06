@@ -858,7 +858,7 @@ def test_a_pinned_mechanism_with_a_tiny_prior_keeps_a_finite_certificate():
     )
     masses, flips, cert = decode_dem(problem, np.array([1]), return_certificate=True)
     assert cert.bound == 0.0
-    assert np.isclose(cert.survival, 1e-200, rtol=1e-9)
+    assert np.isclose(cert.survival, 1e-200, rtol=1e-9, atol=0.0)
     assert flips[0] == 1 and masses[1] > 0.0
 
 
@@ -881,3 +881,21 @@ def test_decode_dem_logs_the_certificate_when_not_silent(caplog):
         r.levelno == logging.WARNING and "not certified" in r.message
         for r in caplog.records
     )
+
+
+def test_reweighting_rejects_a_cap_below_the_floored_branch():
+    """A prior of 1e-14 under floor 1 keeps 1e-14 of its firing branch; a
+    cap of 1e-20 cannot be honored, and accepting it would leave an undo
+    ratio of 1e6. A cap equal to the floored weight is fine."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1.0 - 1e-14, 1e-14]])
+    with pytest.raises(ValueError, match="incompatible"):
+        _reweighted_branches(priors, np.array([0.5]), 1.0, 1e-20, np.array([True]))
+    contracted = _reweighted_branches(
+        priors, np.array([0.5]), 1.0, 1e-14, np.array([True])
+    )
+    # (the window's upper end is 1 - floor * P(0), rounded, so up to round-off)
+    assert np.isclose(contracted[0, 1], 1e-14, rtol=1e-2, atol=0.0)
+    # A pinned mechanism is not checked.
+    _reweighted_branches(priors, np.array([0.5]), 1.0, 1e-20, np.array([False]))
