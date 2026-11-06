@@ -1406,8 +1406,10 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     ranked by the mass they lead to rather than by a bound on it. The sweep
     runs in both directions and keeps ``num_candidates`` prefixes per site;
     the amplitudes it reports are exact signed values, so nothing has to be
-    rescored at the end. Cost ``O(k d chi^3)``, dominated by the
-    orthogonalization.
+    rescored at the end. Cost ``O(k chi^3)``, dominated by the
+    orthogonalization. Qubit chains only: the candidates are bit strings,
+    which is what the basis-state constructors downstream accept, so a core
+    with another physical dimension is rejected up front.
 
     The candidates are ranked by signed amplitude, after the state's global
     sign has been fixed by :func:`_global_sign`. A remaining negative amplitude
@@ -1424,6 +1426,11 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     if isinstance(logical_mps, ExplicitMPS):
         logical_mps = logical_mps.right_canonical()
     cores = list(logical_mps.tensors)
+    if any(core.shape[1] != 2 for core in cores):
+        raise ValueError(
+            "The Optima TT readout handles qubit chains only (physical dimension "
+            f"2), given physical dimensions {[core.shape[1] for core in cores]}."
+        )
     if any(0 in core.shape for core in cores):
         # A collapsed bond: no basis state carries any amplitude. The sweeps
         # cannot run on empty cores, so report one full-length zero candidate
@@ -1636,8 +1643,9 @@ def _logical_readout(
 
     Returns
     -------
-    result : _ReadoutResult or DephasingDMRG
-        Carries ``mps`` (the chosen basis state) and ``mps_target``.
+    result : _ReadoutResult
+        Carries ``mps`` (the chosen basis state) and ``mps_target``, whichever
+        search produced it (the DMRG engine is wrapped the same way).
     amplitude : float
         ``|<s*|logical_mps>|`` for the best basis state found.
     certified : bool
@@ -1981,7 +1989,7 @@ def decode_css(
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalization and
-    subsequent reading out the main component via densifying or Dephasing DMRG.
+    subsequent reading out the main component via densifying, Optima TT or Dephasing DMRG.
     It takes as input an error string and returns the most likely Pauli correction.
 
     Parameters
