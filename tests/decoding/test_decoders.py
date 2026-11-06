@@ -2046,11 +2046,19 @@ def test_search_readouts_rescore_candidates_signed_and_clamped():
 
 
 def test_global_sign_survives_a_tiny_scale():
+    """The first hundred cores carry a factor 1e-30 each, so a running
+    overlap that is not rescaled underflows to zero by the eleventh site;
+    the last hundred carry 1e30 each, so the full overlap is a representable
+    minus one. Only the per-site rescaling keeps the sign."""
     from mdopt.decoding.decoding import _global_sign
     from mdopt.mps.utils import create_custom_product_state
 
     state = create_custom_product_state("0" * 200, form="Right-canonical")
-    state.tensors[0] = -1e-300 * state.tensors[0]
+    for site in range(100):
+        state.tensors[site] = 1e-30 * state.tensors[site]
+    for site in range(100, 200):
+        state.tensors[site] = 1e30 * state.tensors[site]
+    state.tensors[0] = -state.tensors[0]
     assert _global_sign(state) == -1.0
     state.tensors[0] = -state.tensors[0]
     assert _global_sign(state) == 1.0
@@ -2244,9 +2252,10 @@ def test_beam_readout_scores_every_surviving_candidate_signed():
         logical_mps, beam_width=4, return_candidates=True
     )
     assert bits == "01" and np.isclose(modulus, abs(vector[1]))
-    assert sorted(candidates) == sorted(
-        (format(i, "02b"), sign * vector[i]) for i in range(4)
-    ) or np.allclose(sorted(v for _, v in candidates), sorted(sign * vector))
+    found = dict(candidates)
+    assert sorted(found) == ["00", "01", "10", "11"]
+    for i in range(4):
+        assert np.isclose(found[format(i, "02b")], sign * vector[i])
 
     class IdentityDMRG:
         def __init__(self, mps, mps_target, **kwargs):
