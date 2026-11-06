@@ -2736,24 +2736,38 @@ def test_discarded_norms_survive_underflow_of_their_squares():
     _, _, _, squared = svd(spectrum, chi_max=1, cut=0.0, return_truncation_error=True)
     assert squared == 0.0
     _, _, _, norm = svd(spectrum, chi_max=1, cut=0.0, return_discarded_norm=True)
-    assert np.isclose(norm, 1e-170, rtol=1e-12)
+    assert np.isclose(norm, 1e-170, rtol=1e-12, atol=0.0)
     _, _, _, norm = split_two_site_tensor(
         spectrum.reshape(1, 2, 2, 1), chi_max=1, cut=0.0, return_discarded_norm=True
     )
-    assert np.isclose(norm, 1e-170, rtol=1e-12)
-
-    # Through a center move: a two-site state with Schmidt values 1 and
-    # 1e-10 scaled to 1e-160 overall, truncated to one Schmidt value.
-    vector = np.array([1.0, 0.0, 0.0, 1e-10])
-    vector /= np.linalg.norm(vector)
-    mps = mps_from_dense(vector, form="Right-canonical")
-    mps.tensors[mps.orth_center] = mps.tensors[mps.orth_center] * 1e-160
-    mps.chi_max = 1
-    discarded: list = []
-    mps.move_orth_center(
-        mps.num_sites - 1, renormalize=False, discarded_norms=discarded
+    assert np.isclose(norm, 1e-170, rtol=1e-12, atol=0.0)
+    # A huge discard overflows to an infinite squared error, not an exception.
+    _, _, _, squared = svd(
+        np.diag([1e160, 1e160]), chi_max=1, return_truncation_error=True
     )
-    assert any(np.isclose(d, 1e-170, rtol=1e-6) for d in discarded)
+    assert squared == np.inf
+    # The QR residual is a norm already: 4 for a rank-one split of diag(10, 4),
+    # measured before the optional renormalization.
+    for renormalize in (False, True):
+        _, _, residual, _ = split_two_site_tensor(
+            np.diag([10.0, 4.0]).reshape(1, 2, 2, 1),
+            chi_max=1,
+            strategy="qr",
+            renormalize=renormalize,
+            return_discarded_norm=True,
+        )
+        assert np.isclose(residual, 4.0)
+
+    # Through a center move: a two-site state with a unit retained Schmidt
+    # value and a 1e-170 one, truncated to a single value by the move.
+    left = np.zeros((1, 2, 2))
+    left[0, 0, 0] = left[0, 1, 1] = 1.0
+    center = np.zeros((2, 2, 1))
+    center[0, 0, 0], center[1, 1, 0] = 1.0, 1e-170
+    mps = CanonicalMPS([left, center], orth_center=1, chi_max=1)
+    discarded: list = []
+    mps.move_orth_center(0, renormalize=False, discarded_norms=discarded)
+    assert any(np.isclose(d, 1e-170, rtol=1e-6, atol=0.0) for d in discarded)
 
 
 def test_certificate_scales_cancel_in_log_space():

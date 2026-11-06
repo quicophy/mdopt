@@ -173,7 +173,9 @@ def svd(
     max_num = int(min(chi_max, int(np.sum(s > cut))))
     residual = s[max_num:]
     discarded_norm = _stable_norm(residual)
-    truncation_error = discarded_norm**2
+    with np.errstate(over="ignore"):
+        # A NumPy square overflows to inf; a Python float would raise.
+        truncation_error = float(np.square(np.float64(discarded_norm)))
     u_l = u_l[:, :max_num]
     s = s[:max_num]
     v_h = v_h[:max_num, :]
@@ -257,6 +259,13 @@ def qr(
     r_r = r_r[trunc_idx, :][:, inv_piv]
     q_l = q_l[:, trunc_idx]
 
+    # The residual of the truncation, measured before any renormalization
+    # of R and without underflow in its squares: it is what was discarded,
+    # as a norm (not squared, unlike the SVD's truncation error).
+    trunc_error = (
+        _stable_norm(_to_numpy(mat) - q_l @ r_r) if return_truncation_error else None
+    )
+
     if renormalize and effective_rank > 0:
         diag = np.diag(r_r[:effective_rank, :effective_rank])
         nrm = float(np.linalg.norm(diag))
@@ -264,7 +273,6 @@ def qr(
             r_r = r_r / nrm
 
     if return_truncation_error:
-        trunc_error = float(np.linalg.norm(_to_numpy(mat) - q_l @ r_r))
         return np.asarray(q_l), np.asarray(r_r), trunc_error
 
     return np.asarray(q_l), np.asarray(r_r), None
@@ -441,9 +449,8 @@ def split_two_site_tensor(
     chi_v_cut = min(chi_max, q_l.shape[1])
     q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
     r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
-    if return_discarded_norm:
-        return q_l, r_r, float(np.sqrt(max(truncation_error or 0.0, 0.0))), None
-    if return_truncation_error:
+    if return_truncation_error or return_discarded_norm:
+        # The QR residual is already a norm, so both requests return it.
         return q_l, r_r, truncation_error, None
     return q_l, r_r, None, None
 

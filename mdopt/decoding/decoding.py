@@ -300,11 +300,14 @@ def apply_depolarizing_bias(
         # pair's step (it passes through the same bias operator).
         pair_moves: List[float] = []
         if mps.orth_center != site:
+            # In place: the chain is already this function's own copy (the
+            # first move made it), and a copy per pair would be quadratic.
             mps = cast(
                 CanonicalMPS,
                 mps.move_orth_center(
                     site,
                     renormalize=False,
+                    inplace=True,
                     discarded_norms=pair_moves if certificate is not None else None,
                 ),
             )
