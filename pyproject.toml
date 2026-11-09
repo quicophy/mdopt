@@ -52,7 +52,7 @@ dev = [
     "pyinstrument>=5.1.1,<6",
 ]
 test = [
-    "coverage>=7.16.0,<8.0.0",
+    "coverage>=7.17.2,<8.0.0",
     "pytest-cov>=7.1.0,<8",
     "pytest>=9.2.0,<10.0",
     "py>=1.11.0,<2",
