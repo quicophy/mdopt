@@ -2092,6 +2092,7 @@ def test_num_candidates_is_the_last_decoder_parameter():
             "reweighting_floor",
             "bp_iterations",
             "return_certificate",
+            "objective",
         ]
 
 
@@ -3026,3 +3027,77 @@ def test_optima_tt_readout_rejects_non_qubit_chains():
     qutrits = mps_from_dense(vector, phys_dim=3, form="Right-canonical")
     with pytest.raises(ValueError, match="qubit chains only"):
         optima_tt_readout(qutrits, 4)
+
+
+def exact_class_probabilities(code, error, bias_type, prob):
+    """Class posteriors P(class | syndrome) by enumeration: sums of probabilities."""
+    num_qubits = len(code)
+    err_x = np.array([BITS[c][0] for c in error], dtype=int)
+    err_z = np.array([BITS[c][1] for c in error], dtype=int)
+    checks_x = _dense(code.x_stabs_binary(), num_qubits)
+    checks_z = _dense(code.z_stabs_binary(), num_qubits)
+    log_x = _dense(code.x_logicals_binary(), num_qubits)
+    log_z = _dense(code.z_logicals_binary(), num_qubits)
+    if bias_type == "Depolarizing":
+        weight = lambda d_x, d_z: (1 - prob) if (d_x == 0 and d_z == 0) else prob / 3
+    else:
+        weight = lambda d_x, d_z: (
+            ((1 - prob) if d_x == 0 else prob) * ((1 - prob) if d_z == 0 else prob)
+        )
+    mass = dict.fromkeys(ORDER, 0.0)
+    names = {(0, 0): "I", (1, 0): "X", (0, 1): "Z", (1, 1): "Y"}
+    for f_x in _span(_nullspace_gf2(checks_z, num_qubits), num_qubits):
+        d_x = (f_x + err_x) % 2
+        l_x = int(np.dot(f_x, log_z[0]) % 2)
+        for f_z in _span(_nullspace_gf2(checks_x, num_qubits), num_qubits):
+            d_z = (f_z + err_z) % 2
+            l_z = int(np.dot(f_z, log_x[0]) % 2)
+            mass[names[(l_x, l_z)]] += np.prod(
+                [weight(d_x[j], d_z[j]) for j in range(num_qubits)]
+            )
+    total = sum(mass.values())
+    return np.array([mass[k] / total for k in ORDER])
+
+
+@pytest.mark.parametrize("name", sorted(CODES))
+@pytest.mark.parametrize("bias", ["Bitflip", "Depolarizing"])
+def test_probability_objective_returns_the_exact_class_posterior(name, bias):
+    """With objective='probability' the class sums are the true posteriors."""
+    code = CODES[name]()
+    for error in ERRORS[name]:
+        out = np.asarray(
+            decode_css(
+                code,
+                error,
+                chi_max=int(1e5),
+                bias_type=bias,
+                bias_prob=0.1,
+                renormalize=True,
+                silent=True,
+                objective="probability",
+            )[0],
+            dtype=float,
+        )
+        assert np.all(out >= -1e-12)
+        assert np.allclose(
+            out / out.sum(),
+            exact_class_probabilities(code, error, bias, 0.1),
+            atol=1e-6,
+        )
+
+
+def test_objective_options_are_validated():
+    code = qec.steane_code()
+    with pytest.raises(ValueError, match="objective"):
+        decode_css(
+            code, "XIIIIII", bias_type="Bitflip", silent=True, objective="likelihood"
+        )
+    with pytest.raises(ValueError, match="prior_reweighting"):
+        decode_css(
+            code,
+            "XIIIIII",
+            bias_type="Bitflip",
+            silent=True,
+            objective="probability",
+            prior_reweighting="BP",
+        )

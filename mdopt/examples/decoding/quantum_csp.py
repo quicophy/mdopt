@@ -198,6 +198,17 @@ def parse_arguments():
         ),
     )
     parser.add_argument(
+        "--objective",
+        default="amplitude",
+        choices=["amplitude", "probability"],
+        help=(
+            "amplitude (default, historical) ranks logical classes by the sum "
+            "of square-rooted error probabilities; probability ranks them by "
+            "the class probability, i.e. degenerate maximum likelihood. Tags "
+            "the output file with _objProb."
+        ),
+    )
+    parser.add_argument(
         "--store_certificate",
         action="store_true",
         help=(
@@ -298,6 +309,7 @@ def run_single_experiment(
     qubit_order_strategy="Natural",
     prior_reweighting=None,
     store_certificate=False,
+    objective="amplitude",
 ):
     """Run a single experiment (with a few random stabilizer gauges).
 
@@ -332,6 +344,7 @@ def run_single_experiment(
                 rng=rng,
                 prior_reweighting=prior_reweighting,
                 return_certificate=store_certificate,
+                objective=objective,
             )
         )
 
@@ -412,13 +425,15 @@ def run_experiment(
     qubit_order_strategy="Natural",
     prior_reweighting=None,
     store_certificate=False,
+    objective="amplitude",
 ):
     """Run the experiment consisting of multiple single experiments in parallel."""
     logging.info(
         f"Starting {num_experiments} experiments for NUM_QUBITS={num_qubits},"
         f" CHI_MAX={chi_max}, ERROR_RATE={error_rate}, BIAS_PROB={bias_prob}, BATCH={batch},"
         f" TOLERANCE={tolerance}, CUT={cut}, ERROR_MODEL={error_model}, SEED={seed}, CODE_ID={code_id},"
-        f" PRIOR_REWEIGHTING={prior_reweighting}, STORE_CERTIFICATE={store_certificate}"
+        f" PRIOR_REWEIGHTING={prior_reweighting}, STORE_CERTIFICATE={store_certificate},"
+        f" OBJECTIVE={objective}"
     )
 
     # pre-encode all errors into a compact uint8 array of
@@ -445,6 +460,7 @@ def run_experiment(
         qubit_order_strategy=qubit_order_strategy,
         prior_reweighting=prior_reweighting,
         store_certificate=store_certificate,
+        objective=objective,
     )
 
     args = [
@@ -490,6 +506,7 @@ def run_experiment(
         "code_id": code_id,
         "qubit_order_strategy": qubit_order_strategy,
         "prior_reweighting": prior_reweighting,
+        "objective": objective,
     }
     if store_certificate:
         data["survival"] = np.array([result[2] for result in results], dtype=float)
@@ -512,6 +529,7 @@ def save_experiment_data(
     cut,
     qubit_order_strategy="Natural",
     prior_reweighting=None,
+    objective="amplitude",
 ):
     """Save the experiment data."""
     error_model = error_model.replace(" ", "")
@@ -525,7 +543,9 @@ def save_experiment_data(
     )
     prior_reweighting = data.get("prior_reweighting", prior_reweighting)
     prior_tag = f"_prior{prior_reweighting}" if prior_reweighting else ""
-    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_codeid{code_id}_seed{seed}{order_tag}{prior_tag}.pkl"
+    objective = data.get("objective", objective)
+    objective_tag = "_objProb" if objective == "probability" else ""
+    file_key = f"latticesize{num_qubits}_bonddim{chi_max}_errorrate{error_rate}_errormodel{error_model}_bias_prob{bias_prob}_numexperiments{num_experiments}_tolerance{tolerance}_cut{cut}_batch{batch}_codeid{code_id}_seed{seed}{order_tag}{prior_tag}{objective_tag}.pkl"
     with open(file_key, "wb") as pickle_file:
         pickle.dump(data, pickle_file)
     logging.info(
@@ -563,6 +583,7 @@ def main():
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
         prior_reweighting=args.prior_reweighting,
+        objective=args.objective,
         store_certificate=args.store_certificate,
     )
     save_experiment_data(
@@ -580,6 +601,7 @@ def main():
         args.cut,
         qubit_order_strategy=args.qubit_order_strategy,
         prior_reweighting=args.prior_reweighting,
+        objective=args.objective,
     )
 
 

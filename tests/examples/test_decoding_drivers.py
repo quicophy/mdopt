@@ -26,9 +26,12 @@ def test_new_arguments_are_last_in_every_driver_signature(name):
     """Inserting them earlier would shift the positional callers."""
     driver = _driver(name)
     for function, tail in [
-        ("run_single_experiment", ["prior_reweighting", "store_certificate"]),
-        ("run_experiment", ["prior_reweighting", "store_certificate"]),
-        ("save_experiment_data", ["prior_reweighting"]),
+        (
+            "run_single_experiment",
+            ["prior_reweighting", "store_certificate", "objective"],
+        ),
+        ("run_experiment", ["prior_reweighting", "store_certificate", "objective"]),
+        ("save_experiment_data", ["prior_reweighting", "objective"]),
     ]:
         names = list(inspect.signature(getattr(driver, function)).parameters)
         assert names[-len(tail) :] == tail, f"{name}.{function}: {names}"
@@ -36,6 +39,7 @@ def test_new_arguments_are_last_in_every_driver_signature(name):
         assert defaults["prior_reweighting"].default is None
         if "store_certificate" in tail:
             assert defaults["store_certificate"].default is False
+        assert defaults["objective"].default == "amplitude"
 
 
 @pytest.mark.parametrize("name", DRIVERS)
@@ -46,7 +50,12 @@ def test_certificate_values_accepts_both_decoder_shapes(name):
         survival = 0.25
         bound = 3.0
 
-    assert driver.certificate_values(([1.0, 0.0], 1)) == ([1.0, 0.0], 1, np.nan, np.nan) or (
+    assert driver.certificate_values(([1.0, 0.0], 1)) == (
+        [1.0, 0.0],
+        1,
+        np.nan,
+        np.nan,
+    ) or (
         driver.certificate_values(([1.0, 0.0], 1))[:2] == ([1.0, 0.0], 1)
         and all(np.isnan(v) for v in driver.certificate_values(([1.0, 0.0], 1))[2:])
     )
@@ -125,3 +134,17 @@ def test_plain_run_is_unchanged_by_the_new_options(tmp_path, monkeypatch):
     assert stored["prior_reweighting"] is None
     assert "survival" not in stored and "bound" not in stored
     assert len(stored["failures"]) == 4
+
+
+def test_probability_objective_is_stored_and_tags_the_file(tmp_path, monkeypatch):
+    """Probability-objective pickles must never be pooled with amplitude ones."""
+    stored, file_name = _surface_run(tmp_path, monkeypatch, objective="probability")
+    assert file_name.endswith("_seed7_objProb.pkl")
+    assert stored["objective"] == "probability"
+    assert len(stored["failures"]) == 4
+
+
+def test_plain_run_records_the_amplitude_objective(tmp_path, monkeypatch):
+    stored, file_name = _surface_run(tmp_path, monkeypatch)
+    assert stored["objective"] == "amplitude"
+    assert "objProb" not in file_name
