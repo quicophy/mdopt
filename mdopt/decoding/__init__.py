@@ -1,10 +1,18 @@
 """Decoding of classical and quantum error-correcting codes with MPS.
 
 This package provides the error-based decoders for CSS and custom stabilizer
-codes (:mod:`mdopt.decoding.decoding`) and the detector-error-model decoder
-for circuit-level noise (:mod:`mdopt.decoding.dem`).
+codes (:mod:`mdopt.decoding.decoding`), the detector-error-model decoder for
+circuit-level noise (:mod:`mdopt.decoding.dem`) and the class-sum decoder that
+resums the posterior around BP-OSD candidates (:mod:`mdopt.decoding.class_sum`).
 """
 
+from mdopt.decoding.class_sum import (
+    ClassSumDecoder,
+    ParityChain,
+    active_set_class_masses,
+    multiplet_safe_rank,
+    problem_matrices,
+)
 from mdopt.decoding.decoding import (
     apply_bitflip_bias,
     apply_depolarizing_bias,

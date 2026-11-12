@@ -1,7 +1,8 @@
 # DEM decoding campaign: harnesses and how to regenerate the data
 
-These three scripts produced every number and figure in the DEM decoder
-report on pull request #544. The per-shot records they write are **not
+The first three scripts produced every number and figure in the DEM decoder
+report on pull request #544; `bb72_class_sum.py` is the paired comparison of
+the class-sum decoder with BP-OSD. The per-shot records they write are **not
 versioned**: every harness is deterministic and seeded, so the files are
 reproduced bit for bit by rerunning the script. Outputs land in
 `data-dem-campaign/` next to the scripts, which the repository's `data*/`
@@ -12,6 +13,7 @@ rule keeps out of git.
 | `nishimori.py` | Code-capacity bit-flip thresholds, MAP vs MWPM, rotated surface code d = 5, 7, 9, 11 | `N_d{d}_p{p:.4f}.jsonl`, 36 cells | 16000 per near-threshold cell for d ≤ 9, 4000 otherwise | ~26 CPU-hours (d = 9 near threshold is half of it) |
 | `dem_rerun.py` | Circuit-level d = 5, r = 5, p = 0.5 % memory-Z with a per-shot χ ladder, calibration audit, MWPM and belief-matching | `D2_d5r5_p0.005.jsonl` | 2000 | ~83 CPU-hours (149 s per shot) |
 | `repro_tnd3d.py` | Fig. 1d of Piveteau, Chubb and Renes, PRX Quantum 5, 040303: memory-X, rounds = d, p = 0.6 to 0.9 % | `T_d{d}r{d}_p{p:.4f}.jsonl`, 4 cells per distance | 2000 per cell | ~12 CPU-hours at d = 3 (5.6 s per shot) |
+| `bb72_class_sum.py` | Bivariate bicycle [[72, 12, 6]] memory experiment (qldpc, depolarizing circuit noise): `ClassSumDecoder` against BP-OSD on the same shots, with the exact McNemar test | `B_r{rounds}_p{p:.4f}_{basis}_seed{seed}_n{shots}.jsonl` | 2000 by default | ~0.5 s per shot at six rounds, ~0.1 s at one round |
 
 All costs are single-core wall time on an Apple M-series laptop with
 `chi_max` as set in the scripts. Every run is resumable: a cell whose file
@@ -35,6 +37,10 @@ RERUN_SHOTS=2000 python dem_rerun.py
 
 # Fig. 1d reproduction. REPRO_D selects the distance, REPRO_SHOTS the count.
 REPRO_D=3 REPRO_SHOTS=2000 python repro_tnd3d.py
+
+# Class-sum decoder against BP-OSD on the [[72, 12, 6]] code. BB_ROUNDS, BB_P,
+# BB_SHOTS, BB_SEED, BB_CHI and BB_BASIS select the cell.
+BB_ROUNDS=6 BB_P=0.005 BB_SHOTS=2000 python bb72_class_sum.py
 ```
 
 `dem_rerun.py` and `repro_tnd3d.py` also decode every shot with belief
