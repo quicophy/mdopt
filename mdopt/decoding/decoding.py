@@ -1331,27 +1331,56 @@ def max_product_readout(
     return best_bits, abs(best_value)
 
 
-def _right_orthogonalize(cores: List[np.ndarray]) -> List[np.ndarray]:
-    """Return cores equal to ``cores`` as a state, with every core but the first
+def _right_orthogonalize(cores: List[np.ndarray]) -> Tuple[List[np.ndarray], float]:
+    """Return ``(new_cores, log_scale)`` with ``cores`` equal, as a state, to
+    ``exp(log_scale)`` times ``new_cores``, every new core but the first being
     a right isometry (``sum_{p, r} B[l, p, r] conj(B[l', p, r]) = delta``).
 
     A sweep of LQ factorizations from the right end, each one pushing its
     triangular factor into the left neighbor. Exact: nothing is truncated, so
     unlike :meth:`CanonicalMPS.move_orth_center` this neither depends on the
     MPS's ``chi_max`` nor renormalizes the state.
+
+    Every core is divided by its largest modulus before it is factorized, and
+    the logarithms of those positive scales are summed in ``log_scale``. A
+    chain whose cores carry very different scales (``1e-200`` next to
+    ``1e200``) then cannot overflow or underflow while the triangular factors
+    are absorbed, as long as the amplitudes themselves are representable.
     """
     cores = [np.asarray(core) for core in cores]
+    log_scale = 0.0
+
+    def rescaled(core: np.ndarray) -> np.ndarray:
+        nonlocal log_scale
+        scale = float(np.max(np.abs(core))) if core.size else 0.0
+        if scale == 0.0 or not np.isfinite(scale):
+            return core
+        log_scale += float(np.log(scale))
+        return core / scale
+
+    cores[-1] = rescaled(cores[-1])
     for i in range(len(cores) - 1, 0, -1):
         chi_l, phys, chi_r = cores[i].shape
         # LQ of the (chi_l, phys * chi_r) matrix via QR of its transpose.
         q_factor, r_factor = np.linalg.qr(cores[i].reshape(chi_l, phys * chi_r).T)
         cores[i] = q_factor.T.reshape(-1, phys, chi_r)
-        cores[i - 1] = np.tensordot(cores[i - 1], r_factor.T, axes=(2, 0))
-    return cores
+        cores[i - 1] = rescaled(
+            np.tensordot(rescaled(cores[i - 1]), r_factor.T, axes=(2, 0))
+        )
+    return cores, log_scale
 
 
-def _optima_tt_sweep(cores: List[np.ndarray], num_candidates: int, sign: float = 1.0):
+def _optima_tt_sweep(
+    cores: List[np.ndarray],
+    num_candidates: int,
+    sign: float = 1.0,
+    log_scale: float = 0.0,
+):
     """One left-to-right Optima TT pass over right-orthogonal ``cores``.
+
+    ``log_scale`` is the logarithm of a positive factor already divided out
+    of ``cores`` (see :func:`_right_orthogonalize`); the returned values
+    include it.
 
     Returns ``(bitstrings, values)`` for the ``num_candidates`` prefixes kept
     at the last site; ``values`` are the exact signed amplitudes. Prefixes are
@@ -1362,7 +1391,6 @@ def _optima_tt_sweep(cores: List[np.ndarray], num_candidates: int, sign: float =
     """
     state = np.ones((1, 1), dtype=np.result_type(cores[0].dtype, 1.0))
     prefixes = [""]
-    log_scale = 0.0
     for index, core in enumerate(cores):
         chi_r = core.shape[2]
         state = np.einsum("kl,lpr->kpr", state, core).reshape(-1, chi_r)
@@ -1440,13 +1468,13 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     sign = _global_sign(logical_mps)
 
     found: dict[str, float] = {}
-    bits, values = _optima_tt_sweep(_right_orthogonalize(cores), num_candidates, sign)
+    ortho, log_scale = _right_orthogonalize(cores)
+    bits, values = _optima_tt_sweep(ortho, num_candidates, sign, log_scale)
     found.update(zip(bits, sign * values))
     # The right-to-left pass is the same sweep on the mirrored chain.
     mirrored = [core.transpose(2, 1, 0) for core in reversed(cores)]
-    bits, values = _optima_tt_sweep(
-        _right_orthogonalize(mirrored), num_candidates, sign
-    )
+    ortho, log_scale = _right_orthogonalize(mirrored)
+    bits, values = _optima_tt_sweep(ortho, num_candidates, sign, log_scale)
     found.update((prefix[::-1], value) for prefix, value in zip(bits, sign * values))
 
     return sorted(found.items(), key=lambda item: -item[1])
