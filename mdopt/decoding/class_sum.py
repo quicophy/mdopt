@@ -63,7 +63,7 @@ picking the most likely single candidate.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy as np
 from scipy.linalg import svd as scipy_svd
@@ -625,8 +625,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         ``chi_max``.
     extra_centers : int
         Widens the candidate search on the syndromes whose first pass
-        truncated: up to this many further classes found by the search, most
-        likely first, are each used once as the center of the class flips,
+        truncated: up to this many further classes found by the search and not
+        yet used as a center, most likely first, are each used once as the
+        center of the class flips,
         and the class sum is repeated on the larger active set. Every center
         costs one BP-OSD run per observable. With 0 the search is not
         widened.
@@ -725,16 +726,22 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             For each logical class reached, the log-likelihood ratio and the
             mechanisms of its most likely candidate.
         """
+        return self._search(syndrome, seed)[0]
+
+    def _search(
+        self, syndrome: np.ndarray, seed: np.ndarray
+    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int]]:
+        """The candidates of :meth:`candidates` and the centers it used."""
         center = self.class_of(seed)
         found = {center: (float(self._llr @ seed), seed.copy())}
-        tried = set()
+        tried: Set[int] = set()
         for _ in range(self.recenter_rounds):
             if center in tried:
                 break
             tried.add(center)
             self._flip_around(center, syndrome, found)
             center = max(found, key=lambda label: found[label][0])
-        return found
+        return found, tried
 
     def _flip_around(
         self,
@@ -755,12 +762,16 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
                 found[label] = (likelihood, solution.copy())
 
     def widen(
-        self, syndrome: np.ndarray, found: Dict[int, Tuple[float, np.ndarray]]
+        self,
+        syndrome: np.ndarray,
+        found: Dict[int, Tuple[float, np.ndarray]],
+        tried: Iterable[int] = (),
     ) -> Dict[int, Tuple[float, np.ndarray]]:
         """Candidates of a wider search around the classes already found.
 
-        Up to ``extra_centers`` of the classes in ``found``, most likely
-        first, are each used once as the center of the class flips.
+        Up to ``extra_centers`` of the classes in ``found`` that are not in
+        ``tried``, most likely first, are each used once as the center of the
+        class flips.
 
         Parameters
         ----------
@@ -768,6 +779,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             One bit per detector.
         found : Dict[int, Tuple[float, np.ndarray]]
             The candidates of :meth:`candidates`.
+        tried : Iterable[int]
+            Classes that were already used as centers. The search is
+            deterministic, so using them again would add nothing.
 
         Returns
         -------
@@ -776,7 +790,11 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             candidate of every class.
         """
         wider = dict(found)
-        centers = sorted(found, key=lambda label: -found[label][0])
+        skip = set(tried)
+        centers = sorted(
+            (label for label in found if label not in skip),
+            key=lambda label: -found[label][0],
+        )
         for center in centers[: self.extra_centers]:
             self._flip_around(center, syndrome, wider)
         return wider
@@ -852,16 +870,18 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             info.update(margin=0.0, candidates=0)
             return self._flips(bposd_class), info
 
-        found = self.candidates(syndrome, seed)
+        found, tried = self._search(syndrome, seed)
         active = self._active_set(found)
         masses, contraction = self._class_masses(syndrome, active, 1)
         hard = contraction["lost"] >= self.temper_threshold
         widened = False
-        if hard and self.extra_centers > 0:
-            found = self.widen(syndrome, found)
-            active = self._active_set(found)
-            masses, contraction = self._class_masses(syndrome, active, 1)
-            hard = contraction["lost"] >= self.temper_threshold
+        if hard and self.extra_centers > 0 and len(found) > len(tried):
+            found = self.widen(syndrome, found, tried)
+            wider_active = self._active_set(found)
+            if wider_active != active:
+                active = wider_active
+                masses, contraction = self._class_masses(syndrome, active, 1)
+                hard = contraction["lost"] >= self.temper_threshold
             widened = True
         tempered = False
         if self.temper_stages > 1 and hard:
