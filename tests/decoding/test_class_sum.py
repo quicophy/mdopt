@@ -322,6 +322,10 @@ def test_decoder_rejects_bad_input():
     )
     with pytest.raises(ValueError, match="no mechanisms"):
         ClassSumDecoder(empty)
+    with pytest.raises(ValueError, match="bond dimension"):
+        ClassSumDecoder(problem, temper_chi_max=0)
+    with pytest.raises(ValueError, match="extra centers"):
+        ClassSumDecoder(problem, extra_centers=-1)
     with pytest.raises(ValueError):
         ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors + 1))
 
@@ -331,6 +335,35 @@ def test_decoder_returns_no_flips_for_the_empty_syndrome():
     flips, info = ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors))
     assert flips.shape == (problem.num_observables,) and not flips.any()
     assert info["predicted_class"] == 0 and info["active"] == 0
+
+
+def test_empty_syndrome_with_likely_mechanisms_is_searched():
+    """Priors above 1/2 make a flip the likeliest answer to the empty syndrome."""
+    problem = DemProblem(
+        probs=[0.9, 0.8],
+        detector_rows=[[0, 1]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    flips, info = ClassSumDecoder(problem).decode(np.zeros(1))
+    assert flips.tolist() == [1] and info["predicted_class"] == 1
+
+
+def test_a_tie_goes_to_the_bposd_class():
+    """Two mechanisms with the same detectors and prior tie two classes."""
+    problem = DemProblem(
+        probs=[0.1, 0.1, 0.1],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[0], [1]],
+        num_detectors=1,
+        num_observables=2,
+    )
+    decoder = ClassSumDecoder(problem)
+    flips, info = decoder.decode(np.ones(1))
+    assert info["margin"] < 1e-9
+    assert info["predicted_class"] == info["bposd_class"]
+    assert int(flips @ (1 << np.arange(2))) == info["bposd_class"]
 
 
 def test_decoder_matches_maximum_likelihood_on_a_small_surface_code():
@@ -373,6 +406,63 @@ def test_decoder_tempers_only_when_the_first_pass_truncated():
         assert second["tempered"] == (plain["lost"] >= eager.temper_threshold)
         tempered_at_small_chi += second["tempered"]
     assert tempered_at_small_chi > 0
+
+
+def test_widened_search_extends_the_candidates():
+    """Every extra center adds classes and never loses a better candidate."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    syndromes, _ = _sample_from_model(problem, 40, seed=5)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    narrow = ClassSumDecoder(problem, extra_centers=0)
+    wide = ClassSumDecoder(problem, extra_centers=4)
+    grew = 0
+    for syndrome in syndromes:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(narrow._bposd.decode(syndrome), dtype=np.uint8)
+        if not narrow._satisfies(seed, syndrome):
+            continue
+        found = narrow.candidates(syndrome, seed)
+        assert narrow.widen(syndrome, found) == found
+        wider = wide.widen(syndrome, found)
+        assert set(found) <= set(wider)
+        for label, (likelihood, solution) in wider.items():
+            assert wide._satisfies(solution, syndrome)
+            assert wide.class_of(solution) == label
+            assert np.isclose(likelihood, wide._llr @ solution)
+            if label in found:
+                assert likelihood >= found[label][0] - 1e-12
+        grew += len(wider) > len(found)
+    assert grew > 0
+
+
+def test_decoder_widens_only_when_the_first_pass_truncated():
+    """Hard-syndrome options leave the easy syndromes untouched."""
+    problem = _small_surface_problem(0.02)
+    syndromes, _ = _sample_from_model(problem, 40, seed=3)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    default = ClassSumDecoder(problem, chi_max=16)
+    options = ClassSumDecoder(problem, chi_max=16, extra_centers=4, temper_chi_max=32)
+    assert default.temper_chi_max == 16 and options.temper_chi_max == 32
+    forced = ClassSumDecoder(problem, chi_max=1, extra_centers=4, temper_chi_max=64)
+    stock = ClassSumDecoder(problem, chi_max=1)
+    widened = larger = 0
+    for syndrome in syndromes:
+        flips, info = default.decode(syndrome)
+        same_flips, same = options.decode(syndrome)
+        assert not same["widened"] and not same["tempered"]
+        assert np.array_equal(flips, same_flips)
+        assert same["candidates"] == info["candidates"]
+        _, narrow = stock.decode(syndrome)
+        hard_flips, hard = forced.decode(syndrome)
+        assert hard["widened"] == narrow["tempered"]
+        assert hard["candidates"] >= narrow["candidates"]
+        if hard["tempered"]:
+            # The tempered pass at chi 64 is exact on this small model.
+            assert hard["lost"] < 1e-8
+            _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
+            larger += int(np.array_equal(hard_flips, reference))
+        widened += hard["widened"]
+    assert widened > 5 and larger >= widened - 2
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():

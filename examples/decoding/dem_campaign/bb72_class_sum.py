@@ -9,7 +9,7 @@ shots that only one decoder gets right and the exact McNemar p-value.
 
 Settings come from the environment: BB_ROUNDS (default 6), BB_P (0.005),
 BB_SHOTS (2000), BB_SEED (95), BB_CHI (16), BB_BASIS (Z).
-Output: data-dem-campaign/B_r{rounds}_p{p:.4f}_{basis}_seed{seed}_n{shots}.jsonl,
+Output: data-dem-campaign/B_r{rounds}_p{p}_{basis}_chi{chi}_seed{seed}_n{shots}.jsonl,
 one record per shot. The run is resumable (see README.md). The shot count is
 part of the file name because stim's samples depend on it for a given seed.
 """
@@ -70,7 +70,7 @@ def run(rounds, p, shots, seed, chi_max=16, basis="Z"):
     detections, flips = sampler.sample(shots, separate_observables=True)
 
     RESULTS.mkdir(exist_ok=True)
-    name = f"B_r{rounds}_p{p:.4f}_{basis}_seed{seed}_n{shots}.jsonl"
+    name = f"B_r{rounds}_p{p!r}_{basis}_chi{chi_max}_seed{seed}_n{shots}.jsonl"
     path = RESULTS / name
     records = {}
     if path.exists():

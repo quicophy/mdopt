@@ -47,6 +47,13 @@ truncation keeps the configurations that matter. Without truncation both
 contractions give the same masses. The decoder runs the one-pass contraction
 first and repeats it with tempering only when that pass discarded weight.
 
+**Hard syndromes.** The syndromes whose first pass discards weight are the
+ones where the decoder still fails, and two options spend more effort on them
+only. ``temper_chi_max`` gives the tempered contraction its own, larger bond
+dimension. ``extra_centers`` widens the candidate search: classes that the
+search has already found become centers of further class flips, which reaches
+classes more than one observable flip away from the most likely candidates.
+
 On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
 noise this decoder makes fewer logical errors than BP-OSD on the same shots at
 1, 2 and 6 syndrome-extraction rounds. On the [[90, 8, 10]], [[108, 8, 10]]
@@ -610,6 +617,18 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     temper_threshold : float
         The one-pass contraction is replaced by the tempered one when its
         discarded fraction of the squared norm (``lost``) reaches this value.
+    temper_chi_max : Optional[int]
+        The bond dimension of the tempered contraction. ``None`` uses
+        ``chi_max``. The tempered pass only runs on the syndromes whose first
+        pass truncated, so a larger value here costs much less than a larger
+        ``chi_max``.
+    extra_centers : int
+        Widens the candidate search on the syndromes whose first pass
+        truncated: up to this many further classes found by the search, most
+        likely first, are each used once as the center of the class flips,
+        and the class sum is repeated on the larger active set. Every center
+        costs one BP-OSD run per observable. With 0 the search is not
+        widened.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
@@ -621,13 +640,15 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     a model.
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         problem: DemProblem,
         chi_max: int = 16,
         recenter_rounds: int = 3,
         temper_stages: int = 2,
         temper_threshold: float = 1e-8,
+        temper_chi_max: Optional[int] = None,
+        extra_centers: int = 0,
         **bposd_options: Any,
     ):
         # Imported here so that importing mdopt does not pay for ldpc, which
@@ -645,11 +666,17 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             raise ValueError("The number of tempering stages must be positive.")
         if temper_threshold < 0:
             raise ValueError("The tempering threshold cannot be negative.")
+        if temper_chi_max is not None and temper_chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
+        if extra_centers < 0:
+            raise ValueError("The number of extra centers cannot be negative.")
         self.problem = problem
         self.chi_max = chi_max
         self.recenter_rounds = recenter_rounds
         self.temper_stages = temper_stages
         self.temper_threshold = temper_threshold
+        self.temper_chi_max = chi_max if temper_chi_max is None else temper_chi_max
+        self.extra_centers = extra_centers
         self.num_observables = problem.num_observables
         self._check, self._observables = problem_matrices(problem)
         self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
@@ -657,6 +684,10 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             self._observables.todense(), dtype=np.uint8
         )
         self._llr = np.log(probs / (1 - probs))
+        # With every prior at most 1/2 the empty mechanism set is the most
+        # likely explanation of the empty syndrome, which is then answered
+        # without a search.
+        self._quiet_is_likeliest = bool(np.all(probs <= 0.5))
         self._powers = 1 << np.arange(self.num_observables)
         options = {**DEFAULT_BPOSD_OPTIONS, **bposd_options}
         channel = [float(p) for p in probs]
@@ -702,18 +733,66 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             if center in tried:
                 break
             tried.add(center)
-            for j in range(self.num_observables):
-                target = ((center >> j) & 1) ^ 1
-                extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
-                solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
-                if not self._satisfies(solution, syndrome):
-                    continue
-                label = self.class_of(solution)
-                likelihood = float(self._llr @ solution)
-                if label not in found or likelihood > found[label][0]:
-                    found[label] = (likelihood, solution.copy())
+            self._flip_around(center, syndrome, found)
             center = max(found, key=lambda label: found[label][0])
         return found
+
+    def _flip_around(
+        self,
+        center: int,
+        syndrome: np.ndarray,
+        found: Dict[int, Tuple[float, np.ndarray]],
+    ) -> None:
+        """Flip every observable of ``center`` once and record the solutions."""
+        for j in range(self.num_observables):
+            target = ((center >> j) & 1) ^ 1
+            extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
+            solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
+            if not self._satisfies(solution, syndrome):
+                continue
+            label = self.class_of(solution)
+            likelihood = float(self._llr @ solution)
+            if label not in found or likelihood > found[label][0]:
+                found[label] = (likelihood, solution.copy())
+
+    def widen(
+        self, syndrome: np.ndarray, found: Dict[int, Tuple[float, np.ndarray]]
+    ) -> Dict[int, Tuple[float, np.ndarray]]:
+        """Candidates of a wider search around the classes already found.
+
+        Up to ``extra_centers`` of the classes in ``found``, most likely
+        first, are each used once as the center of the class flips.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+        found : Dict[int, Tuple[float, np.ndarray]]
+            The candidates of :meth:`candidates`.
+
+        Returns
+        -------
+        Dict[int, Tuple[float, np.ndarray]]
+            ``found`` extended by the new classes, with the most likely
+            candidate of every class.
+        """
+        wider = dict(found)
+        centers = sorted(found, key=lambda label: -found[label][0])
+        for center in centers[: self.extra_centers]:
+            self._flip_around(center, syndrome, wider)
+        return wider
+
+    @staticmethod
+    def _active_set(found: Dict[int, Tuple[float, np.ndarray]]) -> List[int]:
+        """Union of the candidate supports, most likely candidate first."""
+        active: List[int] = []
+        seen = set()
+        for _, (_, solution) in sorted(found.items(), key=lambda item: -item[1][0]):
+            for i in np.flatnonzero(solution):
+                if int(i) not in seen:
+                    seen.add(int(i))
+                    active.append(int(i))
+        return active
 
     def _flips(self, label: int) -> np.ndarray:
         return (label >> np.arange(self.num_observables)) & 1
@@ -725,7 +804,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             self.problem,
             syndrome,
             active,
-            self.chi_max,
+            self.chi_max if stages == 1 else self.temper_chi_max,
             check_matrix=self._dense_check,
             observable_matrix=self._dense_observables,
             stages=stages,
@@ -751,18 +830,20 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (difference between the two largest normalized class masses),
             ``lost`` (discarded fraction of the squared norm in the
             contraction that gave the verdict), ``tempered`` (whether that
-            was the tempered contraction), ``active`` and
+            was the tempered contraction), ``widened`` (whether the candidate
+            search was widened), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
-            ``candidates`` (number of logical classes reached). A tie between
-            the two heaviest classes goes to the BP-OSD class when it is one
-            of them. If BP-OSD returns a mechanism set that does not reproduce
+            ``candidates`` (number of logical classes reached). A tie for the
+            heaviest class goes to the BP-OSD class when it is one of the
+            tied classes. The empty syndrome is answered with no flips
+            without a search when every prior is at most 1/2. If BP-OSD returns a mechanism set that does not reproduce
             the syndrome, its class is returned with ``candidates`` set to 0.
         """
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
-        info.update(candidates=1, tempered=False)
-        if not syndrome.any():
+        info.update(candidates=1, tempered=False, widened=False)
+        if self._quiet_is_likeliest and not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
         bposd_class = self.class_of(seed)
@@ -773,16 +854,18 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             return self._flips(bposd_class), info
 
         found = self.candidates(syndrome, seed)
-        active: List[int] = []
-        seen = set()
-        for _, (_, solution) in sorted(found.items(), key=lambda item: -item[1][0]):
-            for i in np.flatnonzero(solution):
-                if int(i) not in seen:
-                    seen.add(int(i))
-                    active.append(int(i))
+        active = self._active_set(found)
         masses, contraction = self._class_masses(syndrome, active, 1)
+        hard = contraction["lost"] >= self.temper_threshold
+        widened = False
+        if hard and self.extra_centers > 0:
+            found = self.widen(syndrome, found)
+            active = self._active_set(found)
+            masses, contraction = self._class_masses(syndrome, active, 1)
+            hard = contraction["lost"] >= self.temper_threshold
+            widened = True
         tempered = False
-        if self.temper_stages > 1 and contraction["lost"] >= self.temper_threshold:
+        if self.temper_stages > 1 and hard:
             try:
                 masses, contraction = self._class_masses(
                     syndrome, active, self.temper_stages
@@ -796,7 +879,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         margin = (
             float(masses[ranking[0]] - masses[ranking[1]]) if masses.size > 1 else 1.0
         )
-        if masses.size > 1 and margin < 1e-6 and int(ranking[1]) == bposd_class:
+        if masses[bposd_class] >= masses[predicted] - 1e-6:
             predicted = bposd_class
         info.update(
             predicted_class=predicted,
@@ -804,6 +887,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             margin=margin,
             lost=contraction["lost"],
             tempered=tempered,
+            widened=widened,
             active=len(active),
             free=contraction["free"],
             candidates=len(found),
