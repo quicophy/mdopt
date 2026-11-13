@@ -1509,8 +1509,9 @@ def _optima_tt_sweep(
 def optima_tt_readout(logical_mps, num_candidates: int = 100):
     """Search the logical MPS for its largest basis-state amplitude by Optima TT.
 
-    Optima TT (Chertkov, Ryzhakov and Oseledets, 2022) is a beam search whose
-    score is exact: with the chain orthogonalized toward the sweep's start,
+    Optima TT [1]_ is the optimizer of the ``teneva`` package [2]_ [3]_, whose
+    ``optima_tt`` routine is the reference implementation. It is a beam
+    search whose score is exact: with the chain orthogonalized toward the sweep's start,
     each surviving prefix carries a vector whose squared norm is the total
     squared amplitude of every basis state completing it, so prefixes are
     ranked by the mass they lead to rather than by a bound on it. The sweep
@@ -1532,6 +1533,21 @@ def optima_tt_readout(logical_mps, num_candidates: int = 100):
     candidates : list of (str, float)
         Distinct basis states found by either sweep with their exact signed
         amplitudes, best first. At most ``2 * num_candidates`` entries.
+
+    References
+    ----------
+    .. [1] A. Chertkov, G. Ryzhakov, G. Novikov and I. Oseledets,
+       "Optimization of functions given in the tensor train format",
+       arXiv:2209.14808 (2022).
+    .. [2] A. Chertkov, G. Ryzhakov and I. Oseledets, "Black box
+       approximation in the tensor train format initialized by ANOVA
+       decomposition", SIAM Journal on Scientific Computing 45 (4),
+       A2101-A2118 (2023), doi:10.1137/22M1514088. The paper the ``teneva``
+       package (https://github.com/AndreiChertkov/teneva) asks to be cited.
+    .. [3] A. Chertkov, G. Ryzhakov, G. Novikov and I. Oseledets, "Tensor
+       extrema estimation via sampling: a new approach for determining
+       min/max elements", Computing in Science & Engineering 25 (5), 14-25
+       (2023), doi:10.1109/MCSE.2023.3346208.
     """
     if isinstance(logical_mps, ExplicitMPS):
         logical_mps = logical_mps.right_canonical()

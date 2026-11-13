@@ -166,6 +166,8 @@ If you happen to find `mdopt` useful in your work, please consider supporting de
 }
 ```
 
+The `"Optima TT"` readout (`mdopt.decoding.decoding.optima_tt_readout`) implements the optimizer of A. Chertkov, G. Ryzhakov, G. Novikov and I. Oseledets, "Optimization of functions given in the tensor train format", [arXiv:2209.14808](https://arxiv.org/abs/2209.14808), whose reference implementation is the [`teneva`](https://github.com/AndreiChertkov/teneva) package. If you use that readout, please cite that paper and the `teneva` papers as well: A. Chertkov, G. Ryzhakov and I. Oseledets, SIAM Journal on Scientific Computing 45 (4), A2101-A2118 (2023), [doi:10.1137/22M1514088](https://doi.org/10.1137/22M1514088), and A. Chertkov, G. Ryzhakov, G. Novikov and I. Oseledets, Computing in Science & Engineering 25 (5), 14-25 (2023), [doi:10.1109/MCSE.2023.3346208](https://doi.org/10.1109/MCSE.2023.3346208).
+
 ## Contribution guidelines
 
 If you want to contribute to `mdopt`, be sure to follow GitHub's contribution guidelines.
