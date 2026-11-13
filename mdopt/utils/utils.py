@@ -29,12 +29,31 @@ def _to_numpy(a):
         return np.asarray(host.get())
 
 
+def _stable_norm(values: np.ndarray) -> float:
+    """The Euclidean norm of a vector whose squares may underflow.
+
+    ``np.linalg.norm`` of a one-dimensional array sums the squares first, so
+    a discarded singular value of 1e-170 comes back as a norm of zero; the
+    entries are scaled by their maximum before squaring instead.
+    """
+    # The magnitude is taken before the cast to a real dtype, so a complex
+    # residual keeps its imaginary part.
+    values = np.abs(np.asarray(values)).astype(float).ravel()
+    if values.size == 0:
+        return 0.0
+    peak = float(values.max())
+    if peak == 0.0 or not np.isfinite(peak):
+        return peak
+    return peak * float(np.sqrt(np.sum((values / peak) ** 2)))
+
+
 def svd(
     mat: np.ndarray,
     cut: float = float(1e-12),
     chi_max: float = int(1e4),
     renormalize: bool = False,
     return_truncation_error: bool = False,
+    return_discarded_norm: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[float]]:
     """
     Performs Singular Value Decomposition with different features.
@@ -56,6 +75,13 @@ def svd(
         Whether to renormalize the singular value spectrum after the cut.
     return_truncation_error : bool
         Whether to return the truncation error.
+    return_discarded_norm : bool
+        Return the norm of the discarded singular values instead of the
+        truncation error (their squared norm), computed without underflow:
+        a discarded value of 1e-170 is reported as such, where the squared
+        weight would be zero. If the last fallback had to decompose a
+        perturbed copy of the matrix, the perturbation's Frobenius norm is
+        added, so the value still bounds the distance from the input.
 
     Returns
     -------
@@ -82,6 +108,7 @@ def svd(
     # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
     u_l = s = v_h = None  # type: ignore
+    perturbation_norm = 0.0
     a = xp.asarray(mat)
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
@@ -126,6 +153,10 @@ def svd(
                 )
             else:
                 an = _to_numpy(a)
+                # The decomposed matrix differs from the input by this much in
+                # the Frobenius norm; the discarded norm reported below has to
+                # account for it.
+                perturbation_norm = 1e-12 * float(np.sqrt(min(an.shape)))
                 u_l, s, v_h = scipy.linalg.svd(
                     an + np.eye(an.shape[0], an.shape[1]) * 1e-12,
                     full_matrices=False,
@@ -150,7 +181,10 @@ def svd(
     # idiom the notebooks use to mean "no truncation"; take the min first.
     max_num = int(min(chi_max, int(np.sum(s > cut))))
     residual = s[max_num:]
-    truncation_error = float(np.linalg.norm(residual) ** 2)
+    discarded_norm = _stable_norm(residual)
+    with np.errstate(over="ignore"):
+        # A NumPy square overflows to inf; a Python float would raise.
+        truncation_error = float(np.square(np.float64(discarded_norm)))
     u_l = u_l[:, :max_num]
     s = s[:max_num]
     v_h = v_h[:max_num, :]
@@ -163,12 +197,16 @@ def svd(
         if norm > 0:
             s = s / norm
 
-    if return_truncation_error:
+    if return_truncation_error or return_discarded_norm:
         return (
             np.asarray(u_l),
             np.asarray(s),
             np.asarray(v_h),
-            truncation_error,
+            (
+                discarded_norm + perturbation_norm
+                if return_discarded_norm
+                else truncation_error
+            ),
         )  # type: ignore
     return np.asarray(u_l), np.asarray(s), np.asarray(v_h), None  # type: ignore
 
@@ -234,6 +272,13 @@ def qr(
     r_r = r_r[trunc_idx, :][:, inv_piv]
     q_l = q_l[:, trunc_idx]
 
+    # The residual of the truncation, measured before any renormalization
+    # of R and without underflow in its squares: it is what was discarded,
+    # as a norm (not squared, unlike the SVD's truncation error).
+    trunc_error = (
+        _stable_norm(_to_numpy(mat) - q_l @ r_r) if return_truncation_error else None
+    )
+
     if renormalize and effective_rank > 0:
         diag = np.diag(r_r[:effective_rank, :effective_rank])
         nrm = float(np.linalg.norm(diag))
@@ -241,7 +286,6 @@ def qr(
             r_r = r_r / nrm
 
     if return_truncation_error:
-        trunc_error = float(np.linalg.norm(_to_numpy(mat) - q_l @ r_r))
         return np.asarray(q_l), np.asarray(r_r), trunc_error
 
     return np.asarray(q_l), np.asarray(r_r), None
@@ -329,6 +373,7 @@ def split_two_site_tensor(
     renormalize: bool = False,
     strategy: str = "svd",
     return_truncation_error: bool = False,
+    return_discarded_norm: bool = False,
 ) -> Tuple:
     """
     Split and truncate a two-site MPS tensor according to the following diagram
@@ -355,6 +400,9 @@ def split_two_site_tensor(
         Available options: ``svd`` and ``qr``.
     return_truncation_error : bool
         Whether to return the truncation error.
+    return_discarded_norm : bool
+        Return the norm of what was discarded in its place, computed
+        without underflow (see :func:`svd`).
 
     Returns
     -------
@@ -393,12 +441,13 @@ def split_two_site_tensor(
             chi_max=chi_max,
             renormalize=renormalize,
             return_truncation_error=return_truncation_error,
+            return_discarded_norm=return_discarded_norm,
         )
         s = np.asarray(singular_values, dtype=float)
         chi_v_cut = s.size
         u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
         v_r = v_h.reshape((chi_v_cut, phys_r, chi_v_r))
-        if return_truncation_error:
+        if return_truncation_error or return_discarded_norm:
             return u_l, singular_values, v_r, truncation_error  # type: ignore[return-value]
         return u_l, singular_values, v_r
 
@@ -408,12 +457,13 @@ def split_two_site_tensor(
         cut=cut,
         chi_max=chi_max,
         renormalize=renormalize,
-        return_truncation_error=return_truncation_error,
+        return_truncation_error=return_truncation_error or return_discarded_norm,
     )
     chi_v_cut = min(chi_max, q_l.shape[1])
     q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
     r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
-    if return_truncation_error:
+    if return_truncation_error or return_discarded_norm:
+        # The QR residual is already a norm, so both requests return it.
         return q_l, r_r, truncation_error, None
     return q_l, r_r, None, None
 

@@ -9,7 +9,7 @@ where v stands for "virtual", p -- for "physical",
 and L, R, U, D stand for "left", "right", "up", "down".
 """
 
-from typing import List, cast
+from typing import List, Optional, cast
 import numpy as np
 from tqdm import tqdm
 from matrex import msro
@@ -213,6 +213,151 @@ class ConstraintString:
         return mpo
 
 
+class TruncationCertificate:
+    """A rigorous bound on the relative truncation error of a constraint sweep.
+
+    Every check-constraint MPO is a partial permutation in the computational
+    basis (operator norm one), and so is every partial application of one
+    inside the zip-up contraction, so the part an SVD discards propagates to
+    the end of the sweep with at most its own norm. A logical constraint has
+    operator norm ``sqrt(2)`` (its copy tensor sends ``|+>`` to ``sqrt(2)``
+    times a basis state), and every constraint's gain ``g_u`` is recorded
+    with it. Writing ``d_t`` for the sum of discarded norms inside constraint
+    ``t`` (the move of the orthogonality center to its start included, in the
+    scale of that constraint's input) and ``r_u`` for the factor the state is
+    renormalized by after constraint ``u``, the final state satisfies
+
+        ``||psi - psi_exact|| / ||psi|| <= sum_t d_t * G_t * S_{t-1} / (S_T * ||psi||)``
+
+    with ``S_t = r_1 * ... * r_t`` and ``G_t = g_t * ... * g_T``, since a
+    discarded component passes through at most the rest of its own
+    constraint and all later ones. The bound is loose, by about two orders
+    of magnitude on the [[18,2]] bivariate bicycle code, but it ranks shots:
+    there no verdict with a bound below 100 was wrong, the wrong rate climbs
+    monotonically above that, and every globally sign-flipped posterior sat
+    above 1e8, because its survival factor ``S_T`` had underflowed. The
+    survival factor is the mechanism behind the sign flips: truncation is
+    accurate relative to the mass present at the time, and the checks keep
+    only ``S_T`` of it.
+
+    The operator norm is the worst case the bound needs; ``survival`` instead
+    divides out the factor by which each step would have changed the norm of
+    the exact state, its mass gain. For a check and a logical constraint the
+    two coincide (1 and ``sqrt(2)``); a bias operator has an operator norm
+    above one but maps a unit-norm basis pair to a unit-norm prior, so its
+    mass gain is one and it leaves ``survival`` alone.
+    """
+
+    def __init__(self) -> None:
+        self.log_scale = 0.0
+        self.log_gain = 0.0
+        self.log_mass_gain = 0.0
+        self.final_norm = 1.0
+        self.log_final_norm = 0.0
+        self.terms: List[tuple[float, float, float]] = []
+        self.bound = 0.0
+        # The most negative class mass as a fraction of the peak, set by a
+        # readout that clamps negatives (decode_dem); 0 for an exact
+        # contraction, since every exact class mass is non-negative.
+        self.negativity = 0.0
+
+    def record(
+        self,
+        discarded: float,
+        renormalization: float,
+        gain: float = 1.0,
+        mass_gain: Optional[float] = None,
+        log_mass_gain: Optional[float] = None,
+        log_renormalization: Optional[float] = None,
+    ) -> None:
+        """One constraint: what its truncations discarded, the factor the
+        state was renormalized by afterwards (1 when it was not), the
+        operator norm of its MPO and, when it differs from that norm, the
+        factor by which the exact operator changes the norm of the state
+        (``survival`` divides this one out; it defaults to ``gain``). A mass
+        gain or a renormalization that would underflow as a number (the norm
+        of thousands of site weights) is passed as its logarithm instead."""
+        if mass_gain is not None and log_mass_gain is not None:
+            raise ValueError("Pass either mass_gain or log_mass_gain, not both.")
+        if log_renormalization is not None and renormalization != 1.0:
+            raise ValueError(
+                "Pass either renormalization or log_renormalization, not both."
+            )
+        self.terms.append((float(discarded), self.log_scale, self.log_gain))
+        if log_renormalization is not None:
+            self.log_scale += float(log_renormalization)
+        else:
+            self.log_scale += (
+                float(np.log(renormalization)) if renormalization > 0 else -np.inf
+            )
+        self.log_gain += float(np.log(gain))
+        if log_mass_gain is None:
+            log_mass_gain = float(np.log(gain if mass_gain is None else mass_gain))
+        self.log_mass_gain += float(log_mass_gain)
+
+    @property
+    def survival(self) -> float:
+        """The mass fraction the constraints kept, in amplitude units: the
+        product of the renormalization factors and the final norm, with the
+        mass gains of the constraints divided out. It is the same number
+        whether or not the sweep renormalized. The scales cancel in the
+        exponent, so a tiny final norm against a tiny mass gain is one, not
+        an overflow."""
+        with np.errstate(over="ignore", under="ignore"):
+            return float(
+                np.exp(self.log_scale - self.log_mass_gain + self.log_final_norm)
+            )
+
+    @property
+    def discarded(self) -> float:
+        """The sum of all discarded norms, in the original scale. Each term
+        is exponentiated as one logarithm, so a loss at a scale whose
+        exponential alone would overflow stays finite, and a zero loss is
+        skipped rather than multiplied by an infinite scale."""
+        with np.errstate(over="ignore", divide="ignore"):
+            return float(
+                sum(np.exp(np.log(d) + log_s) for d, log_s, _ in self.terms if d > 0)
+            )
+
+    def finalize(
+        self, final_norm: float = 1.0, log_final_norm: Optional[float] = None
+    ) -> float:
+        """Evaluate and store the bound for a final state of norm ``final_norm``
+        (or of log-norm ``log_final_norm``, for a chain whose norm underflows)."""
+        if log_final_norm is None:
+            self.final_norm = float(final_norm)
+            self.log_final_norm = (
+                float(np.log(self.final_norm))
+                if np.isfinite(self.final_norm) and self.final_norm > 0.0
+                else -np.inf
+            )
+        else:
+            self.log_final_norm = float(log_final_norm)
+            with np.errstate(under="ignore"):
+                self.final_norm = float(np.exp(self.log_final_norm))
+        if not np.isfinite(self.log_final_norm):
+            # Nothing positive is left to compare the discards with: the
+            # relative error of a collapsed state is undefined, not zero,
+            # even when no discard was recorded.
+            self.bound = float("inf")
+            return self.bound
+        log_final = self.log_scale + self.log_final_norm
+        # Each term is one exponential of (log loss + log gains + log scale -
+        # log final norm): a loss of 1e-310 against a final norm of 1e-310 is
+        # one, not infinity times a tiny number.
+        with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
+            self.bound = float(
+                sum(
+                    np.exp(np.log(d) + self.log_gain - log_g + log_s - log_final)
+                    for d, log_s, log_g in self.terms
+                    if d > 0
+                )
+            )
+        if np.isnan(self.bound):
+            self.bound = float("inf")
+        return self.bound
+
+
 def _product_state_orth_center(mps: CanonicalMPS, tolerance: float = 1e-12) -> int:
     """The orthogonality center :func:`find_orth_center` assigns a product state.
 
@@ -241,6 +386,8 @@ def apply_constraints(
     silent: bool = False,
     dense: bool = False,
     return_entropies_and_bond_dims: bool = False,
+    certificate: Optional[TruncationCertificate] = None,
+    gain: float = 1.0,
 ) -> CanonicalMPS | np.ndarray:
     """
     This function applies logical constraints to an MPS.
@@ -272,6 +419,14 @@ def apply_constraints(
     dense : bool
         Whether to perform the calculations in the dense form.
         To be used only for small systems (<= 20 sites).
+    certificate : Optional[TruncationCertificate]
+        When given, every constraint's discarded norms and renormalization
+        factor are recorded in it (see :class:`TruncationCertificate`).
+    gain : float
+        The operator norm of every constraint MPO in ``strings``, recorded
+        with the certificate: one for the check constraints (partial
+        permutations) and ``sqrt(2)`` for the logical constraints, which the
+        decoders pass.
 
     Returns
     -------
@@ -315,6 +470,7 @@ def apply_constraints(
         mpo = string.mpo()
 
         start_site = min(string.flat())
+        discarded: List[float] = []
         if dense:
             # Pad MPO with identities to full length and apply as a matrix
             identities_l = [IDENTITY for _ in range(start_site)]
@@ -322,6 +478,10 @@ def apply_constraints(
             full_mpo = identities_l + mpo + identities_r
             mpo_dense = mpo_to_matrix(full_mpo, interlace=False, group=True)
             mps_dense = mpo_dense @ mps_dense  # type: ignore[has-type]
+            if certificate is not None:
+                # Exact and unnormalized, but the gain still scales what
+                # earlier sweeps discarded and what ``survival`` divides out.
+                certificate.record(0.0, 1.0, gain)
             continue
 
         # Ensure orthogonality center is set and moved once per string
@@ -332,6 +492,7 @@ def apply_constraints(
             # non-isometric site, or site 0 when every site is isometric --
             # comes from the site norms alone. Same tolerance as the scan.
             mps.orth_center = _product_state_orth_center(mps)
+        moves: List[float] = []
         if mps.orth_center is None:
             orth_centers, flags_left, flags_right = find_orth_center(
                 mps, return_orth_flags=True
@@ -358,11 +519,17 @@ def apply_constraints(
             if isinstance(orth_centers, list) and len(orth_centers) > 1:
                 mps.orth_center = orth_centers[0]
 
+        # The move to the string's first site happens here, whether the
+        # center was just found or already known, so that what it discards
+        # is the move term (it passes through this MPO) rather than a loss
+        # the contractor's own move would mix into the zip-up term.
+        if mps.orth_center != start_site:
             mps = mps.move_orth_center(
                 final_pos=start_site,
                 renormalize=False,
                 return_singular_values=False,
                 inplace=True,
+                discarded_norms=moves if certificate is not None else None,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())
@@ -374,14 +541,24 @@ def apply_constraints(
             cut=cut,
             renormalize=False,
             inplace=True,
+            discarded_norms=discarded if certificate is not None else None,
         )
-
+        renormalization = 1.0
         if renormalize:
             orth_center_index = int(mps.orth_center)  # type: ignore
             center = mps.tensors[orth_center_index]
             norm = np.linalg.norm(center)
             if norm > 0:
                 mps.tensors[orth_center_index] = center / norm
+            renormalization = float(norm)
+        if certificate is not None:
+            # What the move before the MPO discarded passes through the MPO,
+            # so it is recorded with the MPO's gain; what the zip-up itself
+            # discarded does not, and recording it with that gain would
+            # shrink it whenever the gain is below one. The renormalization
+            # applies after both, so it goes with the second term.
+            certificate.record(sum(moves), 1.0, gain)
+            certificate.record(sum(discarded), renormalization, 1.0)
 
         if return_entropies_and_bond_dims:
             # Use a copy to avoid mutating `mps` during entropy computation

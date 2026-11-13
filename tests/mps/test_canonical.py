@@ -1102,3 +1102,27 @@ def test_move_orth_center_accepts_integer_and_boolean_tensors():
         back = moved.move_orth_center(0, renormalize=True)
         assert back.orth_center == 0
         assert list(back.bond_dimensions) == [1, 1, 1]
+
+
+def test_move_orth_center_records_what_its_svds_discard():
+    """A move truncates too (at ``chi_max`` and the SVD cutoff); when asked,
+    it reports the norm of every component it drops, so a truncation-error
+    accounting that only watched the zip-up contractions does not miss it."""
+    tiny = 1e-13
+    site_0 = np.eye(2).reshape(1, 2, 2)
+    site_1 = np.diag([1.0, tiny]).reshape(2, 2, 1)
+    mps = CanonicalMPS([site_0, site_1], orth_center=1)
+
+    discarded: list = []
+    moved = mps.move_orth_center(0, renormalize=False, discarded_norms=discarded)
+    assert moved.orth_center == 0
+    assert list(moved.bond_dimensions) == [1]
+    assert len(discarded) == 1
+    assert np.isclose(discarded[0], tiny, rtol=1e-3, atol=0)
+
+    # Nothing to drop, nothing reported.
+    kept: list = []
+    CanonicalMPS(
+        [site_0, np.diag([1.0, 0.5]).reshape(2, 2, 1)], orth_center=1
+    ).move_orth_center(0, renormalize=False, discarded_norms=kept)
+    assert kept == [0.0]
