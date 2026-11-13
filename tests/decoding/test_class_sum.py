@@ -311,8 +311,17 @@ def test_decoder_rejects_bad_input():
         num_detectors=1,
         num_observables=1,
     )
-    with pytest.raises(ValueError, match="strictly between 0 and 1"):
+    with pytest.raises(ValueError, match="at most 1/2"):
         ClassSumDecoder(degenerate)
+    likely = DemProblem(
+        probs=[0.9, 0.8],
+        detector_rows=[[0, 1]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="at most 1/2"):
+        ClassSumDecoder(likely)
     empty = DemProblem(
         probs=[],
         detector_rows=[[]],
@@ -337,33 +346,26 @@ def test_decoder_returns_no_flips_for_the_empty_syndrome():
     assert info["predicted_class"] == 0 and info["active"] == 0
 
 
-def test_empty_syndrome_with_likely_mechanisms_is_searched():
-    """Priors above 1/2 make a flip the likeliest answer to the empty syndrome."""
-    problem = DemProblem(
-        probs=[0.9, 0.8],
-        detector_rows=[[0, 1]],
-        observable_rows=[[0]],
-        num_detectors=1,
-        num_observables=1,
-    )
-    flips, info = ClassSumDecoder(problem).decode(np.zeros(1))
-    assert flips.tolist() == [1] and info["predicted_class"] == 1
-
-
-def test_a_tie_goes_to_the_bposd_class():
-    """Two mechanisms with the same detectors and prior tie two classes."""
-    problem = DemProblem(
-        probs=[0.1, 0.1, 0.1],
-        detector_rows=[[0, 1, 2]],
-        observable_rows=[[0], [1]],
-        num_detectors=1,
-        num_observables=2,
-    )
+def test_a_tie_goes_to_the_bposd_class(monkeypatch):
+    """The BP-OSD class wins a tie wherever the sort happens to rank it."""
+    problem = _random_problem(4, num_observables=2)
     decoder = ClassSumDecoder(problem)
-    flips, info = decoder.decode(np.ones(1))
-    assert info["margin"] < 1e-9
-    assert info["predicted_class"] == info["bposd_class"]
-    assert int(flips @ (1 << np.arange(2))) == info["bposd_class"]
+    monkeypatch.setattr(
+        decoder,
+        "_class_masses",
+        lambda syndrome, active, stages: (np.full(4, 0.25), {"lost": 0.0, "free": 1}),
+    )
+    syndromes, _ = _sample_from_model(problem, 60, seed=7)
+    ranked_elsewhere = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        flips, info = decoder.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        assert info["predicted_class"] == info["bposd_class"]
+        assert int(flips @ (1 << np.arange(2))) == info["bposd_class"]
+        # argsort puts class 3 first and class 2 second among equal masses.
+        ranked_elsewhere += info["bposd_class"] in (0, 1)
+    assert ranked_elsewhere > 0
 
 
 def test_decoder_matches_maximum_likelihood_on_a_small_surface_code():

@@ -603,8 +603,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     Parameters
     ----------
     problem : DemProblem
-        The detector error model. Every prior must lie strictly between 0 and
-        1.
+        The detector error model. Every prior must be positive and at most
+        1/2, so that no error is the most likely explanation of the empty
+        syndrome.
     chi_max : int
         The bond dimension of the class-sum contraction.
     recenter_rounds : int
@@ -658,8 +659,10 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         probs = np.asarray(problem.probs, dtype=float)
         if probs.size == 0:
             raise ValueError("The detector error model has no mechanisms.")
-        if np.any(probs <= 0) or np.any(probs >= 1):
-            raise ValueError("Every prior must lie strictly between 0 and 1.")
+        if np.any(probs <= 0) or np.any(probs > 0.5):
+            # Above 1/2 a mechanism is more likely to fire than not, and the
+            # empty syndrome would no longer be best explained by no error.
+            raise ValueError("Every prior must be positive and at most 1/2.")
         if chi_max < 1:
             raise ValueError("The bond dimension must be positive.")
         if temper_stages < 1:
@@ -684,10 +687,6 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             self._observables.todense(), dtype=np.uint8
         )
         self._llr = np.log(probs / (1 - probs))
-        # With every prior at most 1/2 the empty mechanism set is the most
-        # likely explanation of the empty syndrome, which is then answered
-        # without a search.
-        self._quiet_is_likeliest = bool(np.all(probs <= 0.5))
         self._powers = 1 << np.arange(self.num_observables)
         options = {**DEFAULT_BPOSD_OPTIONS, **bposd_options}
         channel = [float(p) for p in probs]
@@ -836,14 +835,14 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             ``candidates`` (number of logical classes reached). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
             tied classes. The empty syndrome is answered with no flips
-            without a search when every prior is at most 1/2. If BP-OSD returns a mechanism set that does not reproduce
+            without a search. If BP-OSD returns a mechanism set that does not reproduce
             the syndrome, its class is returned with ``candidates`` set to 0.
         """
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
         info.update(candidates=1, tempered=False, widened=False)
-        if self._quiet_is_likeliest and not syndrome.any():
+        if not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
         bposd_class = self.class_of(seed)
