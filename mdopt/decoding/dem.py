@@ -636,8 +636,9 @@ def _reweighted_branches(
     never scaled back by more than ``1 / (1 - cap)`` at marginalization.
     Pinned mechanisms (``free`` false) keep their priors. The zero branch is
     formed by subtraction, which can erase a floor-protected prior below
-    1e-16 when the clip's upper end rounds to one, so the floor is enforced
-    on it directly as well.
+    1e-16 when the clip's upper end rounds to one, and the clip's upper end
+    itself rounds to zero for a firing prior below 1e-16 under a floor of
+    one, so the floor is enforced on both branches directly as well.
     """
     lower = reweighting_floor * priors[:, 1]
     upper = 1.0 - reweighting_floor * priors[:, 0]
@@ -664,7 +665,9 @@ def _reweighted_branches(
         )
     marginal = np.clip(marginal, lower, upper)
     contracted = priors.copy()
-    contracted[free, 1] = marginal[free]
+    contracted[free, 1] = np.maximum(
+        marginal[free], reweighting_floor * priors[free, 1]
+    )
     contracted[free, 0] = np.maximum(
         1.0 - marginal[free], reweighting_floor * priors[free, 0]
     )

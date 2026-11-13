@@ -700,6 +700,38 @@ def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
     return (left * spectrum) @ right
 
 
+def test_svd_jitter_fallback_reports_its_perturbation(monkeypatch):
+    """The last fallback decomposes a perturbed matrix; with nothing cut the
+    discarded norm must still bound the distance from the input."""
+    import scipy.linalg
+
+    from mdopt.utils import utils
+
+    real_svd = scipy.linalg.svd
+    calls = {"scipy": 0}
+
+    def failing_backend_svd(*args, **kwargs):
+        raise np.linalg.LinAlgError("forced")
+
+    def scipy_svd_failing_twice(*args, **kwargs):
+        calls["scipy"] += 1
+        if calls["scipy"] <= 2:
+            raise np.linalg.LinAlgError("forced")
+        return real_svd(*args, **kwargs)
+
+    monkeypatch.setattr(utils.xp.linalg, "svd", failing_backend_svd)
+    monkeypatch.setattr(utils.scipy.linalg, "svd", scipy_svd_failing_twice)
+    mat = 1e-13 * np.arange(1.0, 7.0).reshape(2, 3)
+    u_l, s, v_h, discarded = utils.svd(mat, cut=0.0, return_discarded_norm=True)
+    assert calls["scipy"] == 3
+    distance = np.linalg.norm(mat - (u_l * s) @ v_h)
+    assert distance > 1e-13
+    assert discarded >= distance * (1 - 1e-9)
+    assert np.isclose(discarded, 1e-12 * np.sqrt(2))
+    _, _, _, squared = utils.svd(mat, cut=0.0, return_truncation_error=True)
+    assert squared == 0.0
+
+
 def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
     """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
     decoders' center tensors take. A small deterministic check for the default

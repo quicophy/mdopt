@@ -813,6 +813,20 @@ def test_reweighted_branches_keep_a_floored_zero_branch():
     assert np.array_equal(pinned, priors)
 
 
+def test_reweighted_branches_keep_a_floored_firing_branch():
+    """With a firing prior of 1e-20 and a floor of one the clip's upper end,
+    ``1 - P(0)``, rounds to zero; the firing branch must keep its prior."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1.0, 1e-20]])
+    for marginal in (0.0, 0.3, 1.0):
+        contracted = _reweighted_branches(
+            priors, np.array([marginal]), 1.0, 0.5, np.array([True])
+        )
+        assert contracted[0, 1] == 1e-20
+        assert contracted[0, 0] == 1.0
+
+
 def _truncating_problem(extra_pinned: int = 0) -> tuple[DemProblem, np.ndarray]:
     """Three overlapping three-mechanism detectors (chi_max=3 truncates), plus
     ``extra_pinned`` independent mechanisms of probability one half, each on

@@ -79,7 +79,9 @@ def svd(
         Return the norm of the discarded singular values instead of the
         truncation error (their squared norm), computed without underflow:
         a discarded value of 1e-170 is reported as such, where the squared
-        weight would be zero.
+        weight would be zero. If the last fallback had to decompose a
+        perturbed copy of the matrix, the perturbation's Frobenius norm is
+        added, so the value still bounds the distance from the input.
 
     Returns
     -------
@@ -106,6 +108,7 @@ def svd(
     # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
     u_l = s = v_h = None  # type: ignore
+    perturbation_norm = 0.0
     a = xp.asarray(mat)
     for attempt in ("xp", "gesdd", "gesvd", "jitter"):
         try:
@@ -150,6 +153,10 @@ def svd(
                 )
             else:
                 an = _to_numpy(a)
+                # The decomposed matrix differs from the input by this much in
+                # the Frobenius norm; the discarded norm reported below has to
+                # account for it.
+                perturbation_norm = 1e-12 * float(np.sqrt(min(an.shape)))
                 u_l, s, v_h = scipy.linalg.svd(
                     an + np.eye(an.shape[0], an.shape[1]) * 1e-12,
                     full_matrices=False,
@@ -195,7 +202,11 @@ def svd(
             np.asarray(u_l),
             np.asarray(s),
             np.asarray(v_h),
-            discarded_norm if return_discarded_norm else truncation_error,
+            (
+                discarded_norm + perturbation_norm
+                if return_discarded_norm
+                else truncation_error
+            ),
         )  # type: ignore
     return np.asarray(u_l), np.asarray(s), np.asarray(v_h), None  # type: ignore
 
