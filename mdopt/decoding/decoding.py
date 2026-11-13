@@ -1593,7 +1593,13 @@ def _global_sign(logical_mps) -> float:
         # running vector by a positive factor: the normalized |+> overlap
         # carries 2**(-k/2), which can underflow a tiny but representable
         # posterior to -0.0 and lose the sign.
-        vector = vector @ np.asarray(core).sum(axis=1)
+        core = np.asarray(core)
+        # Rescale the core first: summing a physical leg of entries near the
+        # largest float would overflow although every amplitude is finite.
+        magnitude = float(np.max(np.abs(core))) if core.size else 0.0
+        if magnitude > 0.0 and np.isfinite(magnitude):
+            core = core / magnitude
+        vector = vector @ core.sum(axis=1)
         if vector.size == 0:
             # A zero-width bond: the state collapsed, and a collapsed state
             # has no sign. Scoring it as a failure is the caller's job.
