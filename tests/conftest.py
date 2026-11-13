@@ -10,6 +10,21 @@ import zlib
 
 import numpy as np
 import pytest
+from threadpoolctl import threadpool_limits
+
+
+@pytest.fixture(autouse=True, scope="session")
+def single_threaded_blas():
+    """Run the suite on one BLAS thread.
+
+    The wheels' multithreaded OpenBLAS makes the small QR and SVD
+    factorizations the decoders live on up to a hundred times slower than
+    single-threaded (an 800 x 400 QR takes seconds instead of tens of
+    milliseconds), which the campaign scripts avoid by pinning the thread
+    count and the test suite did not.
+    """
+    with threadpool_limits(limits=1, user_api="blas"):
+        yield
 
 
 @pytest.fixture(autouse=True)
