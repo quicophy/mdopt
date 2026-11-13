@@ -12,5 +12,6 @@ Submodules
 .. toctree::
    :maxdepth: 4
 
+   mdopt.decoding.class_sum
    mdopt.decoding.decoding
    mdopt.decoding.dem
