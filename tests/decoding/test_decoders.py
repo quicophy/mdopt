@@ -2078,6 +2078,46 @@ def test_optima_tt_returns_full_length_strings_for_a_collapsed_state():
     assert all(value == 0.0 for _, value in candidates)
 
 
+@pytest.mark.parametrize(
+    "scales",
+    [
+        [1e-200, 1e-200, 1e200, 1e200],
+        [1e200, 1e200, 1e-200, 1e-200],
+        [1e-30] * 100 + [1e30] * 100,
+    ],
+)
+def test_optima_tt_survives_cores_of_very_different_scales(scales):
+    """The scales cancel in the amplitude and must not overflow on the way."""
+    zero = np.array([1.0, 0.0]).reshape(1, 2, 1)
+    cores = [scale * zero for scale in scales]
+    candidates = optima_tt_readout(CanonicalMPS(cores, orth_center=None), 4)
+    bits, value = candidates[0]
+    assert bits == "0" * len(scales)
+    assert np.isclose(value, 1.0, rtol=1e-9)
+    assert all(np.isfinite(other) for _, other in candidates)
+
+
+def test_optima_tt_scale_bookkeeping_matches_the_dense_amplitudes():
+    """Rescaling during the orthogonalization leaves every amplitude exact."""
+    rng = np.random.default_rng(11)
+    cores = [rng.normal(size=(1, 2, 3)), rng.normal(size=(3, 2, 3))]
+    cores += [rng.normal(size=(3, 2, 2)), rng.normal(size=(2, 2, 1))]
+    for core, scale in zip(cores, [1e-120, 1e90, 1e-60, 1e95]):
+        core *= scale
+    dense = cores[0]
+    for core in cores[1:]:
+        dense = np.tensordot(dense, core, axes=(-1, 0))
+    dense = dense.reshape(-1)
+    for bits, value in optima_tt_readout(CanonicalMPS(cores, orth_center=None), 16):
+        assert np.isclose(
+            value, _global_sign_of(dense) * dense[int(bits, 2)], rtol=1e-9
+        )
+
+
+def _global_sign_of(dense):
+    return -1.0 if dense.sum() < 0 else 1.0
+
+
 def test_num_candidates_is_the_last_decoder_parameter():
     """Inserting it earlier would shift positional tie_policy and rng callers."""
     import inspect
