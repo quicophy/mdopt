@@ -2064,6 +2064,20 @@ def test_global_sign_survives_a_tiny_scale():
     assert _global_sign(state) == 1.0
 
 
+def test_global_sign_survives_cores_near_the_largest_float():
+    """Summing a physical leg must not overflow when the amplitudes are finite."""
+    from mdopt.decoding.decoding import _global_sign
+
+    cores = [
+        np.array([-1e308, -1e308]).reshape(1, 2, 1),
+        np.array([1e-308, 0.0]).reshape(1, 2, 1),
+    ]
+    state = CanonicalMPS(cores, orth_center=None)
+    assert _global_sign(state) == -1.0
+    bits, value = optima_tt_readout(state, 4)[0]
+    assert bits in ("00", "10") and np.isclose(value, 1.0)
+
+
 def test_optima_tt_returns_full_length_strings_for_a_collapsed_state():
     rng = np.random.default_rng(3)
     cores = [rng.random((1, 2, 2)), np.zeros((2, 2, 2)), rng.random((2, 2, 1))]
