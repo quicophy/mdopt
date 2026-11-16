@@ -569,6 +569,28 @@ def test_decode_dem_signature_and_argument_validation():
         decode_dem(problem, syndrome, negative_mass="ignore")
 
 
+def test_a_long_pinned_chain_does_not_underflow_the_readout():
+    """2200 mechanisms pinned by their own detectors, behind one mechanism
+    that only flips the observable with probability 0.6. Without rescaling
+    the readout, both class masses end subnormal and equal."""
+    size = 2200
+    problem = DemProblem(
+        probs=[0.6] + [0.5] * size,
+        detector_rows=[[i + 1] for i in range(size)],
+        observable_rows=[[0]],
+        num_detectors=size,
+        num_observables=1,
+    )
+    syndrome = np.zeros(size, dtype=int)
+    for renormalize in (False, True):
+        masses, flips, cert = decode_dem(
+            problem, syndrome, renormalize=renormalize, return_certificate=True
+        )
+        assert np.array_equal(flips, [1])
+        assert np.isclose(masses[1] / masses[0], 1.5)
+        assert cert.bound < 1e-12
+
+
 def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeypatch):
     """A class mass below -1e-8 of the peak is a truncation artifact. The
     default keeps the old contract (callers escalate on the exception);
