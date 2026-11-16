@@ -287,6 +287,21 @@ def test_class_masses_agree_with_the_full_chain_decoder():
         assert np.allclose(masses, reference / reference.sum(), atol=1e-9)
 
 
+def test_a_mechanism_listed_twice_in_a_row_cancels():
+    """The matrices are over GF(2): two entries of one mechanism are none."""
+    problem = DemProblem(
+        probs=[0.1, 0.2],
+        detector_rows=[[0, 0, 1], [1]],
+        observable_rows=[[1, 1]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    check, observables = problem_matrices(problem)
+    assert np.array_equal(check.toarray(), [[0, 1], [0, 1]])
+    assert np.array_equal(observables.toarray(), [[0, 0]])
+    assert check.nnz == 2 and observables.nnz == 0
+
+
 def test_active_set_without_a_solution_raises():
     problem = DemProblem(
         probs=[0.1, 0.1, 0.1],
@@ -474,6 +489,9 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
     assert default.temper_chi_max == 16 and options.temper_chi_max == 32
     forced = ClassSumDecoder(problem, chi_max=1, extra_centers=4, temper_chi_max=64)
     stock = ClassSumDecoder(problem, chi_max=1)
+    # One pass and nothing else: its ``lost`` says whether the first pass
+    # of the decoders above truncated.
+    one_pass = ClassSumDecoder(problem, chi_max=1, temper_stages=1)
     widened = larger = tempered = 0
     for syndrome in syndromes:
         flips, info = default.decode(syndrome)
@@ -485,7 +503,8 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
         hard_flips, hard = forced.decode(syndrome)
         # Only a truncated first pass widens, and only if a class is left
         # that was not a center yet.
-        assert narrow["tempered"] or not hard["widened"]
+        _, first = one_pass.decode(syndrome)
+        assert first["lost"] >= forced.temper_threshold or not hard["widened"]
         assert hard["candidates"] >= narrow["candidates"]
         if hard["tempered"]:
             # The tempered pass at chi 64 is exact on this small model.
