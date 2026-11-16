@@ -15,6 +15,7 @@ import pytest
 import stim
 
 from mdopt.decoding.dem import (
+    DemDecodingError,
     DemProblem,
     decode_dem,
     dem_to_problem,
@@ -394,7 +395,7 @@ def test_dem_error_paths_raise_precisely():
     # chi_max=1 destroys the class-mass vector: nothing positive survives,
     # which is loud (a collapse). A merely negative mass is clamped and
     # reported through the certificate instead, never silently abs()'d.
-    with pytest.raises(ArithmeticError, match="collapsed"):
+    with pytest.raises(DemDecodingError, match="collapsed"):
         decode_dem(problem, np.array([1, 0]), chi_max=1)
 
     # Ordering: natural is the identity, unknown strategies are rejected.
@@ -585,7 +586,7 @@ def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeyp
         return out
 
     monkeypatch.setattr(CanonicalMPS, "dense", dense_with_an_artifact)
-    with pytest.raises(ArithmeticError, match="negative_mass='clamp'") as info:
+    with pytest.raises(DemDecodingError, match="negative_mass='clamp'") as info:
         decode_dem(problem, syndrome)
     assert np.isclose(info.value.certificate.negativity, 0.25)
     masses, flips, cert = decode_dem(
