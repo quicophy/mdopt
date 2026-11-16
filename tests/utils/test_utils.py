@@ -732,6 +732,69 @@ def test_svd_jitter_fallback_reports_its_perturbation(monkeypatch):
     assert squared == 0.0
 
 
+def test_svd_jitter_fallback_measures_the_perturbation_it_adds(monkeypatch):
+    """Next to an entry of 8192 the jitter of 1e-12 moves the entry by more
+    than 1e-12; the reported norm must cover what was actually added."""
+    import scipy.linalg
+
+    from mdopt.utils import utils
+
+    real_svd = scipy.linalg.svd
+    calls = {"scipy": 0}
+
+    def failing_backend_svd(*args, **kwargs):
+        raise np.linalg.LinAlgError("forced")
+
+    def scipy_svd_failing_twice(*args, **kwargs):
+        calls["scipy"] += 1
+        if calls["scipy"] <= 2:
+            raise np.linalg.LinAlgError("forced")
+        return real_svd(*args, **kwargs)
+
+    monkeypatch.setattr(utils.xp.linalg, "svd", failing_backend_svd)
+    monkeypatch.setattr(utils.scipy.linalg, "svd", scipy_svd_failing_twice)
+    mat = np.array([[8192.0]])
+    added = float(np.abs((mat + 1e-12) - mat)[0, 0])
+    assert added > 1e-12
+    _, _, _, discarded = utils.svd(mat, cut=0.0, return_discarded_norm=True)
+    assert calls["scipy"] == 3
+    assert discarded == added
+
+
+def test_discarded_norm_survives_the_underflow_of_its_square():
+    """A discarded singular value of 1e-170 has a square of zero in float64;
+    the discarded norm still reports it, the legacy squared error does not."""
+    mat = np.diag([1.0, 1e-170])
+    _, s, _, discarded = svd(mat, cut=0.0, chi_max=1, return_discarded_norm=True)
+    assert np.array_equal(s, [1.0])
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
+    _, _, _, squared = svd(mat, cut=0.0, chi_max=1, return_truncation_error=True)
+    assert squared == 0.0
+
+    tensor = mat.reshape((1, 2, 2, 1))
+    *_, discarded = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, return_discarded_norm=True
+    )
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
+    *_, squared = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, return_truncation_error=True
+    )
+    assert squared == 0.0
+
+
+def test_qr_truncation_error_keeps_its_meaning_and_the_discarded_norm_is_separate():
+    """The legacy error is the distance to the returned factors, with the
+    renormalization of R in it; the discarded norm is what truncation cut."""
+    mat = np.diag([4.0, 3.0])
+    q_l, r_r, error = qr(mat, renormalize=True, return_truncation_error=True)
+    assert np.isclose(error, np.linalg.norm(mat - q_l @ r_r))
+    assert np.isclose(error, 4.0)
+    _, _, discarded = qr(mat, renormalize=True, return_discarded_norm=True)
+    assert discarded == 0.0
+    _, _, discarded = qr(mat, chi_max=1, return_discarded_norm=True)
+    assert np.isclose(discarded, 3.0)
+
+
 def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
     """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
     decoders' center tensors take. A small deterministic check for the default
