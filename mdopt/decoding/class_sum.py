@@ -54,14 +54,43 @@ dimension. ``extra_centers`` widens the candidate search: classes that the
 search has already found become centers of further class flips, which reaches
 classes more than one observable flip away from the most likely candidates.
 
+**Truncating in the computational basis.** Every factor of this network is
+diagonal in the bit basis, so a bond does not need the basis an SVD would
+choose: it can stay in the computational basis, where one basis state is one
+pattern of running parities of the pivots whose support is in progress,
+together with the observable pattern accumulated so far. That is the state
+space of a trellis decoder ([1]_, [2]_), and :func:`basis_truncated_class_masses`
+contracts the same network in it. A bond is truncated by keeping the
+``max_states`` most probable basis states, as in reduced-state trellis decoding
+[3]_, ranked by the weight they have when every remaining free mechanism stays
+off. Nothing is rotated, every number is a probability, and the cost is a few
+ten thousand additions and multiplications where the SVD contraction needs a
+thousand factorizations. ``ClassSumDecoder(truncation="basis")`` uses it.
+
 On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
 noise this decoder makes fewer logical errors than BP-OSD on the same shots at
 1, 2 and 6 syndrome-extraction rounds. On the [[90, 8, 10]], [[108, 8, 10]]
 and [[144, 12, 12]] codes of the same family the tempered pass is what keeps
 it ahead: on [[144, 12, 12]] the one-pass contraction alone does worse than
-picking the most likely single candidate.
+picking the most likely single candidate. With the truncation in the
+computational basis the decoder makes fewer errors still on [[144, 12, 12]]
+than with the tempered SVD contraction.
+
+References
+----------
+.. [1] H. Ollivier and J.-P. Tillich, "Trellises for stabilizer codes:
+   definition and uses", Physical Review A 74, 032304 (2006).
+.. [2] E. Stylianou, V. Sidorenko, C. Deppe and H. Boche, "Minimal trellises
+   for non-degenerate and degenerate decoding of quantum stabilizer codes",
+   arXiv:2410.07897 (2024).
+.. [3] V. Franz and J. B. Anderson, "Concatenated decoding with a
+   reduced-search BCJR algorithm", IEEE Journal on Selected Areas in
+   Communications 16 (2), 186-195 (1998).
 """
 
+# pylint: disable=too-many-lines
+
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
@@ -597,6 +626,210 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     return masses / total, info
 
 
+def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+    free_priors: Sequence[Tuple[float, float]],
+    pivot_weights: Sequence[Sequence[float]],
+    kernel: _KernelPicture,
+    num_obs: int,
+    max_states: int,
+) -> Tuple[Dict[int, float], float, float, int]:
+    """Class sums by a forward recursion over the free mechanisms.
+
+    A state is ``(signature, class)``: the running parity of every pivot whose
+    support has started but not ended (bit ``r`` of the signature belongs to
+    pivot ``r``), and the observable pattern accumulated so far. Its value is
+    the summed probability of all partial assignments that lead to it, without
+    the factors of the pivots still open; those are tracked separately so that
+    states can be ranked by the weight of their completion with every
+    remaining free mechanism off.
+
+    Returns the final values by relative class, the logarithm of the scale
+    divided out, the largest fraction of the ranking weight pruned at one
+    step, and the largest number of states held.
+    """
+    num_free = len(kernel.free)
+    log_weights = [[math.log(w0), math.log(w1)] for w0, w1 in pivot_weights]
+    opens: List[List[int]] = [[] for _ in range(num_free)]
+    continues: List[List[int]] = [[] for _ in range(num_free)]
+    closes: List[List[int]] = [[] for _ in range(num_free)]
+    singles: List[List[int]] = [[] for _ in range(num_free)]
+    toggles = [0] * num_free
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            continue
+        first, last = min(support), max(support)
+        if first == last:
+            singles[first].append(r)
+            continue
+        opens[first].append(r)
+        closes[last].append(r)
+        for k in support:
+            toggles[k] |= 1 << r
+            if k != first:
+                continues[k].append(r)
+    flips = [
+        sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
+        for k in range(num_free)
+    ]
+    # (signature, class) -> [summed weight, log of the open pivots' factors]
+    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [1.0, 0.0]}
+    log_scale, pruned, peak = 0.0, 0.0, 1
+    for k in range(num_free):
+        off, on = free_priors[k]
+        for r in singles[k]:
+            off *= pivot_weights[r][0]
+            on *= pivot_weights[r][1]
+        open_off = sum(log_weights[r][0] for r in opens[k])
+        open_on = sum(log_weights[r][1] for r in opens[k])
+        clear = 0
+        for r in closes[k]:
+            clear |= 1 << r
+        new: Dict[Tuple[int, int], List[float]] = {}
+        for (signature, label), (weight, pending) in states.items():
+            for bit in (0, 1):
+                if bit == 0:
+                    sig, lab = signature, label
+                    value, later = weight * off, pending + open_off
+                else:
+                    later = pending + open_on
+                    for r in continues[k]:
+                        current = (signature >> r) & 1
+                        later += log_weights[r][1 - current] - log_weights[r][current]
+                    sig, lab = signature ^ toggles[k], label ^ flips[k]
+                    value = weight * on
+                for r in closes[k]:
+                    current = (sig >> r) & 1
+                    value *= pivot_weights[r][current]
+                    later -= log_weights[r][current]
+                key = (sig & ~clear, lab)
+                item = new.get(key)
+                if item is None:
+                    new[key] = [value, later]
+                else:
+                    item[0] += value
+        top = max(item[0] for item in new.values())
+        if top <= 0:
+            raise ArithmeticError("The recursion lost all of its weight.")
+        peak = max(peak, len(new))
+        if len(new) > max_states:
+            ranked = sorted(
+                (
+                    (
+                        math.log(item[0] / top) + item[1] if item[0] > 0 else -math.inf,
+                        key,
+                    )
+                    for key, item in new.items()
+                ),
+                reverse=True,
+            )
+            best = ranked[0][0]
+            kept = sum(math.exp(metric - best) for metric, _ in ranked[:max_states])
+            cut = sum(math.exp(metric - best) for metric, _ in ranked[max_states:])
+            pruned = max(pruned, cut / (kept + cut))
+            new = {key: new[key] for _, key in ranked[:max_states]}
+            top = max(item[0] for item in new.values())
+        states = {key: [item[0] / top, item[1]] for key, item in new.items()}
+        log_scale += math.log(top)
+    totals: Dict[int, float] = {}
+    for (_, label), (weight, _) in states.items():
+        totals[label] = totals.get(label, 0.0) + weight
+    return totals, log_scale, pruned, peak
+
+
+def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    problem: DemProblem,
+    syndrome: np.ndarray,
+    active: Sequence[int],
+    max_states: int = 256,
+    check_matrix: Optional[np.ndarray] = None,
+    observable_matrix: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Probability mass of every logical class, truncated in the bit basis.
+
+    The same sum as :func:`active_set_class_masses`, over the same network,
+    with the bonds kept in the computational basis and truncated to the
+    ``max_states`` most probable basis states (see the module docstring). With
+    ``max_states`` large enough that nothing is pruned the result is exact.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model.
+    syndrome : np.ndarray
+        One bit per detector.
+    active : Sequence[int]
+        The mechanisms that may fire, in the order in which pivots are chosen
+        and free mechanisms are read. It must hold a solution of the syndrome.
+    max_states : int
+        The number of basis states kept on a bond.
+    check_matrix, observable_matrix : Optional[np.ndarray]
+        Dense ``uint8`` detector and observable matrices, to avoid rebuilding
+        them for every syndrome.
+
+    Returns
+    -------
+    (class_masses, info)
+        ``class_masses`` as in :func:`active_set_class_masses`. ``info`` holds
+        ``log_mass`` (logarithm of the retained probability that the syndrome
+        is produced by mechanisms of the active set alone), ``pruned`` (the
+        largest fraction of the ranking weight discarded at one step; zero
+        means the result is exact), ``states`` (the largest number of basis
+        states held), ``free`` and ``rank``.
+
+    Raises
+    ------
+    ValueError
+        If the active set holds no solution of the syndrome, or if
+        ``max_states`` is not positive.
+    ArithmeticError
+        If the recursion loses all of its weight.
+    """
+    if max_states < 1:
+        raise ValueError("The number of basis states must be positive.")
+    syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
+    if check_matrix is None or observable_matrix is None:
+        sparse_check, sparse_observable = problem_matrices(problem)
+        check_matrix = np.asarray(sparse_check.todense(), dtype=np.uint8)
+        observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
+    num_obs = problem.num_observables
+    probs = np.asarray(problem.probs, dtype=float)
+    columns = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in columns):
+        raise ValueError("The active set names a mechanism outside the model.")
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, columns)
+    pivot_probs = probs[kernel.pivots]
+    pivot_weights = np.where(
+        kernel.base[:, None] == 1,
+        np.stack([pivot_probs, 1 - pivot_probs], axis=1),
+        np.stack([1 - pivot_probs, pivot_probs], axis=1),
+    )
+    inactive = np.ones(problem.num_mechanisms, dtype=bool)
+    inactive[columns] = False
+    log_scale = float(np.sum(np.log1p(-probs[inactive])))
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            log_scale += float(np.log(pivot_weights[r, 0]))
+    totals, log_recursion, pruned, peak = _basis_recursion(
+        [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
+        pivot_weights.tolist(),
+        kernel,
+        num_obs,
+        max_states,
+    )
+    masses = np.zeros(1 << num_obs)
+    for label, weight in totals.items():
+        masses[label ^ kernel.base_class] += weight
+    total = float(masses.sum())
+    info: Dict[str, Any] = {
+        "free": len(kernel.free),
+        "rank": len(kernel.pivots),
+        "log_mass": float(np.log(total)) + log_recursion + log_scale,
+        "pruned": pruned,
+        "states": peak,
+    }
+    return masses / total, info
+
+
 class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     """Class-summed MPS decoder seeded by BP-OSD candidates.
 
@@ -631,6 +864,15 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         and the class sum is repeated on the larger active set. Every center
         costs one BP-OSD run per observable. With 0 the search is not
         widened.
+    truncation : str
+        ``"svd"`` contracts the class sum as a matrix product state truncated
+        by SVD to ``chi_max``, with the tempered pass on syndromes where that
+        truncates. ``"basis"`` keeps the bonds in the computational basis and
+        truncates them to the ``max_states`` most probable basis states (see
+        :func:`basis_truncated_class_masses`); it needs no tempered pass, and
+        ``temper_threshold`` then applies to the pruned fraction.
+    max_states : int
+        The number of basis states kept on a bond with ``truncation="basis"``.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
@@ -651,6 +893,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         temper_threshold: float = 1e-8,
         temper_chi_max: Optional[int] = None,
         extra_centers: int = 0,
+        truncation: str = "svd",
+        max_states: int = 256,
         **bposd_options: Any,
     ):
         # Imported here so that importing mdopt does not pay for ldpc, which
@@ -674,6 +918,12 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             raise ValueError("The bond dimension must be positive.")
         if extra_centers < 0:
             raise ValueError("The number of extra centers cannot be negative.")
+        if truncation not in ("svd", "basis"):
+            raise ValueError(
+                f"Unknown truncation {truncation!r}; expected 'svd' or 'basis'."
+            )
+        if max_states < 1:
+            raise ValueError("The number of basis states must be positive.")
         self.problem = problem
         self.chi_max = chi_max
         self.recenter_rounds = recenter_rounds
@@ -681,6 +931,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         self.temper_threshold = temper_threshold
         self.temper_chi_max = chi_max if temper_chi_max is None else temper_chi_max
         self.extra_centers = extra_centers
+        self.truncation = truncation
+        self.max_states = max_states
         self.num_observables = problem.num_observables
         self._check, self._observables = problem_matrices(problem)
         self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
@@ -827,6 +1079,23 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             stages=stages,
         )
 
+    def _first_pass(
+        self, syndrome: np.ndarray, active: Sequence[int]
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Class masses of the configured truncation, with ``lost`` filled in."""
+        if self.truncation == "svd":
+            return self._class_masses(syndrome, active, 1)
+        masses, info = basis_truncated_class_masses(
+            self.problem,
+            syndrome,
+            active,
+            self.max_states,
+            check_matrix=self._dense_check,
+            observable_matrix=self._dense_observables,
+        )
+        info["lost"] = info["pruned"]
+        return masses, info
+
     def decode(  # pylint: disable=too-many-locals
         self, syndrome: np.ndarray
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -846,7 +1115,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
             ``lost`` (discarded fraction of the squared norm in the
-            contraction that gave the verdict), ``tempered`` (whether that
+            contraction that gave the verdict; with ``truncation="basis"``
+            the largest fraction of the ranking weight pruned at one step),
+            ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the candidate
             search was widened), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
@@ -872,7 +1143,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
         found, tried = self._search(syndrome, seed)
         active = self._active_set(found)
-        masses, contraction = self._class_masses(syndrome, active, 1)
+        masses, contraction = self._first_pass(syndrome, active)
         hard = contraction["lost"] >= self.temper_threshold
         widened = False
         if hard and self.extra_centers > 0 and len(found) > len(tried):
@@ -880,11 +1151,11 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             wider_active = self._active_set(found)
             if wider_active != active:
                 active = wider_active
-                masses, contraction = self._class_masses(syndrome, active, 1)
+                masses, contraction = self._first_pass(syndrome, active)
                 hard = contraction["lost"] >= self.temper_threshold
             widened = True
         tempered = False
-        if self.temper_stages > 1 and hard:
+        if self.truncation == "svd" and self.temper_stages > 1 and hard:
             try:
                 masses, contraction = self._class_masses(
                     syndrome, active, self.temper_stages

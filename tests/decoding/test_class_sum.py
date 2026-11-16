@@ -21,6 +21,7 @@ from mdopt.decoding.class_sum import (
     ClassSumDecoder,
     ParityChain,
     active_set_class_masses,
+    basis_truncated_class_masses,
     multiplet_safe_rank,
     problem_matrices,
 )
@@ -477,6 +478,92 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
     assert widened > 0 and tempered > 5 and larger >= tempered - 2
 
 
+@pytest.mark.parametrize("seed", range(6))
+def test_basis_truncated_masses_match_enumeration(seed):
+    """Without pruning the computational-basis contraction is exact."""
+    problem = _random_problem(seed)
+    syndromes, _ = _sample_from_model(problem, 3, seed + 100)
+    for syndrome in syndromes:
+        active = list(range(problem.num_mechanisms))
+        exact = _enumerate_active_set(problem, syndrome, active)
+        masses, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4096
+        )
+        assert info["pruned"] == 0.0
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert info["rank"] + info["free"] == problem.num_mechanisms
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_basis_truncated_masses_on_a_restricted_active_set(seed):
+    """Pinned mechanisms and the pivot order are handled as in the SVD sum."""
+    problem = _random_problem(seed, num_mechanisms=16)
+    rng = np.random.default_rng(seed)
+    check, _ = problem_matrices(problem)
+    error = np.zeros(problem.num_mechanisms, dtype=np.uint8)
+    error[rng.choice(problem.num_mechanisms, size=3, replace=False)] = 1
+    syndrome = (check @ error) % 2
+    extra = rng.choice(problem.num_mechanisms, size=7, replace=False)
+    active = list(dict.fromkeys([int(i) for i in np.flatnonzero(error)] + list(extra)))
+    exact = _enumerate_active_set(problem, syndrome, active)
+    for order in (active, active[::-1], sorted(active)):
+        masses, info = basis_truncated_class_masses(problem, syndrome, order)
+        reference, svd = active_set_class_masses(problem, syndrome, order, chi_max=256)
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.allclose(masses, reference, atol=1e-10)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert np.isclose(info["log_mass"], svd["log_mass"])
+
+
+def test_basis_truncation_prunes_and_reports_it():
+    """A small state budget prunes, says so, and still returns probabilities."""
+    problem = _random_problem(3, num_detectors=10, num_mechanisms=40, num_observables=4)
+    syndromes, _ = _sample_from_model(problem, 6, seed=11)
+    active = list(range(problem.num_mechanisms))
+    pruned_once = False
+    for syndrome in syndromes:
+        full, exact = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=1 << 20
+        )
+        assert exact["pruned"] == 0.0
+        few, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4
+        )
+        assert info["states"] <= 8
+        assert np.isclose(few.sum(), 1.0) and (few >= 0).all()
+        assert 0.0 <= info["pruned"] <= 1.0
+        pruned_once = pruned_once or info["pruned"] > 0
+        more, _ = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=512
+        )
+        assert np.abs(more - full).sum() <= np.abs(few - full).sum() + 1e-12
+    assert pruned_once
+    with pytest.raises(ValueError, match="basis states"):
+        basis_truncated_class_masses(problem, syndromes[0], active, max_states=0)
+
+
+def test_decoder_with_basis_truncation_matches_maximum_likelihood():
+    """The decoder option agrees with the full-chain reference and the SVD sum."""
+    problem = _small_surface_problem(0.02)
+    basis = ClassSumDecoder(problem, truncation="basis")
+    svd = ClassSumDecoder(problem, chi_max=16)
+    syndromes, _ = _sample_from_model(problem, 80, seed=3)
+    agree = same = 0
+    for syndrome in syndromes:
+        flips, info = basis.decode(syndrome)
+        other, _ = svd.decode(syndrome)
+        _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
+        agree += int(np.array_equal(flips, reference))
+        same += int(np.array_equal(flips, other))
+        assert not info["tempered"] and info["lost"] == 0.0
+    assert agree >= 78 and same == len(syndromes)
+    with pytest.raises(ValueError, match="truncation"):
+        ClassSumDecoder(problem, truncation="schmidt")
+    with pytest.raises(ValueError, match="basis states"):
+        ClassSumDecoder(problem, truncation="basis", max_states=0)
+
+
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     """Fewer logical errors than BP-OSD on the same circuit-level shots.
 
@@ -489,12 +576,15 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     check, observables = problem_matrices(problem)
     syndromes, truth = _sample_from_model(problem, 250, seed=2026)
     decoder = ClassSumDecoder(problem, chi_max=16)
+    basis = ClassSumDecoder(problem, truncation="basis", max_states=64)
     bposd = BpOsdDecoder(
         check, error_channel=list(problem.probs), **DEFAULT_BPOSD_OPTIONS
     )
-    class_sum_failures = bposd_failures = fixes = breaks = 0
+    class_sum_failures = bposd_failures = fixes = breaks = basis_failures = 0
     for syndrome, expected in zip(syndromes, truth):
         flips, info = decoder.decode(syndrome)
+        basis_flips, _ = basis.decode(syndrome)
+        basis_failures += not np.array_equal(basis_flips, expected)
         reference = (observables @ bposd.decode(syndrome)) % 2
         assert info["bposd_class"] == int(reference @ (1 << np.arange(12)))
         ours_wrong = not np.array_equal(flips, expected)
@@ -506,3 +596,5 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     assert bposd_failures > 0
     assert class_sum_failures < bposd_failures
     assert fixes > breaks
+    assert basis_failures < bposd_failures
+    assert basis_failures <= class_sum_failures + 2
