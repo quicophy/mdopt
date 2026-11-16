@@ -442,7 +442,7 @@ def test_widened_search_extends_the_candidates():
         seed = np.asarray(narrow._bposd.decode(syndrome), dtype=np.uint8)
         if not narrow._satisfies(seed, syndrome):
             continue
-        found, tried = narrow._search(syndrome, seed)
+        found, tried, _ = narrow._search(syndrome, seed)
         assert narrow.candidates(syndrome, seed).keys() == found.keys()
         assert narrow.widen(syndrome, found) == found
         # Centers that were already used add nothing and do not use the budget.
@@ -494,6 +494,76 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
         widened += hard["widened"]
         tempered += hard["tempered"]
     assert widened > 0 and tempered > 5 and larger >= tempered - 2
+
+
+def test_widening_recontracts_a_superset_and_decides_from_it(monkeypatch):
+    """A truncated first pass widens the search; the class sum is repeated on
+    a set that contains the first one, and that second sum gives the verdict."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated_then_decided(syndrome, active, stages):
+        calls.append(list(active))
+        masses = np.zeros(1 << problem.num_observables)
+        # First sum: truncated, verdict 0. Second sum: verdict 5.
+        masses[0 if len(calls) == 1 else 5] = 1.0
+        return masses, {"lost": 1.0 if len(calls) == 1 else 0.0, "free": 1}
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated_then_decided)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    recontracted = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        flips, info = decoder.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        assert len(calls) in (1, 2)
+        if len(calls) == 2:
+            assert info["widened"]
+            assert set(calls[0]) < set(calls[1])
+            assert info["active"] == len(calls[1])
+            if info["bposd_class"] != 5:
+                assert info["predicted_class"] == 5
+                assert int(flips @ (1 << np.arange(flips.size))) == 5
+            recontracted += 1
+        else:
+            assert info["active"] == len(calls[0])
+    assert recontracted > 0
+
+
+def test_the_search_never_repeats_a_solve():
+    """One syndrome has two distinct solves per observable; a wide search
+    makes each of them at most once."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64)
+    counts = []
+
+    class Counting:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def decode(self, extended):
+            counts.append(tuple(int(b) for b in extended))
+            return self.inner.decode(extended)
+
+    decoder._flipped = [Counting(inner) for inner in decoder._flipped]
+    syndromes, _ = _sample_from_model(problem, 30, seed=5)
+    widened = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(decoder._bposd.decode(syndrome), dtype=np.uint8)
+        if not decoder._satisfies(seed, syndrome):
+            continue
+        counts.clear()
+        found, tried, solves = decoder._search(syndrome, seed)
+        stock = len(counts)
+        wider = decoder.widen(syndrome, found, tried, solves)
+        assert len(counts) <= 2 * problem.num_observables
+        assert len(counts) == len(solves)
+        assert set(found) <= set(wider)
+        widened += len(counts) > stock
+    assert widened > 0
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
