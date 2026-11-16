@@ -230,6 +230,25 @@ def test_tempered_class_masses_match_enumeration(seed, stages):
         assert np.isclose(info["log_mass"], np.log(exact.sum()))
 
 
+def test_tempered_contraction_survives_thousands_of_free_mechanisms():
+    """The uniform start must not overflow: 2 ** 1100 is beyond float64."""
+    size, prob = 2200, 0.01
+    problem = DemProblem(
+        probs=[prob] * size,
+        detector_rows=[list(range(size))],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    masses, info = active_set_class_masses(
+        problem, np.zeros(1, dtype=np.uint8), list(range(size)), chi_max=4, stages=2
+    )
+    assert info["free"] == size - 1
+    assert np.isfinite(masses).all() and np.isclose(masses.sum(), 1.0)
+    # Even parity over all mechanisms: (1 + (1 - 2p) ** n) / 2.
+    assert np.isclose(info["log_mass"], np.log((1 + (1 - 2 * prob) ** size) / 2))
+
+
 def test_tempering_rejects_bad_input():
     problem = _random_problem(0)
     syndrome = np.zeros(problem.num_detectors, dtype=np.uint8)
