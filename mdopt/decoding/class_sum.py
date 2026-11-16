@@ -63,6 +63,10 @@ DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
 }
 
 
+#: Normalized class masses closer than this count as tied: the contraction
+#: does not resolve smaller differences, and BP-OSD's class then stands.
+TIE_TOLERANCE = 1e-6
+
 #: Singular values below this fraction of the largest one count as zero.
 ZERO_CUTOFF = 1e-13
 
@@ -706,7 +710,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         return active
 
     def _flips(self, label: int) -> np.ndarray:
-        return (label >> np.arange(self.num_observables)) & 1
+        return ((label >> np.arange(self.num_observables)) & 1).astype(np.uint8)
 
     def _class_masses(
         self, syndrome: np.ndarray, active: Sequence[int]
@@ -743,7 +747,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             ``free`` (sizes of the active set and of its free part) and
             ``candidates`` (number of logical classes reached). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
-            tied classes. The empty syndrome is answered with no flips
+            tied classes; two normalized masses within
+            :data:`TIE_TOLERANCE` of each other count as tied. The empty syndrome is answered with no flips
             without a search. If BP-OSD returns a mechanism set that does not reproduce
             the syndrome, its class is returned with ``candidates`` set to 0.
         """
@@ -769,7 +774,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         margin = (
             float(masses[ranking[0]] - masses[ranking[1]]) if masses.size > 1 else 1.0
         )
-        if masses[bposd_class] >= masses[predicted] - 1e-6:
+        if masses[bposd_class] >= masses[predicted] - TIE_TOLERANCE:
             predicted = bposd_class
         info.update(
             predicted_class=predicted,
