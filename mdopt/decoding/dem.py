@@ -243,17 +243,33 @@ def decode_dem(
     silent: bool = True,
     tolerance: float = float(1e-12),
     representative: Optional[np.ndarray] = None,
+    return_certificate: bool = False,
+    negative_mass: str = "raise",
     prior_reweighting: Optional[str] = None,
     reweighting_floor: Optional[float] = None,
     reweighting_cap: float = 0.5,
     bp_iterations: int = 60,
-    return_certificate: bool = False,
-    negative_mass: str = "raise",
 ):
     """Maximum-likelihood observable prediction for one syndrome.
 
     Parameters
     ----------
+    return_certificate : bool
+        Also return the :class:`~mdopt.optimizer.utils.TruncationCertificate`
+        of the contraction. It is always computed; a collapsed class-mass
+        vector (nothing positive, or not finite) raises
+        :class:`DemDecodingError`, an ``ArithmeticError`` that carries the
+        certificate as its ``certificate`` attribute. The
+        certificate's ``negativity`` is the most negative class mass as a
+        fraction of the peak (0 for an exact contraction).
+    negative_mass : str
+        What to do with a class mass below -1e-8 of the peak, which only a
+        truncation artifact can produce. ``"raise"`` (default) raises
+        :class:`DemDecodingError` with the certificate, so that callers
+        that escalate or reject on the exception keep working; ``"clamp"``
+        clamps it to zero before the argmax, takes the verdict of the
+        positive classes and leaves the caller to gate on
+        ``certificate.negativity`` alongside ``bound`` and ``survival``.
     prior_reweighting : Optional[str]
         ``None`` contracts the prior as given. ``"BP"`` replaces every
         mechanism's prior by its belief-propagation posterior marginal
@@ -278,7 +294,9 @@ def decode_dem(
         and a d=5 color-code ladder is monotone in chi_max.
         Run the reweighted contraction with ``cut=0.0``: configurations the
         SVD cutoff drops as negligible in the contracted weights are exactly
-        the ones the undo scales back up.
+        the ones the undo scales back up. This sets the cutoff of the
+        constraint sweeps; the moves of the orthogonality center between
+        them keep the SVD's default cutoff of 1e-12.
     reweighting_cap : float
         The upper clip of the marginal of the a-priori unlikely branch of a
         site, the mechanism firing (default 0.5). Sites BP believes fired are
@@ -291,22 +309,6 @@ def decode_dem(
         color-code circuit with about ten fired mechanisms.
     bp_iterations : int
         The number of flooding iterations.
-    return_certificate : bool
-        Also return the :class:`~mdopt.optimizer.utils.TruncationCertificate`
-        of the contraction. It is always computed; a collapsed class-mass
-        vector (nothing positive, or not finite) raises
-        :class:`DemDecodingError`, an ``ArithmeticError`` that carries the
-        certificate as its ``certificate`` attribute. The
-        certificate's ``negativity`` is the most negative class mass as a
-        fraction of the peak (0 for an exact contraction).
-    negative_mass : str
-        What to do with a class mass below -1e-8 of the peak, which only a
-        truncation artifact can produce. ``"raise"`` (default) raises
-        :class:`DemDecodingError` with the certificate, so that callers
-        that escalate or reject on the exception keep working; ``"clamp"``
-        clamps it to zero before the argmax, takes the verdict of the
-        positive classes and leaves the caller to gate on
-        ``certificate.negativity`` alongside ``bound`` and ``survival``.
 
     Returns
     -------
@@ -569,12 +571,16 @@ def decode_dem(
                 chi_max,
             )
 
+    # The class masses are defined up to a common factor, and tracing out a
+    # site multiplies by 1/sqrt(2): over thousands of sites the masses would
+    # reach the subnormal range and tie. The marginalization therefore always
+    # rescales, whatever ``renormalize`` asked of the constraint sweeps.
     if undo:
-        logical_mps = _marginalize_with_weights(mps, num_obs, undo, renormalize)
+        logical_mps = _marginalize_with_weights(mps, num_obs, undo, True)
     else:
         logical_mps = mps.marginal(
             sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
-            renormalize=renormalize,
+            renormalize=True,
         ).reverse()
     dense = np.atleast_1d(
         np.real(np.asarray(logical_mps.dense(flatten=True, renormalize=False)))
