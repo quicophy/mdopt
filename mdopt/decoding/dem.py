@@ -456,9 +456,13 @@ def decode_dem(
                 chi_max,
             )
 
+    # The class masses are defined up to a common factor, and tracing out a
+    # site multiplies by 1/sqrt(2): over thousands of sites the masses would
+    # reach the subnormal range and tie. The marginalization therefore always
+    # rescales, whatever ``renormalize`` asked of the constraint sweeps.
     logical_mps = mps.marginal(
         sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
-        renormalize=renormalize,
+        renormalize=True,
     ).reverse()
     dense = np.atleast_1d(
         np.real(np.asarray(logical_mps.dense(flatten=True, renormalize=False)))
