@@ -91,9 +91,21 @@ References
 
 # pylint: disable=too-many-lines
 
+import heapq
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 from scipy.linalg import svd as scipy_svd
@@ -658,6 +670,17 @@ def _safe_log(value: float) -> float:
     return math.log(value) if value > 0 else -math.inf
 
 
+class _BasisState(NamedTuple):
+    """One basis state of the recursion in :func:`_basis_recursion`."""
+
+    #: Logarithm of the summed weight of the partial assignments.
+    log_weight: float
+    #: Sum of the finite logarithms of the open pivots' current factors.
+    pending: float
+    #: Number of open pivots whose current factor is zero.
+    blocked: int
+
+
 def _log_sum_exp(values: Sequence[float]) -> float:
     """Logarithm of the sum of the exponentials of finite ``values``."""
     top = max(values)
@@ -719,10 +742,7 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
         sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
         for k in range(num_free)
     ]
-    # (signature, class) -> [logarithm of the summed weight,
-    #                        sum of the finite logs of the open pivots' factors,
-    #                        number of open pivots whose factor is zero]
-    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [0.0, 0.0, 0]}
+    states: Dict[Tuple[int, int], _BasisState] = {(0, 0): _BasisState(0.0, 0.0, 0)}
     pruned, peak, removed = 0.0, 1, 0
     for k in range(num_free):
         branch = [
@@ -778,9 +798,10 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
         # Weights stay logarithms from step to step and merge by a
         # log-sum-exp: a weight that is tiny now is kept, because the factors
         # of its open pivots can still make it the largest.
-        new: Dict[Tuple[int, int], List[float]] = {}
-        for key, (values, later, blocked) in merged.items():
-            new[key] = [_log_sum_exp(values), later, blocked]
+        new: Dict[Tuple[int, int], _BasisState] = {
+            key: _BasisState(_log_sum_exp(values), later, blocked)
+            for key, (values, later, blocked) in merged.items()
+        }
         peak = max(peak, len(new))
         if len(new) > max_states:
             # Unblocked states first, each group by the weight of its
@@ -788,15 +809,17 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
             # state has no such completion, but a later mechanism can unblock
             # it, so the pruned share counts it by the same weight with its
             # zero factors left out: an upper estimate, never zero.
-            ranked = sorted(
-                ((item[2] == 0, item[0] + item[1], key) for key, item in new.items()),
-                reverse=True,
-            )
-            best = max(score for _, score, _ in ranked)
-            shares = [math.exp(score - best) for _, score, _ in ranked]
-            pruned = max(pruned, sum(shares[max_states:]) / sum(shares))
-            removed += len(ranked) - max_states
-            new = {key: new[key] for _, _, key in ranked[:max_states]}
+            scored = [
+                (state.blocked == 0, state.log_weight + state.pending, key)
+                for key, state in new.items()
+            ]
+            kept = heapq.nlargest(max_states, scored)
+            best = max(score for _, score, _ in scored)
+            everything = sum(math.exp(score - best) for _, score, _ in scored)
+            retained = sum(math.exp(score - best) for _, score, _ in kept)
+            pruned = max(pruned, 0.0, 1.0 - retained / everything)
+            removed += len(scored) - max_states
+            new = {key: new[key] for _, _, key in kept}
         states = new
     by_class: Dict[int, List[float]] = {}
     for (_, label), (value, _, _) in states.items():
@@ -1184,12 +1207,23 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             stages=stages,
         )
 
+    def _truncated(self, contraction: Dict[str, Any]) -> bool:
+        """Whether a first pass truncated: ``lost`` or ``pruned`` at the threshold."""
+        measure = max(contraction["lost"], contraction.get("pruned", 0.0))
+        return measure >= self.temper_threshold
+
     def _first_pass(
         self, syndrome: np.ndarray, active: Sequence[int]
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """Class masses of the configured truncation, with ``lost`` filled in."""
+        """Class masses of the configured truncation.
+
+        ``lost`` and ``pruned`` are both filled in; the one that does not
+        belong to the configured truncation is zero.
+        """
         if self.truncation == "svd":
-            return self._class_masses(syndrome, active, 1)
+            masses, info = self._class_masses(syndrome, active, 1)
+            info["pruned"] = 0.0
+            return masses, info
         masses, info = basis_truncated_class_masses(
             self.problem,
             syndrome,
@@ -1198,7 +1232,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             check_matrix=self._dense_check,
             observable_matrix=self._dense_observables,
         )
-        info["lost"] = info["pruned"]
+        info["lost"] = 0.0
         return masses, info
 
     def decode(  # pylint: disable=too-many-locals
@@ -1219,9 +1253,11 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             integers, bit ``j`` is observable ``j``), ``best_candidate_class``
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
-            ``lost`` (discarded fraction of the squared norm in the
-            contraction that gave the verdict; with ``truncation="basis"``
-            the largest fraction of the ranking weight pruned at one step),
+            ``lost`` (discarded fraction of the squared norm in the SVD
+            contraction that gave the verdict; zero with
+            ``truncation="basis"``), ``pruned`` (the largest fraction of the
+            ranking weight pruned at one step of the basis truncation; zero
+            with ``truncation="svd"``),
             ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the candidate
             search was widened), ``active`` and
@@ -1237,7 +1273,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
-        info.update(candidates=1, tempered=False, widened=False)
+        info.update(candidates=1, tempered=False, widened=False, pruned=0.0)
         if not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
@@ -1251,7 +1287,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         found, tried, solves = self._search(syndrome, seed)
         active = self._active_set(found)
         masses, contraction = self._first_pass(syndrome, active)
-        hard = contraction["lost"] >= self.temper_threshold
+        hard = self._truncated(contraction)
         widened = False
         if hard and self.extra_centers > 0 and len(found) > len(tried):
             found = self.widen(syndrome, found, tried, solves)
@@ -1264,7 +1300,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             if wider_active != active:
                 active = wider_active
                 masses, contraction = self._first_pass(syndrome, active)
-                hard = contraction["lost"] >= self.temper_threshold
+                hard = self._truncated(contraction)
             widened = True
         tempered = False
         if self.truncation == "svd" and self.temper_stages > 1 and hard:
@@ -1288,6 +1324,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             best_candidate_class=max(found, key=lambda label: found[label][0]),
             margin=margin,
             lost=contraction["lost"],
+            pruned=contraction.get("pruned", 0.0),
             tempered=tempered,
             widened=widened,
             active=len(active),

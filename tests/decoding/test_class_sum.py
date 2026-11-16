@@ -701,11 +701,13 @@ def test_decoder_with_basis_truncation_matches_maximum_likelihood():
     agree = same = 0
     for syndrome in syndromes:
         flips, info = basis.decode(syndrome)
-        other, _ = svd.decode(syndrome)
+        other, other_info = svd.decode(syndrome)
         _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
         agree += int(np.array_equal(flips, reference))
         same += int(np.array_equal(flips, other))
-        assert not info["tempered"] and info["lost"] == 0.0
+        assert not info["tempered"]
+        assert info["lost"] == 0.0 and info["pruned"] == 0.0
+        assert other_info["pruned"] == 0.0
     assert agree >= 78 and same == len(syndromes)
     with pytest.raises(ValueError, match="truncation"):
         ClassSumDecoder(problem, truncation="schmidt")
