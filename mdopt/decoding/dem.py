@@ -320,6 +320,14 @@ def decode_dem(
         raise ValueError(
             f"prior_reweighting should be None or 'BP', given {prior_reweighting!r}."
         )
+    if (
+        isinstance(bp_iterations, bool)
+        or not isinstance(bp_iterations, (int, np.integer))
+        or bp_iterations < 1
+    ):
+        raise ValueError(
+            f"bp_iterations should be a positive integer, given {bp_iterations!r}."
+        )
     if negative_mass not in ("raise", "clamp"):
         raise ValueError(
             f"negative_mass should be 'raise' or 'clamp', given {negative_mass!r}."

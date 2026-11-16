@@ -796,6 +796,11 @@ def test_decode_dem_signature_and_argument_validation():
         decode_dem(problem, syndrome, prior_reweighting="OSD")
     with pytest.raises(ValueError, match="reweighting_floor"):
         decode_dem(problem, syndrome, prior_reweighting="BP", reweighting_floor=1.5)
+    for iterations in (0, -1, 1.5, True):
+        with pytest.raises(ValueError, match="bp_iterations"):
+            decode_dem(
+                problem, syndrome, prior_reweighting="BP", bp_iterations=iterations
+            )
 
 
 def test_reweighted_branches_keep_a_floored_zero_branch():
