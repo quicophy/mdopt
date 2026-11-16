@@ -636,13 +636,19 @@ def _safe_log(value: float) -> float:
     return math.log(value) if value > 0 else -math.inf
 
 
+def _log_sum_exp(values: Sequence[float]) -> float:
+    """Logarithm of the sum of the exponentials of finite ``values``."""
+    top = max(values)
+    return top + math.log(sum(math.exp(value - top) for value in values))
+
+
 def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
     free_priors: Sequence[Tuple[float, float]],
     pivot_weights: Sequence[Sequence[float]],
     kernel: _KernelPicture,
     num_obs: int,
     max_states: int,
-) -> Tuple[Dict[int, float], float, float, int]:
+) -> Tuple[Dict[int, float], float, float, int, int]:
     """Class sums by a forward recursion over the free mechanisms.
 
     A state is ``(signature, class)``: the running parity of every pivot whose
@@ -653,16 +659,18 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
     states can be ranked by the weight of their completion with every
     remaining free mechanism off.
 
-    Every product of factors is formed in logarithms and brought back to
-    ordinary numbers only relative to the largest value of the step, so
-    hundreds of small factors at one site cannot underflow. A factor of zero
+    Weights are kept as logarithms throughout and merged by a log-sum-exp, so
+    neither hundreds of small factors at one site nor a weight that is tiny
+    until its open pivots close can underflow. A factor of zero
     is allowed: it removes the assignments it applies to, and an open pivot
     whose current factor is zero is counted rather than added, so that it can
     be taken back when the pivot's parity changes.
 
     Returns the final values by relative class, the logarithm of the scale
     divided out, the largest fraction of the ranking weight pruned at one
-    step, and the largest number of states held.
+    step, the largest number of states held, and the number of states
+    removed. The result is exact when nothing was removed; the pruned
+    fraction is an estimate by the ranking weight.
     """
     num_free = len(kernel.free)
     log_weights = [[_safe_log(w0), _safe_log(w1)] for w0, w1 in pivot_weights]
@@ -689,11 +697,11 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
         sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
         for k in range(num_free)
     ]
-    # (signature, class) -> [summed weight relative to the step's largest,
+    # (signature, class) -> [logarithm of the summed weight,
     #                        sum of the finite logs of the open pivots' factors,
     #                        number of open pivots whose factor is zero]
-    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [1.0, 0.0, 0]}
-    log_scale, pruned, peak = 0.0, 0.0, 1
+    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [0.0, 0.0, 0]}
+    pruned, peak, removed = 0.0, 1, 0
     for k in range(num_free):
         branch = [
             log_priors[k][bit] + sum(log_weights[r][bit] for r in singles[k])
@@ -702,9 +710,8 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
         clear = 0
         for r in closes[k]:
             clear |= 1 << r
-        children: List[Tuple[Tuple[int, int], float, float, int]] = []
-        for (signature, label), (weight, pending, zeros) in states.items():
-            base = math.log(weight)
+        merged: Dict[Tuple[int, int], Tuple[List[float], float, int]] = {}
+        for (signature, label), (base, pending, zeros) in states.items():
             for bit in (0, 1):
                 value = base + branch[bit]
                 if value == -math.inf:
@@ -738,46 +745,44 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
                         later -= term
                 if value == -math.inf:
                     continue
-                children.append(((sig & ~clear, lab), value, later, blocked))
-        if not children:
+                key = (sig & ~clear, lab)
+                item = merged.get(key)
+                if item is None:
+                    merged[key] = ([value], later, blocked)
+                else:
+                    item[0].append(value)
+        if not merged:
             raise ArithmeticError("The recursion lost all of its weight.")
-        top = max(child[1] for child in children)
+        # Weights stay logarithms from step to step and merge by a
+        # log-sum-exp: a weight that is tiny now is kept, because the factors
+        # of its open pivots can still make it the largest.
         new: Dict[Tuple[int, int], List[float]] = {}
-        for key, value, later, blocked in children:
-            if value - top < -700.0:
-                continue
-            item = new.get(key)
-            if item is None:
-                new[key] = [math.exp(value - top), later, blocked]
-            else:
-                item[0] += math.exp(value - top)
+        for key, (values, later, blocked) in merged.items():
+            new[key] = [_log_sum_exp(values), later, blocked]
         peak = max(peak, len(new))
         if len(new) > max_states:
             # Unblocked states first, each group by the weight of its
-            # completion with every remaining free mechanism off.
+            # completion with every remaining free mechanism off. A blocked
+            # state has no such completion, but a later mechanism can unblock
+            # it, so the pruned share counts it by the same weight with its
+            # zero factors left out: an upper estimate, never zero.
             ranked = sorted(
-                (
-                    (item[2] == 0, math.log(item[0]) + item[1], key)
-                    for key, item in new.items()
-                ),
+                ((item[2] == 0, item[0] + item[1], key) for key, item in new.items()),
                 reverse=True,
             )
-            lead, best = ranked[0][0], ranked[0][1]
-            shares = [
-                math.exp(score - best) if flag == lead else 0.0
-                for flag, score, _ in ranked
-            ]
+            best = max(score for _, score, _ in ranked)
+            shares = [math.exp(score - best) for _, score, _ in ranked]
             pruned = max(pruned, sum(shares[max_states:]) / sum(shares))
+            removed += len(ranked) - max_states
             new = {key: new[key] for _, _, key in ranked[:max_states]}
-        rescale = max(item[0] for item in new.values())
-        states = {
-            key: [item[0] / rescale, item[1], item[2]] for key, item in new.items()
-        }
-        log_scale += top + math.log(rescale)
-    totals: Dict[int, float] = {}
-    for (_, label), (weight, _, _) in states.items():
-        totals[label] = totals.get(label, 0.0) + weight
-    return totals, log_scale, pruned, peak
+        states = new
+    by_class: Dict[int, List[float]] = {}
+    for (_, label), (value, _, _) in states.items():
+        by_class.setdefault(label, []).append(value)
+    log_totals = {label: _log_sum_exp(values) for label, values in by_class.items()}
+    log_scale = max(log_totals.values())
+    totals = {label: math.exp(v - log_scale) for label, v in log_totals.items()}
+    return totals, log_scale, pruned, peak, removed
 
 
 def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
@@ -816,9 +821,10 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
         ``class_masses`` as in :func:`active_set_class_masses`. ``info`` holds
         ``log_mass`` (logarithm of the retained probability that the syndrome
         is produced by mechanisms of the active set alone), ``pruned`` (the
-        largest fraction of the ranking weight discarded at one step; zero
-        means the result is exact), ``states`` (the largest number of basis
-        states held), ``free`` and ``rank``.
+        largest fraction of the ranking weight discarded at one step: an
+        estimate of the loss, not a bound), ``pruned_states`` (the number of
+        states removed; zero means the result is exact), ``states`` (the
+        largest number of basis states held), ``free`` and ``rank``.
 
     Raises
     ------
@@ -854,7 +860,7 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     for r, support in enumerate(kernel.supports):
         if not support:
             log_scale += _safe_log(float(pivot_weights[r, 0]))
-    totals, log_recursion, pruned, peak = _basis_recursion(
+    totals, log_recursion, pruned, peak, removed = _basis_recursion(
         [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
         pivot_weights.tolist(),
         kernel,
@@ -870,6 +876,7 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
         "rank": len(kernel.pivots),
         "log_mass": _safe_log(total) + log_recursion + log_scale,
         "pruned": pruned,
+        "pruned_states": removed,
         "states": peak,
     }
     return masses / total, info

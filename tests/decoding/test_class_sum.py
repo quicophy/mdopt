@@ -620,6 +620,59 @@ def test_basis_truncation_accepts_zero_probability_factors(seed):
         assert np.isclose(info["log_mass"], np.log(exact.sum()))
 
 
+def test_basis_truncation_keeps_a_weight_that_is_tiny_until_its_pivots_close():
+    """After the first free mechanism the winning class is 1200 orders of
+    magnitude behind; the pivots still open reverse that. Nothing is pruned,
+    so the result must be exact."""
+    prob, num_single, per_group, groups = 1e-3, 400, 200, 5
+    num_pivots = num_single + per_group * groups
+    first = num_pivots
+    # Turning the observable mechanism on fires 400 pivots at once. Leaving
+    # it off costs more: every one of the five groups then needs its own
+    # mechanism of probability 1e-300.
+    rows = [[d, first] for d in range(num_single)] + [
+        [num_single + g * per_group + i, first, first + 1 + g]
+        for g in range(groups)
+        for i in range(per_group)
+    ]
+    problem = DemProblem(
+        probs=[prob] * num_pivots + [0.5] + [1e-300] * groups,
+        detector_rows=rows,
+        observable_rows=[[first]],
+        num_detectors=num_pivots,
+        num_observables=1,
+    )
+    syndrome = np.array([0] * num_single + [1] * (per_group * groups), dtype=np.uint8)
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, list(range(num_pivots + 1 + groups)), max_states=64
+    )
+    assert info["free"] == 1 + groups
+    assert info["pruned_states"] == 0 and info["pruned"] == 0.0
+    assert np.allclose(masses, [0.0, 1.0])
+    assert np.isclose(
+        info["log_mass"],
+        np.log(0.5) + num_single * np.log(prob) + per_group * groups * np.log(1 - prob),
+    )
+
+
+def test_basis_truncation_reports_the_removal_of_a_blocked_state():
+    """A state whose open pivot has a zero factor can be unblocked by a later
+    mechanism. Removing it is a loss and must be reported as one."""
+    problem = DemProblem(
+        probs=[0.0, 0.5, 0.5],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    exact, info = basis_truncated_class_masses(problem, np.zeros(1), [0, 1, 2])
+    assert np.allclose(exact, [0.5, 0.5]) and info["pruned_states"] == 0
+    _, info = basis_truncated_class_masses(
+        problem, np.zeros(1), [0, 1, 2], max_states=1
+    )
+    assert info["pruned_states"] == 1 and info["pruned"] > 0.0
+
+
 def test_decoder_with_basis_truncation_matches_maximum_likelihood():
     """The decoder option agrees with the full-chain reference and the SVD sum."""
     problem = _small_surface_problem(0.02)
