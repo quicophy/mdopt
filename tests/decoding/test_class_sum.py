@@ -138,6 +138,17 @@ def test_parity_chain_records_the_truncated_weight():
     assert truncated.max_bond() < exact.max_bond()
 
 
+def test_parity_chain_holds_a_product_whose_norm_is_outside_float64():
+    """Three thousand sites of (1, 1) have a norm of 2 ** 1500; its logarithm
+    is an ordinary number. Tiny sites must not read as an annihilated state."""
+    chain = ParityChain([np.ones(2)] * 3000)
+    assert np.isclose(chain.log_norm, 1500 * np.log(2.0))
+    tiny = ParityChain([np.array([1e-200, 1e-200])] * 40)
+    assert np.isclose(tiny.log_norm, 40 * np.log(np.sqrt(2.0) * 1e-200))
+    with pytest.raises(ArithmeticError):
+        ParityChain([np.ones(2), np.zeros(2)])
+
+
 def test_parity_chain_rejects_bad_input():
     with pytest.raises(ValueError, match="at least one site"):
         ParityChain([])
