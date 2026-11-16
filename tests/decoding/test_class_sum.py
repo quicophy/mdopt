@@ -627,6 +627,9 @@ def test_basis_truncation_accepts_zero_probability_factors(seed):
     )
     masses, info = basis_truncated_class_masses(certain, np.zeros(1), [0])
     assert np.allclose(masses, [1.0, 0.0]) and info["log_mass"] == 0.0
+    # The same mechanism cannot explain a set detector: nothing to normalize.
+    with pytest.raises(ArithmeticError, match="positive probability"):
+        basis_truncated_class_masses(certain, np.ones(1), [0])
 
     problem = _random_problem(seed)
     rng = np.random.default_rng(seed)

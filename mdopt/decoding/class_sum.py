@@ -884,7 +884,8 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
         If the active set holds no solution of the syndrome, or if
         ``max_states`` is not positive.
     ArithmeticError
-        If the recursion loses all of its weight.
+        If the recursion loses all of its weight, or if no assignment of the
+        active set has positive probability.
     """
     if max_states < 1:
         raise ValueError("The number of basis states must be positive.")
@@ -912,6 +913,12 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     for r, support in enumerate(kernel.supports):
         if not support:
             log_scale += _safe_log(float(pivot_weights[r, 0]))
+    if log_scale == -math.inf:
+        # A pinned mechanism of probability one, or a pivot without free
+        # support that must take a value of probability zero.
+        raise ArithmeticError(
+            "No assignment of the active set has positive probability."
+        )
     totals, log_recursion, pruned, peak, removed = _basis_recursion(
         [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
         pivot_weights.tolist(),
