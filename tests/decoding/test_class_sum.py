@@ -333,6 +333,8 @@ def test_decoder_rejects_bad_input():
         ClassSumDecoder(empty)
     with pytest.raises(ValueError, match="bond dimension"):
         ClassSumDecoder(problem, temper_chi_max=0)
+    with pytest.raises(ValueError, match="extra centers"):
+        ClassSumDecoder(problem, extra_centers=-1)
     with pytest.raises(ValueError):
         ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors + 1))
 
@@ -408,28 +410,71 @@ def test_decoder_tempers_only_when_the_first_pass_truncated():
     assert tempered_at_small_chi > 0
 
 
-def test_tempered_pass_can_use_its_own_bond_dimension():
-    """A larger bond for the tempered pass leaves the easy syndromes untouched."""
+def test_widened_search_extends_the_candidates():
+    """Every extra center adds classes and never loses a better candidate."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    syndromes, _ = _sample_from_model(problem, 40, seed=5)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    narrow = ClassSumDecoder(problem, extra_centers=0)
+    wide = ClassSumDecoder(problem, extra_centers=4)
+    grew = 0
+    for syndrome in syndromes:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(narrow._bposd.decode(syndrome), dtype=np.uint8)
+        if not narrow._satisfies(seed, syndrome):
+            continue
+        found, tried = narrow._search(syndrome, seed)
+        assert narrow.candidates(syndrome, seed).keys() == found.keys()
+        assert narrow.widen(syndrome, found) == found
+        # Centers that were already used add nothing and do not use the budget.
+        only_tried = {label: found[label] for label in tried}
+        assert wide.widen(syndrome, only_tried, tried) == only_tried
+        repeated = ClassSumDecoder(problem, extra_centers=len(tried))
+        again = repeated.widen(syndrome, found)
+        assert again.keys() == found.keys()
+        wider = wide.widen(syndrome, found, tried)
+        assert set(found) <= set(wider)
+        for label, (likelihood, solution) in wider.items():
+            assert wide._satisfies(solution, syndrome)
+            assert wide.class_of(solution) == label
+            assert np.isclose(likelihood, wide._llr @ solution)
+            if label in found:
+                assert likelihood >= found[label][0] - 1e-12
+        grew += len(wider) > len(found)
+    assert grew > 0
+
+
+def test_decoder_widens_only_when_the_first_pass_truncated():
+    """Hard-syndrome options leave the easy syndromes untouched."""
     problem = _small_surface_problem(0.02)
     syndromes, _ = _sample_from_model(problem, 40, seed=3)
     syndromes = syndromes[syndromes.any(axis=1)]
     default = ClassSumDecoder(problem, chi_max=16)
-    larger = ClassSumDecoder(problem, chi_max=16, temper_chi_max=32)
-    assert default.temper_chi_max == 16 and larger.temper_chi_max == 32
-    forced = ClassSumDecoder(problem, chi_max=1, temper_chi_max=64)
-    tempered = exact = 0
+    options = ClassSumDecoder(problem, chi_max=16, extra_centers=4, temper_chi_max=32)
+    assert default.temper_chi_max == 16 and options.temper_chi_max == 32
+    forced = ClassSumDecoder(problem, chi_max=1, extra_centers=4, temper_chi_max=64)
+    stock = ClassSumDecoder(problem, chi_max=1)
+    widened = larger = tempered = 0
     for syndrome in syndromes:
         flips, info = default.decode(syndrome)
-        same_flips, same = larger.decode(syndrome)
-        assert not same["tempered"] and np.array_equal(flips, same_flips)
+        same_flips, same = options.decode(syndrome)
+        assert not same["widened"] and not same["tempered"]
+        assert np.array_equal(flips, same_flips)
+        assert same["candidates"] == info["candidates"]
+        _, narrow = stock.decode(syndrome)
         hard_flips, hard = forced.decode(syndrome)
+        # Only a truncated first pass widens, and only if a class is left
+        # that was not a center yet.
+        assert narrow["tempered"] or not hard["widened"]
+        assert hard["candidates"] >= narrow["candidates"]
         if hard["tempered"]:
             # The tempered pass at chi 64 is exact on this small model.
             assert hard["lost"] < 1e-8
             _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
-            exact += int(np.array_equal(hard_flips, reference))
+            larger += int(np.array_equal(hard_flips, reference))
+        widened += hard["widened"]
         tempered += hard["tempered"]
-    assert tempered > 5 and exact >= tempered - 2
+    assert widened > 0 and tempered > 5 and larger >= tempered - 2
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
