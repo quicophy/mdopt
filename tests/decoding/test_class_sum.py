@@ -488,6 +488,9 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
     assert default.temper_chi_max == 16 and options.temper_chi_max == 32
     forced = ClassSumDecoder(problem, chi_max=1, extra_centers=4, temper_chi_max=64)
     stock = ClassSumDecoder(problem, chi_max=1)
+    # One pass and nothing else: its ``lost`` says whether the first pass
+    # of the decoders above truncated.
+    one_pass = ClassSumDecoder(problem, chi_max=1, temper_stages=1)
     widened = larger = tempered = 0
     for syndrome in syndromes:
         flips, info = default.decode(syndrome)
@@ -499,7 +502,8 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
         hard_flips, hard = forced.decode(syndrome)
         # Only a truncated first pass widens, and only if a class is left
         # that was not a center yet.
-        assert narrow["tempered"] or not hard["widened"]
+        _, first = one_pass.decode(syndrome)
+        assert first["lost"] >= forced.temper_threshold or not hard["widened"]
         assert hard["candidates"] >= narrow["candidates"]
         if hard["tempered"]:
             # The tempered pass at chi 64 is exact on this small model.

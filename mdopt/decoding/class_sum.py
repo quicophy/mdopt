@@ -48,11 +48,12 @@ contractions give the same masses. The decoder runs the one-pass contraction
 first and repeats it with tempering only when that pass discarded weight.
 
 **Hard syndromes.** The syndromes whose first pass discards weight are the
-ones where the decoder still fails, and two options spend more effort on them
-only. ``temper_chi_max`` gives the tempered contraction its own, larger bond
-dimension. ``extra_centers`` widens the candidate search: classes that the
-search has already found become centers of further class flips, which reaches
-classes more than one observable flip away from the most likely candidates.
+ones where the decoder still fails. Two options do extra work on these
+syndromes and leave every other syndrome untouched. ``temper_chi_max`` gives
+the tempered contraction its own, larger bond dimension. ``extra_centers``
+widens the candidate search: classes that the search has already found become
+centers of further class flips, which reaches classes more than one observable
+flip away from the most likely candidates.
 
 On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
 noise this decoder makes fewer logical errors than BP-OSD on the same shots at
