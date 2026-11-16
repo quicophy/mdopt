@@ -611,6 +611,13 @@ def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeyp
     with pytest.raises(DemDecodingError, match="negative_mass='clamp'") as info:
         decode_dem(problem, syndrome)
     assert np.isclose(info.value.certificate.negativity, 0.25)
+    # The error crosses a process boundary with its certificate.
+    import pickle
+
+    revived = pickle.loads(pickle.dumps(info.value))
+    assert isinstance(revived, DemDecodingError)
+    assert str(revived) == str(info.value)
+    assert np.isclose(revived.certificate.negativity, 0.25)
     masses, flips, cert = decode_dem(
         problem, syndrome, negative_mass="clamp", return_certificate=True
     )

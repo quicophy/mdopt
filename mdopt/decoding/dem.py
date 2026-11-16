@@ -63,6 +63,11 @@ class DemDecodingError(ArithmeticError):
         super().__init__(message)
         self.certificate = certificate
 
+    def __reduce__(self):
+        # The default pickles ``args`` alone, which holds only the message;
+        # a worker process could then not hand the error to its parent.
+        return (type(self), (self.args[0], self.certificate))
+
 
 @dataclass
 class DemProblem:
