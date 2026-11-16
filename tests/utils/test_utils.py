@@ -780,6 +780,11 @@ def test_discarded_norm_survives_the_underflow_of_its_square():
         tensor, cut=0.0, chi_max=1, return_truncation_error=True
     )
     assert squared == 0.0
+    # The QR strategy returns (Q, R, error, None).
+    _, _, discarded, _ = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, strategy="qr", return_discarded_norm=True
+    )
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
 
 
 def test_qr_truncation_error_keeps_its_meaning_and_the_discarded_norm_is_separate():
