@@ -2083,10 +2083,238 @@ def decode_message(
     return engine, overlap
 
 
+PRIOR_REWEIGHTINGS = (None, "BP")
 # Operator norm of a logical-constraint MPO: its copy tensor sends |+> to
 # sqrt(2) times a basis state. Check constraints are partial permutations of
 # norm one. Pinned by a test against the dense MPO.
 LOGICAL_CONSTRAINT_GAIN = float(np.sqrt(2.0))
+
+
+def _bp_site_marginals(
+    num_sites: int,
+    checks: List[List[int]],
+    syndrome: np.ndarray,
+    flip_probs: np.ndarray,
+    iterations: int = 60,
+) -> np.ndarray:
+    """Sum-product belief propagation on a parity-check graph over MPS sites.
+
+    Returns ``P(f_i = 1 | syndrome)`` for every site, where ``f_i`` is the
+    flip variable of site ``i`` with prior ``flip_probs[i]`` and check ``j``
+    demands ``sum_{i in checks[j]} f_i = syndrome[j]`` mod 2. Flooding
+    schedule, tanh rule, a fixed number of iterations: these marginals only
+    reweight the prior (see :func:`decode_custom`), they decide nothing, so
+    a BP that has not converged is still fine.
+    """
+    flip = np.clip(np.asarray(flip_probs, dtype=float), 1e-300, 1 - 1e-16)
+    prior = np.log((1 - flip) / flip)
+    edge_check = np.array(
+        [j for j, sites in enumerate(checks) for _ in sites], dtype=int
+    )
+    edge_site = np.array([i for sites in checks for i in sites], dtype=int)
+    if edge_site.size == 0:
+        return 1 / (1 + np.exp(prior))
+    num_checks = len(checks)
+    signs = 1.0 - 2.0 * np.asarray(syndrome, dtype=float)[edge_check]
+    check_to_site = np.zeros(edge_site.size)
+    for _ in range(iterations):
+        total = prior + np.bincount(
+            edge_site, weights=check_to_site, minlength=num_sites
+        )
+        site_to_check = total[edge_site] - check_to_site
+        t = np.tanh(np.clip(site_to_check / 2, -30, 30))
+        # The product over the check's other edges, through log-moduli and
+        # sign counts so that a zero message (an undecided site) is handled.
+        nonzero = t != 0
+        log_abs = np.where(nonzero, np.log(np.abs(np.where(nonzero, t, 1.0))), 0.0)
+        negative = (t < 0).astype(float)
+        zero = (~nonzero).astype(float)
+        sum_log = np.bincount(edge_check, weights=log_abs, minlength=num_checks)
+        sum_neg = np.bincount(edge_check, weights=negative, minlength=num_checks)
+        sum_zero = np.bincount(edge_check, weights=zero, minlength=num_checks)
+        other_log = sum_log[edge_check] - log_abs
+        other_neg = sum_neg[edge_check] - negative
+        other_zero = sum_zero[edge_check] - zero
+        product = np.where(
+            other_zero > 0,
+            0.0,
+            np.exp(other_log) * np.where(other_neg % 2 == 1, -1.0, 1.0),
+        )
+        product = np.clip(product, -1 + 1e-12, 1 - 1e-12)
+        check_to_site = signs * 2 * np.arctanh(product)
+    total = prior + np.bincount(edge_site, weights=check_to_site, minlength=num_sites)
+    return 1 / (1 + np.exp(np.clip(total, -700, 700)))
+
+
+def _reweighted_error_state(
+    error_bits: str,
+    num_logicals: int,
+    constraint_sites,
+    bias_type: str,
+    bias_prob,
+    erased_qubits: List[int],
+    floor: float,
+    iterations: int,
+) -> Tuple[List[np.ndarray], List[Tuple[int, np.ndarray]]]:
+    """The product state whose prior is the BP posterior, and what undoes it.
+
+    The contraction starts from ``sum_e' sqrt(P(e' xor e)) |e'>`` with ``P``
+    the error prior; it has mass one, and the checks keep only the
+    syndrome-consistent part, a fraction of order ``P(syndrome)``. Truncation
+    is accurate relative to the mass present at the time, so by the end the
+    error is amplified by the inverse of that fraction, and once it exceeds
+    the signal the posterior is rebuilt from residue with an arbitrary sign
+    and class. Every constraint tensor is diagonal in the error basis, so a
+    positive site-wise reweighting of the prior commutes with all of them and
+    is undone exactly at marginalization. Replacing ``P`` by the BP posterior
+    marginals ``q`` (clipped to ``[floor, 1 - floor]``) concentrates the
+    state on syndrome-consistent configurations before anything is
+    truncated, and the survival fraction becomes of order one.
+
+    Returns the product-state tensors (logical sites in ``|+>``, error site
+    ``i`` carrying ``sqrt(q_i(e' xor e_i))``) and the undo weights
+    ``sqrt(P / q)``: a ``(2,)`` vector per site for a one-site prior (bit-flip
+    bias, erased qubit) or a ``(2, 2)`` matrix over the (x, z) parts of a
+    qubit for the depolarizing pair prior, which is not a product.
+    """
+    num_error_sites = len(error_bits)
+    num_qubits = num_error_sites // 2
+    # Erased sites are "+" in the bit string (flat prior); their reference bit
+    # is immaterial, since P and q are then symmetric in the flip.
+    bits = np.array([int(b) if b in "01" else 0 for b in error_bits], dtype=int)
+    erased = set(erased_qubits)
+    unerased = [q for q in range(num_qubits) if q not in erased]
+    probs = (
+        list(bias_prob) if isinstance(bias_prob, (list, tuple, np.ndarray)) else None
+    )
+    # Per-site flip prior for BP; per-site or per-pair prior P(f) for the undo.
+    flip = np.full(num_error_sites, 0.5)
+    pair_prior: dict[int, np.ndarray] = {}
+    site_prior: dict[int, np.ndarray] = {}
+    if bias_type == "Bitflip":
+        sites = [s for q in unerased for s in (2 * q, 2 * q + 1)]
+        for index, site in enumerate(sites):
+            p = probs[index] if probs is not None else bias_prob
+            flip[site] = p
+            site_prior[site] = np.array([1 - p, p])
+    else:
+        for index, q in enumerate(unerased):
+            p = probs[index] if probs is not None else bias_prob
+            flip[2 * q] = flip[2 * q + 1] = 2 * p / 3
+            pair_prior[q] = np.array([[1 - p, p / 3], [p / 3, p / 3]])
+    for q in erased:
+        site_prior[2 * q] = site_prior[2 * q + 1] = np.array([0.5, 0.5])
+
+    checks = []
+    syndrome = []
+    for sites in constraint_sites:
+        xor_sites = [sites[0][0]] + list(sites[1]) + [sites[3][0]]
+        error_sites = [s - num_logicals for s in xor_sites]
+        checks.append(error_sites)
+        syndrome.append(int(bits[error_sites].sum() % 2))
+    q1 = _bp_site_marginals(
+        num_error_sites, checks, np.array(syndrome), flip, iterations
+    )
+    q1 = np.clip(q1, floor, 1 - floor)
+    marginal = np.stack([1 - q1, q1], axis=1)  # [site, f]
+
+    tensors = [
+        np.array([1.0, 1.0]).reshape(1, 2, 1) / np.sqrt(2) for _ in range(num_logicals)
+    ]
+    for site in range(num_error_sites):
+        # Indexed by e': the flip f = e' xor e_site.
+        vector = np.sqrt(marginal[site][np.array([0, 1]) ^ bits[site]])
+        tensors.append((vector / np.linalg.norm(vector)).reshape(1, 2, 1))
+
+    undo: List[Tuple[int, np.ndarray]] = []
+    for q in range(num_qubits):
+        x_site, z_site = 2 * q, 2 * q + 1
+        if q in pair_prior:
+            weight = np.zeros((2, 2))
+            for x_value in range(2):
+                for z_value in range(2):
+                    f_x, f_z = x_value ^ bits[x_site], z_value ^ bits[z_site]
+                    weight[x_value, z_value] = np.sqrt(
+                        pair_prior[q][f_x, f_z]
+                        / (marginal[x_site][f_x] * marginal[z_site][f_z])
+                    )
+            undo.append((num_logicals + x_site, weight))
+        else:
+            for site in (x_site, z_site):
+                f_values = np.array([0, 1]) ^ bits[site]
+                weight = np.sqrt(site_prior[site][f_values] / marginal[site][f_values])
+                undo.append((num_logicals + site, weight))
+    return tensors, undo
+
+
+def _marginalize_with_weights(
+    mps: CanonicalMPS,
+    num_logicals: int,
+    undo: List[Tuple[int, np.ndarray]],
+    renormalize: bool,
+) -> CanonicalMPS:
+    """Trace out the error sites against the undo weights instead of all-ones.
+
+    The same contraction as :meth:`CanonicalMPS.marginal` followed by
+    ``reverse``, with each error site (or qubit pair) contracted against its
+    weight times the same ``1/sqrt(d)`` trace normalization per site, so the
+    amplitudes come out on the plain decoder's scale; no SVD, so it is exact.
+    With no logical sites the result is the one-site scalar MPS
+    :meth:`CanonicalMPS.marginal` returns.
+    """
+    tensors = list(mps.tensors)
+    # Every error site must be traced exactly once: on a chain whose bonds
+    # are all one, a site the weights skip would drop out of the contraction
+    # silently (the bond dimensions still match) and the amplitudes would be
+    # the trace over the remaining sites only.
+    covered: List[int] = []
+    for first, weight in undo:
+        covered.extend([first] if weight.ndim == 1 else [first, first + 1])
+    expected = list(range(num_logicals, len(tensors)))
+    if sorted(covered) != expected:
+        raise ValueError(
+            f"The undo weights must cover each error site {expected[0] if expected else 'none'}"
+            f"..{expected[-1] if expected else ''} exactly once, given sites {sorted(covered)}."
+        )
+    right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
+    # ``right`` is a single column throughout, so it is contracted into each
+    # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
+    # site, like :meth:`CanonicalMPS.marginal`.
+    for first, weight in sorted(undo, key=lambda item: -item[0]):
+        if weight.ndim == 1:
+            trace = weight / np.sqrt(tensors[first].shape[1])
+            site = np.tensordot(tensors[first], right, axes=([2], [0]))[:, :, 0]
+            right = np.tensordot(site, trace, axes=([1], [0]))[:, None]
+        else:
+            trace = weight / np.sqrt(
+                tensors[first].shape[1] * tensors[first + 1].shape[1]
+            )
+            second = np.tensordot(tensors[first + 1], right, axes=([2], [0]))[:, :, 0]
+            weighted = np.einsum("xz,mz->xm", trace, second)
+            right = np.einsum("lxm,xm->l", tensors[first], weighted)[:, None]
+        if renormalize:
+            norm = float(np.linalg.norm(right))
+            if norm > 0:
+                right = right / norm
+    if num_logicals == 0:
+        return CanonicalMPS(
+            [right.reshape(1, 1, 1)],
+            orth_center=0,
+            tolerance=mps.tolerance,
+            chi_max=mps.chi_max,
+        )
+    last = np.tensordot(tensors[num_logicals - 1], right, axes=([2], [0]))
+    if renormalize:
+        norm = float(np.linalg.norm(last))
+        if norm > 0:
+            last = last / norm
+    logical = CanonicalMPS(
+        tensors[: num_logicals - 1] + [last],
+        orth_center=num_logicals - 1,
+        tolerance=mps.tolerance,
+        chi_max=mps.chi_max,
+    )
+    return logical.reverse()
 
 
 def _with_certificate(outcome, certificate: TruncationCertificate, wanted: bool):
@@ -2123,6 +2351,9 @@ def decode_css(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    prior_reweighting: Optional[str] = None,
+    reweighting_floor: float = 0.05,
+    bp_iterations: int = 60,
     return_certificate: bool = False,
 ):
     """
@@ -2190,6 +2421,27 @@ def decode_css(
         between runs.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    prior_reweighting : Optional[str]
+        ``"BP"`` replaces the error prior by the belief-propagation posterior
+        marginals before the contraction and undoes the change exactly at
+        marginalization. The exact answer is unchanged; what changes is that
+        the state is concentrated on syndrome-consistent configurations
+        before anything is truncated, so the truncation error is no longer
+        amplified by the inverse of the mass fraction the checks keep. That
+        amplification is what produces globally sign-flipped, wrong-class
+        posteriors at small ``chi_max``. ``None`` keeps the plain prior.
+    reweighting_floor : float
+        The BP marginals are clipped to ``[floor, 1 - floor]`` before use. The
+        undo weight is ``sqrt(P / q)`` per site, so the floor caps how much a
+        site can amplify truncation noise in the directions the reweighted
+        prior suppressed. On the [[18,2]] bivariate bicycle code every floor
+        from 0.01 to 0.2 gave the same verdicts against the exact posterior;
+        on the [[72,12,6]] code at chi_max=128 a floor of 0.01 let that
+        amplification flip the sign again on some shots, 0.05 and 0.1 did
+        not, and 0.2 is close enough to the plain prior to inherit its
+        negatives. 0.05 is the default.
+    bp_iterations : int
+        Flooding iterations of the sum-product BP used for the reweighting.
     return_certificate : bool
         Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
         with the rigorous bound ``certificate.bound`` on the relative
@@ -2292,6 +2544,9 @@ def decode_css(
         num_candidates=num_candidates,
         tie_policy=tie_policy,
         rng=rng,
+        prior_reweighting=prior_reweighting,
+        reweighting_floor=reweighting_floor,
+        bp_iterations=bp_iterations,
         return_certificate=return_certificate,
     )
 
@@ -2317,6 +2572,9 @@ def decode_custom(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    prior_reweighting: Optional[str] = None,
+    reweighting_floor: float = 0.05,
+    bp_iterations: int = 60,
     return_certificate: bool = False,
 ):
     """
@@ -2374,6 +2632,27 @@ def decode_custom(
         Product states the Dephasing DMRG readout is restarted from.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    prior_reweighting : Optional[str]
+        ``"BP"`` replaces the error prior by the belief-propagation posterior
+        marginals before the contraction and undoes the change exactly at
+        marginalization. The exact answer is unchanged; what changes is that
+        the state is concentrated on syndrome-consistent configurations
+        before anything is truncated, so the truncation error is no longer
+        amplified by the inverse of the mass fraction the checks keep. That
+        amplification is what produces globally sign-flipped, wrong-class
+        posteriors at small ``chi_max``. ``None`` keeps the plain prior.
+    reweighting_floor : float
+        The BP marginals are clipped to ``[floor, 1 - floor]`` before use. The
+        undo weight is ``sqrt(P / q)`` per site, so the floor caps how much a
+        site can amplify truncation noise in the directions the reweighted
+        prior suppressed. On the [[18,2]] bivariate bicycle code every floor
+        from 0.01 to 0.2 gave the same verdicts against the exact posterior;
+        on the [[72,12,6]] code at chi_max=128 a floor of 0.01 let that
+        amplification flip the sign again on some shots, 0.05 and 0.1 did
+        not, and 0.2 is close enough to the plain prior to inherit its
+        negatives. 0.05 is the default.
+    bp_iterations : int
+        Flooding iterations of the sum-product BP used for the reweighting.
     return_certificate : bool
         Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
         with the rigorous bound ``certificate.bound`` on the relative
@@ -2485,6 +2764,19 @@ def decode_custom(
         raise ValueError(
             f"Unknown optimizer {optimizer!r}; expected one of {OPTIMIZERS}."
         )
+    if prior_reweighting not in PRIOR_REWEIGHTINGS:
+        raise ValueError(
+            f"Unknown prior_reweighting {prior_reweighting!r}; expected one of "
+            f"{PRIOR_REWEIGHTINGS}."
+        )
+    # A floor below machine precision protects nothing: 1 - floor rounds to
+    # one, a saturated marginal keeps a branch of exactly zero, and the undo
+    # divides zero by zero.
+    if not 0 < reweighting_floor < 0.5 or 1.0 - reweighting_floor == 1.0:
+        raise ValueError(
+            "reweighting_floor should lie in (0, 0.5) and be distinguishable "
+            f"from zero next to one, given {reweighting_floor}."
+        )
     certificate = TruncationCertificate()
 
     if _identity_fast_path_fires(error, bias_prob):
@@ -2535,14 +2827,30 @@ def decode_custom(
     )
     logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
 
-    logicals_state = "+" * num_logicals
-    state_string = logicals_state + error
-    error_mps = cast(
-        CanonicalMPS,
-        create_custom_product_state(
-            string=state_string, tolerance=tolerance, form="Right-canonical"
-        ),
-    )
+    undo_weights: List[Tuple[int, np.ndarray]] = []
+    if prior_reweighting == "BP":
+        if not silent:
+            LOGGER.info("Reweighting the prior by the BP posterior marginals.")
+        tensors, undo_weights = _reweighted_error_state(
+            error,
+            num_logicals,
+            constraint_sites,
+            bias_type,
+            bias_prob,
+            erased_qubits,
+            reweighting_floor,
+            bp_iterations,
+        )
+        error_mps = CanonicalMPS(tensors, orth_center=None, tolerance=tolerance)
+    else:
+        logicals_state = "+" * num_logicals
+        state_string = logicals_state + error
+        error_mps = cast(
+            CanonicalMPS,
+            create_custom_product_state(
+                string=state_string, tolerance=tolerance, form="Right-canonical"
+            ),
+        )
 
     # Exclude erased qubit sites from bias: erased qubits are initialized as
     # |+>, which already represents complete ignorance, so biasing them would
@@ -2562,7 +2870,7 @@ def decode_custom(
         sites_to_bias = [num_logicals + 2 * q for q in unerased]
 
     assert isinstance(error_mps, CanonicalMPS)
-    if sites_to_bias:
+    if sites_to_bias and prior_reweighting is None:
         if bias_type == "Bitflip":
             if not silent:
                 LOGGER.info("Applying bitflip bias.")
@@ -2656,14 +2964,19 @@ def decode_custom(
             LOGGER.warning(
                 "The truncation-error bound %.2e exceeds one at chi_max=%d: the "
                 "posterior may be truncation residue rather than signal. "
-                "Consider a larger chi_max.",
+                "Consider prior_reweighting='BP' or a larger chi_max.",
                 certificate.bound,
                 chi_max,
             )
-    sites_to_marginalize = list(range(num_logicals, num_sites))
-    logical_mps = error_mps.marginal(
-        sites_to_marginalize=sites_to_marginalize, renormalize=renormalize
-    ).reverse()
+    if undo_weights:
+        logical_mps = _marginalize_with_weights(
+            error_mps, num_logicals, undo_weights, renormalize
+        )
+    else:
+        sites_to_marginalize = list(range(num_logicals, num_sites))
+        logical_mps = error_mps.marginal(
+            sites_to_marginalize=sites_to_marginalize, renormalize=renormalize
+        ).reverse()
 
     num_logical_sites = len(logical_mps)
     if not silent:
