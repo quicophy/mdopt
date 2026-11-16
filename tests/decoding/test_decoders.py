@@ -2345,9 +2345,10 @@ def test_prior_reweighting_changes_nothing_when_nothing_is_truncated(name, bias)
 
 def test_prior_reweighting_removes_sign_flips_at_small_chi():
     """On the [[18,2]] bivariate bicycle code at chi_max=4 the plain
-    contraction comes back globally sign-flipped on about one shot in seven;
-    the reweighted one on about one in fifty (measured on 229 shots against
-    the exact posterior, where it also cut the wrong verdicts from 100 to 22)."""
+    contraction comes back globally sign-flipped on several of the 60 shots
+    sampled here, and the reweighted one on fewer. A separate study of 229
+    shots against the exact posterior, not repeated by this test, measured
+    about one flip in seven against one in fifty."""
     code = create_bb_code(3, 3, "x + y", "1 + x*y")
     rng = np.random.default_rng(18)
     flips = {"plain": 0, "reweighted": 0}
@@ -2439,6 +2440,15 @@ def test_prior_reweighting_arguments_are_validated():
             reweighting_floor=0.7,
             silent=True,
         )
+    for iterations in (0, -3, 2.5, True):
+        with pytest.raises(ValueError, match="bp_iterations"):
+            decode_css(
+                qec.steane_code(),
+                "XIIIIII",
+                prior_reweighting="BP",
+                bp_iterations=iterations,
+                silent=True,
+            )
     # Below machine precision the floor would leave a branch of exactly zero
     # and a 0 / 0 undo weight on a saturated marginal.
     with pytest.raises(ValueError, match="reweighting_floor"):
@@ -2465,6 +2475,35 @@ def test_prior_reweighting_arguments_are_validated():
         silent=True,
     )
     assert np.allclose(posterior, [1.0])
+
+
+def test_a_center_too_small_to_square_does_not_collapse_the_certificate():
+    """Amplitudes of 1e-200 have squares of zero. The constraint sweep must
+    record a renormalization of one for a center it did not divide, so that
+    the certificate's scale stays finite."""
+    from mdopt.optimizer.utils import (
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    mps = create_custom_product_state("+++")
+    center = int(mps.orth_center) if mps.orth_center is not None else 0
+    mps.tensors[center] = mps.tensors[center] * 1e-200
+    certificate = TruncationCertificate()
+    apply_constraints(
+        mps,
+        [[[0], [1], [], [2]]],
+        [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        chi_max=8,
+        renormalize=True,
+        silent=True,
+        certificate=certificate,
+    )
+    assert np.isfinite(certificate.log_scale)
 
 
 def test_logical_constraint_gain_is_the_dense_mpo_norm():

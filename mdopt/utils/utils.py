@@ -153,12 +153,14 @@ def svd(
                 )
             else:
                 an = _to_numpy(a)
+                perturbed = an + np.eye(an.shape[0], an.shape[1]) * 1e-12
                 # The decomposed matrix differs from the input by this much in
                 # the Frobenius norm; the discarded norm reported below has to
-                # account for it.
-                perturbation_norm = 1e-12 * float(np.sqrt(min(an.shape)))
+                # account for it. It is measured, not assumed: next to a large
+                # entry the addition moves the entry by more than 1e-12.
+                perturbation_norm = _stable_norm(perturbed - an)
                 u_l, s, v_h = scipy.linalg.svd(
-                    an + np.eye(an.shape[0], an.shape[1]) * 1e-12,
+                    perturbed,
                     full_matrices=False,
                     compute_uv=True,
                     check_finite=True,
@@ -217,6 +219,7 @@ def qr(
     chi_max: float = int(1e4),
     renormalize: bool = False,
     return_truncation_error: bool = False,
+    return_discarded_norm: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, Optional[float]]:
     """
     Performs QR Decomposition with a possibility for truncation.
@@ -232,7 +235,13 @@ def qr(
     renormalize : bool
         Whether to renormalize the matrix after truncation.
     return_truncation_error : bool
-        Whether to return the truncation error.
+        Whether to return the truncation error: the Frobenius distance
+        between the input and the returned ``Q @ R``, renormalization of
+        ``R`` included.
+    return_discarded_norm : bool
+        Return in its place the norm of what the truncation discarded,
+        measured before any renormalization and without underflow in its
+        squares.
 
     Returns
     -------
@@ -273,10 +282,9 @@ def qr(
     q_l = q_l[:, trunc_idx]
 
     # The residual of the truncation, measured before any renormalization
-    # of R and without underflow in its squares: it is what was discarded,
-    # as a norm (not squared, unlike the SVD's truncation error).
-    trunc_error = (
-        _stable_norm(_to_numpy(mat) - q_l @ r_r) if return_truncation_error else None
+    # of R and without underflow in its squares: it is what was discarded.
+    discarded_norm = (
+        _stable_norm(_to_numpy(mat) - q_l @ r_r) if return_discarded_norm else None
     )
 
     if renormalize and effective_rank > 0:
@@ -285,7 +293,10 @@ def qr(
         if nrm > 0:
             r_r = r_r / nrm
 
+    if return_discarded_norm:
+        return np.asarray(q_l), np.asarray(r_r), discarded_norm
     if return_truncation_error:
+        trunc_error = float(np.linalg.norm(_to_numpy(mat) - q_l @ r_r))
         return np.asarray(q_l), np.asarray(r_r), trunc_error
 
     return np.asarray(q_l), np.asarray(r_r), None
@@ -457,13 +468,13 @@ def split_two_site_tensor(
         cut=cut,
         chi_max=chi_max,
         renormalize=renormalize,
-        return_truncation_error=return_truncation_error or return_discarded_norm,
+        return_truncation_error=return_truncation_error,
+        return_discarded_norm=return_discarded_norm,
     )
     chi_v_cut = min(chi_max, q_l.shape[1])
     q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
     r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
     if return_truncation_error or return_discarded_norm:
-        # The QR residual is already a norm, so both requests return it.
         return q_l, r_r, truncation_error, None
     return q_l, r_r, None, None
 

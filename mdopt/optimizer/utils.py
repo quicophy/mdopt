@@ -548,9 +548,12 @@ def apply_constraints(
             orth_center_index = int(mps.orth_center)  # type: ignore
             center = mps.tensors[orth_center_index]
             norm = np.linalg.norm(center)
+            # A center whose squares underflow has a computed norm of zero
+            # and is left as it is; the factor recorded is then one, not
+            # zero, so the certificate's scale stays finite.
             if norm > 0:
                 mps.tensors[orth_center_index] = center / norm
-            renormalization = float(norm)
+                renormalization = float(norm)
         if certificate is not None:
             # What the move before the MPO discarded passes through the MPO,
             # so it is recorded with the MPO's gain; what the zip-up itself
