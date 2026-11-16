@@ -748,9 +748,10 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             ``candidates`` (number of logical classes reached). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
             tied classes; two normalized masses within
-            :data:`TIE_TOLERANCE` of each other count as tied. The empty syndrome is answered with no flips
-            without a search. If BP-OSD returns a mechanism set that does not reproduce
-            the syndrome, its class is returned with ``candidates`` set to 0.
+            :data:`TIE_TOLERANCE` of each other count as tied. The empty
+            syndrome is answered with no flips without a search. If BP-OSD
+            returns a mechanism set that does not reproduce the syndrome, its
+            class is returned with ``candidates`` set to 0.
         """
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
