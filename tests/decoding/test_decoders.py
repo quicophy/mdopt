@@ -2439,6 +2439,32 @@ def test_prior_reweighting_arguments_are_validated():
             reweighting_floor=0.7,
             silent=True,
         )
+    # Below machine precision the floor would leave a branch of exactly zero
+    # and a 0 / 0 undo weight on a saturated marginal.
+    with pytest.raises(ValueError, match="reweighting_floor"):
+        decode_custom(
+            ["ZZ"],
+            [],
+            [],
+            "XX",
+            bias_type="Bitflip",
+            bias_prob=1.0,
+            prior_reweighting="BP",
+            reweighting_floor=1e-20,
+            silent=True,
+        )
+    posterior, _ = decode_custom(
+        ["ZZ"],
+        [],
+        [],
+        "XX",
+        bias_type="Bitflip",
+        bias_prob=1.0,
+        prior_reweighting="BP",
+        reweighting_floor=1e-12,
+        silent=True,
+    )
+    assert np.allclose(posterior, [1.0])
 
 
 def test_logical_constraint_gain_is_the_dense_mpo_norm():

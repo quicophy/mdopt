@@ -2769,9 +2769,13 @@ def decode_custom(
             f"Unknown prior_reweighting {prior_reweighting!r}; expected one of "
             f"{PRIOR_REWEIGHTINGS}."
         )
-    if not 0 < reweighting_floor < 0.5:
+    # A floor below machine precision protects nothing: 1 - floor rounds to
+    # one, a saturated marginal keeps a branch of exactly zero, and the undo
+    # divides zero by zero.
+    if not 0 < reweighting_floor < 0.5 or 1.0 - reweighting_floor == 1.0:
         raise ValueError(
-            f"reweighting_floor should lie in (0, 0.5), given {reweighting_floor}."
+            "reweighting_floor should lie in (0, 0.5) and be distinguishable "
+            f"from zero next to one, given {reweighting_floor}."
         )
     certificate = TruncationCertificate()
 
