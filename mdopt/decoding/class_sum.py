@@ -829,6 +829,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (label for label in found if label not in skip),
             key=lambda label: -found[label][0],
         )
+        if solves is None:
+            solves = {}
         for center in centers[: self.extra_centers]:
             self._flip_around(center, syndrome, wider, solves)
         return wider

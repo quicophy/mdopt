@@ -563,6 +563,10 @@ def test_the_search_never_repeats_a_solve():
         assert len(counts) == len(solves)
         assert set(found) <= set(wider)
         widened += len(counts) > stock
+        # Without a cache from the search, the centers still share one.
+        counts.clear()
+        decoder.widen(syndrome, found, tried)
+        assert len(counts) <= 2 * problem.num_observables
     assert widened > 0
 
 
