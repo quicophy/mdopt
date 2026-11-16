@@ -317,14 +317,9 @@ def apply_depolarizing_bias(
         # which the exact operator changes the norm of the whole state: one
         # for a basis pair, which it maps to a unit-norm prior, and the
         # actual change for a superposition (|++> at bias 3/4 is doubled).
-        pair_norm = _stable_norm(
-            contract(
-                "ijk, klm -> ijlm",
-                mps.tensors[site],
-                mps.tensors[site + 1],
-                optimize=[(0, 1)],
-            )
-        )
+        # The center is at ``site`` and its right neighbor is right-isometric,
+        # so the pair's norm is the center tensor's norm: no contraction.
+        pair_norm = _stable_norm(mps.tensors[site])
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
