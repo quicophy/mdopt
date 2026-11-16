@@ -548,7 +548,12 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     if stages == 1:
         chain = ParityChain([plus] * num_obs + [amplitude(w) for w in free_priors])
     else:
-        chain = ParityChain([plus] * num_obs + [np.ones(2)] * len(kernel.free))
+        # The uniform state, one normalized |+> per free site: unnormalized
+        # ones would give the chain a norm of 2 ** (free / 2), beyond float64
+        # for a couple of thousand free mechanisms. The factor of two per
+        # site that this removes from the squared norm goes into the scale.
+        chain = ParityChain([plus] * (num_obs + len(kernel.free)))
+        log_scale += len(kernel.free) * float(np.log(2.0))
     # Soft factors: pivots that do not fire in the base solution first, short
     # supports before long ones.
     order = sorted(
