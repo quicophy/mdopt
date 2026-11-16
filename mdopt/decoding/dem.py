@@ -31,21 +31,37 @@ import stim
 
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import create_custom_product_state
-from mdopt.utils.utils import _stable_norm
-
-LOGGER = logging.getLogger(__name__)
 from mdopt.optimizer.utils import (
     COPY_LEFT,
     SWAP,
     XOR_BULK,
     XOR_LEFT,
     XOR_RIGHT,
-)
-from mdopt.optimizer.utils import (
     TruncationCertificate,
     apply_constraints,
     optimize_qubit_order,
 )
+from mdopt.utils.utils import _stable_norm
+
+LOGGER = logging.getLogger(__name__)
+
+
+class DemDecodingError(ArithmeticError):
+    """A contraction of :func:`decode_dem` that has no verdict to give.
+
+    Raised when the class-mass vector collapsed, or when a class mass is
+    materially negative and ``negative_mass="raise"``. It is an
+    ``ArithmeticError``, so callers that catch that keep working.
+
+    Attributes
+    ----------
+    certificate : TruncationCertificate
+        The certificate of the contraction that failed.
+    """
+
+    def __init__(self, message: str, certificate: TruncationCertificate):
+        super().__init__(message)
+        self.certificate = certificate
 
 
 @dataclass
@@ -278,14 +294,15 @@ def decode_dem(
     return_certificate : bool
         Also return the :class:`~mdopt.optimizer.utils.TruncationCertificate`
         of the contraction. It is always computed; a collapsed class-mass
-        vector (nothing positive, or not finite) raises ``ArithmeticError``
-        with the certificate attached as its ``certificate`` attribute. The
+        vector (nothing positive, or not finite) raises
+        :class:`DemDecodingError`, an ``ArithmeticError`` that carries the
+        certificate as its ``certificate`` attribute. The
         certificate's ``negativity`` is the most negative class mass as a
         fraction of the peak (0 for an exact contraction).
     negative_mass : str
         What to do with a class mass below -1e-8 of the peak, which only a
         truncation artifact can produce. ``"raise"`` (default) raises
-        ``ArithmeticError`` with the certificate attached, so that callers
+        :class:`DemDecodingError` with the certificate, so that callers
         that escalate or reject on the exception keep working; ``"clamp"``
         clamps it to zero before the argmax, takes the verdict of the
         positive classes and leaves the caller to gate on
@@ -565,28 +582,26 @@ def decode_dem(
     # on the certificate. A collapsed vector, with nothing positive to choose
     # from, has no verdict to give and always raises.
     if not np.isfinite(dense).all() or float(np.max(dense)) <= 0.0:
-        error = ArithmeticError(
+        raise DemDecodingError(
             f"The class-mass vector collapsed at chi_max={chi_max} "
-            f"(truncation-error bound {certificate.bound:.2e})."
+            f"(truncation-error bound {certificate.bound:.2e}).",
+            certificate,
         )
-        error.certificate = certificate  # type: ignore[attr-defined]
-        raise error
     peak = float(np.max(dense))
     most_negative = float(np.min(dense))
     certificate.negativity = max(0.0, -most_negative / peak)
     if certificate.negativity > 1e-8:
         if negative_mass == "raise":
-            error = ArithmeticError(
+            raise DemDecodingError(
                 f"Negative class mass {most_negative:.3e} "
                 f"({100.0 * certificate.negativity:.1f}% of the peak) at "
                 f"chi_max={chi_max} (truncation-error bound "
                 f"{certificate.bound:.2e}): the contraction is not converged; "
                 "raise chi_max, use prior_reweighting='BP', or pass "
                 "negative_mass='clamp' to take the verdict of the positive "
-                "classes and gate on certificate.negativity."
+                "classes and gate on certificate.negativity.",
+                certificate,
             )
-            error.certificate = certificate  # type: ignore[attr-defined]
-            raise error
         if not silent:
             LOGGER.warning(
                 "Negative class mass %.3e (%.1f%% of the peak) at chi_max=%d "

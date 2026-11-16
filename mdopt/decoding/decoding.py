@@ -2769,6 +2769,14 @@ def decode_custom(
             f"Unknown prior_reweighting {prior_reweighting!r}; expected one of "
             f"{PRIOR_REWEIGHTINGS}."
         )
+    if (
+        isinstance(bp_iterations, bool)
+        or not isinstance(bp_iterations, (int, np.integer))
+        or bp_iterations < 1
+    ):
+        raise ValueError(
+            f"bp_iterations should be a positive integer, given {bp_iterations!r}."
+        )
     # A floor below machine precision protects nothing: 1 - floor rounds to
     # one, a saturated marginal keeps a branch of exactly zero, and the undo
     # divides zero by zero.
@@ -2949,7 +2957,7 @@ def decode_custom(
     # already in |+> and are naturally included here — no separate
     # intermediate marginalization is needed.
     final_norm = (
-        float(np.linalg.norm(error_mps.tensors[error_mps.orth_center]))
+        _stable_norm(error_mps.tensors[error_mps.orth_center])
         if error_mps.orth_center is not None
         else 1.0
     )
