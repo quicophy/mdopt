@@ -205,6 +205,41 @@ def test_class_masses_match_enumeration_on_a_restricted_active_set(seed):
         assert np.isclose(info["log_mass"], np.log(exact.sum()))
 
 
+@pytest.mark.parametrize("seed", range(6))
+@pytest.mark.parametrize("stages", [2, 3, 5])
+def test_tempered_class_masses_match_enumeration(seed, stages):
+    """Without truncation the tempered contraction is the same exact sum."""
+    problem = _random_problem(seed, num_mechanisms=16)
+    rng = np.random.default_rng(seed)
+    check, _ = problem_matrices(problem)
+    error = np.zeros(problem.num_mechanisms, dtype=np.uint8)
+    error[rng.choice(problem.num_mechanisms, size=3, replace=False)] = 1
+    syndrome = (check @ error) % 2
+    extra = rng.choice(problem.num_mechanisms, size=7, replace=False)
+    restricted = list(
+        dict.fromkeys([int(i) for i in np.flatnonzero(error)] + list(extra))
+    )
+    for active in (restricted, list(range(problem.num_mechanisms))):
+        exact = _enumerate_active_set(problem, syndrome, active)
+        masses, info = active_set_class_masses(
+            problem, syndrome, active, chi_max=256, stages=stages
+        )
+        assert info["lost"] < 1e-20
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+
+
+def test_tempering_rejects_bad_input():
+    problem = _random_problem(0)
+    syndrome = np.zeros(problem.num_detectors, dtype=np.uint8)
+    with pytest.raises(ValueError, match="tempering stages"):
+        active_set_class_masses(problem, syndrome, [0, 1], stages=0)
+    with pytest.raises(ValueError, match="tempering stages"):
+        ClassSumDecoder(problem, temper_stages=0)
+    with pytest.raises(ValueError, match="tempering threshold"):
+        ClassSumDecoder(problem, temper_threshold=-1.0)
+
+
 def _small_surface_problem(p):
     """Distance 3, one round: 23 mechanisms with genuine hyperedges."""
     circuit = stim.Circuit.generated(
@@ -296,6 +331,8 @@ def test_decoder_rejects_bad_input():
     )
     with pytest.raises(ValueError, match="no mechanisms"):
         ClassSumDecoder(empty)
+    with pytest.raises(ValueError, match="bond dimension"):
+        ClassSumDecoder(problem, temper_chi_max=0)
     with pytest.raises(ValueError):
         ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors + 1))
 
@@ -314,7 +351,7 @@ def test_a_tie_goes_to_the_bposd_class(monkeypatch):
     monkeypatch.setattr(
         decoder,
         "_class_masses",
-        lambda syndrome, active: (np.full(4, 0.25), {"lost": 0.0, "free": 1}),
+        lambda syndrome, active, stages: (np.full(4, 0.25), {"lost": 0.0, "free": 1}),
     )
     syndromes, _ = _sample_from_model(problem, 60, seed=7)
     ranked_elsewhere = 0
@@ -343,6 +380,56 @@ def test_decoder_matches_maximum_likelihood_on_a_small_surface_code():
         assert info["lost"] < 1e-6
         assert int(flips @ (1 << np.arange(flips.size))) == info["predicted_class"]
     assert agree >= 78
+
+
+def test_decoder_tempers_only_when_the_first_pass_truncated():
+    """The tempered pass replaces the one-pass verdict above the threshold."""
+    problem = _small_surface_problem(0.02)
+    syndromes, _ = _sample_from_model(problem, 40, seed=3)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    assert len(syndromes) > 10
+    default = ClassSumDecoder(problem, chi_max=16)
+    always = ClassSumDecoder(problem, chi_max=16, temper_threshold=0.0)
+    never = ClassSumDecoder(problem, chi_max=1, temper_stages=1)
+    eager = ClassSumDecoder(problem, chi_max=1)
+    tempered_at_small_chi = 0
+    for syndrome in syndromes:
+        flips, info = default.decode(syndrome)
+        assert info["lost"] < 1e-8 and not info["tempered"]
+        forced_flips, forced = always.decode(syndrome)
+        assert forced["tempered"]
+        assert np.array_equal(forced_flips, flips)
+        assert np.isclose(forced["margin"], info["margin"], atol=1e-9)
+        _, plain = never.decode(syndrome)
+        assert not plain["tempered"]
+        _, second = eager.decode(syndrome)
+        assert second["tempered"] == (plain["lost"] >= eager.temper_threshold)
+        tempered_at_small_chi += second["tempered"]
+    assert tempered_at_small_chi > 0
+
+
+def test_tempered_pass_can_use_its_own_bond_dimension():
+    """A larger bond for the tempered pass leaves the easy syndromes untouched."""
+    problem = _small_surface_problem(0.02)
+    syndromes, _ = _sample_from_model(problem, 40, seed=3)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    default = ClassSumDecoder(problem, chi_max=16)
+    larger = ClassSumDecoder(problem, chi_max=16, temper_chi_max=32)
+    assert default.temper_chi_max == 16 and larger.temper_chi_max == 32
+    forced = ClassSumDecoder(problem, chi_max=1, temper_chi_max=64)
+    tempered = exact = 0
+    for syndrome in syndromes:
+        flips, info = default.decode(syndrome)
+        same_flips, same = larger.decode(syndrome)
+        assert not same["tempered"] and np.array_equal(flips, same_flips)
+        hard_flips, hard = forced.decode(syndrome)
+        if hard["tempered"]:
+            # The tempered pass at chi 64 is exact on this small model.
+            assert hard["lost"] < 1e-8
+            _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
+            exact += int(np.array_equal(hard_flips, reference))
+        tempered += hard["tempered"]
+    assert tempered > 5 and exact >= tempered - 2
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():

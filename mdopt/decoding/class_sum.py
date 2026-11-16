@@ -34,13 +34,30 @@ double) and then compresses with a canonical SVD sweep, and the bond cut never
 splits a degenerate multiplet of singular values. Class masses are squared
 norms, so they are non-negative by construction.
 
+**Tempering.** Applying every factor at full strength in one pass works as
+long as nothing is truncated. On larger codes the active set has a hundred or
+more free mechanisms, and the one-pass contraction then fails: a truncation
+made early leaves a small error on configurations that the state has not yet
+been told are unlikely, and the factors applied later can amplify that error
+by ``(1 - p) / p`` each. The tempered contraction starts from the uniform
+state and applies every factor (the priors of the free mechanisms and the
+pivot factors) to the power ``1 / stages``, in ``stages`` passes. Each pass
+truncates a state that already carries a share of every factor, so the
+truncation keeps the configurations that matter. Without truncation both
+contractions give the same masses. The decoder runs the one-pass contraction
+first and repeats it with tempering only when that pass discarded weight.
+
+The tempered contraction only runs on the syndromes whose first pass
+discarded weight, which are also the ones where the decoder still fails.
+``temper_chi_max`` gives it its own, larger bond dimension, so that the extra
+effort is spent on those syndromes only.
+
 On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
 noise this decoder makes fewer logical errors than BP-OSD on the same shots at
-1, 2 and 6 syndrome-extraction rounds. On larger codes of the same family the
-active set has a hundred or more free mechanisms, the contraction truncates on
-many syndromes (``lost`` in the returned information says how much), and on
-[[144, 12, 12]] it then does worse than picking the most likely single
-candidate.
+1, 2 and 6 syndrome-extraction rounds. On the [[90, 8, 10]], [[108, 8, 10]]
+and [[144, 12, 12]] codes of the same family the tempered pass is what keeps
+it ahead: on [[144, 12, 12]] the one-pass contraction alone does worse than
+picking the most likely single candidate.
 """
 
 from dataclasses import dataclass
@@ -438,6 +455,7 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     chi_max: int = 16,
     check_matrix: Optional[np.ndarray] = None,
     observable_matrix: Optional[np.ndarray] = None,
+    stages: int = 1,
 ) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Probability mass of every logical class inside an active set.
 
@@ -460,6 +478,15 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     check_matrix, observable_matrix : Optional[np.ndarray]
         Dense ``uint8`` detector and observable matrices, to avoid rebuilding
         them for every syndrome.
+    stages : int
+        The number of tempering passes. With 1 the chain starts from the
+        priors of the free mechanisms and every pivot factor is applied once
+        at full strength. With more, the chain starts from the uniform state
+        and every prior and pivot factor is applied to the power
+        ``1 / stages`` in each of ``stages`` passes, which keeps the
+        truncation faithful when the active set is large. Both give the same
+        masses when nothing is truncated.
+
     Returns
     -------
     (class_masses, info)
@@ -474,8 +501,11 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     Raises
     ------
     ValueError
-        If the active set holds no solution of the syndrome.
+        If the active set holds no solution of the syndrome, or if ``stages``
+        is not positive.
     """
+    if stages < 1:
+        raise ValueError("The number of tempering stages must be positive.")
     syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
     if check_matrix is None or observable_matrix is None:
         sparse_check, sparse_observable = problem_matrices(problem)
@@ -509,24 +539,35 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     plus = np.array([1.0, 1.0]) / np.sqrt(2)
     free_priors = [np.array([1 - probs[c], probs[c]]) for c in kernel.free]
 
-    chain = ParityChain([plus] * num_obs + [np.sqrt(w) for w in free_priors])
+    def amplitude(weights: np.ndarray) -> np.ndarray:
+        """The share of a probability factor that one pass puts on the chain."""
+        return np.sqrt(weights) if stages == 1 else weights ** (0.5 / stages)
+
+    if stages == 1:
+        chain = ParityChain([plus] * num_obs + [amplitude(w) for w in free_priors])
+    else:
+        chain = ParityChain([plus] * num_obs + [np.ones(2)] * len(kernel.free))
     # Soft factors: pivots that do not fire in the base solution first, short
     # supports before long ones.
     order = sorted(
         range(len(kernel.pivots)),
         key=lambda r: (int(kernel.base[r]), len(kernel.supports[r])),
     )
-    for r in order:
-        weights = pivot_weights[r]
-        if not kernel.supports[r]:
-            log_scale += float(np.log(weights[0]))
-            continue
-        log_scale += float(np.log(weights.max()))
-        chain.apply_parity(
-            [num_obs + k for k in kernel.supports[r]],
-            chi_max,
-            np.sqrt(weights / weights.max()),
-        )
+    for _ in range(stages):
+        if stages > 1:
+            for k, weights in enumerate(free_priors):
+                chain.apply_parity([num_obs + k], chi_max, amplitude(weights))
+        for r in order:
+            weights = pivot_weights[r]
+            if not kernel.supports[r]:
+                log_scale += float(np.log(weights[0])) / stages
+                continue
+            log_scale += float(np.log(weights.max())) / stages
+            chain.apply_parity(
+                [num_obs + k for k in kernel.supports[r]],
+                chi_max,
+                amplitude(weights / weights.max()),
+            )
     # Hard factors: register site j carries the parity of the generators that
     # flip observable j relative to the base solution.
     for j in range(num_obs):
@@ -568,6 +609,18 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     recenter_rounds : int
         How many times the class-flip search is recentered on the most likely
         candidate.
+    temper_stages : int
+        The number of passes of the tempered contraction that replaces the
+        one-pass contraction when the latter truncated too much (see
+        :func:`active_set_class_masses`). With 1 the decoder never tempers.
+    temper_threshold : float
+        The one-pass contraction is replaced by the tempered one when its
+        discarded fraction of the squared norm (``lost``) reaches this value.
+    temper_chi_max : Optional[int]
+        The bond dimension of the tempered contraction. ``None`` uses
+        ``chi_max``. The tempered pass only runs on the syndromes whose first
+        pass truncated, so a larger value here costs much less than a larger
+        ``chi_max``.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
@@ -584,6 +637,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         problem: DemProblem,
         chi_max: int = 16,
         recenter_rounds: int = 3,
+        temper_stages: int = 2,
+        temper_threshold: float = 1e-8,
+        temper_chi_max: Optional[int] = None,
         **bposd_options: Any,
     ):
         # Imported here so that importing mdopt does not pay for ldpc, which
@@ -599,9 +655,18 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             raise ValueError("Every prior must be positive and at most 1/2.")
         if chi_max < 1:
             raise ValueError("The bond dimension must be positive.")
+        if temper_stages < 1:
+            raise ValueError("The number of tempering stages must be positive.")
+        if temper_threshold < 0:
+            raise ValueError("The tempering threshold cannot be negative.")
+        if temper_chi_max is not None and temper_chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
         self.problem = problem
         self.chi_max = chi_max
         self.recenter_rounds = recenter_rounds
+        self.temper_stages = temper_stages
+        self.temper_threshold = temper_threshold
+        self.temper_chi_max = chi_max if temper_chi_max is None else temper_chi_max
         self.num_observables = problem.num_observables
         self._check, self._observables = problem_matrices(problem)
         self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
@@ -692,15 +757,16 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         return (label >> np.arange(self.num_observables)) & 1
 
     def _class_masses(
-        self, syndrome: np.ndarray, active: Sequence[int]
+        self, syndrome: np.ndarray, active: Sequence[int], stages: int
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         return active_set_class_masses(
             self.problem,
             syndrome,
             active,
-            self.chi_max,
+            self.chi_max if stages == 1 else self.temper_chi_max,
             check_matrix=self._dense_check,
             observable_matrix=self._dense_observables,
+            stages=stages,
         )
 
     def decode(  # pylint: disable=too-many-locals
@@ -722,7 +788,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
             ``lost`` (discarded fraction of the squared norm in the
-            contraction), ``active`` and
+            contraction that gave the verdict), ``tempered`` (whether that
+            was the tempered contraction), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
             ``candidates`` (number of logical classes reached). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
@@ -733,7 +800,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
-        info.update(candidates=1)
+        info.update(candidates=1, tempered=False)
         if not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
@@ -746,7 +813,17 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
         found = self.candidates(syndrome, seed)
         active = self._active_set(found)
-        masses, contraction = self._class_masses(syndrome, active)
+        masses, contraction = self._class_masses(syndrome, active, 1)
+        tempered = False
+        if self.temper_stages > 1 and contraction["lost"] >= self.temper_threshold:
+            try:
+                masses, contraction = self._class_masses(
+                    syndrome, active, self.temper_stages
+                )
+                tempered = True
+            except ArithmeticError:
+                # The tempered state underflowed: keep the one-pass verdict.
+                pass
         ranking = np.argsort(masses)[::-1]
         predicted = int(ranking[0])
         margin = (
@@ -759,6 +836,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             best_candidate_class=max(found, key=lambda label: found[label][0]),
             margin=margin,
             lost=contraction["lost"],
+            tempered=tempered,
             active=len(active),
             free=contraction["free"],
             candidates=len(found),
