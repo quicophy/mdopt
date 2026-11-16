@@ -2338,6 +2338,35 @@ def test_certificate_is_tight_without_truncation_and_warns_with_it(caplog):
     assert "truncation-error bound" in caplog.text
 
 
+def test_a_center_too_small_to_square_does_not_collapse_the_certificate():
+    """Amplitudes of 1e-200 have squares of zero. The constraint sweep must
+    record a renormalization of one for a center it did not divide, so that
+    the certificate's scale stays finite."""
+    from mdopt.optimizer.utils import (
+        SWAP,
+        XOR_BULK,
+        XOR_LEFT,
+        XOR_RIGHT,
+        TruncationCertificate,
+        apply_constraints,
+    )
+
+    mps = create_custom_product_state("+++")
+    center = int(mps.orth_center) if mps.orth_center is not None else 0
+    mps.tensors[center] = mps.tensors[center] * 1e-200
+    certificate = TruncationCertificate()
+    apply_constraints(
+        mps,
+        [[[0], [1], [], [2]]],
+        [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        chi_max=8,
+        renormalize=True,
+        silent=True,
+        certificate=certificate,
+    )
+    assert np.isfinite(certificate.log_scale)
+
+
 def test_logical_constraint_gain_is_the_dense_mpo_norm():
     """The certificate records sqrt(2) as the operator norm of every logical
     constraint and one for every check constraint; both numbers are pinned

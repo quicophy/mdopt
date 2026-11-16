@@ -2641,7 +2641,7 @@ def decode_custom(
     # already in |+> and are naturally included here — no separate
     # intermediate marginalization is needed.
     final_norm = (
-        float(np.linalg.norm(error_mps.tensors[error_mps.orth_center]))
+        _stable_norm(error_mps.tensors[error_mps.orth_center])
         if error_mps.orth_center is not None
         else 1.0
     )
