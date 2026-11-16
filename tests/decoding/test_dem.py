@@ -534,10 +534,62 @@ def _surface_round_problem(p=0.01, rounds=1, distance=3):
     )
 
 
+def test_bp_reweighted_dem_matches_brute_force_and_keeps_more_mass():
+    """The BP posterior prior is divided out exactly in exact arithmetic, so
+    at full bond dimension the class masses equal the brute-force coset
+    masses (genuine hyperedges included): to 1e-9 with the clip floor at 1
+    (the prior itself, undo weights all one) and to 1e-3 at the default
+    floor, where the SVD's round-off cutoff on configurations the undo
+    scales back up by at most ten per site is the only error. The
+    certificate shows the reweighted contraction keeping a larger mass
+    fraction than the plain one."""
+    from mdopt.optimizer.utils import TruncationCertificate
+
+    for circuit, problem in (_repetition_problem(), _surface_round_problem()):
+        sampler = circuit.compile_detector_sampler(seed=11)
+        detections, _ = sampler.sample(60, separate_observables=True)
+        checked = 0
+        for syndrome in detections:
+            syndrome = syndrome.astype(int)
+            if not syndrome.any() or checked >= 6:
+                continue
+            exact = _exact_class_masses(problem, syndrome)
+            plain, _, plain_cert = decode_dem(
+                problem, syndrome, chi_max=int(1e4), return_certificate=True
+            )
+            masses, flips, cert = decode_dem(
+                problem,
+                syndrome,
+                chi_max=int(1e4),
+                prior_reweighting="BP",
+                return_certificate=True,
+            )
+            assert isinstance(cert, TruncationCertificate)
+            assert np.allclose(
+                masses / masses.sum(), exact / exact.sum(), rtol=1e-3, atol=1e-6
+            )
+            assert flips.shape == (problem.num_observables,)
+            assert int(np.argmax(masses)) == int(np.argmax(exact))
+            unit, _ = decode_dem(
+                problem,
+                syndrome,
+                chi_max=int(1e4),
+                cut=0.0,
+                prior_reweighting="BP",
+                reweighting_floor=1.0,
+            )
+            assert np.allclose(unit / unit.sum(), plain / plain.sum(), atol=1e-9)
+            assert cert.bound < 1e-6 and plain_cert.bound < 1e-6
+            assert 0 < plain_cert.survival <= cert.survival <= 1 + 1e-9
+            checked += 1
+        assert checked >= 3
+
+
 def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
     """At chi_max=2 the d=3, r=3 contraction keeps essentially nothing of the
     syndrome-consistent mass: the decode either collapses (the raised error
-    carries the certificate) or returns with a bound above one."""
+    carries the certificate) or returns with a bound above one, and the
+    reweighted decode at the same chi_max keeps a larger fraction."""
     circuit, problem = _surface_round_problem(rounds=3)
     sampler = circuit.compile_detector_sampler(seed=3)
     detections, _ = sampler.sample(40, separate_observables=True)
@@ -554,18 +606,17 @@ def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
     except ArithmeticError as error:
         cert = error.certificate
     assert cert.bound > 1.0
-
-
-def test_decode_dem_signature_and_argument_validation():
-    _, problem = _repetition_problem()
-    syndrome = np.zeros(problem.num_detectors, dtype=int)
-    result = decode_dem(problem, syndrome)
-    assert len(result) == 2
-    result = decode_dem(problem, syndrome, return_certificate=True)
-    assert len(result) == 3 and result[2].bound < 1e-12
-    assert result[2].negativity == 0.0
-    with pytest.raises(ValueError, match="negative_mass"):
-        decode_dem(problem, syndrome, negative_mass="ignore")
+    try:
+        _, _, bp_cert = decode_dem(
+            problem,
+            syndrome,
+            chi_max=2,
+            prior_reweighting="BP",
+            return_certificate=True,
+        )
+    except ArithmeticError as error:
+        bp_cert = error.certificate
+    assert bp_cert.survival > cert.survival
 
 
 def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeypatch):
@@ -607,6 +658,50 @@ def test_certificate_bound_is_infinite_for_a_collapsed_final_state():
     certificate.record(0.0, 1.0)
     assert certificate.finalize(float("nan")) == np.inf
     assert TruncationCertificate().finalize(1.0) == 0.0
+
+
+def test_incompatible_reweighting_floor_and_cap_are_rejected():
+    """Prior [0.4, 0.6], floor 1 (no reweighting at all) and cap 0.1 (the
+    unlikely branch at most 0.1) cannot both hold; overriding the floor
+    would give an undo ratio of 4 that the floor promised to exclude."""
+    problem = DemProblem(
+        probs=[0.6],
+        detector_rows=[[]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="incompatible"):
+        decode_dem(
+            problem,
+            np.array([0]),
+            prior_reweighting="BP",
+            reweighting_floor=1.0,
+            reweighting_cap=0.1,
+        )
+    # The defaults are always feasible.
+    decode_dem(problem, np.array([0]), prior_reweighting="BP")
+
+
+def test_zero_probability_mechanism_survives_the_reweighting_undo():
+    """A branch with zero prior has zero contracted weight; its undo weight
+    must not be 0/0, which would poison the chain with NaN."""
+    problem = DemProblem(
+        probs=[0.0, 0.1],
+        detector_rows=[[]],
+        observable_rows=[[0], [1]],
+        num_detectors=1,
+        num_observables=2,
+    )
+    plain_masses, plain_flips = decode_dem(problem, np.array([0]))
+    bp_masses, bp_flips = decode_dem(
+        problem, np.array([0]), prior_reweighting="BP", reweighting_floor=1.0
+    )
+    assert np.all(np.isfinite(bp_masses))
+    assert np.allclose(
+        plain_masses / plain_masses.sum(), bp_masses / bp_masses.sum(), atol=1e-12
+    )
+    assert np.array_equal(plain_flips, bp_flips)
 
 
 def test_long_pinned_chain_keeps_a_finite_certificate():
@@ -688,6 +783,50 @@ def test_dem_survival_is_the_kept_fraction_of_the_weights_mass():
     assert np.isclose(cert.survival, expected, rtol=1e-9)
 
 
+def test_decode_dem_signature_and_argument_validation():
+    _, problem = _repetition_problem()
+    syndrome = np.zeros(problem.num_detectors, dtype=int)
+    result = decode_dem(problem, syndrome)
+    assert len(result) == 2
+    result = decode_dem(problem, syndrome, return_certificate=True)
+    assert len(result) == 3 and result[2].bound < 1e-12
+    assert result[2].negativity == 0.0
+    with pytest.raises(ValueError, match="prior_reweighting"):
+        decode_dem(problem, syndrome, prior_reweighting="OSD")
+    with pytest.raises(ValueError, match="reweighting_floor"):
+        decode_dem(problem, syndrome, prior_reweighting="BP", reweighting_floor=1.5)
+
+
+def test_reweighted_branches_keep_a_floored_zero_branch():
+    """With a prior of 1e-20 on the zero branch the clip's upper end rounds
+    to one and BP's marginal sits there; forming the zero branch by
+    subtraction would erase it although the floor keeps half of it."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1e-20, 1.0]])
+    contracted = _reweighted_branches(
+        priors, np.array([1.0]), 0.5, 0.5, np.array([True])
+    )
+    assert contracted[0, 0] == 0.5e-20
+    assert contracted[0, 1] == 1.0
+    pinned = _reweighted_branches(priors, np.array([1.0]), 0.5, 0.5, np.array([False]))
+    assert np.array_equal(pinned, priors)
+
+
+def test_reweighted_branches_keep_a_floored_firing_branch():
+    """With a firing prior of 1e-20 and a floor of one the clip's upper end,
+    ``1 - P(0)``, rounds to zero; the firing branch must keep its prior."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1.0, 1e-20]])
+    for marginal in (0.0, 0.3, 1.0):
+        contracted = _reweighted_branches(
+            priors, np.array([marginal]), 1.0, 0.5, np.array([True])
+        )
+        assert contracted[0, 1] == 1e-20
+        assert contracted[0, 0] == 1.0
+
+
 def _truncating_problem(extra_pinned: int = 0) -> tuple[DemProblem, np.ndarray]:
     """Three overlapping three-mechanism detectors (chi_max=3 truncates), plus
     ``extra_pinned`` independent mechanisms of probability one half, each on
@@ -756,3 +895,21 @@ def test_decode_dem_logs_the_certificate_when_not_silent(caplog):
         r.levelno == logging.WARNING and "not certified" in r.message
         for r in caplog.records
     )
+
+
+def test_reweighting_rejects_a_cap_below_the_floored_branch():
+    """A prior of 1e-14 under floor 1 keeps 1e-14 of its firing branch; a
+    cap of 1e-20 cannot be honored, and accepting it would leave an undo
+    ratio of 1e6. A cap equal to the floored weight is fine."""
+    from mdopt.decoding.dem import _reweighted_branches
+
+    priors = np.array([[1.0 - 1e-14, 1e-14]])
+    with pytest.raises(ValueError, match="incompatible"):
+        _reweighted_branches(priors, np.array([0.5]), 1.0, 1e-20, np.array([True]))
+    contracted = _reweighted_branches(
+        priors, np.array([0.5]), 1.0, 1e-14, np.array([True])
+    )
+    # (the window's upper end is 1 - floor * P(0), rounded, so up to round-off)
+    assert np.isclose(contracted[0, 1], 1e-14, rtol=1e-2, atol=0.0)
+    # A pinned mechanism is not checked.
+    _reweighted_branches(priors, np.array([0.5]), 1.0, 1e-20, np.array([False]))

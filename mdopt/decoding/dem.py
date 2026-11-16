@@ -227,6 +227,10 @@ def decode_dem(
     silent: bool = True,
     tolerance: float = float(1e-12),
     representative: Optional[np.ndarray] = None,
+    prior_reweighting: Optional[str] = None,
+    reweighting_floor: Optional[float] = None,
+    reweighting_cap: float = 0.5,
+    bp_iterations: int = 60,
     return_certificate: bool = False,
     negative_mass: str = "raise",
 ):
@@ -234,6 +238,43 @@ def decode_dem(
 
     Parameters
     ----------
+    prior_reweighting : Optional[str]
+        ``None`` contracts the prior as given. ``"BP"`` replaces every
+        mechanism's prior by its belief-propagation posterior marginal
+        (clipped relative to the prior, see ``reweighting_floor``) before the
+        contraction and divides it out exactly at marginalization. The
+        syndrome-consistent configurations then carry a mass fraction of
+        order one instead of order ``P(syndrome)``, which is what keeps a
+        finite ``chi_max`` from rebuilding the class masses out of truncation
+        residue (see :func:`mdopt.decoding.decoding.decode_custom`).
+    reweighting_floor : Optional[float]
+        The clip of the marginals, relative to the prior: the contracted
+        weight of either branch of site ``i`` stays at least
+        ``floor * P_i(b)``, so every undo ratio ``P_i(b) / q_i(b)`` is at
+        most ``1 / floor`` (``None`` means 0.5). Unlike the code decoders'
+        absolute floor this does not underflow a chain of thousands of
+        mechanisms (the clip costs the consistent configurations about
+        ``exp(-floor * n * p)`` of mass), and it bounds how much a
+        truncation residue is amplified when the prior is divided back in:
+        at 0.1 a configuration with k reweighted branches comes back scaled
+        by up to 10^k and round-off alone moved a class mass by 1e-4 on a
+        13-mechanism model, while at 0.5 (2^k) the masses are exact to 1e-11
+        and a d=5 color-code ladder is monotone in chi_max.
+        Run the reweighted contraction with ``cut=0.0``: configurations the
+        SVD cutoff drops as negligible in the contracted weights are exactly
+        the ones the undo scales back up.
+    reweighting_cap : float
+        The upper clip of the marginal of the a-priori unlikely branch of a
+        site, the mechanism firing (default 0.5). Sites BP believes fired are
+        where the undo amplifies: the unfired branch is scaled back by its
+        prior over its contracted weight, at most ``1 / (1 - cap)`` per such
+        site, so a cap of 0.5 trades a factor two of survival per fired
+        mechanism for an amplification of at most two of whatever the
+        contraction got wrong there. Without the cap a truncation residue
+        certified at 1e-3 came back as an order-one class mass on a d=5
+        color-code circuit with about ten fired mechanisms.
+    bp_iterations : int
+        The number of flooding iterations.
     return_certificate : bool
         Also return the :class:`~mdopt.optimizer.utils.TruncationCertificate`
         of the contraction. It is always computed; a collapsed class-mass
@@ -258,9 +299,23 @@ def decode_dem(
         is observable ``j``), and ``predicted_flips`` is the argmax pattern as
         a bit array.
     """
+    if prior_reweighting not in (None, "BP"):
+        raise ValueError(
+            f"prior_reweighting should be None or 'BP', given {prior_reweighting!r}."
+        )
     if negative_mass not in ("raise", "clamp"):
         raise ValueError(
             f"negative_mass should be 'raise' or 'clamp', given {negative_mass!r}."
+        )
+    if reweighting_floor is None:
+        reweighting_floor = 0.5
+    if not 0 < reweighting_floor <= 1:
+        raise ValueError(
+            f"reweighting_floor should lie in (0, 1], given {reweighting_floor}."
+        )
+    if not 0 < reweighting_cap < 1:
+        raise ValueError(
+            f"reweighting_cap should lie in (0, 1), given {reweighting_cap}."
         )
     # A supplied representative bypasses solve_representative, so the
     # shape check must live here too.
@@ -326,7 +381,11 @@ def decode_dem(
             string=state_string, tolerance=tolerance, form="Right-canonical"
         ),
     )
-    # The prior of f_i = (0, 1) per site: the site weights that are contracted.
+    # The prior of f_i = (0, 1) per site, and the site weights actually
+    # contracted: the prior itself, or the BP posterior marginal of f_i given
+    # even parity on every detector, which the undo weights divide out again
+    # at marginalization (prior / contracted weight, a positive diagonal that
+    # commutes with every XOR and COPY tensor).
     priors = np.array(
         [
             [1.0 - probability, probability]
@@ -336,6 +395,49 @@ def decode_dem(
         ],
         dtype=float,
     ).reshape(num_mech, 2)
+    contracted = priors.copy()
+    undo: List[Tuple[int, np.ndarray]] = []
+    if prior_reweighting == "BP" and num_mech > 0:
+        from mdopt.decoding.decoding import _bp_site_marginals
+
+        flip = priors[:, 1].copy()
+        for i in pinned:
+            flip[i] = 0.0  # forced to f_i = 0
+        checks = [list(row) for row in problem.detector_rows if len(row) >= 2]
+        marginal = _bp_site_marginals(
+            num_mech, checks, np.zeros(len(checks), dtype=int), flip, bp_iterations
+        )
+        # q_i(1) in [floor * P_i(1), 1 - floor * P_i(0)]: both branches keep at
+        # least a fraction floor of their prior weight, so no undo ratio
+        # exceeds 1 / floor.
+        # Both branches keep at least the fraction `floor` of their prior
+        # weight, and the a-priori unlikely branch (the mechanism firing: f=1
+        # where the representative has a 0, f=0 where it has a 1) gets at
+        # most `cap`, so the likely branch is never scaled back by more than
+        # 1 / (1 - cap) at marginalization.
+        free = np.ones(num_mech, dtype=bool)
+        free[list(pinned)] = False
+        contracted = _reweighted_branches(
+            priors, marginal, reweighting_floor, reweighting_cap, free
+        )
+        for i in range(num_mech):
+            if i in pinned:
+                undo.append((offset + i, np.ones(2)))
+                continue
+            # A branch with zero prior has zero contracted weight too (the
+            # floor is relative) and carries no amplitude, so its undo
+            # weight is immaterial; zero keeps 0/0 out of the chain.
+            undo.append(
+                (
+                    offset + i,
+                    np.divide(
+                        priors[i],
+                        contracted[i],
+                        out=np.zeros(2),
+                        where=contracted[i] > 0.0,
+                    ),
+                )
+            )
     # Every site is given its weights at unit norm, so the chain starts as a
     # unit-norm product state: the truncation certificate then measures each
     # discard in the scale of the orthogonality center it was cut from, and
@@ -343,11 +445,11 @@ def decode_dem(
     # ``survival`` is the final norm times the pinned weights factored out
     # below: the fraction of the unprojected weight state's norm that the
     # pinned branches, the constraints and the truncations kept. The class masses
-    # keep their ratios, which is all the readout uses. The row
+    # keep their ratios, which is all the readout and the undo use. The row
     # norms are taken with ``hypot``: a weight of 1e-200 must not vanish by
     # being squared.
-    site_norms = np.hypot(priors[:, 0], priors[:, 1])
-    weights = priors / np.where(site_norms > 0.0, site_norms, 1.0)[:, None]
+    site_norms = np.hypot(contracted[:, 0], contracted[:, 1])
+    weights = contracted / np.where(site_norms > 0.0, site_norms, 1.0)[:, None]
     # A pinned site keeps its f=0 branch only, and that branch's weight is
     # taken out of the chain as a scalar (the site stays the unit |0>): it
     # is what the pinning kept of the site's weight state, so ``survival``
@@ -388,7 +490,10 @@ def decode_dem(
         _constraint_sites(row, offset) for row in problem.detector_rows if len(row) >= 2
     ]
 
-    from mdopt.decoding.decoding import LOGICAL_CONSTRAINT_GAIN
+    from mdopt.decoding.decoding import (
+        LOGICAL_CONSTRAINT_GAIN,
+        _marginalize_with_weights,
+    )
 
     if observable_strings:
         mps = cast(
@@ -439,10 +544,13 @@ def decode_dem(
                 chi_max,
             )
 
-    logical_mps = mps.marginal(
-        sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
-        renormalize=renormalize,
-    ).reverse()
+    if undo:
+        logical_mps = _marginalize_with_weights(mps, num_obs, undo, renormalize)
+    else:
+        logical_mps = mps.marginal(
+            sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
+            renormalize=renormalize,
+        ).reverse()
     dense = np.atleast_1d(
         np.real(np.asarray(logical_mps.dense(flatten=True, renormalize=False)))
     )
@@ -473,7 +581,7 @@ def decode_dem(
                 f"({100.0 * certificate.negativity:.1f}% of the peak) at "
                 f"chi_max={chi_max} (truncation-error bound "
                 f"{certificate.bound:.2e}): the contraction is not converged; "
-                "raise chi_max, or pass "
+                "raise chi_max, use prior_reweighting='BP', or pass "
                 "negative_mass='clamp' to take the verdict of the positive "
                 "classes and gate on certificate.negativity."
             )
@@ -509,6 +617,61 @@ def decode_dem(
     if return_certificate:
         return relabeled, flips, certificate
     return relabeled, flips
+
+
+def _reweighted_branches(
+    priors: np.ndarray,
+    marginal: np.ndarray,
+    reweighting_floor: float,
+    reweighting_cap: float,
+    free: np.ndarray,
+) -> np.ndarray:
+    """The two branch weights per mechanism that the reweighted chain contracts.
+
+    BP's firing marginal is clipped into ``[floor * P(1), 1 - floor * P(0)]``,
+    so both branches keep at least the fraction ``floor`` of their prior
+    weight and no undo ratio exceeds ``1 / floor``; the a-priori unlikely
+    branch (the mechanism firing where the representative has a 0, or not
+    firing where it has a 1) gets at most ``cap``, so the likely branch is
+    never scaled back by more than ``1 / (1 - cap)`` at marginalization.
+    Pinned mechanisms (``free`` false) keep their priors. The zero branch is
+    formed by subtraction, which can erase a floor-protected prior below
+    1e-16 when the clip's upper end rounds to one, and the clip's upper end
+    itself rounds to zero for a firing prior below 1e-16 under a floor of
+    one, so the floor is enforced on both branches directly as well.
+    """
+    lower = reweighting_floor * priors[:, 1]
+    upper = 1.0 - reweighting_floor * priors[:, 0]
+    fired_is_one = priors[:, 1] < priors[:, 0]
+    upper = np.where(fired_is_one, np.minimum(upper, reweighting_cap), upper)
+    lower = np.where(fired_is_one, lower, np.maximum(lower, 1.0 - reweighting_cap))
+    # The floor and the cap conflict exactly when the floor keeps more of the
+    # capped branch than the cap allows; compared directly, so that a prior
+    # of 1e-14 against a cap of 1e-20 is rejected (an absolute tolerance on
+    # the clip window would let it through with an undo ratio of 1e6) and
+    # the round-off of ``1 - floor * P(0)`` rejects nothing valid.
+    capped_weight = reweighting_floor * np.where(
+        fired_is_one, priors[:, 1], priors[:, 0]
+    )
+    infeasible = np.flatnonzero(free & (capped_weight > reweighting_cap))
+    if infeasible.size:
+        i = int(infeasible[0])
+        raise ValueError(
+            f"reweighting_floor={reweighting_floor} and reweighting_cap="
+            f"{reweighting_cap} are incompatible for mechanism {i} with prior "
+            f"{priors[i].tolist()}: the floor keeps at least "
+            f"{capped_weight[i]:.3g} of its {'firing' if fired_is_one[i] else 'quiet'} "
+            f"branch while the cap allows at most {reweighting_cap:.3g}."
+        )
+    marginal = np.clip(marginal, lower, upper)
+    contracted = priors.copy()
+    contracted[free, 1] = np.maximum(
+        marginal[free], reweighting_floor * priors[free, 1]
+    )
+    contracted[free, 0] = np.maximum(
+        1.0 - marginal[free], reweighting_floor * priors[free, 0]
+    )
+    return contracted
 
 
 def _log_full_norm(mps: CanonicalMPS) -> float:
