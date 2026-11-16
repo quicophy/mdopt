@@ -191,15 +191,15 @@ class ParityChain:
         left, phys, right = self.tensors[site].shape
         isometry, rest = np.linalg.qr(self.tensors[site].reshape(left * phys, right))
         self.tensors[site] = isometry.reshape(left, phys, -1)
-        self.tensors[site + 1] = np.einsum("ab,bdc->adc", rest, self.tensors[site + 1])
+        self.tensors[site + 1] = np.tensordot(rest, self.tensors[site + 1], axes=(1, 0))
 
     def _orthogonalize_right(self, site: int) -> None:
         """Make ``site`` right-canonical and push the remainder to its left."""
         left, phys, right = self.tensors[site].shape
         isometry, rest = np.linalg.qr(self.tensors[site].reshape(left, phys * right).T)
         self.tensors[site] = isometry.T.reshape(-1, phys, right)
-        self.tensors[site - 1] = np.einsum(
-            "adb,bc->adc", self.tensors[site - 1], rest.T
+        self.tensors[site - 1] = np.tensordot(
+            self.tensors[site - 1], rest.T, axes=(2, 0)
         )
 
     def move_center(self, site: int) -> None:
@@ -303,10 +303,10 @@ class ParityChain:
             total = float(np.sum(singular_values**2))
             self.lost += float(np.sum(singular_values[keep:] ** 2)) / total
         self.tensors[site] = right_vectors[:keep].reshape(keep, phys, right)
-        self.tensors[site - 1] = np.einsum(
-            "adb,bc->adc",
+        self.tensors[site - 1] = np.tensordot(
             self.tensors[site - 1],
             left_vectors[:, :keep] * singular_values[:keep],
+            axes=(2, 0),
         )
 
     def max_bond(self) -> int:
