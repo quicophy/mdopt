@@ -562,6 +562,64 @@ def test_basis_truncation_prunes_and_reports_it():
         basis_truncated_class_masses(problem, syndromes[0], active, max_states=0)
 
 
+def test_basis_truncation_survives_hundreds_of_small_factors_at_one_site():
+    """Four hundred pivot factors close on one free mechanism: their product
+    underflows float64, the class masses and the log mass do not."""
+    size, prob = 400, 0.01
+    problem = DemProblem(
+        probs=[prob] * (size + 1),
+        detector_rows=[[d, size] for d in range(size)],
+        observable_rows=[[size]],
+        num_detectors=size,
+        num_observables=1,
+    )
+    syndrome = np.zeros(size, dtype=np.uint8)
+    syndrome[: size // 2] = 1
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, list(range(size + 1)), max_states=2
+    )
+    assert info["free"] == 1 and info["pruned"] == 0.0
+    assert np.allclose(masses, [1 - prob, prob])
+    half = size // 2
+    assert np.isclose(info["log_mass"], half * np.log(prob) + half * np.log(1 - prob))
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_basis_truncation_accepts_zero_probability_factors(seed):
+    """Deterministic mechanisms are valid input: zero factors remove
+    assignments, they do not raise."""
+    certain = DemProblem(
+        probs=[0.0],
+        detector_rows=[[0]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    masses, info = basis_truncated_class_masses(certain, np.zeros(1), [0])
+    assert np.allclose(masses, [1.0, 0.0]) and info["log_mass"] == 0.0
+
+    problem = _random_problem(seed)
+    rng = np.random.default_rng(seed)
+    probs = np.array(problem.probs)
+    probs[rng.choice(problem.num_mechanisms, size=3, replace=False)] = 0.0
+    problem = DemProblem(
+        probs=list(probs),
+        detector_rows=problem.detector_rows,
+        observable_rows=problem.observable_rows,
+        num_detectors=problem.num_detectors,
+        num_observables=problem.num_observables,
+    )
+    syndromes, _ = _sample_from_model(problem, 3, seed + 50)
+    active = list(range(problem.num_mechanisms))
+    for syndrome in syndromes:
+        exact = _enumerate_active_set(problem, syndrome, active)
+        masses, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4096
+        )
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+
+
 def test_decoder_with_basis_truncation_matches_maximum_likelihood():
     """The decoder option agrees with the full-chain reference and the SVD sum."""
     problem = _small_surface_problem(0.02)

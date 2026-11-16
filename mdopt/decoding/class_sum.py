@@ -631,7 +631,12 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     return masses / total, info
 
 
-def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+def _safe_log(value: float) -> float:
+    """Logarithm that sends zero to minus infinity instead of raising."""
+    return math.log(value) if value > 0 else -math.inf
+
+
+def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
     free_priors: Sequence[Tuple[float, float]],
     pivot_weights: Sequence[Sequence[float]],
     kernel: _KernelPicture,
@@ -648,12 +653,20 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
     states can be ranked by the weight of their completion with every
     remaining free mechanism off.
 
+    Every product of factors is formed in logarithms and brought back to
+    ordinary numbers only relative to the largest value of the step, so
+    hundreds of small factors at one site cannot underflow. A factor of zero
+    is allowed: it removes the assignments it applies to, and an open pivot
+    whose current factor is zero is counted rather than added, so that it can
+    be taken back when the pivot's parity changes.
+
     Returns the final values by relative class, the logarithm of the scale
     divided out, the largest fraction of the ranking weight pruned at one
     step, and the largest number of states held.
     """
     num_free = len(kernel.free)
-    log_weights = [[math.log(w0), math.log(w1)] for w0, w1 in pivot_weights]
+    log_weights = [[_safe_log(w0), _safe_log(w1)] for w0, w1 in pivot_weights]
+    log_priors = [[_safe_log(off), _safe_log(on)] for off, on in free_priors]
     opens: List[List[int]] = [[] for _ in range(num_free)]
     continues: List[List[int]] = [[] for _ in range(num_free)]
     closes: List[List[int]] = [[] for _ in range(num_free)]
@@ -676,67 +689,93 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
         sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
         for k in range(num_free)
     ]
-    # (signature, class) -> [summed weight, log of the open pivots' factors]
-    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [1.0, 0.0]}
+    # (signature, class) -> [summed weight relative to the step's largest,
+    #                        sum of the finite logs of the open pivots' factors,
+    #                        number of open pivots whose factor is zero]
+    states: Dict[Tuple[int, int], List[float]] = {(0, 0): [1.0, 0.0, 0]}
     log_scale, pruned, peak = 0.0, 0.0, 1
     for k in range(num_free):
-        off, on = free_priors[k]
-        for r in singles[k]:
-            off *= pivot_weights[r][0]
-            on *= pivot_weights[r][1]
-        open_off = sum(log_weights[r][0] for r in opens[k])
-        open_on = sum(log_weights[r][1] for r in opens[k])
+        branch = [
+            log_priors[k][bit] + sum(log_weights[r][bit] for r in singles[k])
+            for bit in (0, 1)
+        ]
         clear = 0
         for r in closes[k]:
             clear |= 1 << r
-        new: Dict[Tuple[int, int], List[float]] = {}
-        for (signature, label), (weight, pending) in states.items():
+        children: List[Tuple[Tuple[int, int], float, float, int]] = []
+        for (signature, label), (weight, pending, zeros) in states.items():
+            base = math.log(weight)
             for bit in (0, 1):
-                if bit == 0:
-                    sig, lab = signature, label
-                    value, later = weight * off, pending + open_off
-                else:
-                    later = pending + open_on
+                value = base + branch[bit]
+                if value == -math.inf:
+                    continue
+                later, blocked = pending, int(zeros)
+                sig, lab = signature, label
+                if bit == 1:
                     for r in continues[k]:
                         current = (signature >> r) & 1
-                        later += log_weights[r][1 - current] - log_weights[r][current]
+                        for term, sign in (
+                            (log_weights[r][current], -1),
+                            (log_weights[r][1 - current], 1),
+                        ):
+                            if term == -math.inf:
+                                blocked += sign
+                            else:
+                                later += sign * term
                     sig, lab = signature ^ toggles[k], label ^ flips[k]
-                    value = weight * on
+                for r in opens[k]:
+                    term = log_weights[r][bit]
+                    if term == -math.inf:
+                        blocked += 1
+                    else:
+                        later += term
                 for r in closes[k]:
-                    current = (sig >> r) & 1
-                    value *= pivot_weights[r][current]
-                    later -= log_weights[r][current]
-                key = (sig & ~clear, lab)
-                item = new.get(key)
-                if item is None:
-                    new[key] = [value, later]
-                else:
-                    item[0] += value
-        top = max(item[0] for item in new.values())
-        if top <= 0:
+                    term = log_weights[r][(sig >> r) & 1]
+                    value += term
+                    if term == -math.inf:
+                        blocked -= 1
+                    else:
+                        later -= term
+                if value == -math.inf:
+                    continue
+                children.append(((sig & ~clear, lab), value, later, blocked))
+        if not children:
             raise ArithmeticError("The recursion lost all of its weight.")
+        top = max(child[1] for child in children)
+        new: Dict[Tuple[int, int], List[float]] = {}
+        for key, value, later, blocked in children:
+            if value - top < -700.0:
+                continue
+            item = new.get(key)
+            if item is None:
+                new[key] = [math.exp(value - top), later, blocked]
+            else:
+                item[0] += math.exp(value - top)
         peak = max(peak, len(new))
         if len(new) > max_states:
+            # Unblocked states first, each group by the weight of its
+            # completion with every remaining free mechanism off.
             ranked = sorted(
                 (
-                    (
-                        math.log(item[0] / top) + item[1] if item[0] > 0 else -math.inf,
-                        key,
-                    )
+                    (item[2] == 0, math.log(item[0]) + item[1], key)
                     for key, item in new.items()
                 ),
                 reverse=True,
             )
-            best = ranked[0][0]
-            kept = sum(math.exp(metric - best) for metric, _ in ranked[:max_states])
-            cut = sum(math.exp(metric - best) for metric, _ in ranked[max_states:])
-            pruned = max(pruned, cut / (kept + cut))
-            new = {key: new[key] for _, key in ranked[:max_states]}
-            top = max(item[0] for item in new.values())
-        states = {key: [item[0] / top, item[1]] for key, item in new.items()}
-        log_scale += math.log(top)
+            lead, best = ranked[0][0], ranked[0][1]
+            shares = [
+                math.exp(score - best) if flag == lead else 0.0
+                for flag, score, _ in ranked
+            ]
+            pruned = max(pruned, sum(shares[max_states:]) / sum(shares))
+            new = {key: new[key] for _, _, key in ranked[:max_states]}
+        rescale = max(item[0] for item in new.values())
+        states = {
+            key: [item[0] / rescale, item[1], item[2]] for key, item in new.items()
+        }
+        log_scale += top + math.log(rescale)
     totals: Dict[int, float] = {}
-    for (_, label), (weight, _) in states.items():
+    for (_, label), (weight, _, _) in states.items():
         totals[label] = totals.get(label, 0.0) + weight
     return totals, log_scale, pruned, peak
 
@@ -810,10 +849,11 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     )
     inactive = np.ones(problem.num_mechanisms, dtype=bool)
     inactive[columns] = False
-    log_scale = float(np.sum(np.log1p(-probs[inactive])))
+    with np.errstate(divide="ignore"):
+        log_scale = float(np.sum(np.log1p(-probs[inactive])))
     for r, support in enumerate(kernel.supports):
         if not support:
-            log_scale += float(np.log(pivot_weights[r, 0]))
+            log_scale += _safe_log(float(pivot_weights[r, 0]))
     totals, log_recursion, pruned, peak = _basis_recursion(
         [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
         pivot_weights.tolist(),
@@ -828,7 +868,7 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     info: Dict[str, Any] = {
         "free": len(kernel.free),
         "rank": len(kernel.pivots),
-        "log_mass": float(np.log(total)) + log_recursion + log_scale,
+        "log_mass": _safe_log(total) + log_recursion + log_scale,
         "pruned": pruned,
         "states": peak,
     }
