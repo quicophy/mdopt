@@ -56,6 +56,36 @@ def mcnemar(fixes, breaks):
     return min(1.0, 2 * tail / 2**total)
 
 
+def load_records(path):
+    """Records of an earlier run, by shot.
+
+    A run that was interrupted in the middle of a write leaves an incomplete
+    last line. That line is cut off the file, so the run resumes after the
+    last complete record. A broken line anywhere else is corruption and
+    raises.
+    """
+    records = {}
+    if not path.exists():
+        return records
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    complete = 0
+    for number, line in enumerate(lines):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            if number == len(lines) - 1:
+                break
+            raise
+        records[record["shot"]] = record
+        complete += 1
+    if complete < len(lines) or (lines and not lines[-1].endswith("\n")):
+        kept = "".join(lines[:complete])
+        if kept and not kept.endswith("\n"):
+            kept += "\n"
+        path.write_text(kept, encoding="utf-8")
+    return records
+
+
 def run(rounds, p, shots, seed, chi_max=16, basis="Z"):
     """Decode ``shots`` samples with both decoders and return the records."""
     memory = circuit(rounds, p, basis)
@@ -72,10 +102,7 @@ def run(rounds, p, shots, seed, chi_max=16, basis="Z"):
     RESULTS.mkdir(exist_ok=True)
     name = f"B_r{rounds}_p{p!r}_{basis}_chi{chi_max}_seed{seed}_n{shots}.jsonl"
     path = RESULTS / name
-    records = {}
-    if path.exists():
-        with open(path, encoding="utf-8") as handle:
-            records = {rec["shot"]: rec for rec in map(json.loads, handle)}
+    records = load_records(path)
     start = time.time()
     with open(path, "a", encoding="utf-8") as handle:
         for shot in range(shots):
