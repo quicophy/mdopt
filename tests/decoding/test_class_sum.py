@@ -286,6 +286,21 @@ def test_class_masses_agree_with_the_full_chain_decoder():
         assert np.allclose(masses, reference / reference.sum(), atol=1e-9)
 
 
+def test_a_mechanism_listed_twice_in_a_row_cancels():
+    """The matrices are over GF(2): two entries of one mechanism are none."""
+    problem = DemProblem(
+        probs=[0.1, 0.2],
+        detector_rows=[[0, 0, 1], [1]],
+        observable_rows=[[1, 1]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    check, observables = problem_matrices(problem)
+    assert np.array_equal(check.toarray(), [[0, 1], [0, 1]])
+    assert np.array_equal(observables.toarray(), [[0, 0]])
+    assert check.nnz == 2 and observables.nnz == 0
+
+
 def test_active_set_without_a_solution_raises():
     problem = DemProblem(
         probs=[0.1, 0.1, 0.1],
