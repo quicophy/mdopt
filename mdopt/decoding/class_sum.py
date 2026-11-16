@@ -216,15 +216,22 @@ class ParityChain:
     def __init__(self, vectors: Sequence[np.ndarray]):
         if len(vectors) == 0:
             raise ValueError("The chain needs at least one site.")
-        self.tensors: List[np.ndarray] = [
-            np.asarray(vector, dtype=float).reshape(1, 2, 1) for vector in vectors
-        ]
+        self.tensors: List[np.ndarray] = []
         self.center = 0
         self.log_norm = 0.0
         self.lost = 0.0
-        for site in range(len(self.tensors) - 1, 0, -1):
-            self._orthogonalize_right(site)
-        self._normalize()
+        # Every site is normalized by itself and the logarithms are summed:
+        # the norm of the whole product can be far outside float64 while
+        # its logarithm is an ordinary number. Normalized rank-one tensors
+        # are canonical for any center, so no sweep is needed.
+        for vector in vectors:
+            tensor = np.asarray(vector, dtype=float).reshape(1, 2, 1)
+            peak = float(np.abs(tensor).max())
+            if peak == 0 or not np.isfinite(peak):
+                raise ArithmeticError("The product state has a zero or infinite site.")
+            norm = peak * float(np.linalg.norm(tensor / peak))
+            self.tensors.append(tensor / norm)
+            self.log_norm += float(np.log(norm))
 
     def __len__(self) -> int:
         return len(self.tensors)
