@@ -2142,10 +2142,10 @@ def test_num_candidates_is_the_last_decoder_parameter():
             "tie_policy",
             "rng",
             "num_candidates",
+            "return_certificate",
             "prior_reweighting",
             "reweighting_floor",
             "bp_iterations",
-            "return_certificate",
         ]
 
 
@@ -3134,6 +3134,19 @@ def test_weighted_marginalization_requires_every_error_site():
     ):
         with pytest.raises(ValueError, match="exactly once"):
             _marginalize_with_weights(state, 1, bad, renormalize=False)
+
+
+def test_weighted_marginalization_survives_weights_too_small_to_square():
+    """Weights of 1e-197 have squares of zero. The renormalization must still
+    see a nonzero norm, or the next tiny weights underflow the readout."""
+    from mdopt.decoding.decoding import _marginalize_with_weights
+
+    state = create_custom_product_state("0" + "+" * 6, form="Right-canonical")
+    weights = [(site, np.full(2, 1e-197)) for site in range(1, 7)]
+    result = _marginalize_with_weights(state, 1, weights, renormalize=True)
+    dense = np.asarray(result.dense(flatten=True, renormalize=False))
+    assert np.isfinite(dense).all()
+    assert np.isclose(abs(dense[0]), 1.0) and dense[1] == 0.0
 
 
 def test_optima_tt_readout_rejects_non_qubit_chains():

@@ -2293,7 +2293,7 @@ def _marginalize_with_weights(
             weighted = np.einsum("xz,mz->xm", trace, second)
             right = np.einsum("lxm,xm->l", tensors[first], weighted)[:, None]
         if renormalize:
-            norm = float(np.linalg.norm(right))
+            norm = _stable_norm(right)
             if norm > 0:
                 right = right / norm
     if num_logicals == 0:
@@ -2305,7 +2305,7 @@ def _marginalize_with_weights(
         )
     last = np.tensordot(tensors[num_logicals - 1], right, axes=([2], [0]))
     if renormalize:
-        norm = float(np.linalg.norm(last))
+        norm = _stable_norm(last)
         if norm > 0:
             last = last / norm
     logical = CanonicalMPS(
@@ -2351,10 +2351,10 @@ def decode_css(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    return_certificate: bool = False,
     prior_reweighting: Optional[str] = None,
     reweighting_floor: float = 0.05,
     bp_iterations: int = 60,
-    return_certificate: bool = False,
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalization and
@@ -2421,6 +2421,14 @@ def decode_css(
         between runs.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    return_certificate : bool
+        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
+        with the rigorous bound ``certificate.bound`` on the relative
+        truncation error of the contracted state and the survival factor
+        ``certificate.survival`` the checks kept. A bound above one means the
+        posterior may be truncation residue; on the [[18,2]] bivariate
+        bicycle code no verdict with a bound below 100 was wrong and every
+        sign-flipped shot had a bound above 1e8.
     prior_reweighting : Optional[str]
         ``"BP"`` replaces the error prior by the belief-propagation posterior
         marginals before the contraction and undoes the change exactly at
@@ -2442,14 +2450,6 @@ def decode_css(
         negatives. 0.05 is the default.
     bp_iterations : int
         Flooding iterations of the sum-product BP used for the reweighting.
-    return_certificate : bool
-        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
-        with the rigorous bound ``certificate.bound`` on the relative
-        truncation error of the contracted state and the survival factor
-        ``certificate.survival`` the checks kept. A bound above one means the
-        posterior may be truncation residue; on the [[18,2]] bivariate
-        bicycle code no verdict with a bound below 100 was wrong and every
-        sign-flipped shot had a bound above 1e8.
 
     Raises
     ------
@@ -2572,10 +2572,10 @@ def decode_custom(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    return_certificate: bool = False,
     prior_reweighting: Optional[str] = None,
     reweighting_floor: float = 0.05,
     bp_iterations: int = 60,
-    return_certificate: bool = False,
 ):
     """
     This function performs error-based decoding for a custom quantum error-correcting code.
@@ -2632,6 +2632,17 @@ def decode_custom(
         Product states the Dephasing DMRG readout is restarted from.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    return_certificate : bool
+        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
+        with the rigorous bound ``certificate.bound`` on the relative
+        truncation error of the contracted state and the survival factor
+        ``certificate.survival`` the checks kept. The certificate is always
+        computed, since the SVDs provide the discarded weights anyway, and
+        unless ``silent`` its bound is logged and a bound above one is
+        warned about: such a posterior may be truncation residue. This flag
+        only controls whether it is returned. On the [[18,2]] bivariate
+        bicycle code no verdict with a bound below 100 was wrong and every
+        sign-flipped shot had a bound above 1e8.
     prior_reweighting : Optional[str]
         ``"BP"`` replaces the error prior by the belief-propagation posterior
         marginals before the contraction and undoes the change exactly at
@@ -2653,17 +2664,6 @@ def decode_custom(
         negatives. 0.05 is the default.
     bp_iterations : int
         Flooding iterations of the sum-product BP used for the reweighting.
-    return_certificate : bool
-        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
-        with the rigorous bound ``certificate.bound`` on the relative
-        truncation error of the contracted state and the survival factor
-        ``certificate.survival`` the checks kept. The certificate is always
-        computed, since the SVDs provide the discarded weights anyway, and
-        unless ``silent`` its bound is logged and a bound above one is
-        warned about: such a posterior may be truncation residue. This flag
-        only controls whether it is returned. On the [[18,2]] bivariate
-        bicycle code no verdict with a bound below 100 was wrong and every
-        sign-flipped shot had a bound above 1e8.
 
     Returns
     -------
