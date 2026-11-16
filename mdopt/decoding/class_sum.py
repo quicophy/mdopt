@@ -63,6 +63,10 @@ DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
 }
 
 
+#: Singular values below this fraction of the largest one count as zero.
+ZERO_CUTOFF = 1e-13
+
+
 def _svd(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Thin SVD that falls back to the slower, more robust LAPACK driver."""
     try:
@@ -99,7 +103,7 @@ def multiplet_safe_rank(
     """
     if singular_values.size == 0 or singular_values[0] <= 0:
         return 0
-    nonzero = int(np.sum(singular_values > singular_values[0] * 1e-13))
+    nonzero = int(np.sum(singular_values > singular_values[0] * ZERO_CUTOFF))
     keep = min(chi_max, nonzero)
     if not 0 < keep < nonzero:
         return keep
@@ -282,6 +286,8 @@ class ParityChain:
         keep = multiplet_safe_rank(singular_values, chi_max)
         if keep < singular_values.size:
             total = float(np.sum(singular_values**2))
+            if total <= 0:
+                raise ArithmeticError("The state vanished during the contraction.")
             self.lost += float(np.sum(singular_values[keep:] ** 2)) / total
         self.tensors[site] = right_vectors[:keep].reshape(keep, phys, right)
         self.tensors[site - 1] = np.tensordot(
@@ -310,9 +316,14 @@ def problem_matrices(problem: DemProblem) -> Tuple[csr_matrix, csr_matrix]:
         row_index = [r for r, row in enumerate(rows) for _ in row]
         column_index = [i for row in rows for i in row]
         data = np.ones(len(row_index), dtype=np.uint8)
-        return csr_matrix(
+        matrix = csr_matrix(
             (data, (row_index, column_index)), shape=(len(rows), num_mech)
         )
+        # A mechanism listed twice in a row is summed by the constructor;
+        # over GF(2) the two entries cancel.
+        matrix.data %= 2
+        matrix.eliminate_zeros()
+        return matrix
 
     return build(problem.detector_rows), build(problem.observable_rows)
 
@@ -420,6 +431,8 @@ def _register_masses(chain: ParityChain, num_obs: int) -> Tuple[np.ndarray, floa
             "lpr,rs,mps->lm", tensor, environment, tensor, optimize=True
         )
         scale = float(np.abs(environment).max())
+        if scale <= 0:
+            raise ArithmeticError("The state vanished during the contraction.")
         environment = environment / scale
         log_scale += float(np.log(scale))
     register = np.ones((1, 1))
@@ -475,6 +488,8 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     ------
     ValueError
         If the active set holds no solution of the syndrome.
+    ArithmeticError
+        If the state or every class mass vanishes during the contraction.
     """
     syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
     if check_matrix is None or observable_matrix is None:
@@ -540,9 +555,11 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     masses = np.empty_like(relative)
     masses[np.arange(relative.size) ^ kernel.base_class] = relative
     total = float(masses.sum())
+    if not np.isfinite(total) or total <= 0:
+        raise ArithmeticError("Every class mass vanished during the contraction.")
     info.update(
         log_mass=float(
-            np.log(max(total, 1e-300))
+            np.log(total)
             + log_environment
             + 2 * chain.log_norm
             + num_obs * np.log(2.0)
