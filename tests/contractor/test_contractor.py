@@ -11,7 +11,7 @@ from mdopt.contractor.contractor import (
     mps_mpo_contract,
 )
 from mdopt.mps.utils import is_canonical, mps_from_dense, create_state_vector
-from mdopt.utils.utils import create_random_mpo, mpo_to_matrix
+from mdopt.utils.utils import create_random_mpo, mpo_from_matrix, mpo_to_matrix
 
 
 def _to_numpy(a):
@@ -206,3 +206,31 @@ def test_contractor_mps_mpo_contract():
         assert np.isclose(np.linalg.norm(mps_fin_dense - psi_fin), 0, atol=1e-7)
 
         assert np.isclose(np.linalg.norm(orthogonality_center), 1.0)
+
+
+def test_mps_mpo_contract_records_the_center_move_truncation():
+    """Moving the orthogonality center to the start site before the zip-up
+    truncates at the SVD cutoff; the discarded-norm record must include that
+    component, or a certificate built on the record would claim an exact
+    contraction while a 1e-13 component has been dropped."""
+    from mdopt.mps.canonical import CanonicalMPS
+
+    tiny = 1e-13
+    site_0 = np.eye(2).reshape(1, 2, 2)
+    site_1 = np.diag([1.0, tiny]).reshape(2, 2, 1)
+    mps = CanonicalMPS([site_0, site_1], orth_center=1)
+    # The even-parity projector |00><00| + |11><11| as a two-site MPO.
+    projector = np.diag([1.0, 0.0, 0.0, 1.0])
+    mpo = mpo_from_matrix(projector, num_sites=2, interlaced=False, chi_max=4)
+
+    discarded: list = []
+    mps_mpo_contract(
+        mps,
+        mpo,
+        0,
+        chi_max=4,
+        renormalize=False,
+        inplace=False,
+        discarded_norms=discarded,
+    )
+    assert np.isclose(max(discarded), tiny, rtol=1e-3, atol=0)
