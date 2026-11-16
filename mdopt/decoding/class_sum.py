@@ -875,6 +875,11 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     return masses / total, info
 
 
+#: BP-OSD solves of one syndrome: (observable, forced value) -> solution, or
+#: ``None`` when BP-OSD returned something that does not match the syndrome.
+_Solves = Dict[Tuple[int, int], Optional[np.ndarray]]
+
+
 class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     """Class-summed MPS decoder seeded by BP-OSD candidates.
 
@@ -907,7 +912,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         yet used as a center, most likely first, are each used once as the
         center of the class flips,
         and the class sum is repeated on the larger active set. Every center
-        costs one BP-OSD run per observable. With 0 the search is not
+        asks for one BP-OSD solve per observable, and solves already made for
+        the syndrome are reused: there are only two per observable, so the
+        whole search never costs more than that. With 0 the search is not
         widened.
     truncation : str
         ``"svd"`` contracts the class sum as a matrix product state truncated
@@ -1027,32 +1034,49 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
     def _search(
         self, syndrome: np.ndarray, seed: np.ndarray
-    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int]]:
-        """The candidates of :meth:`candidates` and the centers it used."""
+    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int], _Solves]:
+        """The candidates of :meth:`candidates`, the centers it used and the
+        BP-OSD solves it made."""
         center = self.class_of(seed)
         found = {center: (float(self._llr @ seed), seed.copy())}
         tried: Set[int] = set()
+        solves: _Solves = {}
         for _ in range(self.recenter_rounds):
             if center in tried:
                 break
             tried.add(center)
-            self._flip_around(center, syndrome, found)
+            self._flip_around(center, syndrome, found, solves)
             center = max(found, key=lambda label: found[label][0])
-        return found, tried
+        return found, tried, solves
 
     def _flip_around(
         self,
         center: int,
         syndrome: np.ndarray,
         found: Dict[int, Tuple[float, np.ndarray]],
+        solves: Optional[_Solves] = None,
     ) -> None:
-        """Flip every observable of ``center`` once and record the solutions."""
+        """Flip every observable of ``center`` once and record the solutions.
+
+        A flip of observable ``j`` only tells BP-OSD the syndrome and the
+        value observable ``j`` must take, so one syndrome has at most two
+        distinct solves per observable. ``solves`` keeps them, and a center
+        that asks for one again does not pay for it.
+        """
+        if solves is None:
+            solves = {}
         for j in range(self.num_observables):
             target = ((center >> j) & 1) ^ 1
-            extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
-            solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
-            if not self._satisfies(solution, syndrome):
+            if (j, target) not in solves:
+                extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
+                solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
+                solves[(j, target)] = (
+                    solution if self._satisfies(solution, syndrome) else None
+                )
+            cached = solves[(j, target)]
+            if cached is None:
                 continue
+            solution = cached
             label = self.class_of(solution)
             likelihood = float(self._llr @ solution)
             if label not in found or likelihood > found[label][0]:
@@ -1063,6 +1087,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         syndrome: np.ndarray,
         found: Dict[int, Tuple[float, np.ndarray]],
         tried: Iterable[int] = (),
+        solves: Optional[_Solves] = None,
     ) -> Dict[int, Tuple[float, np.ndarray]]:
         """Candidates of a wider search around the classes already found.
 
@@ -1079,6 +1104,10 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         tried : Iterable[int]
             Classes that were already used as centers. The search is
             deterministic, so using them again would add nothing.
+        solves : Optional[Dict[Tuple[int, int], Optional[np.ndarray]]]
+            The BP-OSD solves already made for this syndrome, by observable
+            and forced value. With them the wider search costs at most the
+            solves that are still missing: two per observable in total.
 
         Returns
         -------
@@ -1093,7 +1122,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             key=lambda label: -found[label][0],
         )
         for center in centers[: self.extra_centers]:
-            self._flip_around(center, syndrome, wider)
+            self._flip_around(center, syndrome, wider, solves)
         return wider
 
     @staticmethod
@@ -1186,14 +1215,19 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             info.update(margin=0.0, candidates=0)
             return self._flips(bposd_class), info
 
-        found, tried = self._search(syndrome, seed)
+        found, tried, solves = self._search(syndrome, seed)
         active = self._active_set(found)
         masses, contraction = self._first_pass(syndrome, active)
         hard = contraction["lost"] >= self.temper_threshold
         widened = False
         if hard and self.extra_centers > 0 and len(found) > len(tried):
-            found = self.widen(syndrome, found, tried)
+            found = self.widen(syndrome, found, tried, solves)
+            # A better candidate can replace the one a class had; the
+            # mechanisms of the replaced one stay active, so that widening
+            # never pins off anything the first sum included.
             wider_active = self._active_set(found)
+            kept = set(wider_active)
+            wider_active += [m for m in active if m not in kept]
             if wider_active != active:
                 active = wider_active
                 masses, contraction = self._first_pass(syndrome, active)
