@@ -728,7 +728,11 @@ def test_svd_jitter_fallback_reports_its_perturbation(monkeypatch):
     assert distance > 1e-13
     assert discarded >= distance * (1 - 1e-9)
     assert np.isclose(discarded, 1e-12 * np.sqrt(2))
+    # The legacy squared error does not include the jitter, on the same
+    # fallback path: the counter starts again so that all three run.
+    calls["scipy"] = 0
     _, _, _, squared = utils.svd(mat, cut=0.0, return_truncation_error=True)
+    assert calls["scipy"] == 3
     assert squared == 0.0
 
 
