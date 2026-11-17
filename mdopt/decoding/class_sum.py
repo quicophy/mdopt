@@ -13,8 +13,9 @@ logical class inside that set.
    detector. Every assignment of the remaining *free* mechanisms is then a
    valid solution: a pivot fires if and only if its base bit and the parity
    of the free mechanisms in its reduced row disagree. No hard syndrome
-   constraint is left, so truncation can only lose probability mass of valid
-   solutions.
+   constraint is left, so every configuration the truncated state holds is
+   a valid solution and truncation cannot project the state to nothing. It
+   still makes the masses approximate, in either direction.
 2. **Class sum.** An MPS over one register site per observable followed by
    one site per free mechanism holds the square roots of the probabilities.
    Each pivot is a soft parity factor, each observable a hard parity with its
@@ -500,9 +501,12 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         ``class_masses[c]`` is the probability of the solutions inside the
         active set whose observable pattern is ``c`` (bit ``j`` of ``c`` is
         observable ``j``), normalized to sum to one. ``info`` holds
-        ``log_mass`` (logarithm of the retained probability that the syndrome
-        is produced by mechanisms of the active set alone), ``lost`` (accumulated discarded
-        fraction of the squared norm), ``bond`` (largest bond dimension),
+        ``log_mass`` (logarithm of the probability that the syndrome is
+        produced by mechanisms of the active set alone: exact when nothing
+        is truncated, otherwise an estimate that can lie above or below the
+        exact value, because the soft factors applied after a truncation
+        can amplify its error), ``lost`` (accumulated discarded fraction of
+        the squared norm), ``bond`` (largest bond dimension),
         ``free`` (number of free mechanisms) and ``rank`` (number of pivots).
 
     Raises
