@@ -1312,9 +1312,16 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             kept = set(wider_active)
             wider_active += [m for m in active if m not in kept]
             if wider_active != active:
-                active = wider_active
-                masses, contraction = self._first_pass(syndrome, active)
-                hard = self._truncated(contraction)
+                try:
+                    wider = self._first_pass(syndrome, wider_active)
+                except ArithmeticError:
+                    # The wider sum vanished: the first sum and its active
+                    # set stand.
+                    pass
+                else:
+                    active = wider_active
+                    masses, contraction = wider
+                    hard = self._truncated(contraction)
             widened = True
         tempered = False
         if self.truncation == "svd" and self.temper_stages > 1 and hard:
