@@ -402,9 +402,9 @@ def test_a_mechanism_listed_twice_in_a_row_cancels():
 @pytest.mark.parametrize("seed", range(4))
 def test_class_masses_under_real_truncation(seed):
     """End to end at bond dimensions that truncate: the masses stay a
-    probability vector, the retained mass never exceeds the exact one and
-    falls short by about the reported loss, the masses are off by at most the
-    root of that loss, and everything converges to the enumeration."""
+    probability vector, the mass estimate and the masses are off by an amount
+    that the reported loss controls, and everything converges to the
+    enumeration."""
     problem = _random_problem(
         seed, num_detectors=6, num_mechanisms=17, num_observables=3
     )
@@ -419,17 +419,39 @@ def test_class_masses_under_real_truncation(seed):
         )
         assert np.all(masses >= 0.0) and np.isclose(masses.sum(), 1.0)
         distance = 0.5 * np.abs(masses - target).sum()
-        deficit = log_exact - info["log_mass"]
-        assert deficit >= -1e-9
-        assert deficit <= 3.0 * info["lost"] + 1e-9
+        log_error = abs(info["log_mass"] - log_exact)
+        # Measured relations, with a wide margin: over forty models the log
+        # error was at most 1.75 times the loss and the distance at most
+        # 0.66 times its root.
+        assert log_error <= 3.0 * info["lost"] + 1e-9
         assert distance <= 2.0 * np.sqrt(info["lost"]) + 1e-9
         if chi_max == 2048:
-            assert info["lost"] < 1e-20 and distance < 1e-10 and deficit < 1e-10
+            assert info["lost"] < 1e-20 and distance < 1e-10 and log_error < 1e-10
         elif info["lost"] > 1e-3:
             truncated += 1
             assert info["bond"] <= chi_max + max(4, chi_max // 4)
-            assert deficit > 0.1 * info["lost"]
     assert truncated >= 2
+
+
+def test_a_truncated_mass_estimate_can_exceed_the_exact_mass():
+    """``log_mass`` is an estimate, not a lower bound: a soft factor applied
+    after a truncation can amplify what the truncation changed."""
+    problem = DemProblem(
+        probs=[0.1, 0.1, 0.5, 0.5],
+        detector_rows=[[0, 2, 3], [1, 2, 3]],
+        observable_rows=[[2]],
+        num_detectors=2,
+        num_observables=1,
+    )
+    syndrome = np.array([0, 1], dtype=np.uint8)
+    active = [0, 1, 2, 3]
+    exact = _enumerate_active_set(problem, syndrome, active).sum()
+    assert np.isclose(exact, 0.09)
+    _, info = active_set_class_masses(problem, syndrome, active, chi_max=1)
+    assert info["lost"] > 0.1
+    assert np.exp(info["log_mass"]) > 1.5 * exact
+    _, info = active_set_class_masses(problem, syndrome, active, chi_max=2)
+    assert np.isclose(np.exp(info["log_mass"]), exact)
 
 
 def test_active_set_without_a_solution_raises():
