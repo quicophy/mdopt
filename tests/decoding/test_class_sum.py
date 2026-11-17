@@ -292,6 +292,8 @@ def test_active_set_without_a_solution_raises():
         active_set_class_masses(problem, np.array([1, 1]), [0])
     with pytest.raises(ValueError, match="outside the model"):
         active_set_class_masses(problem, np.array([1, 1]), [0, 5])
+    with pytest.raises(ValueError, match="bond dimension"):
+        active_set_class_masses(problem, np.array([1, 1]), [1], chi_max=0)
     masses, info = active_set_class_masses(problem, np.array([1, 1]), [1])
     assert np.allclose(masses, [1.0, 0.0])
     assert info["free"] == 0 and info["rank"] == 1
