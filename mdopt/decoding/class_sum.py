@@ -108,6 +108,18 @@ def multiplet_safe_rank(
     extra values (or if the multiplet starts at the top of the spectrum),
     down otherwise.
 
+    The multiplet is the one the requested cut falls in: the values above
+    the cut within ``tolerance`` of the first value below it, and the values
+    below the cut within ``tolerance`` of the last value above it. Two values
+    whose relative difference is exactly ``tolerance`` count as different.
+    The window is anchored at the cut and is not extended from neighbor to
+    neighbor, so a long run of values that drift apart by less than
+    ``tolerance`` per step is one multiplet only as far as it stays within
+    ``tolerance`` of the cut. Exact multiplets, which differ by rounding
+    alone, are always kept or dropped whole. A multiplet at the top of the
+    spectrum is kept whole whatever its size, since dropping it would leave
+    nothing: the bond can then exceed ``chi_max`` by more than the allowance.
+
     Parameters
     ----------
     singular_values : np.ndarray
@@ -336,11 +348,13 @@ class ParityChain:
             self.tensors[site].reshape(left, phys * right)
         )
         keep = multiplet_safe_rank(singular_values, chi_max)
+        if keep == 0:
+            raise ArithmeticError("The state vanished during the contraction.")
         if keep < singular_values.size:
-            total = float(np.sum(singular_values**2))
-            if total <= 0:
-                raise ArithmeticError("The state vanished during the contraction.")
-            self.lost += float(np.sum(singular_values[keep:] ** 2)) / total
+            # Relative to the largest value, so that the fraction is right
+            # for a spectrum whose squares would underflow.
+            scaled = singular_values / singular_values[0]
+            self.lost += float(np.sum(scaled[keep:] ** 2) / np.sum(scaled**2))
         self.tensors[site] = right_vectors[:keep].reshape(keep, phys, right)
         self.tensors[site - 1] = np.tensordot(
             self.tensors[site - 1],
