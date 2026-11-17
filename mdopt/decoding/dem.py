@@ -465,6 +465,13 @@ def decode_dem(
     # site multiplies by 1/sqrt(2): over thousands of sites the masses would
     # reach the subnormal range and tie. The marginalization therefore always
     # rescales, whatever ``renormalize`` asked of the constraint sweeps.
+    # The center is brought to unit norm first, with a norm that does not
+    # square its entries: the marginalization's own rescaling reads a center
+    # of amplitudes near 1e-170 as zero and skips it.
+    if mps.orth_center is not None:
+        center_norm = _stable_norm(mps.tensors[mps.orth_center])
+        if 0.0 < center_norm < np.inf:
+            mps.tensors[mps.orth_center] = mps.tensors[mps.orth_center] / center_norm
     logical_mps = mps.marginal(
         sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),
         renormalize=True,
