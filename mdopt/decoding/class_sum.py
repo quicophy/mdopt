@@ -193,10 +193,14 @@ class ParityChain:
         return len(self.tensors)
 
     def _normalize(self) -> None:
-        norm = float(np.linalg.norm(self.tensors[self.center]))
-        if norm == 0:
+        # Scaled by the largest entry first: amplitudes of 1e-200 are not
+        # zero, but their squares are.
+        center = self.tensors[self.center]
+        peak = float(np.abs(center).max()) if center.size else 0.0
+        if peak == 0 or not np.isfinite(peak):
             raise ArithmeticError("The constraint annihilated the state.")
-        self.tensors[self.center] = self.tensors[self.center] / norm
+        norm = peak * float(np.linalg.norm(center / peak))
+        self.tensors[self.center] = center / norm
         self.log_norm += float(np.log(norm))
 
     def _orthogonalize_left(self, site: int) -> None:
@@ -528,7 +532,8 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         If the active set holds no solution of the syndrome, or if ``stages``
         is not positive.
     ArithmeticError
-        If the state or every class mass vanishes during the contraction.
+        If the state or every class mass vanishes during the contraction, or
+        if no assignment of the active set has positive probability.
     """
     if stages < 1:
         raise ValueError("The number of tempering stages must be positive.")
@@ -556,9 +561,24 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     # Every mechanism outside the active set is off.
     inactive = np.ones(problem.num_mechanisms, dtype=bool)
     inactive[columns] = False
-    log_scale = float(np.sum(np.log1p(-probs[inactive])))
+    with np.errstate(divide="ignore"):
+        log_scale = float(np.sum(np.log1p(-probs[inactive])))
+        # A pivot without free support takes its base value whatever the
+        # free mechanisms do.
+        log_scale += float(
+            sum(
+                np.log(pivot_weights[r, 0])
+                for r, support in enumerate(kernel.supports)
+                if not support
+            )
+        )
+    if not np.isfinite(log_scale):
+        # An inactive mechanism of probability one, or a pivot forced to a
+        # value of probability zero: the restricted event cannot happen.
+        raise ArithmeticError(
+            "No assignment of the active set has positive probability."
+        )
     if num_obs + len(kernel.free) == 0:
-        log_scale += float(np.sum(np.log(pivot_weights[:, 0])))
         info.update(log_mass=log_scale, lost=0.0, bond=1)
         return np.ones(1), info
 
@@ -591,7 +611,6 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         for r in order:
             weights = pivot_weights[r]
             if not kernel.supports[r]:
-                log_scale += float(np.log(weights[0])) / stages
                 continue
             log_scale += float(np.log(weights.max())) / stages
             chain.apply_parity(
