@@ -64,7 +64,10 @@ space of a trellis decoder ([1]_, [2]_), and :func:`basis_truncated_class_masses
 contracts the same network in it. A bond is truncated by keeping the
 ``max_states`` most probable basis states, as in reduced-state trellis decoding
 [3]_, ranked by the weight they have when every remaining free mechanism stays
-off. Nothing is rotated, every number is a probability, and the cost is a few
+off. A state that a factor of exactly zero rules out under that completion
+ranks behind every other state, and is counted in the pruned share by its
+weight without that factor, since a later mechanism can still revive it.
+Nothing is rotated, every number is a probability, and the cost is a few
 ten thousand additions and multiplications where the SVD contraction needs a
 thousand factorizations. ``ClassSumDecoder(truncation="basis")`` uses it.
 
@@ -844,7 +847,11 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
                 else:
                     item[0].append(value)
         if not merged:
-            raise ArithmeticError("The recursion lost all of its weight.")
+            raise ArithmeticError(
+                f"The recursion lost all of its weight at free mechanism {k} of "
+                f"{num_free}, with {len(states)} states held and {removed} "
+                "pruned so far."
+            )
         # Weights stay logarithms from step to step and merge by a
         # log-sum-exp: a weight that is tiny now is kept, because the factors
         # of its open pivots can still make it the largest.
@@ -1036,6 +1043,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         ``temper_threshold`` then applies to the pruned fraction.
     max_states : int
         The number of basis states kept on a bond with ``truncation="basis"``.
+        It must be positive whichever truncation is chosen.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
