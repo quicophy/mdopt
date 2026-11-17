@@ -92,6 +92,50 @@ def test_rank_never_splits_a_multiplet():
     assert multiplet_safe_rank(values, 8) == 40
 
 
+def test_rank_at_the_edges_of_its_rule():
+    """The tolerance, the allowance and the scale, each at its boundary."""
+    tolerance = 1e-7
+    # A relative difference of exactly the tolerance is not a degeneracy.
+    assert multiplet_safe_rank(np.array([1.0, 0.5, 0.5 * (1 - tolerance), 0.1]), 2) == 2
+    inside = np.array([1.0, 0.5, 0.5 * (1 - 0.5 * tolerance), 0.1])
+    assert multiplet_safe_rank(inside, 2) == 3
+    # At chi_max = 8 the cut may move up by four values, not by five.
+    head = np.linspace(2.0, 1.5, 6)
+    assert multiplet_safe_rank(np.concatenate([head, np.full(6, 1.0), [0.1]]), 8) == 12
+    assert multiplet_safe_rank(np.concatenate([head, np.full(7, 1.0), [0.1]]), 8) == 6
+    # A whole spectrum that is one multiplet is kept, whatever chi_max says.
+    assert multiplet_safe_rank(np.ones(40), 4) == 40
+    # The rule depends on ratios only.
+    for scale in (1e-200, 1.0, 1e200):
+        assert multiplet_safe_rank(scale * np.array([1.0, 1.0, 0.5, 0.25]), 1) == 2
+        assert multiplet_safe_rank(scale * np.array([1.0, 0.5, 0.25]), 1) == 1
+    # The window is anchored at the cut: a run that drifts by 0.6 tolerance
+    # per step is one multiplet only within one tolerance of the cut.
+    drift = (1 - 0.6 * tolerance) ** np.arange(60)
+    assert multiplet_safe_rank(drift, 8) == 9
+
+
+def test_truncation_reports_the_lost_fraction_at_any_scale():
+    """The lost fraction is a ratio, so a chain whose singular values are too
+    small to square reports the same loss as the same chain at unit scale."""
+    losses = []
+    for scale in (1.0, 1e-200):
+        chain = ParityChain([np.array([0.8, 0.6])] * 3)
+        chain.apply_parity([0, 2], 4, (1.0, 0.5))
+        chain.move_center(2)
+        chain.tensors[2] = chain.tensors[2] * scale
+        chain.lost = 0.0
+        chain._truncate_bond(2, 1)
+        losses.append(chain.lost)
+    assert 0.0 < losses[0] < 1.0
+    assert np.isclose(losses[1], losses[0], rtol=1e-12)
+    empty = ParityChain([np.array([0.8, 0.6])] * 2)
+    empty.move_center(1)
+    empty.tensors[1] = np.zeros_like(empty.tensors[1])
+    with pytest.raises(ArithmeticError, match="vanished"):
+        empty._truncate_bond(1, 4)
+
+
 def _dense(chain):
     state = np.ones((1, 1))
     for tensor in chain.tensors:
