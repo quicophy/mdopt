@@ -760,6 +760,18 @@ def test_svd_jitter_fallback_measures_the_perturbation_it_adds(monkeypatch):
     assert calls["scipy"] == 3
     assert discarded == added
 
+    # The jitter survives input dtypes that cannot hold it themselves.
+    for dtype in (np.float32, np.int64, bool):
+        calls["scipy"] = 0
+        _, s, _, discarded = utils.svd(
+            np.eye(2, dtype=dtype), cut=0.0, return_discarded_norm=True
+        )
+        assert calls["scipy"] == 3
+        assert np.allclose(s, 1.0) and 0.0 < discarded < 1e-11
+    calls["scipy"] = 0
+    _, s, _, discarded = utils.svd(1j * np.eye(2), cut=0.0, return_discarded_norm=True)
+    assert np.allclose(s, 1.0) and 0.0 < discarded < 1e-11
+
 
 def test_discarded_norm_survives_the_underflow_of_its_square():
     """A discarded singular value of 1e-170 has a square of zero in float64;
