@@ -731,7 +731,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         if temper_threshold < 0:
             raise ValueError("The tempering threshold cannot be negative.")
         if temper_chi_max is not None and temper_chi_max < 1:
-            raise ValueError("The bond dimension must be positive.")
+            raise ValueError("temper_chi_max, when given, must be positive.")
         if extra_centers < 0:
             raise ValueError("The number of extra centers cannot be negative.")
         self.problem = problem

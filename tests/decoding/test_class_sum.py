@@ -266,7 +266,7 @@ def test_tempered_class_masses_match_enumeration(seed, stages):
     for active in (restricted, list(range(problem.num_mechanisms))):
         exact = _enumerate_active_set(problem, syndrome, active)
         masses, info = active_set_class_masses(
-            problem, syndrome, active, chi_max=256, stages=stages
+            problem, syndrome, active, chi_max=1024, stages=stages
         )
         assert info["lost"] < 1e-20
         assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
@@ -409,7 +409,7 @@ def test_decoder_rejects_bad_input():
     )
     with pytest.raises(ValueError, match="no mechanisms"):
         ClassSumDecoder(empty)
-    with pytest.raises(ValueError, match="bond dimension"):
+    with pytest.raises(ValueError, match="temper_chi_max"):
         ClassSumDecoder(problem, temper_chi_max=0)
     with pytest.raises(ValueError, match="extra centers"):
         ClassSumDecoder(problem, extra_centers=-1)
