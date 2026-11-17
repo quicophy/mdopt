@@ -216,6 +216,12 @@ def test_parity_chain_rejects_bad_input():
         chain.apply_parity([], 4)
     with pytest.raises(ValueError, match="outside the chain"):
         chain.apply_parity([1, 3], 4)
+    with pytest.raises(ValueError, match="more than once"):
+        chain.apply_parity([0, 1, 1], 4)
+    with pytest.raises(ValueError, match="bond dimension"):
+        chain.apply_parity([0, 1], 0)
+    with pytest.raises(ValueError, match="two weights"):
+        chain.apply_parity([0, 1], 4, (1.0, 0.5, 0.25))
     chain.apply_parity([0, 1], 4)
     with pytest.raises(ArithmeticError, match="annihilated"):
         chain.apply_parity([0, 1], 4, (0.0, 1.0))
@@ -888,7 +894,7 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     for syndrome, expected in zip(syndromes, truth):
         flips, info = decoder.decode(syndrome)
         basis_flips, _ = basis.decode(syndrome)
-        basis_failures += not np.array_equal(basis_flips, expected)
+        basis_failures += int(not np.array_equal(basis_flips, expected))
         reference = (observables @ bposd.decode(syndrome)) % 2
         assert info["bposd_class"] == int(reference @ (1 << np.arange(12)))
         ours_wrong = not np.array_equal(flips, expected)
