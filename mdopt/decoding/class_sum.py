@@ -415,8 +415,8 @@ def problem_matrices(problem: DemProblem) -> Tuple[csr_matrix, csr_matrix]:
         matrix = csr_matrix(
             (data, (row_index, column_index)), shape=(len(rows), num_mech)
         )
-        # A mechanism listed twice in a row is summed by the constructor;
-        # over GF(2) the two entries cancel.
+        # The constructor sums the entries of a mechanism that one row
+        # lists more than once; over GF(2) every pair of them cancels.
         matrix.data %= 2
         matrix.eliminate_zeros()
         return matrix
@@ -527,8 +527,10 @@ def _register_masses(chain: ParityChain, num_obs: int) -> Tuple[np.ndarray, floa
             "lpr,rs,mps->lm", tensor, environment, tensor, optimize=True
         )
         scale = float(np.abs(environment).max())
-        if scale <= 0:
-            raise ArithmeticError("The state vanished during the contraction.")
+        if not np.isfinite(scale) or scale <= 0:
+            raise ArithmeticError(
+                "The state vanished or overflowed during the contraction."
+            )
         environment = environment / scale
         log_scale += float(np.log(scale))
     register = np.ones((1, 1))
@@ -594,13 +596,15 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     ------
     ValueError
         If the active set holds no solution of the syndrome, or if ``stages``
-        is not positive.
+        or ``chi_max`` is not positive.
     ArithmeticError
         If the state or every class mass vanishes during the contraction, or
         if no assignment of the active set has positive probability.
     """
     if stages < 1:
         raise ValueError("The number of tempering stages must be positive.")
+    if chi_max < 1:
+        raise ValueError("The bond dimension must be positive.")
     syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
     if check_matrix is None or observable_matrix is None:
         sparse_check, sparse_observable = problem_matrices(problem)
