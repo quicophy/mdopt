@@ -859,8 +859,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             integers, bit ``j`` is observable ``j``), ``best_candidate_class``
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
-            ``lost`` (discarded fraction of the squared norm in the
-            contraction that gave the verdict), ``tempered`` (whether that
+            ``lost`` (the discarded fraction of the squared norm, summed
+            over every truncation of the contraction that gave the verdict),
+            ``tempered`` (whether that
             was the tempered contraction), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
             ``candidates`` (number of logical classes reached). A tie for the
