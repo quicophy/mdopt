@@ -400,6 +400,39 @@ def test_a_mechanism_listed_twice_in_a_row_cancels():
     assert check.nnz == 2 and observables.nnz == 0
 
 
+@pytest.mark.parametrize("seed", range(4))
+def test_class_masses_under_real_truncation(seed):
+    """End to end at bond dimensions that truncate: the masses stay a
+    probability vector, the retained mass never exceeds the exact one and
+    falls short by about the reported loss, the masses are off by at most the
+    root of that loss, and everything converges to the enumeration."""
+    problem = _random_problem(
+        seed, num_detectors=6, num_mechanisms=17, num_observables=3
+    )
+    syndromes, _ = _sample_from_model(problem, 1, seed + 100)
+    active = list(range(problem.num_mechanisms))
+    exact = _enumerate_active_set(problem, syndromes[0], active)
+    target, log_exact = exact / exact.sum(), np.log(exact.sum())
+    truncated = 0
+    for chi_max in (2, 4, 8, 2048):
+        masses, info = active_set_class_masses(
+            problem, syndromes[0], active, chi_max=chi_max
+        )
+        assert np.all(masses >= 0.0) and np.isclose(masses.sum(), 1.0)
+        distance = 0.5 * np.abs(masses - target).sum()
+        deficit = log_exact - info["log_mass"]
+        assert deficit >= -1e-9
+        assert deficit <= 3.0 * info["lost"] + 1e-9
+        assert distance <= 2.0 * np.sqrt(info["lost"]) + 1e-9
+        if chi_max == 2048:
+            assert info["lost"] < 1e-20 and distance < 1e-10 and deficit < 1e-10
+        elif info["lost"] > 1e-3:
+            truncated += 1
+            assert info["bond"] <= chi_max + max(4, chi_max // 4)
+            assert deficit > 0.1 * info["lost"]
+    assert truncated >= 2
+
+
 def test_active_set_without_a_solution_raises():
     problem = DemProblem(
         probs=[0.1, 0.1, 0.1],
