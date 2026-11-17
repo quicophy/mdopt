@@ -641,6 +641,22 @@ def test_a_long_pinned_chain_does_not_underflow_the_readout():
         assert np.isclose(masses[1] / masses[0], 1.5)
         assert cert.bound < 1e-12
 
+    # The same chain behind a pair of mechanisms of probability 1e-170 that
+    # the syndrome forces to fire once: the final center is tiny, the class
+    # masses must still come back at an ordinary scale.
+    tiny = DemProblem(
+        probs=[0.6, 1e-170, 1e-170] + [0.5] * size,
+        detector_rows=[[1, 2]] + [[i + 3] for i in range(size)],
+        observable_rows=[[0]],
+        num_detectors=size + 1,
+        num_observables=1,
+    )
+    syndrome = np.zeros(size + 1, dtype=int)
+    syndrome[0] = 1
+    masses, flips = decode_dem(tiny, syndrome, cut=0.0)
+    assert np.array_equal(flips, [1])
+    assert np.isclose(masses[1] / masses[0], 1.5) and masses.max() > 0.1
+
 
 def test_negative_class_mass_raises_by_default_and_is_clamped_on_request(monkeypatch):
     """A class mass below -1e-8 of the peak is a truncation artifact. The
