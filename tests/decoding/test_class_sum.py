@@ -562,6 +562,34 @@ def test_widening_recontracts_a_superset_and_decides_from_it(monkeypatch):
     assert recontracted > 0
 
 
+def test_a_wider_sum_that_vanishes_keeps_the_first_verdict(monkeypatch):
+    """Widening must not abort a decode that already has a verdict."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated_then_vanished(syndrome, active, stages):
+        calls.append(list(active))
+        if len(calls) > 1:
+            raise ArithmeticError("vanished")
+        masses = np.zeros(1 << problem.num_observables)
+        masses[3] = 1.0
+        return masses, {"lost": 1.0, "free": 1}
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated_then_vanished)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    retried = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        _, info = decoder.decode(syndrome)
+        if len(calls) == 2:
+            retried += 1
+            assert info["widened"] and info["active"] == len(calls[0])
+            if info["bposd_class"] != 3:
+                assert info["predicted_class"] == 3
+    assert retried > 0
+
+
 def test_the_search_never_repeats_a_solve():
     """One syndrome has two distinct solves per observable; a wide search
     makes each of them at most once."""
