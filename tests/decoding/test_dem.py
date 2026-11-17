@@ -417,6 +417,8 @@ def test_empty_and_mechanism_free_models_decode_trivially():
     masses, flips = decode_dem(empty, np.array([0]))
     assert masses.tolist() == [1.0]
     assert flips.size == 0
+    _, _, trivial = decode_dem(empty, np.array([0]), return_certificate=True)
+    assert trivial.bound == 0.0 and trivial.final_norm == 1.0
     with pytest.raises(ValueError, match="fired"):
         decode_dem(empty, np.array([1]))
 
@@ -552,7 +554,7 @@ def test_dem_certificate_flags_a_collapsed_or_residue_contraction():
         # its size is reported for the caller to gate on.
         assert np.all(masses >= 0.0)
         assert cert.negativity >= 0.0
-    except ArithmeticError as error:
+    except DemDecodingError as error:
         cert = error.certificate
     assert cert.bound > 1.0
 
