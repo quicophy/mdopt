@@ -163,7 +163,12 @@ def svd(
                 # addition changed, and the discarded norm reported below has
                 # to account for it. It is measured, not assumed: next to a
                 # large entry the addition moves the entry by more than 1e-12.
-                perturbed = np.array(an, copy=True)
+                # At least float64 (complex stays complex): in float32 the
+                # jitter would vanish next to an entry of one, and an integer
+                # or boolean matrix could not hold it at all.
+                perturbed = np.array(
+                    an, dtype=np.result_type(an.dtype, np.float64), copy=True
+                )
                 diagonal = np.diag_indices(min(an.shape))
                 before = perturbed[diagonal].copy()
                 perturbed[diagonal] = before + 1e-12
