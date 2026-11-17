@@ -29,6 +29,11 @@ from typing import cast, Dict, FrozenSet, List, Optional, Tuple
 import numpy as np
 import stim
 
+from mdopt.decoding.decoding import (
+    LOGICAL_CONSTRAINT_GAIN,
+    _bp_site_marginals,
+    _marginalize_with_weights,
+)
 from mdopt.mps.canonical import CanonicalMPS
 from mdopt.mps.utils import create_custom_product_state
 from mdopt.optimizer.utils import (
@@ -266,7 +271,7 @@ def decode_dem(
         :class:`DemDecodingError`, an ``ArithmeticError`` that carries the
         certificate as its ``certificate`` attribute. The
         certificate's ``negativity`` is the most negative class mass as a
-        fraction of the peak (0 for an exact contraction).
+        fraction of the peak (0 for an exact contraction, up to round-off).
     negative_mass : str
         What to do with a class mass below -1e-8 of the peak, which only a
         truncation artifact can produce. ``"raise"`` (default) raises
@@ -401,7 +406,7 @@ def decode_dem(
             # Finalized like every other certificate: an exact contraction
             # of a state of norm one.
             trivial = TruncationCertificate()
-            trivial.finalize(1.0)
+            trivial.finalize(final_norm=1.0)
             return np.array([1.0]), np.zeros(0, dtype=int), trivial
         return np.array([1.0]), np.zeros(0, dtype=int)
 
@@ -434,8 +439,6 @@ def decode_dem(
     contracted = priors.copy()
     undo: List[Tuple[int, np.ndarray]] = []
     if prior_reweighting == "BP" and num_mech > 0:
-        from mdopt.decoding.decoding import _bp_site_marginals
-
         flip = priors[:, 1].copy()
         for i in pinned:
             flip[i] = 0.0  # forced to f_i = 0
@@ -525,11 +528,6 @@ def decode_dem(
     detector_strings = [
         _constraint_sites(row, offset) for row in problem.detector_rows if len(row) >= 2
     ]
-
-    from mdopt.decoding.decoding import (
-        LOGICAL_CONSTRAINT_GAIN,
-        _marginalize_with_weights,
-    )
 
     if observable_strings:
         mps = cast(
