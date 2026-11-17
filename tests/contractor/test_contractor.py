@@ -234,3 +234,42 @@ def test_mps_mpo_contract_records_the_center_move_truncation():
         discarded_norms=discarded,
     )
     assert np.isclose(max(discarded), tiny, rtol=1e-3, atol=0)
+
+
+def test_mps_mpo_contract_records_what_the_zip_up_truncates():
+    """The record holds one entry per SVD: the move of the center to the
+    start site, then the zip-up. For a two-site operator the zip-up is a
+    single SVD between isometries, so its discarded norm is exactly the
+    distance between the truncated and the exact result. A three-site
+    operator adds an intermediate SVD, which is recorded too."""
+    rng = np.random.default_rng(7)
+    state = rng.normal(size=2**5)
+    state /= np.linalg.norm(state)
+
+    def contract_at(chi_max, mpo, record):
+        mps = mps_from_dense(state, phys_dim=2, form="Right-canonical")
+        return mps_mpo_contract(
+            mps,
+            mpo,
+            1,
+            chi_max=chi_max,
+            cut=0.0,
+            renormalize=False,
+            inplace=False,
+            discarded_norms=record,
+        )
+
+    two_site = create_random_mpo(2, [3], phys_dim=2, which="normal", rng=rng)
+    exact_record: list = []
+    exact = contract_at(64, two_site, exact_record)
+    assert len(exact_record) == 2 and max(exact_record) < 1e-12
+    record: list = []
+    truncated = contract_at(2, two_site, record)
+    assert len(record) == 2 and record[0] < 1e-12 and record[1] > 1e-3
+    distance = np.linalg.norm(exact.dense(flatten=True) - truncated.dense(flatten=True))
+    assert np.isclose(record[1], distance, rtol=1e-9)
+
+    three_site = create_random_mpo(3, [3, 3], phys_dim=2, which="normal", rng=rng)
+    record = []
+    contract_at(2, three_site, record)
+    assert len(record) == 3 and record[-1] > 1e-3
