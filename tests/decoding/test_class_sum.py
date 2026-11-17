@@ -379,6 +379,47 @@ def test_a_truncated_mass_estimate_can_exceed_the_exact_mass():
     assert np.isclose(np.exp(info["log_mass"]), exact)
 
 
+def test_certain_mechanisms_are_decided_before_the_contraction():
+    """A mechanism of probability zero or one is a hard constraint. Left in
+    the chain, a truncation could remove every valid solution and raise on an
+    instance of positive probability; decided beforehand, the result is exact
+    at a large bond dimension and never raises at a small one."""
+    checked = impossible = 0
+    for seed in range(60):
+        base = _random_problem(
+            seed, num_detectors=5, num_mechanisms=11, num_observables=2
+        )
+        rng = np.random.default_rng(seed)
+        probs = np.array(base.probs)
+        certain = rng.choice(11, size=int(rng.integers(1, 4)), replace=False)
+        probs[certain] = rng.choice([0.0, 1.0], size=len(certain))
+        problem = DemProblem(
+            probs=list(probs),
+            detector_rows=base.detector_rows,
+            observable_rows=base.observable_rows,
+            num_detectors=5,
+            num_observables=2,
+        )
+        syndromes, _ = _sample_from_model(problem, 1, seed + 7)
+        active = list(range(11))
+        exact = _enumerate_active_set(problem, syndromes[0], active)
+        if exact.sum() == 0.0:
+            impossible += 1
+            with pytest.raises(ArithmeticError, match="positive probability"):
+                active_set_class_masses(problem, syndromes[0], active, chi_max=4)
+            continue
+        checked += 1
+        masses, info = active_set_class_masses(
+            problem, syndromes[0], active, chi_max=2048
+        )
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert info["free"] + info["rank"] == 11 - len(certain)
+        rough, _ = active_set_class_masses(problem, syndromes[0], active, chi_max=1)
+        assert np.all(rough >= 0.0) and np.isclose(rough.sum(), 1.0)
+    assert checked >= 40
+
+
 def test_active_set_without_a_solution_raises():
     problem = DemProblem(
         probs=[0.1, 0.1, 0.1],
