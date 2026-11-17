@@ -1102,3 +1102,28 @@ def test_move_orth_center_accepts_integer_and_boolean_tensors():
         back = moved.move_orth_center(0, renormalize=True)
         assert back.orth_center == 0
         assert list(back.bond_dimensions) == [1, 1, 1]
+
+
+def test_move_orth_center_takes_the_cutoff_of_its_caller():
+    """A bond with singular values (1, 1e-14): the default cutoff of the SVD
+    drops the small one, a caller that passes its own cutoff keeps it."""
+    center = np.zeros((1, 2, 2))
+    center[0, 0, 0], center[0, 1, 1] = 1.0, 1e-14
+    neighbor = np.eye(2).reshape(2, 2, 1)
+
+    def fresh():
+        return CanonicalMPS([center.copy(), neighbor.copy()], orth_center=0)
+
+    default = fresh().move_orth_center(1, renormalize=False)
+    assert default.tensors[1].shape[0] == 1
+    kept = fresh().move_orth_center(1, renormalize=False, cut=0.0)
+    assert kept.tensors[1].shape[0] == 2
+    assert np.allclose(kept.dense(flatten=True), fresh().dense(flatten=True), atol=0)
+    explicit = fresh().move_orth_center(1, renormalize=False, cut=1e-12)
+    assert explicit.tensors[1].shape[0] == 1
+    # The two-site branch (a neighbor that is not an isometry) honors it too.
+    skewed = CanonicalMPS([center.copy(), 2.0 * neighbor], orth_center=0)
+    assert skewed.move_orth_center(1, renormalize=False).tensors[1].shape[0] == 1
+    skewed = CanonicalMPS([center.copy(), 2.0 * neighbor], orth_center=0)
+    moved = skewed.move_orth_center(1, renormalize=False, cut=0.0)
+    assert moved.tensors[1].shape[0] == 2

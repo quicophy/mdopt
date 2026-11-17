@@ -363,6 +363,7 @@ def apply_constraints(
                 renormalize=False,
                 return_singular_values=False,
                 inplace=True,
+                cut=cut,
             )  # type: ignore
 
         # Contract MPO string into the MPS (uses contractor that preserves dtype & avoids diag())

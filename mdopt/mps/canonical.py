@@ -349,6 +349,7 @@ class CanonicalMPS:
         return_singular_values: bool = False,
         renormalize: bool = True,
         inplace: bool = False,
+        cut: Optional[float] = None,
     ) -> Union["CanonicalMPS", Tuple["CanonicalMPS", List[np.ndarray]]]:
         """
         Moves the orthogonality center from its current position to ``final_pos``.
@@ -370,6 +371,11 @@ class CanonicalMPS:
             instead of deep-copying them first (a leftward move builds a new
             object either way and leaves this instance unmoved). The returned
             object is the one to use in both cases.
+        cut : Optional[float]
+            Singular values below this are discarded by the SVDs of the move.
+            ``None`` keeps the default of :func:`mdopt.utils.utils.svd`. A
+            contraction that sets its own cutoff passes it here, so that the
+            moves between its steps do not discard what its steps keep.
 
         Raises
         ------
@@ -385,6 +391,8 @@ class CanonicalMPS:
             )
 
         singular_values: List[np.ndarray] = []
+        # ``None`` is the default cutoff of ``svd`` and ``split_two_site_tensor``.
+        cutoff = 1e-12 if cut is None else float(cut)
 
         if self.orth_center is None:
             self.orth_center = self.check_orth_center()  # type: ignore
@@ -446,6 +454,7 @@ class CanonicalMPS:
                         center.reshape(chi_l * phys, chi_r),
                         chi_max=self.chi_max,
                         renormalize=renormalize,
+                        cut=cutoff,
                     )
                     singular_values.append(s_bond)
                     keep = len(s_bond)
@@ -463,6 +472,7 @@ class CanonicalMPS:
                 renormalize=renormalize,
                 strategy="svd",
                 return_truncation_error=True,
+                cut=cutoff,
             )
             singular_values.append(singular_values_bond)
             mps.tensors[i] = u_l

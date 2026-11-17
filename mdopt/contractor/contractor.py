@@ -354,7 +354,7 @@ def mps_mpo_contract(
         # caller asked for inplace, in which case it handed ownership over).
         mps = cast(
             CanonicalMPS,
-            mps.move_orth_center(start_site, renormalize=False, inplace=True),
+            mps.move_orth_center(start_site, renormalize=False, inplace=True, cut=cut),
         )
 
     for i, tensor in enumerate(mpo):

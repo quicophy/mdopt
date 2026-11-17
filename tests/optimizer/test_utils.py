@@ -469,3 +469,29 @@ def test_optimizer_utils_apply_constraints_rejects_unknown_strategy():
             logical_tensors=[],
             strategy="unsupported",
         )
+
+
+def test_apply_constraints_passes_its_cutoff_to_the_center_moves(monkeypatch):
+    """The moves between constraints must not discard what the constraints
+    keep: both the sweep and the contractor forward ``cut``."""
+    from mdopt.mps.canonical import CanonicalMPS
+    from mdopt.mps.utils import create_custom_product_state
+
+    seen = []
+    original = CanonicalMPS.move_orth_center
+
+    def recording(self, *args, **kwargs):
+        seen.append(kwargs.get("cut", "missing"))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(CanonicalMPS, "move_orth_center", recording)
+    state = create_custom_product_state("+++++", form="Left-canonical")
+    apply_constraints(
+        state,
+        [[[2], [3], [], [4]], [[0], [1], [], [2]]],
+        [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT],
+        cut=0.0,
+        renormalize=False,
+        silent=True,
+    )
+    assert seen and all(cut == 0.0 for cut in seen)
