@@ -66,6 +66,8 @@ it ahead: on [[144, 12, 12]] the one-pass contraction alone does worse than
 picking the most likely single candidate.
 """
 
+# pylint: disable=too-many-lines
+
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
