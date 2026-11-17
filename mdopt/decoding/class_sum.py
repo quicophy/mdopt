@@ -168,9 +168,12 @@ class ParityChain:
             peak = float(np.abs(tensor).max())
             if peak == 0 or not np.isfinite(peak):
                 raise ArithmeticError("The product state has a zero or infinite site.")
-            norm = peak * float(np.linalg.norm(tensor / peak))
-            self.tensors.append(tensor / norm)
-            self.log_norm += float(np.log(norm))
+            # The norm itself is never formed: for entries near the top of
+            # float64 it would be infinite while its logarithm is not.
+            scaled = tensor / peak
+            scaled_norm = float(np.linalg.norm(scaled))
+            self.tensors.append(scaled / scaled_norm)
+            self.log_norm += float(np.log(peak) + np.log(scaled_norm))
 
     def __len__(self) -> int:
         return len(self.tensors)
@@ -182,9 +185,10 @@ class ParityChain:
         peak = float(np.abs(center).max()) if center.size else 0.0
         if peak == 0 or not np.isfinite(peak):
             raise ArithmeticError("The constraint annihilated the state.")
-        norm = peak * float(np.linalg.norm(center / peak))
-        self.tensors[self.center] = center / norm
-        self.log_norm += float(np.log(norm))
+        scaled = center / peak
+        scaled_norm = float(np.linalg.norm(scaled))
+        self.tensors[self.center] = scaled / scaled_norm
+        self.log_norm += float(np.log(peak) + np.log(scaled_norm))
 
     def _orthogonalize_left(self, site: int) -> None:
         """Make ``site`` left-canonical and push the remainder to its right."""
