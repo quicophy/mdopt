@@ -940,7 +940,9 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     (class_masses, info)
         ``class_masses`` as in :func:`active_set_class_masses`. ``info`` holds
         ``log_mass`` (logarithm of the retained probability that the syndrome
-        is produced by mechanisms of the active set alone), ``pruned`` (the
+        is produced by mechanisms of the active set alone; pruning only
+        drops non-negative terms of the sum, so unlike the SVD estimate it
+        never exceeds the exact value), ``pruned`` (the
         largest fraction of the ranking weight discarded at one step: an
         estimate of the loss, not a bound), ``pruned_states`` (the number of
         states removed; zero means the result is exact), ``states`` (the

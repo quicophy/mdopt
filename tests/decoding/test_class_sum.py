@@ -756,6 +756,9 @@ def test_basis_truncation_prunes_and_reports_it():
         assert info["states"] <= 8
         assert np.isclose(few.sum(), 1.0) and (few >= 0).all()
         assert 0.0 <= info["pruned"] <= 1.0
+        # Pruning drops non-negative terms: the retained mass is a lower
+        # bound on the exact one.
+        assert info["log_mass"] <= exact["log_mass"] + 1e-12
         pruned_once = pruned_once or info["pruned"] > 0
         more, _ = basis_truncated_class_masses(
             problem, syndrome, active, max_states=512
