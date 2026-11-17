@@ -166,6 +166,10 @@ def test_parity_chain_holds_a_product_whose_norm_is_outside_float64():
     assert np.isclose(chain.log_norm, 1500 * np.log(2.0))
     tiny = ParityChain([np.array([1e-200, 1e-200])] * 40)
     assert np.isclose(tiny.log_norm, 40 * np.log(np.sqrt(2.0) * 1e-200))
+    # Entries near the top of float64: the norm is infinite, its log is not.
+    huge = ParityChain([np.array([1.5e308, 1.5e308])])
+    assert np.isclose(huge.log_norm, np.log(1.5e308) + 0.5 * np.log(2.0))
+    assert np.allclose(huge.tensors[0].ravel(), np.sqrt(0.5))
     with pytest.raises(ArithmeticError):
         ParityChain([np.ones(2), np.zeros(2)])
 
