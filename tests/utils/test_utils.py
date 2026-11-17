@@ -798,6 +798,17 @@ def test_qr_truncation_error_keeps_its_meaning_and_the_discarded_norm_is_separat
     assert discarded == 0.0
     _, _, discarded = qr(mat, chi_max=1, return_discarded_norm=True)
     assert np.isclose(discarded, 3.0)
+    # The two requests share one return slot, so asking for both is an error.
+    for decompose in (svd, qr):
+        with pytest.raises(ValueError, match="one return slot"):
+            decompose(mat, return_truncation_error=True, return_discarded_norm=True)
+    with pytest.raises(ValueError, match="one return slot"):
+        split_two_site_tensor(
+            mat.reshape((1, 2, 2, 1)),
+            strategy="qr",
+            return_truncation_error=True,
+            return_discarded_norm=True,
+        )
 
 
 def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
