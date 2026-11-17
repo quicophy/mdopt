@@ -9,7 +9,8 @@ where v stands for "virtual", p -- for "physical",
 and L, R, U, D stand for "left", "right", "up", "down".
 """
 
-from typing import List, Optional, cast
+import math
+from typing import Iterable, List, Optional, cast
 import numpy as np
 from tqdm import tqdm
 from matrex import msro
@@ -213,6 +214,20 @@ class ConstraintString:
         return mpo
 
 
+def _sum_of_positive(terms: Iterable[float]) -> float:
+    """Sum of non-negative terms without losing the small ones.
+
+    A plain running sum absorbs a term far below the total, which would make
+    a bound built from thousands of terms too small. ``math.fsum`` is exact
+    up to one rounding; it raises on an intermediate overflow, which for
+    non-negative terms means the sum is infinite.
+    """
+    try:
+        return float(math.fsum(float(term) for term in terms))
+    except OverflowError:
+        return float("inf")
+
+
 class TruncationCertificate:
     """A rigorous bound on the relative truncation error of a constraint sweep.
 
@@ -315,8 +330,8 @@ class TruncationCertificate:
         exponential alone would overflow stays finite, and a zero loss is
         skipped rather than multiplied by an infinite scale."""
         with np.errstate(over="ignore", divide="ignore"):
-            return float(
-                sum(np.exp(np.log(d) + log_s) for d, log_s, _ in self.terms if d > 0)
+            return _sum_of_positive(
+                np.exp(np.log(d) + log_s) for d, log_s, _ in self.terms if d > 0
             )
 
     def finalize(
@@ -346,12 +361,10 @@ class TruncationCertificate:
         # log final norm): a loss of 1e-310 against a final norm of 1e-310 is
         # one, not infinity times a tiny number.
         with np.errstate(over="ignore", invalid="ignore", divide="ignore"):
-            self.bound = float(
-                sum(
-                    np.exp(np.log(d) + self.log_gain - log_g + log_s - log_final)
-                    for d, log_s, log_g in self.terms
-                    if d > 0
-                )
+            self.bound = _sum_of_positive(
+                np.exp(np.log(d) + self.log_gain - log_g + log_s - log_final)
+                for d, log_s, log_g in self.terms
+                if d > 0
             )
         if np.isnan(self.bound):
             self.bound = float("inf")
