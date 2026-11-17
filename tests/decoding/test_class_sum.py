@@ -367,6 +367,8 @@ def test_active_set_without_a_solution_raises():
         active_set_class_masses(problem, np.array([1, 1]), [0])
     with pytest.raises(ValueError, match="outside the model"):
         active_set_class_masses(problem, np.array([1, 1]), [0, 5])
+    with pytest.raises(ValueError, match="bond dimension"):
+        active_set_class_masses(problem, np.array([1, 1]), [1], chi_max=0)
     masses, info = active_set_class_masses(problem, np.array([1, 1]), [1])
     assert np.allclose(masses, [1.0, 0.0])
     assert info["free"] == 0 and info["rank"] == 1
@@ -470,6 +472,36 @@ def test_decoder_matches_maximum_likelihood_on_a_small_surface_code():
         assert info["lost"] < 1e-6
         assert int(flips @ (1 << np.arange(flips.size))) == info["predicted_class"]
     assert agree >= 78
+
+
+def test_a_tempered_pass_that_fails_keeps_the_one_pass_verdict(monkeypatch):
+    """The tempered contraction can underflow. The decode then stands on the
+    first pass: same verdict, margin and ``lost``, and ``tempered`` is off."""
+    problem = _random_problem(4, num_observables=2)
+    decoder = ClassSumDecoder(problem, temper_stages=4)
+    calls = []
+
+    def truncated_then_failing(syndrome, active, stages):
+        calls.append(stages)
+        if stages > 1:
+            raise ArithmeticError("underflow")
+        return np.array([0.1, 0.2, 0.6, 0.1]), {"lost": 0.5, "free": 1}
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated_then_failing)
+    syndromes, _ = _sample_from_model(problem, 60, seed=7)
+    decoded = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        flips, info = decoder.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        decoded += 1
+        assert calls == [1, 4]
+        assert not info["tempered"]
+        assert info["predicted_class"] == 2
+        assert int(flips @ (1 << np.arange(2))) == 2
+        assert np.isclose(info["margin"], 0.4) and info["lost"] == 0.5
+    assert decoded > 0
 
 
 def test_decoder_tempers_only_when_the_first_pass_truncated():
