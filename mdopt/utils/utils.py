@@ -36,8 +36,8 @@ def _stable_norm(values: np.ndarray) -> float:
     a discarded singular value of 1e-170 comes back as a norm of zero; the
     entries are scaled by their maximum before squaring instead.
     """
-    # The magnitude is taken before the cast to a real dtype, so a complex
-    # residual keeps its imaginary part.
+    # The magnitude is taken before the cast to a real dtype, so the
+    # imaginary component of a complex residual contributes to it.
     values = np.abs(np.asarray(values)).astype(float).ravel()
     if values.size == 0:
         return 0.0
@@ -104,6 +104,11 @@ def svd(
         raise ValueError(
             f"A valid matrix must have 2 dimensions while the one given has {mat.ndim}."
         )
+    if return_truncation_error and return_discarded_norm:
+        raise ValueError(
+            "return_truncation_error and return_discarded_norm share one return "
+            "slot; ask for one of them."
+        )
 
     # Try backend SVD first (GPU-friendly), then fall back to SciPy variants.
     last_exception: Optional[Exception] = None
@@ -153,12 +158,16 @@ def svd(
                 )
             else:
                 an = _to_numpy(a)
-                perturbed = an + np.eye(an.shape[0], an.shape[1]) * 1e-12
-                # The decomposed matrix differs from the input by this much in
-                # the Frobenius norm; the discarded norm reported below has to
-                # account for it. It is measured, not assumed: next to a large
-                # entry the addition moves the entry by more than 1e-12.
-                perturbation_norm = _stable_norm(perturbed - an)
+                # Jitter on the diagonal of a copy. The decomposed matrix
+                # differs from the input by the Frobenius norm of what the
+                # addition changed, and the discarded norm reported below has
+                # to account for it. It is measured, not assumed: next to a
+                # large entry the addition moves the entry by more than 1e-12.
+                perturbed = np.array(an, copy=True)
+                diagonal = np.diag_indices(min(an.shape))
+                before = perturbed[diagonal].copy()
+                perturbed[diagonal] = before + 1e-12
+                perturbation_norm = _stable_norm(perturbed[diagonal] - before)
                 u_l, s, v_h = scipy.linalg.svd(
                     perturbed,
                     full_matrices=False,
@@ -263,6 +272,11 @@ def qr(
     The truncation is based on the magnitudes of the absolute values
     of the diagonal elements of R.
     """
+    if return_truncation_error and return_discarded_norm:
+        raise ValueError(
+            "return_truncation_error and return_discarded_norm share one return "
+            "slot; ask for one of them."
+        )
 
     if len(mat.shape) != 2:
         raise ValueError(f"Input matrix must have 2 dimensions, got {len(mat.shape)}.")
