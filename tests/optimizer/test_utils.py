@@ -473,19 +473,28 @@ def test_optimizer_utils_apply_constraints_rejects_unknown_strategy():
 
 def test_apply_constraints_passes_its_cutoff_to_the_center_moves(monkeypatch):
     """The moves between constraints must not discard what the constraints
-    keep: both the sweep and the contractor forward ``cut``."""
+    keep. There are two forwarding sites: the sweep itself, when it has to
+    find the center of a state that does not know it, and the contractor."""
     from mdopt.mps.canonical import CanonicalMPS
-    from mdopt.mps.utils import create_custom_product_state
+    from mdopt.mps.utils import mps_from_dense
 
-    seen = []
+    seen = {"sweep": [], "contractor": []}
     original = CanonicalMPS.move_orth_center
 
     def recording(self, *args, **kwargs):
-        seen.append(kwargs.get("cut", "missing"))
+        # The sweep names the target, the contractor passes it by position.
+        caller = "sweep" if "final_pos" in kwargs else "contractor"
+        seen[caller].append(kwargs.get("cut", "missing"))
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(CanonicalMPS, "move_orth_center", recording)
-    state = create_custom_product_state("+++++", form="Left-canonical")
+    rng = np.random.default_rng(3)
+    vector = rng.normal(size=2**5)
+    vector /= np.linalg.norm(vector)
+    # An entangled state whose center, site 0, is not recorded: the sweep
+    # has to find it and move it to the first constraint's start, site 2.
+    state = mps_from_dense(vector, phys_dim=2, form="Right-canonical")
+    state.orth_center = None
     apply_constraints(
         state,
         [[[2], [3], [], [4]], [[0], [1], [], [2]]],
@@ -494,4 +503,6 @@ def test_apply_constraints_passes_its_cutoff_to_the_center_moves(monkeypatch):
         renormalize=False,
         silent=True,
     )
-    assert seen and all(cut == 0.0 for cut in seen)
+    for caller, cuts in seen.items():
+        assert cuts, caller
+        assert all(cut == 0.0 for cut in cuts), caller
