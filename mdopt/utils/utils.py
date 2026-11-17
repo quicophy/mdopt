@@ -199,7 +199,8 @@ def svd(
     residual = s[max_num:]
     discarded_norm = _stable_norm(residual)
     with np.errstate(over="ignore"):
-        # A NumPy square overflows to inf; a Python float would raise.
+        # A NumPy square overflows to inf, with a warning that is suppressed
+        # here; ``float ** 2`` would raise OverflowError instead.
         truncation_error = float(np.square(np.float64(discarded_norm)))
     u_l = u_l[:, :max_num]
     s = s[:max_num]
@@ -465,7 +466,7 @@ def split_two_site_tensor(
     mat = tensor.reshape((chi_v_l * phys_l, phys_r * chi_v_r))
 
     if strategy == "svd":
-        u_l, singular_values, v_h, truncation_error = svd(
+        u_l, singular_values, v_h, error_or_discarded = svd(
             mat=mat,
             cut=cut,
             chi_max=chi_max,
@@ -478,11 +479,11 @@ def split_two_site_tensor(
         u_l = u_l.reshape((chi_v_l, phys_l, chi_v_cut))
         v_r = v_h.reshape((chi_v_cut, phys_r, chi_v_r))
         if return_truncation_error or return_discarded_norm:
-            return u_l, singular_values, v_r, truncation_error  # type: ignore[return-value]
+            return u_l, singular_values, v_r, error_or_discarded  # type: ignore[return-value]
         return u_l, singular_values, v_r
 
     # strategy == "qr"
-    q_l, r_r, truncation_error = qr(
+    q_l, r_r, error_or_discarded = qr(
         mat=mat,
         cut=cut,
         chi_max=chi_max,
@@ -494,7 +495,7 @@ def split_two_site_tensor(
     q_l = q_l.reshape((chi_v_l, phys_l, chi_v_cut))
     r_r = r_r.reshape((chi_v_cut, phys_r, chi_v_r))
     if return_truncation_error or return_discarded_norm:
-        return q_l, r_r, truncation_error, None
+        return q_l, r_r, error_or_discarded, None
     return q_l, r_r, None, None
 
 

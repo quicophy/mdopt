@@ -398,7 +398,11 @@ def decode_dem(
     # would need at least one site.
     if num_mech == 0 and num_obs == 0:
         if return_certificate:
-            return np.array([1.0]), np.zeros(0, dtype=int), TruncationCertificate()
+            # Finalized like every other certificate: an exact contraction
+            # of a state of norm one.
+            trivial = TruncationCertificate()
+            trivial.finalize(1.0)
+            return np.array([1.0]), np.zeros(0, dtype=int), trivial
         return np.array([1.0]), np.zeros(0, dtype=int)
 
     # An observable no mechanism touches is deterministically unflipped: it

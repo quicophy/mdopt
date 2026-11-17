@@ -2272,9 +2272,13 @@ def _marginalize_with_weights(
         covered.extend([first] if weight.ndim == 1 else [first, first + 1])
     expected = list(range(num_logicals, len(tensors)))
     if sorted(covered) != expected:
+        wanted = (
+            f"each error site {expected[0]}..{expected[-1]} exactly once"
+            if expected
+            else "no site, since the chain has no error sites"
+        )
         raise ValueError(
-            f"The undo weights must cover each error site {expected[0] if expected else 'none'}"
-            f"..{expected[-1] if expected else ''} exactly once, given sites {sorted(covered)}."
+            f"The undo weights must cover {wanted}, given sites {sorted(covered)}."
         )
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
     # ``right`` is a single column throughout, so it is contracted into each
