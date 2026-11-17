@@ -22,7 +22,9 @@ For one syndrome the decoder goes through four steps.
    of the free mechanisms in its reduced row disagree. No hard syndrome
    constraint is left, so every configuration the truncated state holds is
    a valid solution and truncation cannot project the state to nothing. It
-   still makes the masses approximate, in either direction.
+   still makes the masses approximate, in either direction. A mechanism of
+   probability exactly zero or one would bring a hard constraint back; such
+   mechanisms are decided exactly beforehand and never enter the chain.
 4. **Class sum.** An MPS over one register site per observable followed by
    one site per free mechanism holds the square roots of the probabilities.
    Each pivot is a soft parity factor, each observable a hard parity with its
@@ -633,10 +635,31 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
     num_obs = problem.num_observables
     probs = np.asarray(problem.probs, dtype=float)
-    columns = list(dict.fromkeys(int(i) for i in active))
-    if any(i < 0 or i >= problem.num_mechanisms for i in columns):
+    named = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in named):
         raise ValueError("The active set names a mechanism outside the model.")
-    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, columns)
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, named)
+    # A mechanism of probability exactly zero or one is decided before any
+    # contraction: it is taken out of the active set, and one that certainly
+    # fires moves its detectors and observables into the syndrome and the
+    # class. Left in, its pivot factor would be a hard constraint again, and
+    # a truncation could then remove every valid solution.
+    columns = [i for i in named if 0.0 < probs[i] < 1.0]
+    forced_class = 0
+    if len(columns) < len(named):
+        reduced = syndrome.copy()
+        for i in named:
+            if probs[i] >= 1.0:
+                reduced ^= check_matrix[:, i]
+                forced_class ^= sum(
+                    int(observable_matrix[j, i]) << j for j in range(num_obs)
+                )
+        try:
+            kernel = _kernel_picture(check_matrix, observable_matrix, reduced, columns)
+        except ValueError as error:
+            raise ArithmeticError(
+                "No assignment of the active set has positive probability."
+            ) from error
     info: Dict[str, Any] = {"free": len(kernel.free), "rank": len(kernel.pivots)}
 
     # Probability of each pivot as a function of the parity of its support:
@@ -647,9 +670,10 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         np.stack([pivot_probs, 1 - pivot_probs], axis=1),
         np.stack([1 - pivot_probs, pivot_probs], axis=1),
     )
-    # Every mechanism outside the active set is off.
+    # Every mechanism outside the active set is off. The certain ones of
+    # the active set contribute a factor of one.
     inactive = np.ones(problem.num_mechanisms, dtype=bool)
-    inactive[columns] = False
+    inactive[named] = False
     with np.errstate(divide="ignore"):
         log_scale = float(np.sum(np.log1p(-probs[inactive])))
         # A pivot without free support takes its base value whatever the
@@ -718,7 +742,7 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
 
     relative, log_environment = _register_masses(chain, num_obs)
     masses = np.empty_like(relative)
-    masses[np.arange(relative.size) ^ kernel.base_class] = relative
+    masses[np.arange(relative.size) ^ kernel.base_class ^ forced_class] = relative
     total = float(masses.sum())
     if not np.isfinite(total) or total <= 0:
         raise ArithmeticError("Every class mass vanished during the contraction.")
