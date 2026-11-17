@@ -924,6 +924,24 @@ def test_basis_truncation_reports_the_removal_of_a_blocked_state():
     assert info["pruned_states"] == 1 and info["pruned"] > 0.0
 
 
+def test_a_tiny_pruned_share_is_reported_as_it_is():
+    """A share of 1e-80 must not round to zero: the decoder compares it with
+    ``temper_threshold``, which a caller may set far below double precision
+    of one."""
+    problem = DemProblem(
+        probs=[1e-100, 1e-20, 0.5],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    _, info = basis_truncated_class_masses(
+        problem, np.ones(1, dtype=np.uint8), [0, 1, 2], max_states=1
+    )
+    assert info["pruned_states"] > 0
+    assert 1e-90 < info["pruned"] < 1e-60
+
+
 def test_decoder_with_basis_truncation_matches_maximum_likelihood():
     """The decoder option agrees with the full-chain reference and the SVD sum."""
     problem = _small_surface_problem(0.02)

@@ -913,10 +913,17 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
                 for key, state in new.items()
             ]
             kept = heapq.nlargest(max_states, scored)
+            kept_keys = {key for _, _, key in kept}
             best = max(score for _, score, _ in scored)
-            everything = sum(math.exp(score - best) for _, score, _ in scored)
-            retained = sum(math.exp(score - best) for _, score, _ in kept)
-            pruned = max(pruned, 0.0, 1.0 - retained / everything)
+            # The discarded weights are summed directly: one minus the
+            # retained share would round a loss of 1e-80 to zero.
+            everything = math.fsum(math.exp(score - best) for _, score, _ in scored)
+            discarded = math.fsum(
+                math.exp(score - best)
+                for _, score, key in scored
+                if key not in kept_keys
+            )
+            pruned = max(pruned, discarded / everything)
             removed += len(scored) - max_states
             new = {key: new[key] for _, _, key in kept}
         states = new
