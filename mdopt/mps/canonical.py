@@ -42,12 +42,17 @@ Hereafter, saying a MPS is in a canonical form will mean one of the following.
 
 from functools import reduce
 from copy import deepcopy
+import inspect
 from typing import Optional, Literal, Iterable, Tuple, Union, List, cast
 import numpy as np
 from opt_einsum import contract
 
 import mdopt
 from mdopt.utils.utils import svd, kron_tensors, split_two_site_tensor
+
+#: The cutoff ``svd`` uses when none is passed, read from its signature so
+#: that a move without a cutoff keeps following that default.
+_SVD_DEFAULT_CUT = float(inspect.signature(svd).parameters["cut"].default)
 
 
 class CanonicalMPS:
@@ -391,8 +396,7 @@ class CanonicalMPS:
             )
 
         singular_values: List[np.ndarray] = []
-        # ``None`` is the default cutoff of ``svd`` and ``split_two_site_tensor``.
-        cutoff = 1e-12 if cut is None else float(cut)
+        cutoff = _SVD_DEFAULT_CUT if cut is None else float(cut)
 
         if self.orth_center is None:
             self.orth_center = self.check_orth_center()  # type: ignore

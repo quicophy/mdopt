@@ -1118,7 +1118,10 @@ def test_move_orth_center_takes_the_cutoff_of_its_caller():
     assert default.tensors[1].shape[0] == 1
     kept = fresh().move_orth_center(1, renormalize=False, cut=0.0)
     assert kept.tensors[1].shape[0] == 2
-    assert np.allclose(kept.dense(flatten=True), fresh().dense(flatten=True), atol=0)
+    # The component of 1e-14 is still there, to a relative accuracy.
+    assert np.allclose(
+        kept.dense(flatten=True), fresh().dense(flatten=True), rtol=1e-9, atol=1e-20
+    )
     explicit = fresh().move_orth_center(1, renormalize=False, cut=1e-12)
     assert explicit.tensors[1].shape[0] == 1
     # The two-site branch (a neighbor that is not an isometry) honors it too.
