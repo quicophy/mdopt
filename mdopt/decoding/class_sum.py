@@ -257,22 +257,38 @@ class ParityChain:
         Parameters
         ----------
         sites : Sequence[int]
-            The sites whose parity enters the factor.
+            The sites whose parity enters the factor, each named once.
         chi_max : int
             The bond dimension to compress to.
         weights : Union[Sequence[float], np.ndarray]
             The factor for even and for odd parity.
+
+        Raises
+        ------
+        ValueError
+            If no site is given, a site is named twice or lies outside the
+            chain, ``chi_max`` is not positive, or ``weights`` does not hold
+            two numbers.
         """
-        support = {int(site) for site in sites}
+        listed = [int(site) for site in sites]
+        support = set(listed)
         if not support:
             raise ValueError("A parity factor needs at least one site.")
+        if len(support) != len(listed):
+            # Over GF(2) a site named twice cancels; silently keeping it once
+            # would apply a different factor from the one asked for.
+            raise ValueError("A parity factor names a site more than once.")
+        if chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
+        weights = np.asarray(weights, dtype=float)
+        if weights.shape != (2,):
+            raise ValueError("A parity factor has two weights: even and odd.")
         first, last = min(support), max(support)
         if first < 0 or last >= len(self.tensors):
             raise ValueError("A parity factor acts on a site outside the chain.")
         self.move_center(first)
         if first == last:
-            factor = np.asarray(weights, dtype=float)[None, :, None]
-            self.tensors[first] = self.tensors[first] * factor
+            self.tensors[first] = self.tensors[first] * weights[None, :, None]
             self._normalize()
             return
         for site in range(first, last + 1):
@@ -933,8 +949,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             integers, bit ``j`` is observable ``j``), ``best_candidate_class``
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
-            ``lost`` (discarded fraction of the squared norm in the
-            contraction that gave the verdict), ``tempered`` (whether that
+            ``lost`` (the discarded fraction of the squared norm, summed
+            over every truncation of the contraction that gave the verdict),
+            ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the candidate
             search was widened), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
