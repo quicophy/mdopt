@@ -2506,6 +2506,22 @@ def test_a_center_too_small_to_square_does_not_collapse_the_certificate():
     assert np.isfinite(certificate.log_scale)
 
 
+def test_the_certificate_sums_small_terms_without_losing_them():
+    """A running sum absorbs terms far below the total, which would make the
+    bound too small; an overflowing sum of non-negative terms is infinite."""
+    from mdopt.optimizer.utils import _sum_of_positive
+
+    terms = [1.0] + [1e-17] * 1000
+    running = 0.0
+    for term in terms:
+        running += term
+    assert running == 1.0
+    assert _sum_of_positive(terms) == 1.0 + 1e-14
+    assert _sum_of_positive([1e308, 1e308]) == float("inf")
+    assert _sum_of_positive([]) == 0.0
+    assert _sum_of_positive([float("inf"), 1.0]) == float("inf")
+
+
 def test_logical_constraint_gain_is_the_dense_mpo_norm():
     """The certificate records sqrt(2) as the operator norm of every logical
     constraint and one for every check constraint; both numbers are pinned
