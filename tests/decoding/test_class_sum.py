@@ -171,6 +171,39 @@ def test_parity_chain_holds_a_product_whose_norm_is_outside_float64():
         ParityChain([np.ones(2), np.zeros(2)])
 
 
+def test_parity_chain_normalizes_amplitudes_too_small_to_square():
+    chain = ParityChain([np.ones(2)])
+    chain.apply_parity([0], 4, (1e-200, 1e-200))
+    assert np.isclose(chain.log_norm, np.log(np.sqrt(2.0) * 1e-200))
+
+
+def test_an_active_set_of_probability_zero_is_rejected():
+    """An inactive mechanism that certainly fires, or a pivot that must take
+    a value of probability zero: there is nothing to normalize."""
+    certain = DemProblem(
+        probs=[0.2, 1.0],
+        detector_rows=[[0]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ArithmeticError, match="positive probability"):
+        active_set_class_masses(certain, np.ones(1, dtype=np.uint8), [0], chi_max=4)
+    impossible = DemProblem(
+        probs=[0.0],
+        detector_rows=[[0]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ArithmeticError, match="positive probability"):
+        active_set_class_masses(impossible, np.ones(1, dtype=np.uint8), [0], chi_max=4)
+    masses, info = active_set_class_masses(
+        impossible, np.zeros(1, dtype=np.uint8), [0], chi_max=4
+    )
+    assert np.allclose(masses, [1.0, 0.0]) and abs(info["log_mass"]) < 1e-12
+
+
 def test_parity_chain_rejects_bad_input():
     with pytest.raises(ValueError, match="at least one site"):
         ParityChain([])
