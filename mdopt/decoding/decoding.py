@@ -2432,7 +2432,10 @@ def decode_css(
         ``certificate.survival`` the checks kept. A bound above one means the
         posterior may be truncation residue; on the [[18,2]] bivariate
         bicycle code no verdict with a bound below 100 was wrong and every
-        sign-flipped shot had a bound above 1e8.
+        sign-flipped shot had a bound above 1e8. A trivial error answered
+        by ``decode_custom``'s no-error fast path comes with the trivial
+        certificate (see there): its survival of one is not the probability
+        of the syndrome.
     prior_reweighting : Optional[str]
         ``"BP"`` replaces the error prior by the belief-propagation posterior
         marginals before the contraction and undoes the change exactly at
@@ -2647,6 +2650,12 @@ def decode_custom(
         only controls whether it is returned. On the [[18,2]] bivariate
         bicycle code no verdict with a bound below 100 was wrong and every
         sign-flipped shot had a bound above 1e8.
+        The no-error fast path (a trivial error at ``bias_prob < 0.5``)
+        contracts nothing and returns the trivial certificate: bound 0,
+        survival 1.0 and no terms. That survival is a placeholder, not the
+        survival of the shot (the full pipeline gives 0.69 for the Steane
+        code at ``bias_prob = 0.1``), so leave these shots out when
+        survivals are averaged or thresholded across shots.
     prior_reweighting : Optional[str]
         ``"BP"`` replaces the error prior by the belief-propagation posterior
         marginals before the contraction and undoes the change exactly at
