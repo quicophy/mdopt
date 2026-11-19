@@ -382,7 +382,9 @@ class CanonicalMPS:
         ValueError
             If ``final_pos`` does not match the MPS length.
         ValueError
-            If ``self.orth_center`` is still ``None`` after the search.
+            If ``self.orth_center`` is ``None`` and the isometry check does
+            not single out one center, as for a chain that is not in a
+            canonical form. ``self.orth_center`` is then left unset.
         """
         if final_pos not in range(self.num_sites):
             raise ValueError(
@@ -393,7 +395,20 @@ class CanonicalMPS:
         singular_values: List[np.ndarray] = []
 
         if self.orth_center is None:
-            self.orth_center = self.check_orth_center()  # type: ignore
+            # The search returns an index for the boundary cases and the list
+            # of candidate sites otherwise: one site for a center in the
+            # bulk, none or several when the chain is not in a canonical form
+            # with a single center.
+            found = self.check_orth_center()
+            if isinstance(found, list):
+                if len(found) != 1:
+                    raise ValueError(
+                        "The orthogonality center is not set and the isometry "
+                        f"check does not single one out (candidate sites {found}). "
+                        "Set ``orth_center`` explicitly."
+                    )
+                found = found[0]
+            self.orth_center = found
         if self.orth_center is None:
             raise ValueError("The orthogonality center value is set to None.")
 
