@@ -1102,3 +1102,40 @@ def test_move_orth_center_accepts_integer_and_boolean_tensors():
         back = moved.move_orth_center(0, renormalize=True)
         assert back.orth_center == 0
         assert list(back.bond_dimensions) == [1, 1, 1]
+
+
+def test_move_orth_center_finds_an_unset_center_in_the_bulk():
+    """With ``orth_center=None`` the isometry check returns the center of a
+    mixed-canonical chain as a one-element list for a bulk site and as an
+    index at the boundaries. The move must work from both and leave an
+    integer in ``orth_center``."""
+    num_sites = 6
+    psi = create_state_vector(num_sites)
+    for center in range(num_sites):
+        reference = mps_from_dense(
+            psi, phys_dim=2, form="Mixed-canonical", orth_center=center
+        )
+        for final in range(num_sites):
+            for inplace in (False, True):
+                mps = CanonicalMPS(
+                    [tensor.copy() for tensor in reference.tensors], orth_center=None
+                )
+                moved = mps.move_orth_center(final, inplace=inplace)
+                assert moved.orth_center == final
+                assert isinstance(mps.orth_center, int)
+                assert find_orth_center(moved) == [final]
+                assert np.allclose(moved.dense(flatten=True), psi)
+
+
+def test_move_orth_center_refuses_an_unset_center_it_cannot_identify():
+    """A chain that is not in a canonical form has no single center. The move
+    must say so and leave ``orth_center`` unset, not store the list of
+    candidate sites and fail on a comparison."""
+    rng = np.random.default_rng(7)
+    tensors = [
+        rng.normal(size=shape) for shape in ((1, 2, 2), (2, 2, 3), (3, 2, 2), (2, 2, 1))
+    ]
+    mps = CanonicalMPS(tensors, orth_center=None)
+    with pytest.raises(ValueError, match="does not single one out"):
+        mps.move_orth_center(2)
+    assert mps.orth_center is None

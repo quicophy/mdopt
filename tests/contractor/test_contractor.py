@@ -206,3 +206,23 @@ def test_contractor_mps_mpo_contract():
         assert np.isclose(np.linalg.norm(mps_fin_dense - psi_fin), 0, atol=1e-7)
 
         assert np.isclose(np.linalg.norm(orthogonality_center), 1.0)
+
+
+@pytest.mark.parametrize("chi_max", [3, int(1e4)])
+def test_contractor_mps_mpo_contract_renormalizes_the_center(chi_max):
+    """With ``renormalize=True`` the state comes back with unit norm and in
+    canonical form. The center is the right tensor of the last split;
+    dividing its left neighbor, an isometry of norm ``sqrt(chi)``, by its own
+    norm left a state of norm ``1/sqrt(chi)`` with a broken isometry."""
+    num_sites, phys_dim = 5, 2
+    rng = np.random.default_rng(11)
+    psi = rng.normal(size=phys_dim**num_sites)
+    psi /= np.linalg.norm(psi)
+    mps = mps_from_dense(psi, phys_dim=phys_dim, form="Mixed-canonical", orth_center=0)
+    mpo = create_random_mpo(4, [3, 3, 3], phys_dim=phys_dim, which="normal")
+
+    out = mps_mpo_contract(mps, mpo, 0, renormalize=True, chi_max=chi_max)
+    center = out.tensors[out.orth_center]
+    assert np.isclose(np.linalg.norm(_to_numpy(center)), 1.0)
+    assert np.isclose(np.linalg.norm(_to_numpy(out.dense(flatten=True))), 1.0)
+    assert is_canonical(out)

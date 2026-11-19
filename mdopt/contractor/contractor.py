@@ -456,14 +456,17 @@ def mps_mpo_contract(
         mps.tensors[orth_center_index + 1] = b_r * singular_values[:, None, None]
         mps.orth_center = orth_center_index + 1
 
-        # Renormalize orthogonality center (GPU-safe)
+        # Renormalize the orthogonality center (GPU-safe). The center is the
+        # tensor the last split left on the right, at ``mps.orth_center``;
+        # the tensor to its left is an isometry of Frobenius norm
+        # ``sqrt(chi)`` and must stay one.
         if renormalize:
             # stay on device if GPU
             norm = (A.to_device if A.GPU else np.asarray)(
-                np.linalg.norm(mps.tensors[orth_center_index])
+                np.linalg.norm(mps.tensors[mps.orth_center])
             )
             if norm != 0:
-                mps.tensors[orth_center_index] /= norm
+                mps.tensors[mps.orth_center] /= norm
 
         # Barrier so timing includes device completion
         A.synchronize()
