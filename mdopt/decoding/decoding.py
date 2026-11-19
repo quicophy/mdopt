@@ -2272,7 +2272,7 @@ def _marginalize_with_weights(
     num_logicals: int,
     undo: List[Tuple[int, np.ndarray]],
     renormalize: bool,
-    survival: float = 1.0,
+    survival: Optional[float] = 1.0,
 ) -> Tuple[CanonicalMPS, bool]:
     """Trace out the error sites against the undo weights instead of all-ones.
 
@@ -2294,6 +2294,13 @@ def _marginalize_with_weights(
     is then exactly zero. ``survival`` is the mass fraction the contraction
     kept (the certificate's), which sets how much round-off to expect; see
     :func:`_undo_collapse_tolerance`.
+
+    The check compares norms, so it cannot tell an impossible shot from a
+    possible one whose probability is below the tolerance: a branch of
+    probability 1e-15 next to a certain one keeps 5e-12 of the arriving
+    norm. ``survival=None`` turns the check off for a caller that decides
+    exactly whether the shot is possible, as ``decode_dem`` does; the second
+    return value is then always ``False``.
     """
     tensors = list(mps.tensors)
     # Every error site must be traced exactly once: on a chain whose bonds
@@ -2313,7 +2320,8 @@ def _marginalize_with_weights(
         raise ValueError(
             f"The undo weights must cover {wanted}, given sites {sorted(covered)}."
         )
-    if mps.orth_center is not None and any(not np.all(w) for _, w in undo):
+    detect = survival is not None
+    if detect and mps.orth_center is not None and any(not np.all(w) for _, w in undo):
         # The collapse check below compares norms of partial contractions.
         # Those are norms of the state only when every tensor to the left is
         # an isometry, that is, with the orthogonality center on the last
@@ -2327,7 +2335,7 @@ def _marginalize_with_weights(
     # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
     # site, like :meth:`CanonicalMPS.marginal`.
     collapsed = False
-    tolerance = _undo_collapse_tolerance(survival)
+    tolerance = _undo_collapse_tolerance(survival) if survival is not None else 0.0
     for first, weight in sorted(undo, key=lambda item: -item[0]):
         if weight.ndim == 1:
             trace = weight / np.sqrt(tensors[first].shape[1])
@@ -2342,7 +2350,7 @@ def _marginalize_with_weights(
             arrived = None
             weighted = np.einsum("xz,mz->xm", trace, second)
             right = np.einsum("lxm,xm->l", tensors[first], weighted)[:, None]
-        if not collapsed and not np.all(weight):
+        if detect and not collapsed and not np.all(weight):
             # Only a weight with an exact zero can annihilate the state, so
             # shots whose prior is positive everywhere never get here.
             if arrived is None:
