@@ -1,0 +1,1604 @@
+"""Class-summed decoding of a detector error model on a candidate active set.
+
+:func:`~mdopt.decoding.dem.decode_dem` contracts every mechanism of the model.
+For quantum LDPC memory circuits that chain is thousands of sites long and its
+detector constraints have long spans, so a small bond dimension truncates away
+the answer. This module contracts a much smaller problem instead, one that a
+bond dimension of 16 solves almost exactly.
+
+For one syndrome the decoder goes through four steps.
+
+1. **Candidates.** BP-OSD gives one solution. For every observable ``j``,
+   BP-OSD on the check matrix extended by the row of observable ``j``, with
+   that observable forced to the opposite value, gives a solution in a
+   neighboring logical class. The search is recentered on the most likely
+   candidate found so far and repeated a few times.
+2. **Active set.** The union of the supports of all candidates. Every other
+   mechanism is pinned to "did not fire".
+3. **Kernel picture.** Gauss-Jordan elimination of the detector matrix
+   restricted to the active set picks one pivot mechanism per independent
+   detector. Every assignment of the remaining *free* mechanisms is then a
+   valid solution: a pivot fires if and only if its base bit and the parity
+   of the free mechanisms in its reduced row disagree. No hard syndrome
+   constraint is left, so every configuration the truncated state holds is
+   a valid solution and truncation cannot project the state to nothing. It
+   still makes the masses approximate, in either direction. A mechanism of
+   probability exactly zero or one would bring a hard constraint back; such
+   mechanisms are decided exactly beforehand and never enter the chain.
+4. **Class sum.** An MPS over one register site per observable followed by
+   one site per free mechanism holds the square roots of the probabilities.
+   Each pivot is a soft parity factor, each observable a hard parity with its
+   register site. The squared norm of each register value is the total
+   probability of that logical class inside the active set, and the decoder
+   returns the heaviest class.
+
+The contraction applies each parity factor exactly (the bonds it crosses
+double) and then compresses with a canonical SVD sweep, and the bond cut never
+splits a degenerate multiplet of singular values. Class masses are squared
+norms, so they are non-negative by construction.
+
+The compression is never exactly lossless, whatever the bond dimension: a
+Schmidt component below :data:`ZERO_CUTOFF` times the largest one is always
+dropped, and a parity factor applied afterwards can amplify what was dropped
+(each pivot that then fires instead of resting multiplies the component by
+``(1 - p) / p``). A small discarded weight therefore does not prove that the
+masses are right.
+
+**Tempering.** Applying every factor at full strength in one pass works as
+long as no cut removes a component that a later factor amplifies. On larger
+codes the active set has a hundred or more free mechanisms, and the one-pass
+contraction then fails: a truncation
+made early leaves a small error on configurations that the state has not yet
+been told are unlikely, and the factors applied later can amplify that error
+by ``(1 - p) / p`` each. The tempered contraction starts from the uniform
+state and applies every factor (the priors of the free mechanisms and the
+pivot factors) to the power ``1 / stages``, in ``stages`` passes. Each pass
+truncates a state that already carries a share of every factor, so the
+truncation keeps the configurations that matter. When ``chi_max`` cuts
+nothing the two contractions agree, except on a component that the one pass
+loses to the zero cutoff and a later factor would have amplified: the
+tempered passes keep it. The decoder runs the one-pass contraction
+first and repeats it with tempering only when that pass discarded weight.
+
+**Hard syndromes.** The syndromes whose first pass discards weight are the
+ones where the decoder still fails. Two options do extra work on these
+syndromes and leave every other syndrome untouched. ``temper_chi_max`` gives
+the tempered contraction its own, larger bond dimension. ``extra_centers``
+widens the candidate search: classes that the search has already found become
+centers of further class flips, which reaches classes more than one observable
+flip away from the most likely candidates.
+
+**Truncating in the computational basis.** Every factor of this network is
+diagonal in the bit basis, so a bond does not need the basis an SVD would
+choose: it can stay in the computational basis, where one basis state is one
+pattern of running parities of the pivots whose support is in progress,
+together with the observable pattern accumulated so far. That is the state
+space of a trellis decoder ([1]_, [2]_), and :func:`basis_truncated_class_masses`
+contracts the same network in it. A bond is truncated by keeping the
+``max_states`` most probable basis states, as in reduced-state trellis decoding
+[3]_, ranked by the weight they have when every remaining free mechanism stays
+off. A state that a factor of exactly zero rules out under that completion
+ranks behind every other state, and is counted in the pruned share by its
+weight without that factor, since a later mechanism can still revive it.
+The pruned share is measured by that ranking weight, one step at a time. It
+indicates that states were dropped; it does not bound the probability that
+was lost, because a dropped state can be worth far more once later mechanisms
+fire than its ranking weight said.
+Nothing is rotated, every number is a probability, and the cost is a few
+ten thousand additions and multiplications where the SVD contraction needs a
+thousand factorizations. ``ClassSumDecoder(truncation="basis")`` uses it.
+
+On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
+noise this decoder makes fewer logical errors than BP-OSD on the same shots at
+1, 2 and 6 syndrome-extraction rounds. On the [[90, 8, 10]], [[108, 8, 10]]
+and [[144, 12, 12]] codes of the same family the tempered pass is what keeps
+it ahead: on [[144, 12, 12]] the one-pass contraction alone does worse than
+picking the most likely single candidate. With the truncation in the
+computational basis the decoder makes fewer errors still on [[144, 12, 12]]
+than with the tempered SVD contraction.
+
+References
+----------
+.. [1] H. Ollivier and J.-P. Tillich, "Trellises for stabilizer codes:
+   definition and uses", Physical Review A 74, 032304 (2006).
+.. [2] E. Stylianou, V. Sidorenko, C. Deppe and H. Boche, "Minimal trellises
+   for non-degenerate and degenerate decoding of quantum stabilizer codes",
+   arXiv:2410.07897 (2024).
+.. [3] V. Franz and J. B. Anderson, "Concatenated decoding with a
+   reduced-search BCJR algorithm", IEEE Journal on Selected Areas in
+   Communications 16 (2), 186-195 (1998).
+"""
+
+# pylint: disable=too-many-lines
+
+import heapq
+import math
+from dataclasses import dataclass
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
+
+import numpy as np
+from scipy.linalg import svd as scipy_svd
+from scipy.sparse import csr_matrix, vstack
+
+from mdopt.decoding.dem import DemProblem, _validated_syndrome
+
+#: BP-OSD settings used to produce the candidates: min-sum belief propagation
+#: followed by combination-sweep ordered statistics decoding of order 10.
+DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
+    "max_iter": 100,
+    "bp_method": "minimum_sum",
+    "ms_scaling_factor": 0.9,
+    "osd_method": "osd_cs",
+    "osd_order": 10,
+}
+
+
+#: Normalized class masses closer than this count as tied: the contraction
+#: does not resolve smaller differences, and BP-OSD's class then stands.
+TIE_TOLERANCE = 1e-6
+
+#: Singular values below this fraction of the largest one count as zero and
+#: are dropped at every bond, whatever the requested bond dimension. Rounding
+#: noise sits at this level, so a smaller cutoff would keep noise instead.
+ZERO_CUTOFF = 1e-13
+
+
+def _svd(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Thin SVD that falls back to the slower, more robust LAPACK driver."""
+    try:
+        return np.linalg.svd(matrix, full_matrices=False)
+    except np.linalg.LinAlgError:
+        return scipy_svd(matrix, full_matrices=False, lapack_driver="gesvd")
+
+
+def multiplet_safe_rank(
+    singular_values: np.ndarray, chi_max: int, tolerance: float = 1e-7
+) -> int:
+    """Number of singular values to keep without splitting a multiplet.
+
+    Parity constraints produce exactly degenerate singular values. Cutting
+    through such a multiplet keeps an arbitrary rotation of it and breaks the
+    symmetry between logical classes, so the cut is moved to the nearest
+    multiplet boundary: up if that costs at most ``max(4, chi_max // 4)``
+    extra values (or if the multiplet starts at the top of the spectrum),
+    down otherwise.
+
+    The multiplet is the one the requested cut falls in: the values above
+    the cut within ``tolerance`` of the first value below it, and the values
+    below the cut within ``tolerance`` of the last value above it. Two values
+    whose relative difference is exactly ``tolerance`` count as different.
+    The window is anchored at the cut and is not extended from neighbor to
+    neighbor, so a long run of values that drift apart by less than
+    ``tolerance`` per step is one multiplet only as far as it stays within
+    ``tolerance`` of the cut. Exact multiplets, which differ by rounding
+    alone, are always kept or dropped whole. A multiplet at the top of the
+    spectrum is kept whole whatever its size, since dropping it would leave
+    nothing: the bond can then exceed ``chi_max`` by more than the allowance.
+
+    Parameters
+    ----------
+    singular_values : np.ndarray
+        Singular values in descending order.
+    chi_max : int
+        The requested bond dimension.
+    tolerance : float
+        Relative difference below which two singular values count as equal.
+
+    Returns
+    -------
+    int
+        The number of singular values to keep.
+    """
+    if singular_values.size == 0 or singular_values[0] <= 0:
+        return 0
+    nonzero = int(np.sum(singular_values > singular_values[0] * ZERO_CUTOFF))
+    keep = min(chi_max, nonzero)
+    if not 0 < keep < nonzero:
+        return keep
+    if singular_values[keep] <= singular_values[keep - 1] * (1 - tolerance):
+        return keep
+    low = keep
+    while (
+        low > 0 and singular_values[low - 1] * (1 - tolerance) < singular_values[keep]
+    ):
+        low -= 1
+    high = keep
+    while high < nonzero and singular_values[high] > singular_values[keep - 1] * (
+        1 - tolerance
+    ):
+        high += 1
+    if high <= chi_max + max(4, chi_max // 4) or low == 0:
+        return high
+    return low
+
+
+class ParityChain:
+    """A real MPS of bits that is multiplied by functions of parities.
+
+    The chain is kept in mixed canonical form and normalized; the logarithm
+    of the accumulated norm is tracked separately.
+
+    Parameters
+    ----------
+    vectors : Sequence[np.ndarray]
+        One length-2 vector per site: the initial product state.
+
+    Attributes
+    ----------
+    tensors : List[np.ndarray]
+        Site tensors with index order ``(left bond, bit, right bond)``.
+    center : int
+        The orthogonality center.
+    log_norm : float
+        Logarithm of the norm that has been divided out so far.
+    lost : float
+        Sum over all truncations of the discarded fraction of the squared
+        norm at the time of the cut. It includes the components below
+        :data:`ZERO_CUTOFF`, which are dropped at any bond dimension. A later
+        factor can amplify a discarded component, so a small value is an
+        indicator and not a bound on the error of the result.
+    """
+
+    def __init__(self, vectors: Sequence[np.ndarray]):
+        if len(vectors) == 0:
+            raise ValueError("The chain needs at least one site.")
+        self.tensors: List[np.ndarray] = []
+        self.center = 0
+        self.log_norm = 0.0
+        self.lost = 0.0
+        # Every site is normalized by itself and the logarithms are summed:
+        # the norm of the whole product can be far outside float64 while
+        # its logarithm is an ordinary number. Normalized rank-one tensors
+        # are canonical for any center, so no sweep is needed.
+        for vector in vectors:
+            tensor = np.asarray(vector, dtype=float).reshape(1, 2, 1)
+            peak = float(np.abs(tensor).max())
+            if peak == 0 or not np.isfinite(peak):
+                raise ArithmeticError("The product state has a zero or infinite site.")
+            # The norm itself is never formed: for entries near the top of
+            # float64 it would be infinite while its logarithm is not.
+            scaled = tensor / peak
+            scaled_norm = float(np.linalg.norm(scaled))
+            self.tensors.append(scaled / scaled_norm)
+            self.log_norm += float(np.log(peak) + np.log(scaled_norm))
+
+    def __len__(self) -> int:
+        return len(self.tensors)
+
+    def _normalize(self) -> None:
+        # Scaled by the largest entry first: amplitudes of 1e-200 are not
+        # zero, but their squares are.
+        center = self.tensors[self.center]
+        peak = float(np.abs(center).max()) if center.size else 0.0
+        if peak == 0 or not np.isfinite(peak):
+            raise ArithmeticError("The constraint annihilated the state.")
+        scaled = center / peak
+        scaled_norm = float(np.linalg.norm(scaled))
+        self.tensors[self.center] = scaled / scaled_norm
+        self.log_norm += float(np.log(peak) + np.log(scaled_norm))
+
+    def _orthogonalize_left(self, site: int) -> None:
+        """Make ``site`` left-canonical and push the remainder to its right."""
+        left, phys, right = self.tensors[site].shape
+        isometry, rest = np.linalg.qr(self.tensors[site].reshape(left * phys, right))
+        self.tensors[site] = isometry.reshape(left, phys, -1)
+        self.tensors[site + 1] = np.tensordot(rest, self.tensors[site + 1], axes=(1, 0))
+
+    def _orthogonalize_right(self, site: int) -> None:
+        """Make ``site`` right-canonical and push the remainder to its left."""
+        left, phys, right = self.tensors[site].shape
+        isometry, rest = np.linalg.qr(self.tensors[site].reshape(left, phys * right).T)
+        self.tensors[site] = isometry.T.reshape(-1, phys, right)
+        self.tensors[site - 1] = np.tensordot(
+            self.tensors[site - 1], rest.T, axes=(2, 0)
+        )
+
+    def move_center(self, site: int) -> None:
+        """Move the orthogonality center to ``site`` without truncation."""
+        while self.center < site:
+            self._orthogonalize_left(self.center)
+            self.center += 1
+        while self.center > site:
+            self._orthogonalize_right(self.center)
+            self.center -= 1
+
+    def project_bit(self, site: int, value: int) -> None:
+        """Project the bit at ``site`` onto ``value`` and renormalize."""
+        self.move_center(site)
+        self.tensors[site][:, 1 - value, :] = 0.0
+        self._normalize()
+
+    def apply_parity(
+        self,
+        sites: Sequence[int],
+        chi_max: int,
+        weights: Union[Sequence[float], np.ndarray] = (1.0, 0.0),
+    ) -> None:
+        """Multiply the state by ``weights[parity of the bits at sites]``.
+
+        The factor is applied exactly, which doubles the bonds between the
+        first and the last site involved, and the chain is then compressed
+        back to ``chi_max`` by one canonical SVD sweep. The default weights
+        project onto even parity.
+
+        Parameters
+        ----------
+        sites : Sequence[int]
+            The sites whose parity enters the factor, each named once.
+        chi_max : int
+            The bond dimension to compress to.
+        weights : Union[Sequence[float], np.ndarray]
+            The factor for even and for odd parity.
+
+        Raises
+        ------
+        ValueError
+            If no site is given, a site is named twice or lies outside the
+            chain, ``chi_max`` is not positive, or ``weights`` does not hold
+            two numbers.
+        """
+        listed = [int(site) for site in sites]
+        support = set(listed)
+        if not support:
+            raise ValueError("A parity factor needs at least one site.")
+        if len(support) != len(listed):
+            # Over GF(2) a site named twice cancels; silently keeping it once
+            # would apply a different factor from the one asked for.
+            raise ValueError("A parity factor names a site more than once.")
+        if chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
+        weights = np.asarray(weights, dtype=float)
+        if weights.shape != (2,):
+            raise ValueError("A parity factor has two weights: even and odd.")
+        first, last = min(support), max(support)
+        if first < 0 or last >= len(self.tensors):
+            raise ValueError("A parity factor acts on a site outside the chain.")
+        self.move_center(first)
+        if first == last:
+            self.tensors[first] = self.tensors[first] * weights[None, :, None]
+            self._normalize()
+            return
+        for site in range(first, last + 1):
+            self._thread_parity(
+                site, site in support, site == first, site == last, weights
+            )
+        for site in range(first, last):
+            self._orthogonalize_left(site)
+        self.center = last
+        self._normalize()
+        for site in range(last, first, -1):
+            self._truncate_bond(site, chi_max)
+        self.center = first
+        self._normalize()
+
+    def _thread_parity(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        site: int,
+        counted: bool,
+        is_first: bool,
+        is_last: bool,
+        weights: Union[Sequence[float], np.ndarray],
+    ) -> None:
+        """Thread the running parity through ``site`` as an extra bond index.
+
+        The parity enters from the left (trivially at the first site), picks
+        up the bit of the site if it is ``counted``, and leaves to the right;
+        at the last site it is contracted with ``weights`` instead.
+        """
+        tensor = self.tensors[site]
+        left, _, right = tensor.shape
+        parity_in = 1 if is_first else 2
+        parity_out = 1 if is_last else 2
+        new = np.zeros((left, parity_in, 2, right, parity_out))
+        for incoming in range(parity_in):
+            for bit in range(2):
+                outgoing = incoming ^ (bit if counted else 0)
+                if is_last:
+                    new[:, incoming, bit, :, 0] = tensor[:, bit, :] * weights[outgoing]
+                else:
+                    new[:, incoming, bit, :, outgoing] = tensor[:, bit, :]
+        self.tensors[site] = np.reshape(new, (left * parity_in, 2, right * parity_out))
+
+    def _truncate_bond(self, site: int, chi_max: int) -> None:
+        """Truncate the bond to the left of ``site``; the center moves left."""
+        left, phys, right = self.tensors[site].shape
+        left_vectors, singular_values, right_vectors = _svd(
+            self.tensors[site].reshape(left, phys * right)
+        )
+        keep = multiplet_safe_rank(singular_values, chi_max)
+        if keep == 0:
+            raise ArithmeticError("The state vanished during the contraction.")
+        if keep < singular_values.size:
+            # Relative to the largest value, so that the fraction is right
+            # for a spectrum whose squares would underflow.
+            scaled = singular_values / singular_values[0]
+            self.lost += float(np.sum(scaled[keep:] ** 2) / np.sum(scaled**2))
+        self.tensors[site] = right_vectors[:keep].reshape(keep, phys, right)
+        self.tensors[site - 1] = np.tensordot(
+            self.tensors[site - 1],
+            left_vectors[:, :keep] * singular_values[:keep],
+            axes=(2, 0),
+        )
+
+    def max_bond(self) -> int:
+        """The largest bond dimension of the chain."""
+        return max(tensor.shape[2] for tensor in self.tensors)
+
+
+def problem_matrices(problem: DemProblem) -> Tuple[csr_matrix, csr_matrix]:
+    """Sparse detector and observable matrices of a detector error model.
+
+    Returns
+    -------
+    (check_matrix, observable_matrix)
+        ``check_matrix[d, i]`` is 1 if mechanism ``i`` flips detector ``d``
+        and ``observable_matrix[j, i]`` is 1 if it flips observable ``j``.
+    """
+    num_mech = problem.num_mechanisms
+
+    def build(rows: List[List[int]]) -> csr_matrix:
+        row_index = [r for r, row in enumerate(rows) for _ in row]
+        column_index = [i for row in rows for i in row]
+        data = np.ones(len(row_index), dtype=np.uint8)
+        matrix = csr_matrix(
+            (data, (row_index, column_index)), shape=(len(rows), num_mech)
+        )
+        # The constructor sums the entries of a mechanism that one row
+        # lists more than once; over GF(2) every pair of them cancels.
+        matrix.data %= 2
+        matrix.eliminate_zeros()
+        return matrix
+
+    return build(problem.detector_rows), build(problem.observable_rows)
+
+
+def _gauss_jordan(
+    check_matrix: np.ndarray, syndrome: np.ndarray, columns: Sequence[int]
+) -> Tuple[List[int], List[int], np.ndarray, np.ndarray]:
+    """Gauss-Jordan elimination over GF(2) restricted to ``columns``.
+
+    Pivots are chosen in the order of ``columns``. Returns the pivot columns,
+    the row of each pivot, the reduced matrix augmented by the reduced
+    syndrome as its last column, and a mask of the rows that hold a pivot.
+    """
+    work = np.concatenate([check_matrix, syndrome[:, None]], axis=1).astype(np.uint8)
+    used = np.zeros(check_matrix.shape[0], dtype=bool)
+    pivots: List[int] = []
+    pivot_rows: List[int] = []
+    for column in columns:
+        candidates = np.flatnonzero(work[:, column] & ~used)
+        if candidates.size == 0:
+            continue
+        row = int(candidates[0])
+        used[row] = True
+        others = np.flatnonzero(work[:, column])
+        others = others[others != row]
+        work[others] ^= work[row]
+        pivots.append(int(column))
+        pivot_rows.append(row)
+    return pivots, pivot_rows, work, used
+
+
+@dataclass
+class _KernelPicture:
+    """The solutions of a syndrome inside an active set, in free variables.
+
+    Attributes
+    ----------
+    pivots : List[int]
+        Pivot mechanisms, one per independent detector of the active set.
+    base : np.ndarray
+        For each pivot, whether it fires when every free mechanism is off.
+    free : List[int]
+        The free mechanisms, in chain order.
+    supports : List[List[int]]
+        For each pivot, the positions (in ``free``) of the free mechanisms
+        that toggle it.
+    observable_flips : np.ndarray
+        ``observable_flips[j, k]`` is 1 if switching free mechanism ``k`` on
+        (together with the pivots it toggles) flips observable ``j``.
+    base_class : int
+        Observable pattern of the base solution.
+    """
+
+    pivots: List[int]
+    base: np.ndarray
+    free: List[int]
+    supports: List[List[int]]
+    observable_flips: np.ndarray
+    base_class: int
+
+
+def _kernel_picture(
+    check_matrix: np.ndarray,
+    observable_matrix: np.ndarray,
+    syndrome: np.ndarray,
+    columns: List[int],
+) -> _KernelPicture:
+    """Eliminate the detectors inside the active set ``columns``."""
+    pivots, pivot_rows, work, used = _gauss_jordan(check_matrix, syndrome, columns)
+    if work[~used, -1].any():
+        raise ValueError("The syndrome has no solution inside the active set.")
+    pivot_set = set(pivots)
+    free = [column for column in columns if column not in pivot_set]
+    # Pivot r fires in the base solution (all free mechanisms off) iff its
+    # reduced syndrome bit is set; switching free mechanisms on toggles it
+    # through the reduced row.
+    base = work[pivot_rows, -1]
+    reduced = work[np.ix_(pivot_rows, free)].astype(np.int64)
+    supports = [[int(k) for k in np.flatnonzero(row)] for row in reduced]
+    pivot_observables = observable_matrix[:, pivots].astype(np.int64)
+    return _KernelPicture(
+        pivots=pivots,
+        base=base,
+        free=free,
+        supports=supports,
+        observable_flips=(observable_matrix[:, free] + pivot_observables @ reduced) % 2,
+        base_class=int(
+            ((pivot_observables @ base) % 2)
+            @ (1 << np.arange(observable_matrix.shape[0]))
+        ),
+    )
+
+
+def _register_masses(chain: ParityChain, num_obs: int) -> Tuple[np.ndarray, float]:
+    """Squared norm of every value of the leading ``num_obs`` register sites.
+
+    Returns the unnormalized masses (index bit ``j`` is register site ``j``)
+    and the logarithm of the scale divided out of them.
+    """
+    environment = np.ones((1, 1))
+    log_scale = 0.0
+    for site in range(len(chain) - 1, num_obs - 1, -1):
+        tensor = chain.tensors[site]
+        environment = np.einsum(
+            "lpr,rs,mps->lm", tensor, environment, tensor, optimize=True
+        )
+        scale = float(np.abs(environment).max())
+        if not np.isfinite(scale) or scale <= 0:
+            raise ArithmeticError(
+                "The state vanished or overflowed during the contraction."
+            )
+        environment = environment / scale
+        log_scale += float(np.log(scale))
+    register = np.ones((1, 1))
+    for site in range(num_obs):
+        tensor = chain.tensors[site]
+        register = np.concatenate(
+            [register @ tensor[:, 0, :], register @ tensor[:, 1, :]], axis=0
+        )
+    return np.einsum("cr,rs,cs->c", register, environment, register), log_scale
+
+
+def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals,too-many-branches,too-many-statements
+    problem: DemProblem,
+    syndrome: np.ndarray,
+    active: Sequence[int],
+    chi_max: int = 16,
+    check_matrix: Optional[np.ndarray] = None,
+    observable_matrix: Optional[np.ndarray] = None,
+    stages: int = 1,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Probability mass of every logical class inside an active set.
+
+    Mechanisms outside ``active`` are pinned to "did not fire". Inside the
+    active set every solution of the syndrome is summed, up to the truncation
+    to ``chi_max``.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model.
+    syndrome : np.ndarray
+        One bit per detector.
+    active : Sequence[int]
+        The active mechanisms. Their order is the pivot preference of the
+        elimination (earlier mechanisms become pivots first) and the order of
+        the free mechanisms on the chain.
+    chi_max : int
+        The bond dimension of the compression.
+    check_matrix, observable_matrix : Optional[np.ndarray]
+        Dense ``uint8`` detector and observable matrices, to avoid rebuilding
+        them for every syndrome.
+    stages : int
+        The number of tempering passes. With 1 the chain starts from the
+        priors of the free mechanisms and every pivot factor is applied once
+        at full strength. With more, the chain starts from the uniform state
+        and every prior and pivot factor is applied to the power
+        ``1 / stages`` in each of ``stages`` passes, which keeps the
+        truncation faithful when the active set is large. When ``chi_max``
+        cuts nothing both give the same masses, except that the one pass can
+        lose to :data:`ZERO_CUTOFF` a component that a later factor would
+        have amplified; the tempered passes keep it.
+
+    Returns
+    -------
+    (class_masses, info)
+        ``class_masses[c]`` is the probability of the solutions inside the
+        active set whose observable pattern is ``c`` (bit ``j`` of ``c`` is
+        observable ``j``), normalized to sum to one. ``info`` holds
+        ``log_mass`` (logarithm of the probability that the syndrome is
+        produced by mechanisms of the active set alone: an estimate that can
+        lie above or below the exact value, because the soft factors applied
+        after a cut can amplify what the cut discarded, and components below
+        :data:`ZERO_CUTOFF` are cut at any ``chi_max``), ``lost``
+        (accumulated discarded fraction of the squared norm at the time of
+        each cut: an indicator, not a bound on the error of the masses, for
+        the same reason), ``bond`` (largest bond dimension),
+        ``free`` (number of free mechanisms) and ``rank`` (number of pivots).
+
+    Raises
+    ------
+    ValueError
+        If the active set holds no solution of the syndrome, or if ``stages``
+        or ``chi_max`` is not positive.
+    ArithmeticError
+        If the state or every class mass vanishes during the contraction, or
+        if no assignment of the active set has positive probability.
+    """
+    if stages < 1:
+        raise ValueError("The number of tempering stages must be positive.")
+    if chi_max < 1:
+        raise ValueError("The bond dimension must be positive.")
+    syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
+    if check_matrix is None or observable_matrix is None:
+        sparse_check, sparse_observable = problem_matrices(problem)
+        check_matrix = np.asarray(sparse_check.todense(), dtype=np.uint8)
+        observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
+    num_obs = problem.num_observables
+    probs = np.asarray(problem.probs, dtype=float)
+    named = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in named):
+        raise ValueError("The active set names a mechanism outside the model.")
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, named)
+    # A mechanism of probability exactly zero or one is decided before any
+    # contraction: it is taken out of the active set, and one that certainly
+    # fires moves its detectors and observables into the syndrome and the
+    # class. Left in, its pivot factor would be a hard constraint again, and
+    # a truncation could then remove every valid solution.
+    columns = [i for i in named if 0.0 < probs[i] < 1.0]
+    forced_class = 0
+    if len(columns) < len(named):
+        reduced = syndrome.copy()
+        for i in named:
+            if probs[i] >= 1.0:
+                reduced ^= check_matrix[:, i]
+                forced_class ^= sum(
+                    int(observable_matrix[j, i]) << j for j in range(num_obs)
+                )
+        try:
+            kernel = _kernel_picture(check_matrix, observable_matrix, reduced, columns)
+        except ValueError as error:
+            raise ArithmeticError(
+                "No assignment of the active set has positive probability."
+            ) from error
+    info: Dict[str, Any] = {"free": len(kernel.free), "rank": len(kernel.pivots)}
+
+    # Probability of each pivot as a function of the parity of its support:
+    # index 0 is the base value, index 1 the toggled one.
+    pivot_probs = probs[kernel.pivots]
+    pivot_weights = np.where(
+        kernel.base[:, None] == 1,
+        np.stack([pivot_probs, 1 - pivot_probs], axis=1),
+        np.stack([1 - pivot_probs, pivot_probs], axis=1),
+    )
+    # Every mechanism outside the active set is off. The certain ones of
+    # the active set contribute a factor of one.
+    inactive = np.ones(problem.num_mechanisms, dtype=bool)
+    inactive[named] = False
+    with np.errstate(divide="ignore"):
+        log_scale = float(np.sum(np.log1p(-probs[inactive])))
+        # A pivot without free support takes its base value whatever the
+        # free mechanisms do.
+        log_scale += float(
+            sum(
+                np.log(pivot_weights[r, 0])
+                for r, support in enumerate(kernel.supports)
+                if not support
+            )
+        )
+    if not np.isfinite(log_scale):
+        # An inactive mechanism of probability one, or a pivot forced to a
+        # value of probability zero: the restricted event cannot happen.
+        raise ArithmeticError(
+            "No assignment of the active set has positive probability."
+        )
+    if num_obs + len(kernel.free) == 0:
+        info.update(log_mass=log_scale, lost=0.0, bond=1)
+        return np.ones(1), info
+
+    plus = np.array([1.0, 1.0]) / np.sqrt(2)
+    free_priors = [np.array([1 - probs[c], probs[c]]) for c in kernel.free]
+
+    def amplitude(weights: np.ndarray) -> np.ndarray:
+        """The share of a probability factor that one pass puts on the chain."""
+        return np.sqrt(weights) if stages == 1 else weights ** (0.5 / stages)
+
+    if stages == 1:
+        chain = ParityChain([plus] * num_obs + [amplitude(w) for w in free_priors])
+    else:
+        # The uniform state, one normalized |+> per free site: unnormalized
+        # ones would give the chain a norm of 2 ** (free / 2), beyond float64
+        # for a couple of thousand free mechanisms. The factor of two per
+        # site that this removes from the squared norm goes into the scale.
+        chain = ParityChain([plus] * (num_obs + len(kernel.free)))
+        log_scale += len(kernel.free) * float(np.log(2.0))
+    # Soft factors: pivots that do not fire in the base solution first, short
+    # supports before long ones.
+    order = sorted(
+        range(len(kernel.pivots)),
+        key=lambda r: (int(kernel.base[r]), len(kernel.supports[r])),
+    )
+    for _ in range(stages):
+        if stages > 1:
+            for k, weights in enumerate(free_priors):
+                chain.apply_parity([num_obs + k], chi_max, amplitude(weights))
+        for r in order:
+            weights = pivot_weights[r]
+            if not kernel.supports[r]:
+                continue
+            log_scale += float(np.log(weights.max())) / stages
+            chain.apply_parity(
+                [num_obs + k for k in kernel.supports[r]],
+                chi_max,
+                amplitude(weights / weights.max()),
+            )
+    # Hard factors: register site j carries the parity of the generators that
+    # flip observable j relative to the base solution.
+    for j in range(num_obs):
+        flips = np.flatnonzero(kernel.observable_flips[j])
+        if flips.size == 0:
+            chain.project_bit(j, 0)
+        else:
+            chain.apply_parity([j] + [num_obs + int(k) for k in flips], chi_max)
+
+    relative, log_environment = _register_masses(chain, num_obs)
+    masses = np.empty_like(relative)
+    masses[np.arange(relative.size) ^ kernel.base_class ^ forced_class] = relative
+    total = float(masses.sum())
+    if not np.isfinite(total) or total <= 0:
+        raise ArithmeticError("Every class mass vanished during the contraction.")
+    info.update(
+        log_mass=float(
+            np.log(total)
+            + log_environment
+            + 2 * chain.log_norm
+            + num_obs * np.log(2.0)
+            + log_scale
+        ),
+        lost=chain.lost,
+        bond=chain.max_bond(),
+    )
+    return masses / total, info
+
+
+def _safe_log(value: float) -> float:
+    """Logarithm that sends zero to minus infinity instead of raising."""
+    return math.log(value) if value > 0 else -math.inf
+
+
+class _BasisState(NamedTuple):
+    """One basis state of the recursion in :func:`_basis_recursion`."""
+
+    #: Logarithm of the summed weight of the partial assignments.
+    log_weight: float
+    #: Sum of the finite logarithms of the open pivots' current factors.
+    pending: float
+    #: Number of open pivots whose current factor is zero.
+    blocked: int
+
+
+def _log_sum_exp(values: Sequence[float]) -> float:
+    """Logarithm of the sum of the exponentials of finite ``values``."""
+    top = max(values)
+    return top + math.log(sum(math.exp(value - top) for value in values))
+
+
+def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
+    free_priors: Sequence[Tuple[float, float]],
+    pivot_weights: Sequence[Sequence[float]],
+    kernel: _KernelPicture,
+    num_obs: int,
+    max_states: int,
+) -> Tuple[Dict[int, float], float, float, int, int]:
+    """Class sums by a forward recursion over the free mechanisms.
+
+    A state is ``(signature, class)``: the running parity of every pivot whose
+    support has started but not ended (bit ``r`` of the signature belongs to
+    pivot ``r``), and the observable pattern accumulated so far. Its value is
+    the summed probability of all partial assignments that lead to it, without
+    the factors of the pivots still open; those are tracked separately so that
+    states can be ranked by the weight of their completion with every
+    remaining free mechanism off.
+
+    Weights are kept as logarithms throughout and merged by a log-sum-exp, so
+    neither hundreds of small factors at one site nor a weight that is tiny
+    until its open pivots close can underflow. A factor of zero
+    is allowed: it removes the assignments it applies to, and an open pivot
+    whose current factor is zero is counted rather than added, so that it can
+    be taken back when the pivot's parity changes.
+
+    Returns the final values by relative class, the logarithm of the scale
+    divided out, the largest fraction of the ranking weight pruned at one
+    step, the largest number of states held, and the number of states
+    removed. The result is exact when nothing was removed. The pruned
+    fraction is measured by the ranking weight and is the largest over the
+    steps, not their sum: it indicates pruning and does not bound the mass
+    that was lost.
+    """
+    num_free = len(kernel.free)
+    log_weights = [[_safe_log(w0), _safe_log(w1)] for w0, w1 in pivot_weights]
+    log_priors = [[_safe_log(off), _safe_log(on)] for off, on in free_priors]
+    opens: List[List[int]] = [[] for _ in range(num_free)]
+    continues: List[List[int]] = [[] for _ in range(num_free)]
+    closes: List[List[int]] = [[] for _ in range(num_free)]
+    singles: List[List[int]] = [[] for _ in range(num_free)]
+    toggles = [0] * num_free
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            continue
+        first, last = min(support), max(support)
+        if first == last:
+            singles[first].append(r)
+            continue
+        opens[first].append(r)
+        closes[last].append(r)
+        for k in support:
+            toggles[k] |= 1 << r
+            if k != first:
+                continues[k].append(r)
+    flips = [
+        sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
+        for k in range(num_free)
+    ]
+    states: Dict[Tuple[int, int], _BasisState] = {(0, 0): _BasisState(0.0, 0.0, 0)}
+    pruned, peak, removed = 0.0, 1, 0
+    for k in range(num_free):
+        branch = [
+            log_priors[k][bit] + sum(log_weights[r][bit] for r in singles[k])
+            for bit in (0, 1)
+        ]
+        clear = 0
+        for r in closes[k]:
+            clear |= 1 << r
+        merged: Dict[Tuple[int, int], Tuple[List[float], float, int]] = {}
+        for (signature, label), (base, pending, zeros) in states.items():
+            for bit in (0, 1):
+                value = base + branch[bit]
+                if value == -math.inf:
+                    continue
+                later, blocked = pending, int(zeros)
+                sig, lab = signature, label
+                if bit == 1:
+                    for r in continues[k]:
+                        current = (signature >> r) & 1
+                        for term, sign in (
+                            (log_weights[r][current], -1),
+                            (log_weights[r][1 - current], 1),
+                        ):
+                            if term == -math.inf:
+                                blocked += sign
+                            else:
+                                later += sign * term
+                    sig, lab = signature ^ toggles[k], label ^ flips[k]
+                for r in opens[k]:
+                    term = log_weights[r][bit]
+                    if term == -math.inf:
+                        blocked += 1
+                    else:
+                        later += term
+                for r in closes[k]:
+                    term = log_weights[r][(sig >> r) & 1]
+                    value += term
+                    if term == -math.inf:
+                        blocked -= 1
+                    else:
+                        later -= term
+                if value == -math.inf:
+                    continue
+                key = (sig & ~clear, lab)
+                item = merged.get(key)
+                if item is None:
+                    merged[key] = ([value], later, blocked)
+                else:
+                    item[0].append(value)
+        if not merged:
+            raise ArithmeticError(
+                f"The recursion lost all of its weight at free mechanism {k} of "
+                f"{num_free}, with {len(states)} states held and {removed} "
+                "pruned so far."
+            )
+        # Weights stay logarithms from step to step and merge by a
+        # log-sum-exp: a weight that is tiny now is kept, because the factors
+        # of its open pivots can still make it the largest.
+        new: Dict[Tuple[int, int], _BasisState] = {
+            key: _BasisState(_log_sum_exp(values), later, blocked)
+            for key, (values, later, blocked) in merged.items()
+        }
+        peak = max(peak, len(new))
+        if len(new) > max_states:
+            # Unblocked states first, each group by the weight of its
+            # completion with every remaining free mechanism off. A blocked
+            # state has no such completion, but a later mechanism can unblock
+            # it, so the pruned share counts it by the same weight with its
+            # zero factors left out: an upper estimate, never zero.
+            scored = [
+                (state.blocked == 0, state.log_weight + state.pending, key)
+                for key, state in new.items()
+            ]
+            kept = heapq.nlargest(max_states, scored)
+            kept_keys = {key for _, _, key in kept}
+            best = max(score for _, score, _ in scored)
+            # The discarded weights are summed directly: one minus the
+            # retained share would round a loss of 1e-80 to zero.
+            everything = math.fsum(math.exp(score - best) for _, score, _ in scored)
+            discarded = math.fsum(
+                math.exp(score - best)
+                for _, score, key in scored
+                if key not in kept_keys
+            )
+            pruned = max(pruned, discarded / everything)
+            removed += len(scored) - max_states
+            new = {key: new[key] for _, _, key in kept}
+        states = new
+    by_class: Dict[int, List[float]] = {}
+    for (_, label), (value, _, _) in states.items():
+        by_class.setdefault(label, []).append(value)
+    log_totals = {label: _log_sum_exp(values) for label, values in by_class.items()}
+    log_scale = max(log_totals.values())
+    totals = {label: math.exp(v - log_scale) for label, v in log_totals.items()}
+    return totals, log_scale, pruned, peak, removed
+
+
+def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    problem: DemProblem,
+    syndrome: np.ndarray,
+    active: Sequence[int],
+    max_states: int = 256,
+    check_matrix: Optional[np.ndarray] = None,
+    observable_matrix: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Probability mass of every logical class, truncated in the bit basis.
+
+    The same sum as :func:`active_set_class_masses`, over the same network,
+    with the bonds kept in the computational basis and truncated to the
+    ``max_states`` most probable basis states (see the module docstring). With
+    ``max_states`` large enough that nothing is pruned the result is exact.
+    Mechanisms of probability exactly zero or one are decided beforehand, as
+    in :func:`active_set_class_masses`, and are not counted in ``free`` and
+    ``rank``.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model.
+    syndrome : np.ndarray
+        One bit per detector.
+    active : Sequence[int]
+        The mechanisms that may fire, in the order in which pivots are chosen
+        and free mechanisms are read. It must hold a solution of the syndrome.
+    max_states : int
+        The number of basis states kept on a bond.
+    check_matrix, observable_matrix : Optional[np.ndarray]
+        Dense ``uint8`` detector and observable matrices, to avoid rebuilding
+        them for every syndrome.
+
+    Returns
+    -------
+    (class_masses, info)
+        ``class_masses`` as in :func:`active_set_class_masses`. ``info`` holds
+        ``log_mass`` (logarithm of the retained probability that the syndrome
+        is produced by mechanisms of the active set alone; pruning only
+        drops non-negative terms of the sum, so unlike the SVD estimate it
+        never exceeds the exact value), ``pruned`` (the
+        largest fraction of the ranking weight discarded at one step. It is
+        an indicator, not a bound: the ranking weight assumes that every
+        remaining free mechanism stays off, and a discarded state can carry
+        most of the probability once some of them fire, so the true loss
+        can exceed this value by many orders of magnitude; compare
+        ``log_mass`` at a larger ``max_states`` to measure it),
+        ``pruned_states`` (the number of
+        states removed; zero means the result is exact), ``states`` (the
+        largest number of basis states held at one step, counted before that
+        step is pruned, so at most twice ``max_states``), ``free`` and
+        ``rank``.
+
+    Raises
+    ------
+    ValueError
+        If the active set holds no solution of the syndrome, or if
+        ``max_states`` is not positive.
+    ArithmeticError
+        If the recursion loses all of its weight, or if no assignment of the
+        active set has positive probability.
+    """
+    if max_states < 1:
+        raise ValueError("The number of basis states must be positive.")
+    syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
+    if check_matrix is None or observable_matrix is None:
+        sparse_check, sparse_observable = problem_matrices(problem)
+        check_matrix = np.asarray(sparse_check.todense(), dtype=np.uint8)
+        observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
+    num_obs = problem.num_observables
+    probs = np.asarray(problem.probs, dtype=float)
+    named = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in named):
+        raise ValueError("The active set names a mechanism outside the model.")
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, named)
+    # A mechanism of probability exactly zero or one is decided beforehand,
+    # as in :func:`active_set_class_masses`. Left in, the states are ranked
+    # by a completion in which a certain mechanism stays off, which has
+    # probability zero, and the pruning then keeps the wrong states.
+    columns = [i for i in named if 0.0 < probs[i] < 1.0]
+    forced_class = 0
+    if len(columns) < len(named):
+        reduced = syndrome.copy()
+        for i in named:
+            if probs[i] >= 1.0:
+                reduced ^= check_matrix[:, i]
+                forced_class ^= sum(
+                    int(observable_matrix[j, i]) << j for j in range(num_obs)
+                )
+        try:
+            kernel = _kernel_picture(check_matrix, observable_matrix, reduced, columns)
+        except ValueError as error:
+            raise ArithmeticError(
+                "No assignment of the active set has positive probability."
+            ) from error
+    pivot_probs = probs[kernel.pivots]
+    pivot_weights = np.where(
+        kernel.base[:, None] == 1,
+        np.stack([pivot_probs, 1 - pivot_probs], axis=1),
+        np.stack([1 - pivot_probs, pivot_probs], axis=1),
+    )
+    # Every mechanism outside the active set is off. The certain ones of
+    # the active set contribute a factor of one.
+    inactive = np.ones(problem.num_mechanisms, dtype=bool)
+    inactive[named] = False
+    with np.errstate(divide="ignore"):
+        log_scale = float(np.sum(np.log1p(-probs[inactive])))
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            log_scale += _safe_log(float(pivot_weights[r, 0]))
+    if log_scale == -math.inf:
+        # A pinned mechanism of probability one, or a pivot without free
+        # support that must take a value of probability zero.
+        raise ArithmeticError(
+            "No assignment of the active set has positive probability."
+        )
+    totals, log_recursion, pruned, peak, removed = _basis_recursion(
+        [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
+        pivot_weights.tolist(),
+        kernel,
+        num_obs,
+        max_states,
+    )
+    masses = np.zeros(1 << num_obs)
+    for label, weight in totals.items():
+        masses[label ^ kernel.base_class ^ forced_class] += weight
+    total = float(masses.sum())
+    info: Dict[str, Any] = {
+        "free": len(kernel.free),
+        "rank": len(kernel.pivots),
+        "log_mass": _safe_log(total) + log_recursion + log_scale,
+        "pruned": pruned,
+        "pruned_states": removed,
+        "states": peak,
+    }
+    return masses / total, info
+
+
+#: BP-OSD solves of one syndrome: (observable, forced value) -> solution, or
+#: ``None`` when BP-OSD returned something that does not match the syndrome.
+_Solves = Dict[Tuple[int, int], Optional[np.ndarray]]
+
+
+class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
+    """Class-summed MPS decoder seeded by BP-OSD candidates.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model. Every prior must be positive and at most
+        1/2, so that no error is the most likely explanation of the empty
+        syndrome.
+    chi_max : int
+        The bond dimension of the class-sum contraction.
+    recenter_rounds : int
+        How many times the class-flip search is recentered on the most likely
+        candidate.
+    temper_stages : int
+        The number of passes of the tempered contraction that replaces the
+        one-pass contraction when the latter truncated too much (see
+        :func:`active_set_class_masses`). With 1 the decoder never tempers.
+    temper_threshold : float
+        The one-pass contraction is replaced by the tempered one when its
+        discarded fraction of the squared norm (``lost``) reaches this value.
+        A component the one pass loses to :data:`ZERO_CUTOFF` contributes
+        next to nothing to ``lost``, so such a loss does not trigger the
+        tempered pass.
+    temper_chi_max : Optional[int]
+        The bond dimension of the tempered contraction. ``None`` uses
+        ``chi_max``. The tempered pass only runs on the syndromes whose first
+        pass truncated, so a larger value here costs much less than a larger
+        ``chi_max``.
+    extra_centers : int
+        Widens the candidate search on the syndromes whose first pass
+        truncated: up to this many further classes found by the search and not
+        yet used as a center, most likely first, are each used once as the
+        center of the class flips,
+        and the class sum is repeated on the larger active set. Every center
+        asks for one BP-OSD solve per observable, and solves already made for
+        the syndrome are reused: there are only two per observable, so the
+        whole search never costs more than that. With 0 the search is not
+        widened.
+    truncation : str
+        ``"svd"`` contracts the class sum as a matrix product state truncated
+        by SVD to ``chi_max``, with the tempered pass on syndromes where that
+        truncates. ``"basis"`` keeps the bonds in the computational basis and
+        truncates them to the ``max_states`` most probable basis states (see
+        :func:`basis_truncated_class_masses`); it needs no tempered pass, and
+        ``temper_threshold`` then applies to the pruned fraction, which can
+        understate the loss: a wider search is not triggered by every loss.
+    max_states : int
+        The number of basis states kept on a bond with ``truncation="basis"``.
+        It must be positive whichever truncation is chosen.
+    candidate_sources : Sequence[Callable[[np.ndarray], Iterable[np.ndarray]]]
+        Further candidate searches, for example the solutions of another
+        decoder. Each one is called with the syndrome and returns mechanism
+        sets, one bit per mechanism in the order of ``problem``. The sets that
+        reproduce the syndrome join the candidates: the class-flip search
+        starts from the most likely of them and of the BP-OSD solution, and
+        all of them enter the active set. A set that does not reproduce the
+        syndrome is ignored. The class flips themselves stay with BP-OSD: a
+        flip is a parity check on every mechanism of an observable, which a
+        decoder without an ordered-statistics step rarely satisfies.
+    **bposd_options
+        Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
+        ``ldpc.BpOsdDecoder``.
+
+    Notes
+    -----
+    Building the decoder constructs one BP-OSD decoder for the model and one
+    per observable, so it should be built once and reused for all syndromes of
+    a model.
+    """
+
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+        self,
+        problem: DemProblem,
+        chi_max: int = 16,
+        recenter_rounds: int = 3,
+        temper_stages: int = 2,
+        temper_threshold: float = 1e-8,
+        temper_chi_max: Optional[int] = None,
+        extra_centers: int = 0,
+        truncation: str = "svd",
+        max_states: int = 256,
+        candidate_sources: Sequence[Callable[[np.ndarray], Iterable[np.ndarray]]] = (),
+        **bposd_options: Any,
+    ):
+        # Imported here so that importing mdopt does not pay for ldpc, which
+        # only this decoder uses.
+        from ldpc import BpOsdDecoder  # pylint: disable=import-outside-toplevel
+
+        probs = np.asarray(problem.probs, dtype=float)
+        if probs.size == 0:
+            raise ValueError("The detector error model has no mechanisms.")
+        if np.any(probs <= 0) or np.any(probs > 0.5):
+            # Above 1/2 a mechanism is more likely to fire than not, and the
+            # empty syndrome would no longer be best explained by no error.
+            raise ValueError("Every prior must be positive and at most 1/2.")
+        if chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
+        if temper_stages < 1:
+            raise ValueError("The number of tempering stages must be positive.")
+        if temper_threshold < 0:
+            raise ValueError("The tempering threshold cannot be negative.")
+        if temper_chi_max is not None and temper_chi_max < 1:
+            raise ValueError("temper_chi_max, when given, must be positive.")
+        if extra_centers < 0:
+            raise ValueError("The number of extra centers cannot be negative.")
+        if truncation not in ("svd", "basis"):
+            raise ValueError(
+                f"Unknown truncation {truncation!r}; expected 'svd' or 'basis'."
+            )
+        if max_states < 1:
+            raise ValueError("The number of basis states must be positive.")
+        self.problem = problem
+        self.chi_max = chi_max
+        self.recenter_rounds = recenter_rounds
+        self.temper_stages = temper_stages
+        self.temper_threshold = temper_threshold
+        self.temper_chi_max = chi_max if temper_chi_max is None else temper_chi_max
+        self.extra_centers = extra_centers
+        self.truncation = truncation
+        self.max_states = max_states
+        self.candidate_sources = tuple(candidate_sources)
+        self.num_observables = problem.num_observables
+        self._check, self._observables = problem_matrices(problem)
+        self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
+        self._dense_observables = np.asarray(
+            self._observables.todense(), dtype=np.uint8
+        )
+        self._llr = np.log(probs / (1 - probs))
+        self._powers = 1 << np.arange(self.num_observables)
+        options = {**DEFAULT_BPOSD_OPTIONS, **bposd_options}
+        channel = [float(p) for p in probs]
+        self._bposd = BpOsdDecoder(self._check, error_channel=channel, **options)
+        self._flipped = [
+            BpOsdDecoder(
+                vstack([self._check, self._observables[j]]).tocsr(),
+                error_channel=channel,
+                **options,
+            )
+            for j in range(self.num_observables)
+        ]
+
+    def class_of(self, mechanisms: np.ndarray) -> int:
+        """Observable pattern of a mechanism set (bit ``j`` is observable ``j``)."""
+        return int(((self._observables @ mechanisms) % 2) @ self._powers)
+
+    def _satisfies(self, mechanisms: np.ndarray, syndrome: np.ndarray) -> bool:
+        return not ((self._check @ mechanisms) % 2 != syndrome).any()
+
+    def external_candidates(self, syndrome: np.ndarray) -> List[np.ndarray]:
+        """The distinct mechanism sets of ``candidate_sources`` that reproduce
+        ``syndrome``, in the order the sources returned them.
+
+        Raises
+        ------
+        ValueError
+            If a source returns something other than one bit per mechanism.
+        """
+        solutions: List[np.ndarray] = []
+        seen: Set[bytes] = set()
+        for source in self.candidate_sources:
+            for mechanisms in source(syndrome.copy()):
+                solution = np.asarray(mechanisms)
+                if solution.shape != (self._llr.size,):
+                    raise ValueError(
+                        f"A candidate source returned shape {solution.shape}; "
+                        f"expected ({self._llr.size},), one bit per mechanism."
+                    )
+                if np.any((solution != 0) & (solution != 1)):
+                    raise ValueError(
+                        "A candidate source returned entries other than 0 and 1."
+                    )
+                solution = solution.astype(np.uint8)
+                key = solution.tobytes()
+                if key in seen or not self._satisfies(solution, syndrome):
+                    continue
+                seen.add(key)
+                solutions.append(solution)
+        return solutions
+
+    def candidates(
+        self, syndrome: np.ndarray, seed: np.ndarray
+    ) -> Dict[int, Tuple[float, np.ndarray]]:
+        """Candidate solutions from class-flipped BP-OSD reruns.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+        seed : np.ndarray
+            A solution of the syndrome, normally the BP-OSD solution.
+
+        Returns
+        -------
+        Dict[int, Tuple[float, np.ndarray]]
+            For each logical class reached, the log-likelihood ratio and the
+            mechanisms of its most likely candidate.
+        """
+        return self._search(syndrome, seed)[0]
+
+    def _search(
+        self, syndrome: np.ndarray, seed: np.ndarray
+    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int], _Solves]:
+        """The candidates of :meth:`candidates`, the centers it used and the
+        BP-OSD solves it made."""
+        center = self.class_of(seed)
+        found = {center: (float(self._llr @ seed), seed.copy())}
+        tried: Set[int] = set()
+        solves: _Solves = {}
+        for _ in range(self.recenter_rounds):
+            if center in tried:
+                break
+            tried.add(center)
+            self._flip_around(center, syndrome, found, solves)
+            center = max(found, key=lambda label: found[label][0])
+        return found, tried, solves
+
+    def _flip_around(
+        self,
+        center: int,
+        syndrome: np.ndarray,
+        found: Dict[int, Tuple[float, np.ndarray]],
+        solves: Optional[_Solves] = None,
+    ) -> None:
+        """Flip every observable of ``center`` once and record the solutions.
+
+        A flip of observable ``j`` only tells BP-OSD the syndrome and the
+        value observable ``j`` must take, so one syndrome has at most two
+        distinct solves per observable. ``solves`` keeps them, and a center
+        that asks for one again does not pay for it.
+        """
+        if solves is None:
+            solves = {}
+        for j in range(self.num_observables):
+            target = ((center >> j) & 1) ^ 1
+            if (j, target) not in solves:
+                extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
+                solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
+                solves[(j, target)] = (
+                    solution if self._satisfies(solution, syndrome) else None
+                )
+            cached = solves[(j, target)]
+            if cached is None:
+                continue
+            solution = cached
+            label = self.class_of(solution)
+            likelihood = float(self._llr @ solution)
+            if label not in found or likelihood > found[label][0]:
+                found[label] = (likelihood, solution.copy())
+
+    def widen(
+        self,
+        syndrome: np.ndarray,
+        found: Dict[int, Tuple[float, np.ndarray]],
+        tried: Iterable[int] = (),
+        solves: Optional[_Solves] = None,
+    ) -> Dict[int, Tuple[float, np.ndarray]]:
+        """Candidates of a wider search around the classes already found.
+
+        Up to ``extra_centers`` of the classes in ``found`` that are not in
+        ``tried``, most likely first, are each used once as the center of the
+        class flips. A center whose flips are all in ``solves`` already would
+        add nothing; it is passed over and does not count.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+        found : Dict[int, Tuple[float, np.ndarray]]
+            The candidates of :meth:`candidates`.
+        tried : Iterable[int]
+            Classes that were already used as centers. The search is
+            deterministic, so using them again would add nothing.
+        solves : Optional[Dict[Tuple[int, int], Optional[np.ndarray]]]
+            The BP-OSD solves already made for this syndrome, by observable
+            and forced value. With them the wider search costs at most the
+            solves that are still missing: two per observable in total.
+
+        Returns
+        -------
+        Dict[int, Tuple[float, np.ndarray]]
+            ``found`` extended by the new classes, with the most likely
+            candidate of every class.
+        """
+        wider = dict(found)
+        skip = set(tried)
+        centers = sorted(
+            (label for label in found if label not in skip),
+            key=lambda label: -found[label][0],
+        )
+        if solves is None:
+            solves = {}
+        used = 0
+        for center in centers:
+            if used >= self.extra_centers:
+                break
+            if all(
+                (j, ((center >> j) & 1) ^ 1) in solves
+                for j in range(self.num_observables)
+            ):
+                continue
+            self._flip_around(center, syndrome, wider, solves)
+            used += 1
+        return wider
+
+    @staticmethod
+    def _active_set(found: Dict[int, Tuple[float, np.ndarray]]) -> List[int]:
+        """Union of the candidate supports, most likely candidate first."""
+        active: List[int] = []
+        seen = set()
+        for _, (_, solution) in sorted(found.items(), key=lambda item: -item[1][0]):
+            for i in np.flatnonzero(solution):
+                if int(i) not in seen:
+                    seen.add(int(i))
+                    active.append(int(i))
+        return active
+
+    def _flips(self, label: int) -> np.ndarray:
+        return ((label >> np.arange(self.num_observables)) & 1).astype(np.uint8)
+
+    def _class_masses(
+        self, syndrome: np.ndarray, active: Sequence[int], stages: int
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        return active_set_class_masses(
+            self.problem,
+            syndrome,
+            active,
+            self.chi_max if stages == 1 else self.temper_chi_max,
+            check_matrix=self._dense_check,
+            observable_matrix=self._dense_observables,
+            stages=stages,
+        )
+
+    def _truncated(self, contraction: Dict[str, Any]) -> bool:
+        """Whether a first pass truncated: ``lost`` or ``pruned`` at the threshold."""
+        measure = max(contraction["lost"], contraction.get("pruned", 0.0))
+        return measure >= self.temper_threshold
+
+    def _first_pass(
+        self, syndrome: np.ndarray, active: Sequence[int]
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Class masses of the configured truncation.
+
+        ``lost`` and ``pruned`` are both filled in; the one that does not
+        belong to the configured truncation is zero.
+        """
+        if self.truncation == "svd":
+            masses, info = self._class_masses(syndrome, active, 1)
+            info["pruned"] = 0.0
+            return masses, info
+        masses, info = basis_truncated_class_masses(
+            self.problem,
+            syndrome,
+            active,
+            self.max_states,
+            check_matrix=self._dense_check,
+            observable_matrix=self._dense_observables,
+        )
+        info["lost"] = 0.0
+        return masses, info
+
+    def _first_candidates(
+        self, syndrome: np.ndarray, seed: np.ndarray, external: List[np.ndarray]
+    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int], _Solves, List[int]]:
+        """The standard search started from the most likely of the BP-OSD
+        solution and the external candidates, with all of them recorded, and
+        the active set of the result."""
+        start = max([seed, *external], key=lambda solution: self._llr @ solution)
+        found, tried, solves = self._search(syndrome, start)
+        for solution in [seed, *external]:
+            label = self.class_of(solution)
+            likelihood = float(self._llr @ solution)
+            if label not in found or likelihood > found[label][0]:
+                found[label] = (likelihood, solution.copy())
+        active = self._active_set(found)
+        # An external candidate that is not the most likely of its class
+        # still explains the syndrome: its mechanisms stay in the sum.
+        kept = set(active)
+        for solution in external:
+            for mechanism in np.flatnonzero(solution):
+                if int(mechanism) not in kept:
+                    kept.add(int(mechanism))
+                    active.append(int(mechanism))
+        return found, tried, solves, active
+
+    def decode(  # pylint: disable=too-many-locals
+        self, syndrome: np.ndarray
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Predict the observable flips for one syndrome.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+
+        Returns
+        -------
+        (predicted_flips, info)
+            ``predicted_flips`` has one bit per observable. ``info`` holds
+            ``predicted_class`` and ``bposd_class`` (observable patterns as
+            integers, bit ``j`` is observable ``j``), ``best_candidate_class``
+            (the class of the most likely single candidate), ``margin``
+            (difference between the two largest normalized class masses),
+            ``lost`` (the discarded fraction of the squared norm, summed
+            over every truncation of the SVD contraction that gave the
+            verdict; zero with ``truncation="basis"``), ``pruned`` (the
+            largest fraction of the ranking weight pruned at one step of the
+            basis truncation; zero with ``truncation="svd"``; both are
+            indicators, not bounds on the error of the masses),
+            ``tempered`` (whether that
+            was the tempered contraction), ``widened`` (whether the wider
+            search asked BP-OSD for a solve it did not have), ``active`` and
+            ``free`` (sizes of the active set and of its free part),
+            ``candidates`` (number of logical classes reached) and
+            ``external`` (number of distinct mechanism sets from
+            ``candidate_sources`` that reproduced the syndrome). A tie for the
+            heaviest class goes to the BP-OSD class when it is one of the
+            tied classes; two normalized masses within
+            :data:`TIE_TOLERANCE` of each other count as tied. The empty
+            syndrome is answered with no flips without a search. If BP-OSD
+            returns a mechanism set that does not reproduce the syndrome, its
+            class is returned with ``candidates`` set to 0.
+        """
+        syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
+        info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
+        info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
+        info.update(candidates=1, tempered=False, widened=False, pruned=0.0)
+        info["external"] = 0
+        if not syndrome.any():
+            return self._flips(0), info
+        seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
+        bposd_class = self.class_of(seed)
+        info.update(predicted_class=bposd_class, bposd_class=bposd_class)
+        info["best_candidate_class"] = bposd_class
+        if not self._satisfies(seed, syndrome):
+            info.update(margin=0.0, candidates=0)
+            return self._flips(bposd_class), info
+
+        external = self.external_candidates(syndrome)
+        info["external"] = len(external)
+        found, tried, solves, active = self._first_candidates(syndrome, seed, external)
+        masses, contraction = self._first_pass(syndrome, active)
+        hard = self._truncated(contraction)
+        widened = False
+        if hard and self.extra_centers > 0 and len(found) > len(tried):
+            solved = len(solves)
+            found = self.widen(syndrome, found, tried, solves)
+            # A better candidate can replace the one a class had; the
+            # mechanisms of the replaced one stay active, so that widening
+            # never pins off anything the first sum included.
+            wider_active = self._active_set(found)
+            kept = set(wider_active)
+            wider_active += [m for m in active if m not in kept]
+            if wider_active != active:
+                try:
+                    wider = self._first_pass(syndrome, wider_active)
+                except ArithmeticError:
+                    # The wider sum vanished: the first sum and its active
+                    # set stand.
+                    pass
+                else:
+                    active = wider_active
+                    masses, contraction = wider
+                    hard = self._truncated(contraction)
+            # Centers whose solves were all made already cost nothing and
+            # change nothing: the search was widened only if it asked for one.
+            widened = len(solves) > solved
+        tempered = False
+        if self.truncation == "svd" and self.temper_stages > 1 and hard:
+            try:
+                masses, contraction = self._class_masses(
+                    syndrome, active, self.temper_stages
+                )
+                tempered = True
+            except ArithmeticError:
+                # The tempered state underflowed: keep the one-pass verdict.
+                pass
+        ranking = np.argsort(masses)[::-1]
+        predicted = int(ranking[0])
+        margin = (
+            float(masses[ranking[0]] - masses[ranking[1]]) if masses.size > 1 else 1.0
+        )
+        if masses[bposd_class] >= masses[predicted] - TIE_TOLERANCE:
+            predicted = bposd_class
+        info.update(
+            predicted_class=predicted,
+            best_candidate_class=max(found, key=lambda label: found[label][0]),
+            margin=margin,
+            lost=contraction["lost"],
+            pruned=contraction.get("pruned", 0.0),
+            tempered=tempered,
+            widened=widened,
+            active=len(active),
+            free=contraction["free"],
+            candidates=len(found),
+        )
+        return self._flips(predicted), info

@@ -1,7 +1,9 @@
 # DEM decoding campaign: harnesses and how to regenerate the data
 
-These three scripts produced every number and figure in the DEM decoder
-report on pull request #544. The per-shot records they write are **not
+The first three scripts produced every number and figure in the DEM decoder
+report on pull request #544; `bb72_class_sum.py` is the paired comparison of
+the class-sum decoder with BP-OSD, and `priortilt_candidates.py` adds the
+solutions of an external decoder to its candidates. The per-shot records they write are **not
 versioned**: every harness is deterministic and seeded, so the files are
 reproduced bit for bit by rerunning the script. Outputs land in
 `data-dem-campaign/` next to the scripts, which the repository's `data*/`
@@ -12,6 +14,8 @@ rule keeps out of git.
 | `nishimori.py` | Code-capacity bit-flip thresholds, MAP vs MWPM, rotated surface code d = 5, 7, 9, 11 | `N_d{d}_p{p:.4f}.jsonl`, 36 cells | 16000 per near-threshold cell for d ≤ 9, 4000 otherwise | ~26 CPU-hours (d = 9 near threshold is half of it) |
 | `dem_rerun.py` | Circuit-level d = 5, r = 5, p = 0.5 % memory-Z with a per-shot χ ladder, calibration audit, MWPM and belief-matching | `D2_d5r5_p0.005.jsonl` | 2000 | ~83 CPU-hours (149 s per shot) |
 | `repro_tnd3d.py` | Fig. 1d of Piveteau, Chubb and Renes, PRX Quantum 5, 040303: memory-X, rounds = d, p = 0.6 to 0.9 % | `T_d{d}r{d}_p{p:.4f}.jsonl`, 4 cells per distance | 2000 per cell | ~12 CPU-hours at d = 3 (5.6 s per shot) |
+| `bb72_class_sum.py` | Bivariate bicycle [[72, 12, 6]] memory experiment (qldpc, depolarizing circuit noise): `ClassSumDecoder` against BP-OSD on the same shots, with the exact McNemar test | `B_r{rounds}_p{p}_{basis}_chi{chi}_seed{seed}_n{shots}.jsonl` | 2000 by default | ~0.5 s per shot at six rounds, ~0.1 s at one round |
+| `priortilt_candidates.py` | Any stim circuit PriorTilt has tuned parameters for, by default the [[144, 12, 12]] memory circuits of arXiv:2611.13373: BP-OSD, PriorTilt, `ClassSumDecoder` and `ClassSumDecoder` with PriorTilt solutions as `candidate_sources`, on the same shots | `P_{circuit}_{code}_p{p}_seed{seed}_n{shots}_k{runs}_m{states}.jsonl` | 200 by default | ~20 s per shot at p = 0.5 % |
 
 All costs are single-core wall time on an Apple M-series laptop with
 `chi_max` as set in the scripts. Every run is resumable: a cell whose file
@@ -35,6 +39,15 @@ RERUN_SHOTS=2000 python dem_rerun.py
 
 # Fig. 1d reproduction. REPRO_D selects the distance, REPRO_SHOTS the count.
 REPRO_D=3 REPRO_SHOTS=2000 python repro_tnd3d.py
+
+# Class-sum decoder against BP-OSD on the [[72, 12, 6]] code. BB_ROUNDS, BB_P,
+# BB_SHOTS, BB_SEED, BB_CHI and BB_BASIS select the cell.
+BB_ROUNDS=6 BB_P=0.005 BB_SHOTS=2000 python bb72_class_sum.py
+
+# Class-sum decoder with PriorTilt solutions among its candidates. Needs the
+# PriorTilt repository on PYTHONPATH (see below). PT_CIRCUIT, PT_CODE, PT_P,
+# PT_SHOTS, PT_SEED, PT_RUNS and PT_STATES select the run.
+PT_CIRCUIT=path/to/circuit.stim PT_P=0.005 python priortilt_candidates.py
 ```
 
 `dem_rerun.py` and `repro_tnd3d.py` also decode every shot with belief
@@ -115,3 +128,11 @@ harness aborts when the two differ by more than three standard deviations.
 The numbers behind the report are printed by each harness when a cell
 completes, so a regeneration can be checked against the PR text without
 any plotting code.
+
+`priortilt_candidates.py` needs PriorTilt, which is neither a dependency of
+mdopt nor distributed with it: its code is licensed CC BY-NC-SA 4.0, for
+non-commercial use. Clone https://github.com/ionq-publications/PriorTiltDecoder,
+build its Rust extension as its README describes (`pip install ./decoder`) and
+put the clone on `PYTHONPATH`. The clone also holds the circuits of the paper
+in `StimCircuit/`. The script uses PriorTilt's public interface only and maps
+its error columns to mdopt's mechanisms by their detectors.
