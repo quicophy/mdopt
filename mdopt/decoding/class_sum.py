@@ -37,17 +37,27 @@ double) and then compresses with a canonical SVD sweep, and the bond cut never
 splits a degenerate multiplet of singular values. Class masses are squared
 norms, so they are non-negative by construction.
 
+The compression is never exactly lossless, whatever the bond dimension: a
+Schmidt component below :data:`ZERO_CUTOFF` times the largest one is always
+dropped, and a parity factor applied afterwards can amplify what was dropped
+(each pivot that then fires instead of resting multiplies the component by
+``(1 - p) / p``). A small discarded weight therefore does not prove that the
+masses are right.
+
 **Tempering.** Applying every factor at full strength in one pass works as
-long as nothing is truncated. On larger codes the active set has a hundred or
-more free mechanisms, and the one-pass contraction then fails: a truncation
+long as no cut removes a component that a later factor amplifies. On larger
+codes the active set has a hundred or more free mechanisms, and the one-pass
+contraction then fails: a truncation
 made early leaves a small error on configurations that the state has not yet
 been told are unlikely, and the factors applied later can amplify that error
 by ``(1 - p) / p`` each. The tempered contraction starts from the uniform
 state and applies every factor (the priors of the free mechanisms and the
 pivot factors) to the power ``1 / stages``, in ``stages`` passes. Each pass
 truncates a state that already carries a share of every factor, so the
-truncation keeps the configurations that matter. Without truncation both
-contractions give the same masses. The decoder runs the one-pass contraction
+truncation keeps the configurations that matter. When ``chi_max`` cuts
+nothing the two contractions agree, except on a component that the one pass
+loses to the zero cutoff and a later factor would have amplified: the
+tempered passes keep it. The decoder runs the one-pass contraction
 first and repeats it with tempering only when that pass discarded weight.
 
 **Hard syndromes.** The syndromes whose first pass discards weight are the
@@ -92,7 +102,9 @@ DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
 #: does not resolve smaller differences, and BP-OSD's class then stands.
 TIE_TOLERANCE = 1e-6
 
-#: Singular values below this fraction of the largest one count as zero.
+#: Singular values below this fraction of the largest one count as zero and
+#: are dropped at every bond, whatever the requested bond dimension. Rounding
+#: noise sits at this level, so a smaller cutoff would keep noise instead.
 ZERO_CUTOFF = 1e-13
 
 
@@ -186,7 +198,10 @@ class ParityChain:
         Logarithm of the norm that has been divided out so far.
     lost : float
         Sum over all truncations of the discarded fraction of the squared
-        norm.
+        norm at the time of the cut. It includes the components below
+        :data:`ZERO_CUTOFF`, which are dropped at any bond dimension. A later
+        factor can amplify a discarded component, so a small value is an
+        indicator and not a bound on the error of the result.
     """
 
     def __init__(self, vectors: Sequence[np.ndarray]):
@@ -556,8 +571,10 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         at full strength. With more, the chain starts from the uniform state
         and every prior and pivot factor is applied to the power
         ``1 / stages`` in each of ``stages`` passes, which keeps the
-        truncation faithful when the active set is large. Both give the same
-        masses when nothing is truncated.
+        truncation faithful when the active set is large. When ``chi_max``
+        cuts nothing both give the same masses, except that the one pass can
+        lose to :data:`ZERO_CUTOFF` a component that a later factor would
+        have amplified; the tempered passes keep it.
 
     Returns
     -------
@@ -566,11 +583,13 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         active set whose observable pattern is ``c`` (bit ``j`` of ``c`` is
         observable ``j``), normalized to sum to one. ``info`` holds
         ``log_mass`` (logarithm of the probability that the syndrome is
-        produced by mechanisms of the active set alone: exact when nothing
-        is truncated, otherwise an estimate that can lie above or below the
-        exact value, because the soft factors applied after a truncation
-        can amplify its error), ``lost`` (accumulated discarded fraction of
-        the squared norm), ``bond`` (largest bond dimension),
+        produced by mechanisms of the active set alone: an estimate that can
+        lie above or below the exact value, because the soft factors applied
+        after a cut can amplify what the cut discarded, and components below
+        :data:`ZERO_CUTOFF` are cut at any ``chi_max``), ``lost``
+        (accumulated discarded fraction of the squared norm at the time of
+        each cut: an indicator, not a bound on the error of the masses, for
+        the same reason), ``bond`` (largest bond dimension),
         ``free`` (number of free mechanisms) and ``rank`` (number of pivots).
 
     Raises
@@ -744,6 +763,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     temper_threshold : float
         The one-pass contraction is replaced by the tempered one when its
         discarded fraction of the squared norm (``lost``) reaches this value.
+        A component the one pass loses to :data:`ZERO_CUTOFF` contributes
+        next to nothing to ``lost``, so such a loss does not trigger the
+        tempered pass.
     temper_chi_max : Optional[int]
         The bond dimension of the tempered contraction. ``None`` uses
         ``chi_max``. The tempered pass only runs on the syndromes whose first
@@ -998,7 +1020,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
             ``lost`` (the discarded fraction of the squared norm, summed
-            over every truncation of the contraction that gave the verdict),
+            over every truncation of the contraction that gave the verdict:
+            an indicator, not a bound on the error of the masses),
             ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the candidate
             search was widened), ``active`` and
