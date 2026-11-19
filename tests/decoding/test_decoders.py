@@ -3224,6 +3224,10 @@ def test_weighted_marginalization_reports_a_state_the_weights_annihilate(renorma
     result, collapsed = _marginalize_with_weights(state, 1, kill, renormalize)
     assert collapsed
     assert not np.asarray(result.dense(flatten=True, renormalize=False)).any()
+    # A caller that decides exactly whether the shot is possible turns the
+    # norm check off and gets the contraction as it is.
+    result, collapsed = _marginalize_with_weights(state, 1, kill, renormalize, None)
+    assert not collapsed
 
     pair = create_custom_product_state("0" + "00", form="Right-canonical")
     weight = np.ones((2, 2))
