@@ -28,6 +28,13 @@ The contraction (:class:`ParityChain`) applies each parity factor exactly (the
 bonds it crosses double) and then compresses with a canonical SVD sweep, and
 the bond cut never splits a degenerate multiplet of singular values. Class
 masses are squared norms, so they are non-negative by construction.
+
+The compression is never exactly lossless, whatever the bond dimension: a
+Schmidt component below :data:`ZERO_CUTOFF` times the largest one is always
+dropped, and a parity factor applied afterwards can amplify what was dropped
+(each pivot that then fires instead of resting multiplies the component by
+``(1 - p) / p``). A small discarded weight therefore does not prove that the
+masses are right.
 """
 
 from dataclasses import dataclass
@@ -40,7 +47,9 @@ from scipy.sparse import csr_matrix
 from mdopt.decoding.dem import DemProblem, _validated_syndrome
 
 
-#: Singular values below this fraction of the largest one count as zero.
+#: Singular values below this fraction of the largest one count as zero and
+#: are dropped at every bond, whatever the requested bond dimension. Rounding
+#: noise sits at this level, so a smaller cutoff would keep noise instead.
 ZERO_CUTOFF = 1e-13
 
 
@@ -134,7 +143,10 @@ class ParityChain:
         Logarithm of the norm that has been divided out so far.
     lost : float
         Sum over all truncations of the discarded fraction of the squared
-        norm.
+        norm at the time of the cut. It includes the components below
+        :data:`ZERO_CUTOFF`, which are dropped at any bond dimension. A later
+        factor can amplify a discarded component, so a small value is an
+        indicator and not a bound on the error of the result.
     """
 
     def __init__(self, vectors: Sequence[np.ndarray]):
@@ -504,11 +516,13 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         active set whose observable pattern is ``c`` (bit ``j`` of ``c`` is
         observable ``j``), normalized to sum to one. ``info`` holds
         ``log_mass`` (logarithm of the probability that the syndrome is
-        produced by mechanisms of the active set alone: exact when nothing
-        is truncated, otherwise an estimate that can lie above or below the
-        exact value, because the soft factors applied after a truncation
-        can amplify its error), ``lost`` (accumulated discarded fraction of
-        the squared norm), ``bond`` (largest bond dimension),
+        produced by mechanisms of the active set alone: an estimate that can
+        lie above or below the exact value, because the soft factors applied
+        after a cut can amplify what the cut discarded, and components below
+        :data:`ZERO_CUTOFF` are cut at any ``chi_max``), ``lost``
+        (accumulated discarded fraction of the squared norm at the time of
+        each cut: an indicator, not a bound on the error of the masses, for
+        the same reason), ``bond`` (largest bond dimension),
         ``free`` (number of free mechanisms) and ``rank`` (number of pivots).
 
     Raises
