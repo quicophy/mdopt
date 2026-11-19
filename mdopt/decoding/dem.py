@@ -269,7 +269,15 @@ def decode_dem(
         of the contraction. It is always computed; a collapsed class-mass
         vector (nothing positive, or not finite) raises
         :class:`DemDecodingError`, an ``ArithmeticError`` that carries the
-        certificate as its ``certificate`` attribute. The
+        certificate as its ``certificate`` attribute. A syndrome of
+        probability exactly zero under the model (it needs a mechanism of
+        probability 0 to fire, or one of probability 1 not to) has all
+        class masses zero, but the contraction does not always end in an
+        exact zero: the rescaling can bring the round-off that is left to
+        order one, and a verdict then comes back with a survival near
+        machine precision and a bound near or above one. With
+        ``prior_reweighting="BP"`` the undo detects the case (see there).
+        The
         certificate's ``negativity`` is the most negative class mass as a
         fraction of the peak (0 for an exact contraction, up to round-off).
     negative_mass : str
@@ -289,6 +297,11 @@ def decode_dem(
         order one instead of order ``P(syndrome)``, which is what keeps a
         finite ``chi_max`` from rebuilding the class masses out of truncation
         residue (see :func:`mdopt.decoding.decoding.decode_custom`).
+        A branch of probability exactly zero is undone with weight zero.
+        If nothing the contraction kept survives that, beyond the round-off
+        expected at the certificate's survival, the syndrome has probability
+        zero under the model and :class:`DemDecodingError` is raised with an
+        infinite bound, instead of a verdict built from the round-off.
     reweighting_floor : Optional[float]
         The clip of the marginals, relative to the prior: the contracted
         weight of either branch of site ``i`` stays at least
@@ -298,10 +311,20 @@ def decode_dem(
         mechanisms (the clip costs the consistent configurations about
         ``exp(-floor * n * p)`` of mass), and it bounds how much a
         truncation residue is amplified when the prior is divided back in:
-        at 0.1 a configuration with k reweighted branches comes back scaled
-        by up to 10^k and round-off alone moved a class mass by 1e-4 on a
-        13-mechanism model, while at 0.5 (2^k) the masses are exact to 1e-11
-        and a d=5 color-code ladder is monotone in chi_max.
+        a configuration with k reweighted branches comes back scaled by up
+        to ``(1 / floor)^k``. Round-off is amplified the same way, with
+        nothing truncated and a clean certificate, because the certificate
+        bounds the reweighted contraction and not what the undo does to it.
+        Measured at ``chi_max=1e4`` and ``cut=0.0``: a floor of 0.1 raised a
+        negative class mass of 1.9 % of the peak on a 23-mechanism surface
+        code model, and a floor of 0.02 collapsed there and flipped a
+        verdict on a 41-mechanism one. At the default of 0.5 no verdict
+        changed, but the masses are not exact either: the moves of the
+        orthogonality center keep the SVD's cutoff of 1e-12, and on a
+        distance-5 repetition code memory (41 mechanisms) the smaller class
+        mass came out up to 3 % off in relative terms, about 1e-7 in
+        absolute terms, with a bound of 2e-11. A d=5 color-code ladder is
+        monotone in chi_max at 0.5.
         Run the reweighted contraction with ``cut=0.0``: configurations the
         SVD cutoff drops as negligible in the contracted weights are exactly
         the ones the undo scales back up. This sets the cutoff of the
@@ -590,7 +613,23 @@ def decode_dem(
         if 0.0 < center_norm < np.inf:
             mps.tensors[mps.orth_center] = mps.tensors[mps.orth_center] / center_norm
     if undo:
-        logical_mps = _marginalize_with_weights(mps, num_obs, undo, True)
+        logical_mps, undo_collapsed = _marginalize_with_weights(
+            mps, num_obs, undo, True, certificate.survival
+        )
+        if undo_collapsed:
+            # Every configuration the contraction kept sits on a branch the
+            # prior gives probability zero: the syndrome is impossible under
+            # the model, the exact class masses are all zero, and what the
+            # undo let through is round-off. The bound of the reweighted
+            # contraction says nothing about that, so it is replaced by the
+            # bound of a collapsed state.
+            certificate.finalize(0.0)
+            raise DemDecodingError(
+                "The class-mass vector collapsed when the BP prior was undone: "
+                "every configuration the contraction kept has probability zero "
+                f"under the model (chi_max={chi_max}).",
+                certificate,
+            )
     else:
         logical_mps = mps.marginal(
             sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),

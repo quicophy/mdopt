@@ -752,6 +752,60 @@ def test_zero_probability_mechanism_survives_the_reweighting_undo():
     assert np.array_equal(plain_flips, bp_flips)
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"cut": 0.0},
+        {"renormalize": False},
+    ],
+)
+def test_impossible_syndrome_raises_when_the_bp_prior_is_undone(options):
+    """Mechanism 0 never fires and mechanisms 5 and 6 always do, and no
+    setting of the others explains the syndrome: every class mass is exactly
+    zero. The BP-reweighted contraction still keeps a mass fraction of 5e-4,
+    all of it on branches the prior forbids, and the undo multiplies it by
+    zero. The round-off that was left used to be rescaled into the masses
+    [0.42, 0.91] with a bound of 4e-13; it must raise instead, with the bound
+    of a collapsed state."""
+    problem = DemProblem(
+        probs=[0.0, 0.158, 0.122, 0.29, 0.308, 1.0, 1.0],
+        detector_rows=[[2, 3, 4, 6], [], [0, 5, 6], [0, 1, 2, 5, 6], []],
+        observable_rows=[[1, 2, 3, 6]],
+        num_detectors=5,
+        num_observables=1,
+    )
+    syndrome = np.array([0, 0, 1, 1, 0])
+    assert not _exact_class_masses(problem, syndrome).any()
+    with pytest.raises(DemDecodingError, match="BP prior was undone") as raised:
+        decode_dem(problem, syndrome, prior_reweighting="BP", **options)
+    assert raised.value.certificate.bound == float("inf")
+    assert raised.value.certificate.survival == 0.0
+
+
+def test_certain_mechanisms_do_not_trip_the_undo_collapse_check():
+    """A possible syndrome on a model with mechanisms of probability 0 and 1
+    has zero undo weights too. What survives them is the whole answer, so
+    the collapse check must stay silent and the masses must be exact."""
+    problem = DemProblem(
+        probs=[1.0, 0.1, 0.2, 0.0],
+        detector_rows=[[0, 1], [1, 2, 3], [0, 2]],
+        observable_rows=[[1], [0, 3]],
+        num_detectors=3,
+        num_observables=2,
+    )
+    syndrome = np.array([0, 0, 0])
+    exact = _exact_class_masses(problem, syndrome)
+    assert exact.sum() > 0
+    masses, flips, certificate = decode_dem(
+        problem, syndrome, prior_reweighting="BP", return_certificate=True
+    )
+    assert np.allclose(masses / masses.sum(), exact / exact.sum(), atol=1e-10)
+    assert int(np.argmax(masses)) == int(np.argmax(exact))
+    assert certificate.bound < 1e-9 and certificate.survival > 0.0
+    assert len(flips) == 2
+
+
 def test_long_pinned_chain_keeps_a_finite_certificate():
     """2,200 probability-0.5 mechanisms, each pinned by its own detector: no
     sweep runs, and each site keeps 1/sqrt(2) of its unit-norm weight state,
