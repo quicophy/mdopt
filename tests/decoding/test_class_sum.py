@@ -610,6 +610,8 @@ def test_decoder_rejects_bad_input():
         ClassSumDecoder(empty)
     with pytest.raises(ValueError, match="temper_chi_max"):
         ClassSumDecoder(problem, temper_chi_max=0)
+    with pytest.raises(ValueError, match="extra centers"):
+        ClassSumDecoder(problem, extra_centers=-1)
     with pytest.raises(ValueError):
         ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors + 1))
 
@@ -715,28 +717,249 @@ def test_decoder_tempers_only_when_the_first_pass_truncated():
     assert tempered_at_small_chi > 0
 
 
-def test_tempered_pass_can_use_its_own_bond_dimension():
-    """A larger bond for the tempered pass leaves the easy syndromes untouched."""
+def test_widened_search_extends_the_candidates():
+    """Every extra center adds classes and never loses a better candidate."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    syndromes, _ = _sample_from_model(problem, 40, seed=5)
+    syndromes = syndromes[syndromes.any(axis=1)]
+    narrow = ClassSumDecoder(problem, extra_centers=0)
+    wide = ClassSumDecoder(problem, extra_centers=4)
+    grew = 0
+    for syndrome in syndromes:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(narrow._bposd.decode(syndrome), dtype=np.uint8)
+        if not narrow._satisfies(seed, syndrome):
+            continue
+        found, tried, _ = narrow._search(syndrome, seed)
+        assert narrow.candidates(syndrome, seed).keys() == found.keys()
+        assert narrow.widen(syndrome, found) == found
+        # Centers that were already used add nothing and do not use the budget.
+        only_tried = {label: found[label] for label in tried}
+        assert wide.widen(syndrome, only_tried, tried) == only_tried
+        repeated = ClassSumDecoder(problem, extra_centers=len(tried))
+        again = repeated.widen(syndrome, found)
+        assert again.keys() == found.keys()
+        wider = wide.widen(syndrome, found, tried)
+        assert set(found) <= set(wider)
+        for label, (likelihood, solution) in wider.items():
+            assert wide._satisfies(solution, syndrome)
+            assert wide.class_of(solution) == label
+            assert np.isclose(likelihood, wide._llr @ solution)
+            if label in found:
+                assert likelihood >= found[label][0] - 1e-12
+        grew += len(wider) > len(found)
+    assert grew > 0
+
+
+def test_decoder_widens_only_when_the_first_pass_truncated():
+    """Hard-syndrome options leave the easy syndromes untouched."""
     problem = _small_surface_problem(0.02)
     syndromes, _ = _sample_from_model(problem, 40, seed=3)
     syndromes = syndromes[syndromes.any(axis=1)]
     default = ClassSumDecoder(problem, chi_max=16)
-    larger = ClassSumDecoder(problem, chi_max=16, temper_chi_max=32)
-    assert default.temper_chi_max == 16 and larger.temper_chi_max == 32
-    forced = ClassSumDecoder(problem, chi_max=1, temper_chi_max=64)
-    tempered = exact = 0
+    options = ClassSumDecoder(problem, chi_max=16, extra_centers=4, temper_chi_max=32)
+    assert default.temper_chi_max == 16 and options.temper_chi_max == 32
+    forced = ClassSumDecoder(problem, chi_max=1, extra_centers=4, temper_chi_max=64)
+    stock = ClassSumDecoder(problem, chi_max=1)
+    # One pass and nothing else: its ``lost`` says whether the first pass
+    # of the decoders above truncated.
+    one_pass = ClassSumDecoder(problem, chi_max=1, temper_stages=1)
+    widened = larger = tempered = 0
     for syndrome in syndromes:
         flips, info = default.decode(syndrome)
-        same_flips, same = larger.decode(syndrome)
-        assert not same["tempered"] and np.array_equal(flips, same_flips)
+        same_flips, same = options.decode(syndrome)
+        assert not same["widened"] and not same["tempered"]
+        assert np.array_equal(flips, same_flips)
+        assert same["candidates"] == info["candidates"]
+        _, narrow = stock.decode(syndrome)
         hard_flips, hard = forced.decode(syndrome)
+        # Only a truncated first pass widens, and only if a class is left
+        # that was not a center yet.
+        _, first = one_pass.decode(syndrome)
+        assert first["lost"] >= forced.temper_threshold or not hard["widened"]
+        assert hard["candidates"] >= narrow["candidates"]
         if hard["tempered"]:
             # The tempered pass at chi 64 is exact on this small model.
             assert hard["lost"] < 1e-8
             _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
-            exact += int(np.array_equal(hard_flips, reference))
+            larger += int(np.array_equal(hard_flips, reference))
+        widened += hard["widened"]
         tempered += hard["tempered"]
-    assert tempered > 5 and exact >= tempered - 2
+    assert widened > 0 and tempered > 5 and larger >= tempered - 2
+
+
+def test_widening_recontracts_a_superset_and_decides_from_it(monkeypatch):
+    """A truncated first pass widens the search; the class sum is repeated on
+    a set that contains the first one, and that second sum gives the verdict."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated_then_decided(syndrome, active, stages):
+        calls.append(list(active))
+        masses = np.zeros(1 << problem.num_observables)
+        # First sum: truncated, verdict 0. Second sum: verdict 5.
+        masses[0 if len(calls) == 1 else 5] = 1.0
+        return masses, {"lost": 1.0 if len(calls) == 1 else 0.0, "free": 1}
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated_then_decided)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    recontracted = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        flips, info = decoder.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        assert len(calls) in (1, 2)
+        if len(calls) == 2:
+            assert info["widened"]
+            assert set(calls[0]) < set(calls[1])
+            assert info["active"] == len(calls[1])
+            if info["bposd_class"] != 5:
+                assert info["predicted_class"] == 5
+                assert int(flips @ (1 << np.arange(flips.size))) == 5
+            recontracted += 1
+        else:
+            assert info["active"] == len(calls[0])
+    assert recontracted > 0
+
+
+def test_widening_that_asks_for_no_solve_is_not_reported(monkeypatch):
+    """With every solve of the syndrome already made, the untried classes cost
+    nothing to visit and change nothing: the decode is not marked as widened
+    and the class sum is not run again."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated(syndrome, active, stages):
+        calls.append(list(active))
+        masses = np.zeros(1 << problem.num_observables)
+        masses[3] = 1.0
+        return masses, {"lost": 1.0, "free": 1}
+
+    search = decoder._search
+
+    def search_with_every_solve_made(syndrome, seed):
+        found, tried, solves = search(syndrome, seed)
+        for j in range(problem.num_observables):
+            for target in (0, 1):
+                solves.setdefault((j, target), None)
+        return found, tried, solves
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated)
+    monkeypatch.setattr(decoder, "_search", search_with_every_solve_made)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    untried = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        _, info = decoder.decode(syndrome)
+        assert not info["widened"] and len(calls) <= 1
+        untried += info["candidates"] > decoder.recenter_rounds
+    assert untried > 0
+
+
+def test_a_wider_sum_that_vanishes_keeps_the_first_verdict(monkeypatch):
+    """Widening must not abort a decode that already has a verdict."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated_then_vanished(syndrome, active, stages):
+        calls.append(list(active))
+        if len(calls) > 1:
+            raise ArithmeticError("vanished")
+        masses = np.zeros(1 << problem.num_observables)
+        masses[3] = 1.0
+        return masses, {"lost": 1.0, "free": 1}
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated_then_vanished)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    retried = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        _, info = decoder.decode(syndrome)
+        if len(calls) == 2:
+            retried += 1
+            assert info["widened"] and info["active"] == len(calls[0])
+            if info["bposd_class"] != 3:
+                assert info["predicted_class"] == 3
+    assert retried > 0
+
+
+def test_the_search_never_repeats_a_solve():
+    """One syndrome has two distinct solves per observable; a wide search
+    makes each of them at most once."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64)
+    counts = []
+
+    class Counting:
+        def __init__(self, inner):
+            self.inner = inner
+
+        def decode(self, extended):
+            counts.append(tuple(int(b) for b in extended))
+            return self.inner.decode(extended)
+
+    decoder._flipped = [Counting(inner) for inner in decoder._flipped]
+    syndromes, _ = _sample_from_model(problem, 30, seed=5)
+    widened = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(decoder._bposd.decode(syndrome), dtype=np.uint8)
+        if not decoder._satisfies(seed, syndrome):
+            continue
+        counts.clear()
+        found, tried, solves = decoder._search(syndrome, seed)
+        stock = len(counts)
+        wider = decoder.widen(syndrome, found, tried, solves)
+        assert len(counts) <= 2 * problem.num_observables
+        assert len(counts) == len(solves)
+        assert set(found) <= set(wider)
+        widened += len(counts) > stock
+        # Without a cache from the search, the centers still share one.
+        counts.clear()
+        decoder.widen(syndrome, found, tried)
+        assert len(counts) <= 2 * problem.num_observables
+    assert widened > 0
+
+
+def test_the_center_budget_is_spent_on_centers_that_solve_something():
+    """A center whose flips were all solved already does not use up the budget.
+
+    With one extra center, the most likely untried class sometimes needs no
+    new solve while a less likely one does. The wider search then moves on
+    to that one instead of doing nothing.
+    """
+    problem = _random_problem(2, num_detectors=12, num_mechanisms=60, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=1)
+    syndromes, _ = _sample_from_model(problem, 80, seed=5)
+    passed_over = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(decoder._bposd.decode(syndrome), dtype=np.uint8)
+        if not decoder._satisfies(seed, syndrome):
+            continue
+        found, tried, solves = decoder._search(syndrome, seed)
+        centers = sorted(
+            (label for label in found if label not in tried),
+            key=lambda label: -found[label][0],
+        )
+        missing = [
+            sum(
+                (j, ((center >> j) & 1) ^ 1) not in solves
+                for j in range(problem.num_observables)
+            )
+            for center in centers
+        ]
+        useful = next((n for n in missing if n > 0), 0)
+        before = len(solves)
+        decoder.widen(syndrome, found, tried, solves)
+        # Exactly the first center with something to solve is used.
+        assert len(solves) - before == useful
+        passed_over += bool(missing) and missing[0] == 0 and useful > 0
+    assert passed_over > 0
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
