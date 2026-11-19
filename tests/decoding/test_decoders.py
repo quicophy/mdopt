@@ -2312,7 +2312,9 @@ def test_certificate_is_tight_without_truncation_and_warns_with_it(caplog):
     assert certificate.bound < 1e-6
     assert 0 < certificate.survival <= 1
 
-    # The trivial-error fast path reports a clean certificate too.
+    # The trivial-error fast path contracts nothing and reports the trivial
+    # certificate: its survival of one is a placeholder, not the survival of
+    # the shot.
     _, score, certificate = decode_css(
         qec.steane_code(),
         "IIIIIII",
@@ -2321,6 +2323,7 @@ def test_certificate_is_tight_without_truncation_and_warns_with_it(caplog):
         return_certificate=True,
     )
     assert score == 1 and certificate.bound == 0.0
+    assert certificate.survival == 1.0 and not certificate.terms
 
     code = create_bb_code(3, 3, "x + y", "1 + x*y")
     with caplog.at_level(logging.WARNING, logger="mdopt.decoding.decoding"):
