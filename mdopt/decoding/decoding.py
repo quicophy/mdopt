@@ -2323,16 +2323,26 @@ def _marginalize_with_weights(
         raise ValueError(
             f"The undo weights must cover {wanted}, given sites {sorted(covered)}."
         )
-    detect = survival is not None
-    if detect and mps.orth_center is not None and any(not np.all(w) for _, w in undo):
+    detect = survival is not None and any(not np.all(w) for _, w in undo)
+    if detect and all(tensor.size > 0 for tensor in tensors):
         # The collapse check below compares norms of partial contractions.
         # Those are norms of the state only when every tensor to the left is
-        # an isometry, that is, with the orthogonality center on the last
-        # site; elsewhere a vector of order one can still be annihilated by
-        # the sites to its left. Only a prior with an exact zero pays for
-        # the move.
-        moved = mps.move_orth_center(len(tensors) - 1, renormalize=False)
-        tensors = list(cast(CanonicalMPS, moved).tensors)
+        # an isometry; in another gauge a vector of order one can still be
+        # annihilated by the sites to its left. A QR sweep from the first
+        # site to the last brings the chain into that gauge whatever its
+        # orthogonality center was. It truncates nothing, unlike a move of
+        # the center, so the undo stays exact; only a prior with an exact
+        # zero pays for it.
+        for position in range(len(tensors) - 1):
+            chi_l, phys, chi_r = tensors[position].shape
+            matrix = np.asarray(
+                tensors[position], dtype=np.result_type(tensors[position].dtype, 1.0)
+            ).reshape(chi_l * phys, chi_r)
+            isometry, remainder = np.linalg.qr(matrix)
+            tensors[position] = isometry.reshape(chi_l, phys, -1)
+            tensors[position + 1] = np.tensordot(
+                remainder, tensors[position + 1], axes=(1, 0)
+            )
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
     # ``right`` is a single column throughout, so it is contracted into each
     # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
