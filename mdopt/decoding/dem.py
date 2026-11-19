@@ -213,6 +213,39 @@ def solve_representative(problem: DemProblem, syndrome: np.ndarray) -> np.ndarra
     return solution
 
 
+def _syndrome_is_possible(problem: DemProblem, syndrome: np.ndarray) -> bool:
+    """Whether some mechanism set of positive probability has this syndrome.
+
+    A mechanism of probability 0 never fires and one of probability 1 always
+    does. With those fixed, the syndrome is possible exactly when the
+    remaining mechanisms can supply what is left of it, a linear system over
+    GF(2). The answer is exact: a mechanism of probability 1e-300 is free.
+    """
+    probs = np.asarray(problem.probs, dtype=float)
+    free = np.flatnonzero((probs > 0.0) & (probs < 1.0))
+    if free.size == probs.size:
+        return True  # the representative already exists
+    certain = probs == 1.0
+    target = _validated_syndrome(problem, syndrome).copy()
+    position = {int(old): new for new, old in enumerate(free)}
+    rows: List[List[int]] = []
+    for det, row in enumerate(problem.detector_rows):
+        target[det] = (target[det] + int(np.sum(certain[list(row)]))) % 2
+        rows.append([position[i] for i in row if i in position])
+    reduced = DemProblem(
+        probs=[float(probs[i]) for i in free],
+        detector_rows=rows,
+        observable_rows=[[] for _ in range(problem.num_observables)],
+        num_detectors=problem.num_detectors,
+        num_observables=problem.num_observables,
+    )
+    try:
+        solve_representative(reduced, target)
+    except ValueError:
+        return False
+    return True
+
+
 def _constraint_sites(mechanisms: List[int], offset: int) -> List[List[int]]:
     """[XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT] site lists for one detector.
 
@@ -276,7 +309,8 @@ def decode_dem(
         exact zero: the rescaling can bring the round-off that is left to
         order one, and a verdict then comes back with a survival near
         machine precision and a bound near or above one. With
-        ``prior_reweighting="BP"`` the undo detects the case (see there).
+        ``prior_reweighting="BP"`` the case is decided exactly and raises
+        (see there).
         The
         certificate's ``negativity`` is the most negative class mass as a
         fraction of the peak (0 for an exact contraction, up to round-off).
@@ -297,11 +331,14 @@ def decode_dem(
         order one instead of order ``P(syndrome)``, which is what keeps a
         finite ``chi_max`` from rebuilding the class masses out of truncation
         residue (see :func:`mdopt.decoding.decoding.decode_custom`).
-        A branch of probability exactly zero is undone with weight zero.
-        If nothing the contraction kept survives that, beyond the round-off
-        expected at the certificate's survival, the syndrome has probability
-        zero under the model and :class:`DemDecodingError` is raised with an
-        infinite bound, instead of a verdict built from the round-off.
+        A branch of probability exactly zero is undone with weight zero, so
+        for a syndrome of probability zero under the model the undo would
+        leave only round-off. Whether the syndrome is possible is therefore
+        decided exactly first, by GF(2) elimination with the mechanisms of
+        probability 0 and 1 fixed, and an impossible one raises
+        :class:`DemDecodingError` with an infinite bound before anything is
+        contracted. A possible syndrome is never rejected, however small
+        its probability.
     reweighting_floor : Optional[float]
         The clip of the marginals, relative to the prior: the contracted
         weight of either branch of site ``i`` stays at least
@@ -461,6 +498,23 @@ def decode_dem(
     ).reshape(num_mech, 2)
     contracted = priors.copy()
     undo: List[Tuple[int, np.ndarray]] = []
+    if prior_reweighting == "BP" and not _syndrome_is_possible(problem, syndrome):
+        # Every class mass is exactly zero. The reweighted contraction would
+        # still keep mass, on branches the prior forbids (their clipped
+        # marginals are positive), the undo would multiply it by zero, and
+        # the round-off left over would be rescaled into masses of order one
+        # under a bound near machine precision. Whether the syndrome is
+        # possible is decided exactly instead of from the size of what the
+        # undo leaves: a possible syndrome of probability 1e-15 leaves just
+        # as little.
+        impossible = TruncationCertificate()
+        impossible.finalize(0.0)
+        raise DemDecodingError(
+            "The syndrome has probability zero under the model: it needs a "
+            "mechanism of probability 0 to fire or one of probability 1 not "
+            "to, so every class mass is zero.",
+            impossible,
+        )
     if prior_reweighting == "BP" and num_mech > 0:
         flip = priors[:, 1].copy()
         for i in pinned:
@@ -613,23 +667,9 @@ def decode_dem(
         if 0.0 < center_norm < np.inf:
             mps.tensors[mps.orth_center] = mps.tensors[mps.orth_center] / center_norm
     if undo:
-        logical_mps, undo_collapsed = _marginalize_with_weights(
-            mps, num_obs, undo, True, certificate.survival
-        )
-        if undo_collapsed:
-            # Every configuration the contraction kept sits on a branch the
-            # prior gives probability zero: the syndrome is impossible under
-            # the model, the exact class masses are all zero, and what the
-            # undo let through is round-off. The bound of the reweighted
-            # contraction says nothing about that, so it is replaced by the
-            # bound of a collapsed state.
-            certificate.finalize(0.0)
-            raise DemDecodingError(
-                "The class-mass vector collapsed when the BP prior was undone: "
-                "every configuration the contraction kept has probability zero "
-                f"under the model (chi_max={chi_max}).",
-                certificate,
-            )
+        # The norm check of the helper is off: whether anything can survive
+        # the zero weights was decided exactly above.
+        logical_mps, _ = _marginalize_with_weights(mps, num_obs, undo, True, None)
     else:
         logical_mps = mps.marginal(
             sites_to_marginalize=list(range(num_obs, num_obs + num_mech)),

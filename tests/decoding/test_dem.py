@@ -777,10 +777,44 @@ def test_impossible_syndrome_raises_when_the_bp_prior_is_undone(options):
     )
     syndrome = np.array([0, 0, 1, 1, 0])
     assert not _exact_class_masses(problem, syndrome).any()
-    with pytest.raises(DemDecodingError, match="BP prior was undone") as raised:
+    with pytest.raises(DemDecodingError, match="probability zero") as raised:
         decode_dem(problem, syndrome, prior_reweighting="BP", **options)
     assert raised.value.certificate.bound == float("inf")
     assert raised.value.certificate.survival == 0.0
+
+
+def test_improbable_syndrome_is_not_taken_for_an_impossible_one():
+    """Mechanism 0 always fires and the syndrome needs mechanism 1, of
+    probability 1e-15, to fire with it. That is possible, and the undo keeps
+    only 5e-12 of the norm that arrives, less than any tolerance on norms
+    would let through: the decision must be the exact one."""
+    problem = DemProblem(
+        probs=[1.0, 1e-15],
+        detector_rows=[[0, 1]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    masses, flips, certificate = decode_dem(
+        problem, np.array([0]), prior_reweighting="BP", return_certificate=True
+    )
+    assert np.array_equal(flips, [1])
+    assert masses[1] > 0.0 and masses[0] == 0.0
+    assert np.isfinite(certificate.bound)
+
+    from mdopt.decoding.dem import _syndrome_is_possible
+
+    assert _syndrome_is_possible(problem, np.array([0]))
+    assert _syndrome_is_possible(problem, np.array([1]))
+    never = DemProblem(
+        probs=[1.0, 0.0],
+        detector_rows=[[0, 1]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    assert _syndrome_is_possible(never, np.array([1]))
+    assert not _syndrome_is_possible(never, np.array([0]))
 
 
 def test_certain_mechanisms_do_not_trip_the_undo_collapse_check():
