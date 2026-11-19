@@ -347,6 +347,53 @@ def test_tempered_contraction_survives_thousands_of_free_mechanisms():
     assert np.isclose(info["log_mass"], np.log((1 + (1 - 2 * prob) ** size) / 2))
 
 
+def _two_route_problem(free: int, prob: float):
+    """Two equally likely solutions in opposite classes, far apart in weight order.
+
+    Free mechanisms ``f_i``; detector ``g_i`` holds a pivot ``G_i`` and
+    ``f_i`` and fired; detector ``n_ij`` holds a pivot ``N_ij``, ``f_i`` and
+    ``f_j`` and did not fire. The observable is ``f_0``. "Every ``G_i``" and
+    "every ``f_i``" both have ``free`` firing mechanisms, so the two classes
+    carry exactly the same mass by the symmetry that exchanges them, but on
+    the way from one to the other ``k (free - k)`` of the ``N_ij`` fire.
+    """
+    pairs = list(itertools.combinations(range(free), 2))
+    first_free = free + len(pairs)
+    rows = [[i, first_free + i] for i in range(free)]
+    rows += [
+        [free + k, first_free + i, first_free + j] for k, (i, j) in enumerate(pairs)
+    ]
+    problem = DemProblem(
+        probs=[prob] * (first_free + free),
+        detector_rows=rows,
+        observable_rows=[[first_free]],
+        num_detectors=len(rows),
+        num_observables=1,
+    )
+    syndrome = np.array([1] * free + [0] * len(pairs), dtype=np.uint8)
+    return problem, syndrome, list(range(first_free + free))
+
+
+def test_tempering_keeps_a_component_the_one_pass_loses_to_the_zero_cutoff():
+    """Tempering keeps the second route, which a one-pass contraction can lose.
+
+    With ten free mechanisms at probability 1e-3 the second solution sits
+    below ``ZERO_CUTOFF`` of the first in the state a single pass compresses,
+    whatever the bond dimension, and the pivot factors applied afterwards
+    bring it back to the same weight: the single pass returns one class with
+    almost no discarded weight. The exact masses are one half each.
+    """
+    problem, syndrome, active = _two_route_problem(10, 1e-3)
+    tempered, _ = active_set_class_masses(
+        problem, syndrome, active, chi_max=10**6, stages=2
+    )
+    assert np.allclose(tempered, [0.5, 0.5], atol=1e-6)
+    tempered, _ = active_set_class_masses(
+        problem, syndrome, active, chi_max=16, stages=2
+    )
+    assert np.allclose(tempered, [0.5, 0.5], atol=1e-6)
+
+
 def test_tempering_rejects_bad_input():
     problem = _random_problem(0)
     syndrome = np.zeros(problem.num_detectors, dtype=np.uint8)
@@ -832,6 +879,90 @@ def test_basis_truncation_survives_hundreds_of_small_factors_at_one_site():
     assert np.isclose(info["log_mass"], half * np.log(prob) + half * np.log(1 - prob))
 
 
+def test_basis_truncation_decides_certain_mechanisms_beforehand():
+    """A mechanism that certainly fires is not ranked as if it stayed off.
+
+    Detector 0 holds a pivot of probability 1e-6, a free mechanism of
+    probability 0.3 that flips the observable, and a mechanism that certainly
+    fires. The free mechanism then almost surely fired too. Ranking the
+    states by "every remaining mechanism stays off" would keep the other
+    state when a single state is kept.
+    """
+    problem = DemProblem(
+        probs=[1e-6, 0.3, 1.0],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    syndrome = np.zeros(1, dtype=np.uint8)
+    exact = _enumerate_active_set(problem, syndrome, [0, 1, 2])
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, [0, 1, 2], max_states=1
+    )
+    assert masses.argmax() == exact.argmax() == 1
+    assert info["free"] + info["rank"] == 2
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, [0, 1, 2], max_states=4
+    )
+    assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+    assert np.isclose(info["log_mass"], np.log(exact.sum()))
+
+    checked = 0
+    for seed in range(60):
+        base = _random_problem(
+            seed, num_detectors=5, num_mechanisms=11, num_observables=2
+        )
+        rng = np.random.default_rng(seed)
+        probs = np.array(base.probs)
+        certain = rng.choice(11, size=int(rng.integers(1, 4)), replace=False)
+        probs[certain] = rng.choice([0.0, 1.0], size=len(certain))
+        problem = DemProblem(
+            probs=list(probs),
+            detector_rows=base.detector_rows,
+            observable_rows=base.observable_rows,
+            num_detectors=5,
+            num_observables=2,
+        )
+        syndromes, _ = _sample_from_model(problem, 1, seed + 7)
+        active = list(range(11))
+        exact = _enumerate_active_set(problem, syndromes[0], active)
+        if exact.sum() == 0.0:
+            with pytest.raises(ArithmeticError, match="positive probability"):
+                basis_truncated_class_masses(problem, syndromes[0], active)
+            continue
+        checked += 1
+        masses, info = basis_truncated_class_masses(
+            problem, syndromes[0], active, max_states=4096
+        )
+        assert info["pruned_states"] == 0
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert info["free"] + info["rank"] == 11 - len(certain)
+        # A single state never loses everything: the completion it is
+        # ranked by has positive probability.
+        rough, _ = basis_truncated_class_masses(
+            problem, syndromes[0], active, max_states=1
+        )
+        assert np.all(rough >= 0.0) and np.isclose(rough.sum(), 1.0)
+    assert checked >= 40
+
+
+def test_basis_truncation_keeps_both_routes_of_the_zero_cutoff_case():
+    """Two equally likely solutions in opposite classes, one half each.
+
+    The one-pass SVD contraction can lose one of them to its zero cutoff (see
+    the tempering test on the same model); the recursion in the bit basis
+    works with probabilities and keeps both.
+    """
+    problem, syndrome, active = _two_route_problem(10, 1e-3)
+    for max_states in (256, 10**6):
+        masses, _ = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=max_states
+        )
+        assert np.allclose(masses, [0.5, 0.5], atol=1e-9)
+
+
 @pytest.mark.parametrize("seed", range(4))
 def test_basis_truncation_accepts_zero_probability_factors(seed):
     """Deterministic mechanisms are valid input: zero factors remove
@@ -1065,6 +1196,43 @@ def test_the_search_never_repeats_a_solve():
         decoder.widen(syndrome, found, tried)
         assert len(counts) <= 2 * problem.num_observables
     assert widened > 0
+
+
+def test_the_center_budget_is_spent_on_centers_that_solve_something():
+    """A center whose flips were all solved already does not use up the budget.
+
+    With one extra center, the most likely untried class sometimes needs no
+    new solve while a less likely one does. The wider search then moves on
+    to that one instead of doing nothing.
+    """
+    problem = _random_problem(2, num_detectors=12, num_mechanisms=60, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=1)
+    syndromes, _ = _sample_from_model(problem, 80, seed=5)
+    passed_over = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(decoder._bposd.decode(syndrome), dtype=np.uint8)
+        if not decoder._satisfies(seed, syndrome):
+            continue
+        found, tried, solves = decoder._search(syndrome, seed)
+        centers = sorted(
+            (label for label in found if label not in tried),
+            key=lambda label: -found[label][0],
+        )
+        missing = [
+            sum(
+                (j, ((center >> j) & 1) ^ 1) not in solves
+                for j in range(problem.num_observables)
+            )
+            for center in centers
+        ]
+        useful = next((n for n in missing if n > 0), 0)
+        before = len(solves)
+        decoder.widen(syndrome, found, tried, solves)
+        # Exactly the first center with something to solve is used.
+        assert len(solves) - before == useful
+        passed_over += bool(missing) and missing[0] == 0 and useful > 0
+    assert passed_over > 0
 
 
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():

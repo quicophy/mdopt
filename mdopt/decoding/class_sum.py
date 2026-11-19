@@ -37,17 +37,27 @@ double) and then compresses with a canonical SVD sweep, and the bond cut never
 splits a degenerate multiplet of singular values. Class masses are squared
 norms, so they are non-negative by construction.
 
+The compression is never exactly lossless, whatever the bond dimension: a
+Schmidt component below :data:`ZERO_CUTOFF` times the largest one is always
+dropped, and a parity factor applied afterwards can amplify what was dropped
+(each pivot that then fires instead of resting multiplies the component by
+``(1 - p) / p``). A small discarded weight therefore does not prove that the
+masses are right.
+
 **Tempering.** Applying every factor at full strength in one pass works as
-long as nothing is truncated. On larger codes the active set has a hundred or
-more free mechanisms, and the one-pass contraction then fails: a truncation
+long as no cut removes a component that a later factor amplifies. On larger
+codes the active set has a hundred or more free mechanisms, and the one-pass
+contraction then fails: a truncation
 made early leaves a small error on configurations that the state has not yet
 been told are unlikely, and the factors applied later can amplify that error
 by ``(1 - p) / p`` each. The tempered contraction starts from the uniform
 state and applies every factor (the priors of the free mechanisms and the
 pivot factors) to the power ``1 / stages``, in ``stages`` passes. Each pass
 truncates a state that already carries a share of every factor, so the
-truncation keeps the configurations that matter. Without truncation both
-contractions give the same masses. The decoder runs the one-pass contraction
+truncation keeps the configurations that matter. When ``chi_max`` cuts
+nothing the two contractions agree, except on a component that the one pass
+loses to the zero cutoff and a later factor would have amplified: the
+tempered passes keep it. The decoder runs the one-pass contraction
 first and repeats it with tempering only when that pass discarded weight.
 
 **Hard syndromes.** The syndromes whose first pass discards weight are the
@@ -70,6 +80,10 @@ contracts the same network in it. A bond is truncated by keeping the
 off. A state that a factor of exactly zero rules out under that completion
 ranks behind every other state, and is counted in the pruned share by its
 weight without that factor, since a later mechanism can still revive it.
+The pruned share is measured by that ranking weight, one step at a time. It
+indicates that states were dropped; it does not bound the probability that
+was lost, because a dropped state can be worth far more once later mechanisms
+fire than its ranking weight said.
 Nothing is rotated, every number is a probability, and the cost is a few
 ten thousand additions and multiplications where the SVD contraction needs a
 thousand factorizations. ``ClassSumDecoder(truncation="basis")`` uses it.
@@ -134,7 +148,9 @@ DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
 #: does not resolve smaller differences, and BP-OSD's class then stands.
 TIE_TOLERANCE = 1e-6
 
-#: Singular values below this fraction of the largest one count as zero.
+#: Singular values below this fraction of the largest one count as zero and
+#: are dropped at every bond, whatever the requested bond dimension. Rounding
+#: noise sits at this level, so a smaller cutoff would keep noise instead.
 ZERO_CUTOFF = 1e-13
 
 
@@ -228,7 +244,10 @@ class ParityChain:
         Logarithm of the norm that has been divided out so far.
     lost : float
         Sum over all truncations of the discarded fraction of the squared
-        norm.
+        norm at the time of the cut. It includes the components below
+        :data:`ZERO_CUTOFF`, which are dropped at any bond dimension. A later
+        factor can amplify a discarded component, so a small value is an
+        indicator and not a bound on the error of the result.
     """
 
     def __init__(self, vectors: Sequence[np.ndarray]):
@@ -598,8 +617,10 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         at full strength. With more, the chain starts from the uniform state
         and every prior and pivot factor is applied to the power
         ``1 / stages`` in each of ``stages`` passes, which keeps the
-        truncation faithful when the active set is large. Both give the same
-        masses when nothing is truncated.
+        truncation faithful when the active set is large. When ``chi_max``
+        cuts nothing both give the same masses, except that the one pass can
+        lose to :data:`ZERO_CUTOFF` a component that a later factor would
+        have amplified; the tempered passes keep it.
 
     Returns
     -------
@@ -608,11 +629,13 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         active set whose observable pattern is ``c`` (bit ``j`` of ``c`` is
         observable ``j``), normalized to sum to one. ``info`` holds
         ``log_mass`` (logarithm of the probability that the syndrome is
-        produced by mechanisms of the active set alone: exact when nothing
-        is truncated, otherwise an estimate that can lie above or below the
-        exact value, because the soft factors applied after a truncation
-        can amplify its error), ``lost`` (accumulated discarded fraction of
-        the squared norm), ``bond`` (largest bond dimension),
+        produced by mechanisms of the active set alone: an estimate that can
+        lie above or below the exact value, because the soft factors applied
+        after a cut can amplify what the cut discarded, and components below
+        :data:`ZERO_CUTOFF` are cut at any ``chi_max``), ``lost``
+        (accumulated discarded fraction of the squared norm at the time of
+        each cut: an indicator, not a bound on the error of the masses, for
+        the same reason), ``bond`` (largest bond dimension),
         ``free`` (number of free mechanisms) and ``rank`` (number of pivots).
 
     Raises
@@ -809,8 +832,10 @@ def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-m
     Returns the final values by relative class, the logarithm of the scale
     divided out, the largest fraction of the ranking weight pruned at one
     step, the largest number of states held, and the number of states
-    removed. The result is exact when nothing was removed; the pruned
-    fraction is an estimate by the ranking weight.
+    removed. The result is exact when nothing was removed. The pruned
+    fraction is measured by the ranking weight and is the largest over the
+    steps, not their sum: it indicates pruning and does not bound the mass
+    that was lost.
     """
     num_free = len(kernel.free)
     log_weights = [[_safe_log(w0), _safe_log(w1)] for w0, w1 in pivot_weights]
@@ -950,6 +975,9 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     with the bonds kept in the computational basis and truncated to the
     ``max_states`` most probable basis states (see the module docstring). With
     ``max_states`` large enough that nothing is pruned the result is exact.
+    Mechanisms of probability exactly zero or one are decided beforehand, as
+    in :func:`active_set_class_masses`, and are not counted in ``free`` and
+    ``rank``.
 
     Parameters
     ----------
@@ -974,8 +1002,13 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
         is produced by mechanisms of the active set alone; pruning only
         drops non-negative terms of the sum, so unlike the SVD estimate it
         never exceeds the exact value), ``pruned`` (the
-        largest fraction of the ranking weight discarded at one step: an
-        estimate of the loss, not a bound), ``pruned_states`` (the number of
+        largest fraction of the ranking weight discarded at one step. It is
+        an indicator, not a bound: the ranking weight assumes that every
+        remaining free mechanism stays off, and a discarded state can carry
+        most of the probability once some of them fire, so the true loss
+        can exceed this value by many orders of magnitude; compare
+        ``log_mass`` at a larger ``max_states`` to measure it),
+        ``pruned_states`` (the number of
         states removed; zero means the result is exact), ``states`` (the
         largest number of basis states held at one step, counted before that
         step is pruned, so at most twice ``max_states``), ``free`` and
@@ -999,18 +1032,40 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
         observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
     num_obs = problem.num_observables
     probs = np.asarray(problem.probs, dtype=float)
-    columns = list(dict.fromkeys(int(i) for i in active))
-    if any(i < 0 or i >= problem.num_mechanisms for i in columns):
+    named = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in named):
         raise ValueError("The active set names a mechanism outside the model.")
-    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, columns)
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, named)
+    # A mechanism of probability exactly zero or one is decided beforehand,
+    # as in :func:`active_set_class_masses`. Left in, the states are ranked
+    # by a completion in which a certain mechanism stays off, which has
+    # probability zero, and the pruning then keeps the wrong states.
+    columns = [i for i in named if 0.0 < probs[i] < 1.0]
+    forced_class = 0
+    if len(columns) < len(named):
+        reduced = syndrome.copy()
+        for i in named:
+            if probs[i] >= 1.0:
+                reduced ^= check_matrix[:, i]
+                forced_class ^= sum(
+                    int(observable_matrix[j, i]) << j for j in range(num_obs)
+                )
+        try:
+            kernel = _kernel_picture(check_matrix, observable_matrix, reduced, columns)
+        except ValueError as error:
+            raise ArithmeticError(
+                "No assignment of the active set has positive probability."
+            ) from error
     pivot_probs = probs[kernel.pivots]
     pivot_weights = np.where(
         kernel.base[:, None] == 1,
         np.stack([pivot_probs, 1 - pivot_probs], axis=1),
         np.stack([1 - pivot_probs, pivot_probs], axis=1),
     )
+    # Every mechanism outside the active set is off. The certain ones of
+    # the active set contribute a factor of one.
     inactive = np.ones(problem.num_mechanisms, dtype=bool)
-    inactive[columns] = False
+    inactive[named] = False
     with np.errstate(divide="ignore"):
         log_scale = float(np.sum(np.log1p(-probs[inactive])))
     for r, support in enumerate(kernel.supports):
@@ -1031,7 +1086,7 @@ def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many
     )
     masses = np.zeros(1 << num_obs)
     for label, weight in totals.items():
-        masses[label ^ kernel.base_class] += weight
+        masses[label ^ kernel.base_class ^ forced_class] += weight
     total = float(masses.sum())
     info: Dict[str, Any] = {
         "free": len(kernel.free),
@@ -1070,6 +1125,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     temper_threshold : float
         The one-pass contraction is replaced by the tempered one when its
         discarded fraction of the squared norm (``lost``) reaches this value.
+        A component the one pass loses to :data:`ZERO_CUTOFF` contributes
+        next to nothing to ``lost``, so such a loss does not trigger the
+        tempered pass.
     temper_chi_max : Optional[int]
         The bond dimension of the tempered contraction. ``None`` uses
         ``chi_max``. The tempered pass only runs on the syndromes whose first
@@ -1091,7 +1149,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         truncates. ``"basis"`` keeps the bonds in the computational basis and
         truncates them to the ``max_states`` most probable basis states (see
         :func:`basis_truncated_class_masses`); it needs no tempered pass, and
-        ``temper_threshold`` then applies to the pruned fraction.
+        ``temper_threshold`` then applies to the pruned fraction, which can
+        understate the loss: a wider search is not triggered by every loss.
     max_states : int
         The number of basis states kept on a bond with ``truncation="basis"``.
         It must be positive whichever truncation is chosen.
@@ -1263,7 +1322,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
         Up to ``extra_centers`` of the classes in ``found`` that are not in
         ``tried``, most likely first, are each used once as the center of the
-        class flips.
+        class flips. A center whose flips are all in ``solves`` already would
+        add nothing; it is passed over and does not count.
 
         Parameters
         ----------
@@ -1293,8 +1353,17 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         )
         if solves is None:
             solves = {}
-        for center in centers[: self.extra_centers]:
+        used = 0
+        for center in centers:
+            if used >= self.extra_centers:
+                break
+            if all(
+                (j, ((center >> j) & 1) ^ 1) in solves
+                for j in range(self.num_observables)
+            ):
+                continue
             self._flip_around(center, syndrome, wider, solves)
+            used += 1
         return wider
 
     @staticmethod
@@ -1375,7 +1444,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             over every truncation of the SVD contraction that gave the
             verdict; zero with ``truncation="basis"``), ``pruned`` (the
             largest fraction of the ranking weight pruned at one step of the
-            basis truncation; zero with ``truncation="svd"``),
+            basis truncation; zero with ``truncation="svd"``; both are
+            indicators, not bounds on the error of the masses),
             ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the candidate
             search was widened), ``active`` and
