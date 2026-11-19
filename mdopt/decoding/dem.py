@@ -343,7 +343,9 @@ def decode_dem(
         The clip of the marginals, relative to the prior: the contracted
         weight of either branch of site ``i`` stays at least
         ``floor * P_i(b)``, so every undo ratio ``P_i(b) / q_i(b)`` is at
-        most ``1 / floor`` (``None`` means 0.5). Unlike the code decoders'
+        most ``1 / floor`` (``None`` means 0.5). It must lie in ``(0, 1]``
+        and be distinguishable from zero next to one in double precision:
+        below that the quotient can overflow. Unlike the code decoders'
         absolute floor this does not underflow a chain of thousands of
         mechanisms (the clip costs the consistent configurations about
         ``exp(-floor * n * p)`` of mass), and it bounds how much a
@@ -406,9 +408,12 @@ def decode_dem(
         )
     if reweighting_floor is None:
         reweighting_floor = 0.5
-    if not 0 < reweighting_floor <= 1:
+    # The undo divides by the clipped marginal: a floor that is zero next to
+    # one in double precision lets that quotient overflow.
+    if not 0 < reweighting_floor <= 1 or 1.0 - reweighting_floor == 1.0:
         raise ValueError(
-            f"reweighting_floor should lie in (0, 1], given {reweighting_floor}."
+            "reweighting_floor should lie in (0, 1] and be distinguishable "
+            f"from zero next to one, given {reweighting_floor}."
         )
     if not 0 < reweighting_cap < 1:
         raise ValueError(

@@ -938,6 +938,27 @@ def test_decode_dem_signature_and_argument_validation():
             )
 
 
+def test_a_subnormal_reweighting_floor_is_rejected():
+    """At a floor of 1e-320 the clipped marginal of a branch BP saturated is
+    subnormal and the undo ratio overflows on a possible syndrome. Such floors
+    are refused; the smallest floor that is not zero next to one is accepted."""
+    problem = DemProblem(
+        probs=[0.001] * 7,
+        detector_rows=[[0, j] for j in range(1, 7)],
+        observable_rows=[[0]],
+        num_detectors=6,
+        num_observables=1,
+    )
+    syndrome = np.zeros(6, dtype=np.uint8)
+    for floor in (1e-320, np.finfo(float).tiny, 1e-17):
+        with pytest.raises(ValueError, match="distinguishable from zero"):
+            decode_dem(
+                problem, syndrome, prior_reweighting="BP", reweighting_floor=floor
+            )
+    masses = decode_dem(problem, syndrome, prior_reweighting="BP")[0]
+    assert np.isfinite(masses).all() and masses[0] > masses[1]
+
+
 def test_reweighted_branches_keep_a_floored_zero_branch():
     """With a prior of 1e-20 on the zero branch the clip's upper end rounds
     to one and BP's marginal sits there; forming the zero branch by
