@@ -1304,3 +1304,112 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     assert fixes > breaks
     assert basis_failures < bposd_failures
     assert basis_failures <= class_sum_failures + 2
+
+
+def _three_route_problem():
+    """Three detectors, one observable, five mechanisms. The syndrome
+    ``[1, 1, 0]`` has one likely error that leaves the observable alone,
+    ``a``, and two that flip it, ``b + c`` and ``b' + c'``: the flipped class
+    is the heavier one, 0.0248 against 0.0172, but only with both routes."""
+    return DemProblem(
+        probs=[0.03, 0.13, 0.13, 0.13, 0.13],  # a, b, c, b', c'
+        detector_rows=[[0, 1, 3], [0, 2, 4], [3, 4]],
+        observable_rows=[[1, 3]],
+        num_detectors=3,
+        num_observables=1,
+    )
+
+
+def test_an_external_candidate_enters_the_sum_and_can_decide():
+    """The search finds one of the two routes of the flipped class, and the
+    sum over it loses to the unflipped class. A source that returns the other
+    route makes the active set complete and the verdict the exact one."""
+    problem = _three_route_problem()
+    syndrome = np.array([1, 1, 0], dtype=np.uint8)
+    alone = ClassSumDecoder(problem)
+    flips, info = alone.decode(syndrome)
+    assert flips.tolist() == [0] and info["active"] == 3 and info["external"] == 0
+    found = alone.candidates(syndrome, np.array([1, 0, 0, 0, 0], dtype=np.uint8))
+    routes = [np.array([0, 1, 1, 0, 0]), np.array([0, 0, 0, 1, 1])]
+    (missing,) = [r for r in routes if not np.array_equal(r, found[1][1])]
+
+    calls = []
+
+    def source(seen):
+        calls.append(seen.copy())
+        return [missing]
+
+    helped = ClassSumDecoder(problem, candidate_sources=[source])
+    flips, info = helped.decode(syndrome)
+    assert flips.tolist() == [1]
+    assert info["active"] == 5 and info["external"] == 1 and info["bposd_class"] == 0
+    assert len(calls) == 1 and np.array_equal(calls[0], syndrome)
+    # The four errors of the syndrome: a, all five, b + c and b' + c'.
+    exact = np.array([0.03 * 0.87**4 + 0.03 * 0.13**4, 2 * 0.97 * 0.13**2 * 0.87**2])
+    masses, _ = active_set_class_masses(problem, syndrome, list(range(5)), 16)
+    assert np.allclose(masses, exact / exact.sum())
+    assert np.isclose(info["margin"], masses[1] - masses[0])
+
+
+def test_candidate_sources_that_add_nothing_change_nothing():
+    """No source, a source with no solution, one whose sets do not reproduce
+    the syndrome and one that repeats the BP-OSD solution all give the decode
+    of the plain decoder."""
+    problem = _random_problem(4, num_detectors=10, num_mechanisms=40, num_observables=4)
+    plain = ClassSumDecoder(problem, extra_centers=8)
+    wrong = np.zeros(problem.num_mechanisms, dtype=np.uint8)
+    bposd = BpOsdDecoder(
+        problem_matrices(problem)[0],
+        error_channel=list(problem.probs),
+        **DEFAULT_BPOSD_OPTIONS,
+    )
+    sources = [
+        lambda syndrome: [],
+        lambda syndrome: [wrong, wrong],
+        lambda syndrome: [np.asarray(bposd.decode(syndrome), dtype=np.uint8)] * 2,
+    ]
+    with_sources = ClassSumDecoder(problem, extra_centers=8, candidate_sources=sources)
+    syndromes, _ = _sample_from_model(problem, 40, seed=6)
+    decoded = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        flips, info = plain.decode(syndrome)
+        other_flips, other = with_sources.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        decoded += 1
+        assert other.pop("external") == 1 and info.pop("external") == 0
+        assert np.array_equal(flips, other_flips) and info == other
+    assert decoded > 10
+
+
+def test_candidate_sources_are_validated():
+    problem = _three_route_problem()
+    syndrome = np.array([1, 1, 0], dtype=np.uint8)
+    short = ClassSumDecoder(problem, candidate_sources=[lambda s: [np.zeros(4)]])
+    with pytest.raises(ValueError, match="one bit per mechanism"):
+        short.decode(syndrome)
+    twos = ClassSumDecoder(
+        problem, candidate_sources=[lambda s: [np.array([0, 2, 1, 0, 0])]]
+    )
+    with pytest.raises(ValueError, match="other than 0 and 1"):
+        twos.decode(syndrome)
+    # The empty syndrome is answered without a search: no source is called.
+    silent = ClassSumDecoder(problem, candidate_sources=[lambda s: 1 / 0])
+    flips, info = silent.decode(np.zeros(3, dtype=np.uint8))
+    assert flips.tolist() == [0] and info["external"] == 0
+
+
+def test_external_candidates_work_with_the_basis_truncation():
+    """The same three-route decision with ``truncation="basis"``, and a
+    second, less likely set of an already reached class stays in the sum."""
+    problem = _three_route_problem()
+    syndrome = np.array([1, 1, 0], dtype=np.uint8)
+    routes = [np.array([0, 1, 1, 0, 0]), np.array([0, 0, 0, 1, 1])]
+    decoder = ClassSumDecoder(
+        problem, truncation="basis", candidate_sources=[lambda s: routes]
+    )
+    flips, info = decoder.decode(syndrome)
+    assert flips.tolist() == [1] and info["active"] == 5 and info["external"] == 2
+    assert [c.tolist() for c in decoder.external_candidates(syndrome)] == [
+        r.tolist() for r in routes
+    ]

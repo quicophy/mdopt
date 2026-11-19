@@ -116,6 +116,7 @@ import math
 from dataclasses import dataclass
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     List,
@@ -1154,6 +1155,16 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     max_states : int
         The number of basis states kept on a bond with ``truncation="basis"``.
         It must be positive whichever truncation is chosen.
+    candidate_sources : Sequence[Callable[[np.ndarray], Iterable[np.ndarray]]]
+        Further candidate searches, for example the solutions of another
+        decoder. Each one is called with the syndrome and returns mechanism
+        sets, one bit per mechanism in the order of ``problem``. The sets that
+        reproduce the syndrome join the candidates: the class-flip search
+        starts from the most likely of them and of the BP-OSD solution, and
+        all of them enter the active set. A set that does not reproduce the
+        syndrome is ignored. The class flips themselves stay with BP-OSD: a
+        flip is a parity check on every mechanism of an observable, which a
+        decoder without an ordered-statistics step rarely satisfies.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
@@ -1165,7 +1176,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
     a model.
     """
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
         self,
         problem: DemProblem,
         chi_max: int = 16,
@@ -1176,6 +1187,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         extra_centers: int = 0,
         truncation: str = "svd",
         max_states: int = 256,
+        candidate_sources: Sequence[Callable[[np.ndarray], Iterable[np.ndarray]]] = (),
         **bposd_options: Any,
     ):
         # Imported here so that importing mdopt does not pay for ldpc, which
@@ -1214,6 +1226,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         self.extra_centers = extra_centers
         self.truncation = truncation
         self.max_states = max_states
+        self.candidate_sources = tuple(candidate_sources)
         self.num_observables = problem.num_observables
         self._check, self._observables = problem_matrices(problem)
         self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
@@ -1240,6 +1253,37 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
     def _satisfies(self, mechanisms: np.ndarray, syndrome: np.ndarray) -> bool:
         return not ((self._check @ mechanisms) % 2 != syndrome).any()
+
+    def external_candidates(self, syndrome: np.ndarray) -> List[np.ndarray]:
+        """The distinct mechanism sets of ``candidate_sources`` that reproduce
+        ``syndrome``, in the order the sources returned them.
+
+        Raises
+        ------
+        ValueError
+            If a source returns something other than one bit per mechanism.
+        """
+        solutions: List[np.ndarray] = []
+        seen: Set[bytes] = set()
+        for source in self.candidate_sources:
+            for mechanisms in source(syndrome.copy()):
+                solution = np.asarray(mechanisms)
+                if solution.shape != (self._llr.size,):
+                    raise ValueError(
+                        f"A candidate source returned shape {solution.shape}; "
+                        f"expected ({self._llr.size},), one bit per mechanism."
+                    )
+                if np.any((solution != 0) & (solution != 1)):
+                    raise ValueError(
+                        "A candidate source returned entries other than 0 and 1."
+                    )
+                solution = solution.astype(np.uint8)
+                key = solution.tobytes()
+                if key in seen or not self._satisfies(solution, syndrome):
+                    continue
+                seen.add(key)
+                solutions.append(solution)
+        return solutions
 
     def candidates(
         self, syndrome: np.ndarray, seed: np.ndarray
@@ -1422,6 +1466,30 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         info["lost"] = 0.0
         return masses, info
 
+    def _first_candidates(
+        self, syndrome: np.ndarray, seed: np.ndarray, external: List[np.ndarray]
+    ) -> Tuple[Dict[int, Tuple[float, np.ndarray]], Set[int], _Solves, List[int]]:
+        """The standard search started from the most likely of the BP-OSD
+        solution and the external candidates, with all of them recorded, and
+        the active set of the result."""
+        start = max([seed, *external], key=lambda solution: self._llr @ solution)
+        found, tried, solves = self._search(syndrome, start)
+        for solution in [seed, *external]:
+            label = self.class_of(solution)
+            likelihood = float(self._llr @ solution)
+            if label not in found or likelihood > found[label][0]:
+                found[label] = (likelihood, solution.copy())
+        active = self._active_set(found)
+        # An external candidate that is not the most likely of its class
+        # still explains the syndrome: its mechanisms stay in the sum.
+        kept = set(active)
+        for solution in external:
+            for mechanism in np.flatnonzero(solution):
+                if int(mechanism) not in kept:
+                    kept.add(int(mechanism))
+                    active.append(int(mechanism))
+        return found, tried, solves, active
+
     def decode(  # pylint: disable=too-many-locals
         self, syndrome: np.ndarray
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -1449,8 +1517,10 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the wider
             search asked BP-OSD for a solve it did not have), ``active`` and
-            ``free`` (sizes of the active set and of its free part) and
-            ``candidates`` (number of logical classes reached). A tie for the
+            ``free`` (sizes of the active set and of its free part),
+            ``candidates`` (number of logical classes reached) and
+            ``external`` (number of distinct mechanism sets from
+            ``candidate_sources`` that reproduced the syndrome). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
             tied classes; two normalized masses within
             :data:`TIE_TOLERANCE` of each other count as tied. The empty
@@ -1462,6 +1532,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
         info.update(candidates=1, tempered=False, widened=False, pruned=0.0)
+        info["external"] = 0
         if not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
@@ -1472,8 +1543,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             info.update(margin=0.0, candidates=0)
             return self._flips(bposd_class), info
 
-        found, tried, solves = self._search(syndrome, seed)
-        active = self._active_set(found)
+        external = self.external_candidates(syndrome)
+        info["external"] = len(external)
+        found, tried, solves, active = self._first_candidates(syndrome, seed, external)
         masses, contraction = self._first_pass(syndrome, active)
         hard = self._truncated(contraction)
         widened = False
