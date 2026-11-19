@@ -939,7 +939,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
         Up to ``extra_centers`` of the classes in ``found`` that are not in
         ``tried``, most likely first, are each used once as the center of the
-        class flips.
+        class flips. A center whose flips are all in ``solves`` already would
+        add nothing; it is passed over and does not count.
 
         Parameters
         ----------
@@ -969,8 +970,17 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         )
         if solves is None:
             solves = {}
-        for center in centers[: self.extra_centers]:
+        used = 0
+        for center in centers:
+            if used >= self.extra_centers:
+                break
+            if all(
+                (j, ((center >> j) & 1) ^ 1) in solves
+                for j in range(self.num_observables)
+            ):
+                continue
             self._flip_around(center, syndrome, wider, solves)
+            used += 1
         return wider
 
     @staticmethod

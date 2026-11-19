@@ -890,6 +890,43 @@ def test_the_search_never_repeats_a_solve():
     assert widened > 0
 
 
+def test_the_center_budget_is_spent_on_centers_that_solve_something():
+    """A center whose flips were all solved already does not use up the budget.
+
+    With one extra center, the most likely untried class sometimes needs no
+    new solve while a less likely one does. The wider search then moves on
+    to that one instead of doing nothing.
+    """
+    problem = _random_problem(2, num_detectors=12, num_mechanisms=60, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=1)
+    syndromes, _ = _sample_from_model(problem, 80, seed=5)
+    passed_over = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        syndrome = syndrome.astype(np.uint8)
+        seed = np.asarray(decoder._bposd.decode(syndrome), dtype=np.uint8)
+        if not decoder._satisfies(seed, syndrome):
+            continue
+        found, tried, solves = decoder._search(syndrome, seed)
+        centers = sorted(
+            (label for label in found if label not in tried),
+            key=lambda label: -found[label][0],
+        )
+        missing = [
+            sum(
+                (j, ((center >> j) & 1) ^ 1) not in solves
+                for j in range(problem.num_observables)
+            )
+            for center in centers
+        ]
+        useful = next((n for n in missing if n > 0), 0)
+        before = len(solves)
+        decoder.widen(syndrome, found, tried, solves)
+        # Exactly the first center with something to solve is used.
+        assert len(solves) - before == useful
+        passed_over += bool(missing) and missing[0] == 0 and useful > 0
+    assert passed_over > 0
+
+
 def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     """Fewer logical errors than BP-OSD on the same circuit-level shots.
 
