@@ -346,6 +346,53 @@ def test_tempered_contraction_survives_thousands_of_free_mechanisms():
     assert np.isclose(info["log_mass"], np.log((1 + (1 - 2 * prob) ** size) / 2))
 
 
+def _two_route_problem(free: int, prob: float):
+    """Two equally likely solutions in opposite classes, far apart in weight order.
+
+    Free mechanisms ``f_i``; detector ``g_i`` holds a pivot ``G_i`` and
+    ``f_i`` and fired; detector ``n_ij`` holds a pivot ``N_ij``, ``f_i`` and
+    ``f_j`` and did not fire. The observable is ``f_0``. "Every ``G_i``" and
+    "every ``f_i``" both have ``free`` firing mechanisms, so the two classes
+    carry exactly the same mass by the symmetry that exchanges them, but on
+    the way from one to the other ``k (free - k)`` of the ``N_ij`` fire.
+    """
+    pairs = list(itertools.combinations(range(free), 2))
+    first_free = free + len(pairs)
+    rows = [[i, first_free + i] for i in range(free)]
+    rows += [
+        [free + k, first_free + i, first_free + j] for k, (i, j) in enumerate(pairs)
+    ]
+    problem = DemProblem(
+        probs=[prob] * (first_free + free),
+        detector_rows=rows,
+        observable_rows=[[first_free]],
+        num_detectors=len(rows),
+        num_observables=1,
+    )
+    syndrome = np.array([1] * free + [0] * len(pairs), dtype=np.uint8)
+    return problem, syndrome, list(range(first_free + free))
+
+
+def test_tempering_keeps_a_component_the_one_pass_loses_to_the_zero_cutoff():
+    """Tempering keeps the second route, which a one-pass contraction can lose.
+
+    With ten free mechanisms at probability 1e-3 the second solution sits
+    below ``ZERO_CUTOFF`` of the first in the state a single pass compresses,
+    whatever the bond dimension, and the pivot factors applied afterwards
+    bring it back to the same weight: the single pass returns one class with
+    almost no discarded weight. The exact masses are one half each.
+    """
+    problem, syndrome, active = _two_route_problem(10, 1e-3)
+    tempered, _ = active_set_class_masses(
+        problem, syndrome, active, chi_max=10**6, stages=2
+    )
+    assert np.allclose(tempered, [0.5, 0.5], atol=1e-6)
+    tempered, _ = active_set_class_masses(
+        problem, syndrome, active, chi_max=16, stages=2
+    )
+    assert np.allclose(tempered, [0.5, 0.5], atol=1e-6)
+
+
 def test_tempering_rejects_bad_input():
     problem = _random_problem(0)
     syndrome = np.zeros(problem.num_detectors, dtype=np.uint8)
