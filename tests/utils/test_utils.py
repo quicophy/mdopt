@@ -700,6 +700,133 @@ def _graded_rank_deficient(rng, rows=636, cols=304, rank=237):
     return (left * spectrum) @ right
 
 
+def test_svd_jitter_fallback_reports_its_perturbation(monkeypatch):
+    """The last fallback decomposes a perturbed matrix; with nothing cut the
+    discarded norm must still bound the distance from the input."""
+    import scipy.linalg
+
+    from mdopt.utils import utils
+
+    real_svd = scipy.linalg.svd
+    calls = {"scipy": 0}
+
+    def failing_backend_svd(*args, **kwargs):
+        raise np.linalg.LinAlgError("forced")
+
+    def scipy_svd_failing_twice(*args, **kwargs):
+        calls["scipy"] += 1
+        if calls["scipy"] <= 2:
+            raise np.linalg.LinAlgError("forced")
+        return real_svd(*args, **kwargs)
+
+    monkeypatch.setattr(utils.xp.linalg, "svd", failing_backend_svd)
+    monkeypatch.setattr(utils.scipy.linalg, "svd", scipy_svd_failing_twice)
+    mat = 1e-13 * np.arange(1.0, 7.0).reshape(2, 3)
+    u_l, s, v_h, discarded = utils.svd(mat, cut=0.0, return_discarded_norm=True)
+    assert calls["scipy"] == 3
+    distance = np.linalg.norm(mat - (u_l * s) @ v_h)
+    assert distance > 1e-13
+    assert discarded >= distance * (1 - 1e-9)
+    assert np.isclose(discarded, 1e-12 * np.sqrt(2))
+    # The legacy squared error does not include the jitter, on the same
+    # fallback path: the counter starts again so that all three run.
+    calls["scipy"] = 0
+    _, _, _, squared = utils.svd(mat, cut=0.0, return_truncation_error=True)
+    assert calls["scipy"] == 3
+    assert squared == 0.0
+
+
+def test_svd_jitter_fallback_measures_the_perturbation_it_adds(monkeypatch):
+    """Next to an entry of 8192 the jitter of 1e-12 moves the entry by more
+    than 1e-12; the reported norm must cover what was actually added."""
+    import scipy.linalg
+
+    from mdopt.utils import utils
+
+    real_svd = scipy.linalg.svd
+    calls = {"scipy": 0}
+
+    def failing_backend_svd(*args, **kwargs):
+        raise np.linalg.LinAlgError("forced")
+
+    def scipy_svd_failing_twice(*args, **kwargs):
+        calls["scipy"] += 1
+        if calls["scipy"] <= 2:
+            raise np.linalg.LinAlgError("forced")
+        return real_svd(*args, **kwargs)
+
+    monkeypatch.setattr(utils.xp.linalg, "svd", failing_backend_svd)
+    monkeypatch.setattr(utils.scipy.linalg, "svd", scipy_svd_failing_twice)
+    mat = np.array([[8192.0]])
+    added = float(np.abs((mat + 1e-12) - mat)[0, 0])
+    assert added > 1e-12
+    _, _, _, discarded = utils.svd(mat, cut=0.0, return_discarded_norm=True)
+    assert calls["scipy"] == 3
+    assert discarded == added
+
+    # The jitter survives input dtypes that cannot hold it themselves.
+    for dtype in (np.float32, np.int64, bool):
+        calls["scipy"] = 0
+        _, s, _, discarded = utils.svd(
+            np.eye(2, dtype=dtype), cut=0.0, return_discarded_norm=True
+        )
+        assert calls["scipy"] == 3
+        assert np.allclose(s, 1.0) and 0.0 < discarded < 1e-11
+    calls["scipy"] = 0
+    _, s, _, discarded = utils.svd(1j * np.eye(2), cut=0.0, return_discarded_norm=True)
+    assert np.allclose(s, 1.0) and 0.0 < discarded < 1e-11
+
+
+def test_discarded_norm_survives_the_underflow_of_its_square():
+    """A discarded singular value of 1e-170 has a square of zero in float64;
+    the discarded norm still reports it, the legacy squared error does not."""
+    mat = np.diag([1.0, 1e-170])
+    _, s, _, discarded = svd(mat, cut=0.0, chi_max=1, return_discarded_norm=True)
+    assert np.array_equal(s, [1.0])
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
+    _, _, _, squared = svd(mat, cut=0.0, chi_max=1, return_truncation_error=True)
+    assert squared == 0.0
+
+    tensor = mat.reshape((1, 2, 2, 1))
+    *_, discarded = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, return_discarded_norm=True
+    )
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
+    *_, squared = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, return_truncation_error=True
+    )
+    assert squared == 0.0
+    # The QR strategy returns (Q, R, error, None).
+    _, _, discarded, _ = split_two_site_tensor(
+        tensor, cut=0.0, chi_max=1, strategy="qr", return_discarded_norm=True
+    )
+    assert np.isclose(discarded, 1e-170, rtol=1e-12, atol=0)
+
+
+def test_qr_truncation_error_keeps_its_meaning_and_the_discarded_norm_is_separate():
+    """The legacy error is the distance to the returned factors, with the
+    renormalization of R in it; the discarded norm is what truncation cut."""
+    mat = np.diag([4.0, 3.0])
+    q_l, r_r, error = qr(mat, renormalize=True, return_truncation_error=True)
+    assert np.isclose(error, np.linalg.norm(mat - q_l @ r_r))
+    assert np.isclose(error, 4.0)
+    _, _, discarded = qr(mat, renormalize=True, return_discarded_norm=True)
+    assert discarded == 0.0
+    _, _, discarded = qr(mat, chi_max=1, return_discarded_norm=True)
+    assert np.isclose(discarded, 3.0)
+    # The two requests share one return slot, so asking for both is an error.
+    for decompose in (svd, qr):
+        with pytest.raises(ValueError, match="one return slot"):
+            decompose(mat, return_truncation_error=True, return_discarded_norm=True)
+    with pytest.raises(ValueError, match="one return slot"):
+        split_two_site_tensor(
+            mat.reshape((1, 2, 2, 1)),
+            strategy="qr",
+            return_truncation_error=True,
+            return_discarded_norm=True,
+        )
+
+
 def test_svd_reconstructs_graded_rank_deficient_matrices(rng):
     """``svd`` is exact on rank-deficient, wide-spectrum input of the shape the
     decoders' center tensors take. A small deterministic check for the default
