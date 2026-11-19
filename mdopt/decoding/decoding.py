@@ -2247,14 +2247,24 @@ def _reweighted_error_state(
     return tensors, undo
 
 
-# The fraction of the arriving norm the undo weights must keep at a site with a
-# zero weight for the result to count as signal. On shots of probability zero
-# the measured fraction was 5e-17 to 2e-14 (round-off of the contraction); on
-# possible shots with zero-probability branches it was 0.7 or more. 1e-10 sits
-# above the round-off and above what the sweeps resolve at all, since the moves
-# of the orthogonality center drop singular values below 1e-12, and far below
-# any fraction a possible shot produced.
-_UNDO_COLLAPSE_TOLERANCE = 1e-10
+def _undo_collapse_tolerance(survival: float) -> float:
+    """The fraction of the arriving norm the undo weights must keep at a site
+    with a zero weight for the result to count as signal.
+
+    The contraction's round-off is relative to the state before the checks
+    removed mass, so relative to what is left it is the machine precision
+    divided by ``survival``. On shots of probability zero the fraction kept
+    was 1 to 20 times that (5e-17 to 2e-14 on the five-qubit code at a
+    survival of 0.08, 8e-10 on a detector error model at a survival of 5e-6
+    with undo weights of 100); on possible shots with zero-probability
+    branches it was 0.7 or more. The tolerance is a thousand times the
+    round-off estimate, at least 1e-10 (the moves of the orthogonality
+    center drop singular values below 1e-12, so nothing smaller is resolved
+    anyway) and at most 1e-6, so that a small survival never lets the check
+    discard a component the contraction did resolve.
+    """
+    resolution = 1e3 * np.finfo(float).eps / survival if survival > 0.0 else np.inf
+    return float(min(max(resolution, 1e-10), 1e-6))
 
 
 def _marginalize_with_weights(
@@ -2262,6 +2272,7 @@ def _marginalize_with_weights(
     num_logicals: int,
     undo: List[Tuple[int, np.ndarray]],
     renormalize: bool,
+    survival: float = 1.0,
 ) -> Tuple[CanonicalMPS, bool]:
     """Trace out the error sites against the undo weights instead of all-ones.
 
@@ -2280,7 +2291,9 @@ def _marginalize_with_weights(
     of the contraction, which a later normalization would scale up to order
     one. This is detected at the site where it happens, by comparing the
     norm the weights keep with the norm that arrived, and the returned state
-    is then exactly zero.
+    is then exactly zero. ``survival`` is the mass fraction the contraction
+    kept (the certificate's), which sets how much round-off to expect; see
+    :func:`_undo_collapse_tolerance`.
     """
     tensors = list(mps.tensors)
     # Every error site must be traced exactly once: on a chain whose bonds
@@ -2300,11 +2313,21 @@ def _marginalize_with_weights(
         raise ValueError(
             f"The undo weights must cover {wanted}, given sites {sorted(covered)}."
         )
+    if mps.orth_center is not None and any(not np.all(w) for _, w in undo):
+        # The collapse check below compares norms of partial contractions.
+        # Those are norms of the state only when every tensor to the left is
+        # an isometry, that is, with the orthogonality center on the last
+        # site; elsewhere a vector of order one can still be annihilated by
+        # the sites to its left. Only a prior with an exact zero pays for
+        # the move.
+        moved = mps.move_orth_center(len(tensors) - 1, renormalize=False)
+        tensors = list(cast(CanonicalMPS, moved).tensors)
     right = np.ones((tensors[-1].shape[2], 1), dtype=tensors[-1].dtype)
     # ``right`` is a single column throughout, so it is contracted into each
     # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
     # site, like :meth:`CanonicalMPS.marginal`.
     collapsed = False
+    tolerance = _undo_collapse_tolerance(survival)
     for first, weight in sorted(undo, key=lambda item: -item[0]):
         if weight.ndim == 1:
             trace = weight / np.sqrt(tensors[first].shape[1])
@@ -2325,7 +2348,7 @@ def _marginalize_with_weights(
             if arrived is None:
                 arrived = np.einsum("lxm,mz->lxz", tensors[first], second)
             reference = _stable_norm(arrived) * float(np.max(np.abs(trace)))
-            collapsed = _stable_norm(right) <= _UNDO_COLLAPSE_TOLERANCE * reference
+            collapsed = _stable_norm(right) <= tolerance * reference
         if collapsed:
             right = np.zeros_like(right)
         if renormalize:
@@ -3044,7 +3067,7 @@ def decode_custom(
             )
     if undo_weights:
         logical_mps, undo_collapsed = _marginalize_with_weights(
-            error_mps, num_logicals, undo_weights, renormalize
+            error_mps, num_logicals, undo_weights, renormalize, certificate.survival
         )
         if undo_collapsed:
             certificate.finalize(0.0)
