@@ -3233,6 +3233,40 @@ def test_weighted_marginalization_reports_a_state_the_weights_annihilate(renorma
     assert not np.asarray(result.dense(flatten=True, renormalize=False)).any()
 
 
+def test_weighted_marginalization_sees_a_collapse_spread_over_two_sites():
+    """In the Bell state the zero weight on the last site keeps half of that
+    site's norm, and the weight on the site before it removes the rest. With
+    the orthogonality center on the first site the vector passed leftward
+    keeps a norm of order one and is annihilated only by the tensor to its
+    left, so the check has to compare norms of the state: the helper moves
+    the center to the last site first."""
+    from mdopt.decoding.decoding import (
+        _marginalize_with_weights,
+        _undo_collapse_tolerance,
+    )
+
+    bell = np.zeros(8)
+    bell[0b000] = bell[0b011] = np.sqrt(0.5)  # logical |0> (x) (|00> + |11>)
+    for center in (0, 1, 2):
+        state = mps_from_dense(
+            bell, phys_dim=2, form="Mixed-canonical", orth_center=center
+        )
+        kill = [(1, np.array([0.0, 1.0])), (2, np.array([1.0, 0.0]))]
+        result, collapsed = _marginalize_with_weights(state, 1, kill, True)
+        assert collapsed
+        assert not np.asarray(result.dense(flatten=True, renormalize=False)).any()
+        keep = [(1, np.array([0.0, 1.0])), (2, np.array([0.0, 1.0]))]
+        result, collapsed = _marginalize_with_weights(state, 1, keep, True)
+        assert not collapsed
+
+    # The tolerance follows the round-off expected at the given survival,
+    # between a floor and a ceiling.
+    assert _undo_collapse_tolerance(1.0) == 1e-10
+    assert np.isclose(_undo_collapse_tolerance(1e-6), 1e9 * np.finfo(float).eps)
+    assert _undo_collapse_tolerance(1e-12) == 1e-6
+    assert _undo_collapse_tolerance(0.0) == 1e-6
+
+
 def test_optima_tt_readout_rejects_non_qubit_chains():
     """The candidates are bit strings, so a qutrit chain is refused up front
     instead of ending in a ValueError from the basis-state constructor."""
