@@ -3242,8 +3242,9 @@ def test_weighted_marginalization_sees_a_collapse_spread_over_two_sites():
     site's norm, and the weight on the site before it removes the rest. With
     the orthogonality center on the first site the vector passed leftward
     keeps a norm of order one and is annihilated only by the tensor to its
-    left, so the check has to compare norms of the state: the helper moves
-    the center to the last site first."""
+    left, so the check has to compare norms of the state: the helper first
+    makes every tensor left of the last site an isometry, by a QR sweep that
+    truncates nothing."""
     from mdopt.decoding.decoding import (
         _marginalize_with_weights,
         _undo_collapse_tolerance,
