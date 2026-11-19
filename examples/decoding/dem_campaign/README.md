@@ -15,7 +15,7 @@ rule keeps out of git.
 | `dem_rerun.py` | Circuit-level d = 5, r = 5, p = 0.5 % memory-Z with a per-shot χ ladder, calibration audit, MWPM and belief-matching | `D2_d5r5_p0.005.jsonl` | 2000 | ~83 CPU-hours (149 s per shot) |
 | `repro_tnd3d.py` | Fig. 1d of Piveteau, Chubb and Renes, PRX Quantum 5, 040303: memory-X, rounds = d, p = 0.6 to 0.9 % | `T_d{d}r{d}_p{p:.4f}.jsonl`, 4 cells per distance | 2000 per cell | ~12 CPU-hours at d = 3 (5.6 s per shot) |
 | `bb72_class_sum.py` | Bivariate bicycle [[72, 12, 6]] memory experiment (qldpc, depolarizing circuit noise): `ClassSumDecoder` against BP-OSD on the same shots, with the exact McNemar test | `B_r{rounds}_p{p}_{basis}_chi{chi}_seed{seed}_n{shots}.jsonl` | 2000 by default | ~0.5 s per shot at six rounds, ~0.1 s at one round |
-| `priortilt_candidates.py` | Any stim circuit PriorTilt has tuned parameters for, by default the [[144, 12, 12]] memory circuits of arXiv:2611.13373: BP-OSD, PriorTilt, `ClassSumDecoder` and `ClassSumDecoder` with PriorTilt solutions as `candidate_sources`, on the same shots | `P_{circuit}_seed{seed}_n{shots}_k{runs}.jsonl` | 200 by default | ~20 s per shot at p = 0.5 % |
+| `priortilt_candidates.py` | Any stim circuit PriorTilt has tuned parameters for, by default the [[144, 12, 12]] memory circuits of arXiv:2611.13373: BP-OSD, PriorTilt, `ClassSumDecoder` and `ClassSumDecoder` with PriorTilt solutions as `candidate_sources`, on the same shots | `P_{circuit}_{code}_p{p}_seed{seed}_n{shots}_k{runs}_m{states}.jsonl` | 200 by default | ~20 s per shot at p = 0.5 % |
 
 All costs are single-core wall time on an Apple M-series laptop with
 `chi_max` as set in the scripts. Every run is resumable: a cell whose file

@@ -19,11 +19,14 @@ only.
 Settings come from the environment: PT_CIRCUIT (path of a stim circuit,
 required), PT_CODE (BB144), PT_P (0.005), PT_SHOTS (200), PT_SEED (1),
 PT_RUNS (5, PriorTilt runs per syndrome), PT_STATES (256).
-Output: data-dem-campaign/P_{circuit}_seed{seed}_n{shots}_k{runs}.jsonl, one
-record per shot. The run is resumable (see README.md). The shot count is part
-of the file name because stim's samples depend on it for a given seed.
+Output: data-dem-campaign/P_{circuit}_{code}_p{p}_seed{seed}_n{shots}_k{runs}_m{states}.jsonl,
+one record per shot. The run is resumable (see README.md): every setting that
+changes a verdict is part of the file name, the shot count because stim's
+samples depend on it for a given seed, and PriorTilt is reseeded from each
+syndrome, so a resumed run gives the records of an uninterrupted one.
 """
 
+import hashlib
 import json
 import os
 import time
@@ -78,20 +81,38 @@ def column_map(theirs, check, probs):
     return mapping
 
 
+def run_seed(seed, run, syndrome):
+    """Seed of PriorTilt run ``run`` on ``syndrome``.
+
+    PriorTilt draws its prior offsets from a generator that advances with
+    every decode. Reseeding it from the syndrome before each decode makes a
+    solution a function of the syndrome alone, so a resumed run decodes the
+    remaining shots exactly as an uninterrupted one would.
+    """
+    digest = hashlib.blake2b(
+        np.ascontiguousarray(syndrome, dtype=np.uint8).tobytes(), digest_size=6
+    ).digest()
+    return (seed * 1_000_003 + run * 7919 + int.from_bytes(digest, "little")) % 2**62
+
+
 def priortilt_source(dem, check, probs, code, p, runs, seed):
-    """A candidate source for ``ClassSumDecoder``: the solutions of ``runs``
-    PriorTilt decoders with different seeds, as mechanism sets of mdopt's
-    model. Runs that do not converge return nothing."""
+    """A candidate source for ``ClassSumDecoder`` and PriorTilt as a decoder
+    of its own.
+
+    The source returns the solutions of ``runs`` PriorTilt runs with different
+    seeds, as mechanism sets of mdopt's model; runs that do not converge
+    return nothing. The second function is the first of those runs alone and
+    returns the observable flips PriorTilt predicts.
+    """
     import priortilt  # pylint: disable=import-outside-toplevel,import-error
 
-    decoders = [
-        priortilt.PriorTilt(dem, code=code, p=p, seed=seed + run) for run in range(runs)
-    ]
+    decoder = priortilt.PriorTilt(dem, code=code, p=p, seed=seed)
     mapping = column_map(priortilt.dem_to_matrices(dem).check_matrix, check, probs)
 
     def source(syndrome):
         solutions = []
-        for decoder in decoders:
+        for run in range(runs):
+            decoder.seed = run_seed(seed, run, syndrome)
             errors = decoder.decode_errors(syndrome)
             if decoder.converged:
                 solution = np.zeros(check.shape[1], dtype=np.uint8)
@@ -99,18 +120,40 @@ def priortilt_source(dem, check, probs, code, p, runs, seed):
                 solutions.append(solution)
         return solutions
 
-    return source, decoders[0]
+    def alone(syndrome):
+        decoder.seed = run_seed(seed, 0, syndrome)
+        return np.asarray(decoder.decode(syndrome))
+
+    return source, alone
 
 
 def load_records(path):
-    """Records of an earlier run, by shot."""
+    """Records of an earlier run, by shot.
+
+    A run that was interrupted in the middle of a write leaves an incomplete
+    last line. That line is cut off the file, so the run resumes after the
+    last complete record. A broken line anywhere else is corruption and
+    raises.
+    """
     records = {}
-    if path.exists():
-        with open(path, encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip():
-                    record = json.loads(line)
-                    records[record["shot"]] = record
+    if not path.exists():
+        return records
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    complete = 0
+    for number, line in enumerate(lines):
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            if number == len(lines) - 1:
+                break
+            raise
+        records[record["shot"]] = record
+        complete += 1
+    if complete < len(lines) or (lines and not lines[-1].endswith("\n")):
+        kept = "".join(lines[:complete])
+        if kept and not kept.endswith("\n"):
+            kept += "\n"
+        path.write_text(kept, encoding="utf-8")
     return records
 
 
@@ -160,7 +203,8 @@ def main():  # pylint: disable=too-many-locals
     sampler = circuit.compile_detector_sampler(seed=seed)
     detectors, flips = sampler.sample(shots, separate_observables=True)
     RESULTS.mkdir(exist_ok=True)
-    out = RESULTS / f"P_{path.stem}_seed{seed}_n{shots}_k{runs}.jsonl"
+    name = f"P_{path.stem}_{code}_p{p}_seed{seed}_n{shots}_k{runs}_m{states}"
+    out = RESULTS / f"{name}.jsonl"
     records = load_records(out)
     with open(out, "a", encoding="utf-8") as handle:
         for shot in range(shots):
@@ -171,7 +215,7 @@ def main():  # pylint: disable=too-many-locals
             record = {"shot": shot, "truth": int(flips[shot].astype(int) @ powers)}
             solution = np.asarray(bposd.decode(syndrome), dtype=np.uint8)
             record["bposd"] = int(((observables @ solution) % 2) @ powers)
-            record["priortilt"] = int(np.asarray(tilt.decode(syndrome)) @ powers)
+            record["priortilt"] = int(tilt(syndrome) @ powers)
             record["class_sum"] = int(plain.decode(syndrome)[1]["predicted_class"])
             _, info = helped.decode(syndrome)
             record["class_sum_priortilt"] = int(info["predicted_class"])
