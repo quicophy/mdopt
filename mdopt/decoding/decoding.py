@@ -2301,6 +2301,9 @@ def _marginalize_with_weights(
     norm. ``survival=None`` turns the check off for a caller that decides
     exactly whether the shot is possible, as ``decode_dem`` does; the second
     return value is then always ``False``.
+    ``decode_custom`` keeps the check: its prior has an exact zero only
+    at a rate of exactly 0 or 1, where every site's probabilities are 0, 1
+    or uniform over an erasure, so no possible error is that improbable.
     """
     tensors = list(mps.tensors)
     # Every error site must be traced exactly once: on a chain whose bonds
