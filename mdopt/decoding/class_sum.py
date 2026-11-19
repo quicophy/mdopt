@@ -45,8 +45,9 @@ dropped, and a parity factor applied afterwards can amplify what was dropped
 masses are right.
 
 **Tempering.** Applying every factor at full strength in one pass works as
-long as no cut removes a component that a later factor amplifies. On larger codes the active set has a hundred or
-more free mechanisms, and the one-pass contraction then fails: a truncation
+long as no cut removes a component that a later factor amplifies. On larger
+codes the active set has a hundred or more free mechanisms, and the one-pass
+contraction then fails: a truncation
 made early leaves a small error on configurations that the state has not yet
 been told are unlikely, and the factors applied later can amplify that error
 by ``(1 - p) / p`` each. The tempered contraction starts from the uniform
