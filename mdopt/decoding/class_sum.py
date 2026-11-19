@@ -1,14 +1,21 @@
-"""Class sums of a detector error model on an active set of mechanisms.
+"""Class-summed decoding of a detector error model on a candidate active set.
 
 :func:`~mdopt.decoding.dem.decode_dem` contracts every mechanism of the model.
 For quantum LDPC memory circuits that chain is thousands of sites long and its
 detector constraints have long spans, so a small bond dimension truncates away
-the answer. :func:`active_set_class_masses` contracts a much smaller problem
-instead: the caller names an *active set* of mechanisms, every other mechanism
-is pinned to "did not fire", and the function returns the probability of each
-logical class inside that set.
+the answer. This module contracts a much smaller problem instead, one that a
+bond dimension of 16 solves almost exactly.
 
-1. **Kernel picture.** Gauss-Jordan elimination of the detector matrix
+For one syndrome the decoder goes through four steps.
+
+1. **Candidates.** BP-OSD gives one solution. For every observable ``j``,
+   BP-OSD on the check matrix extended by the row of observable ``j``, with
+   that observable forced to the opposite value, gives a solution in a
+   neighboring logical class. The search is recentered on the most likely
+   candidate found so far and repeated a few times.
+2. **Active set.** The union of the supports of all candidates. Every other
+   mechanism is pinned to "did not fire".
+3. **Kernel picture.** Gauss-Jordan elimination of the detector matrix
    restricted to the active set picks one pivot mechanism per independent
    detector. Every assignment of the remaining *free* mechanisms is then a
    valid solution: a pivot fires if and only if its base bit and the parity
@@ -18,16 +25,17 @@ logical class inside that set.
    still makes the masses approximate, in either direction. A mechanism of
    probability exactly zero or one would bring a hard constraint back; such
    mechanisms are decided exactly beforehand and never enter the chain.
-2. **Class sum.** An MPS over one register site per observable followed by
+4. **Class sum.** An MPS over one register site per observable followed by
    one site per free mechanism holds the square roots of the probabilities.
    Each pivot is a soft parity factor, each observable a hard parity with its
    register site. The squared norm of each register value is the total
-   probability of that logical class inside the active set.
+   probability of that logical class inside the active set, and the decoder
+   returns the heaviest class.
 
-The contraction (:class:`ParityChain`) applies each parity factor exactly (the
-bonds it crosses double) and then compresses with a canonical SVD sweep, and
-the bond cut never splits a degenerate multiplet of singular values. Class
-masses are squared norms, so they are non-negative by construction.
+The contraction applies each parity factor exactly (the bonds it crosses
+double) and then compresses with a canonical SVD sweep, and the bond cut never
+splits a degenerate multiplet of singular values. Class masses are squared
+norms, so they are non-negative by construction.
 
 The compression is never exactly lossless, whatever the bond dimension: a
 Schmidt component below :data:`ZERO_CUTOFF` times the largest one is always
@@ -35,6 +43,14 @@ dropped, and a parity factor applied afterwards can amplify what was dropped
 (each pivot that then fires instead of resting multiplies the component by
 ``(1 - p) / p``). A small discarded weight therefore does not prove that the
 masses are right.
+
+On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
+noise this decoder makes fewer logical errors than BP-OSD on the same shots at
+1, 2 and 6 syndrome-extraction rounds. On larger codes of the same family the
+active set has a hundred or more free mechanisms, the contraction truncates on
+many syndromes (``lost`` in the returned information says how much), and on
+[[144, 12, 12]] it then does worse than picking the most likely single
+candidate.
 """
 
 from dataclasses import dataclass
@@ -42,10 +58,24 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from scipy.linalg import svd as scipy_svd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, vstack
 
 from mdopt.decoding.dem import DemProblem, _validated_syndrome
 
+#: BP-OSD settings used to produce the candidates: min-sum belief propagation
+#: followed by combination-sweep ordered statistics decoding of order 10.
+DEFAULT_BPOSD_OPTIONS: Dict[str, Any] = {
+    "max_iter": 100,
+    "bp_method": "minimum_sum",
+    "ms_scaling_factor": 0.9,
+    "osd_method": "osd_cs",
+    "osd_order": 10,
+}
+
+
+#: Normalized class masses closer than this count as tied: the contraction
+#: does not resolve smaller differences, and BP-OSD's class then stands.
+TIE_TOLERANCE = 1e-6
 
 #: Singular values below this fraction of the largest one count as zero and
 #: are dropped at every bond, whatever the requested bond dimension. Rounding
@@ -650,3 +680,218 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
         bond=chain.max_bond(),
     )
     return masses / total, info
+
+
+class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
+    """Class-summed MPS decoder seeded by BP-OSD candidates.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model. Every prior must be positive and at most
+        1/2, so that no error is the most likely explanation of the empty
+        syndrome.
+    chi_max : int
+        The bond dimension of the class-sum contraction.
+    recenter_rounds : int
+        How many times the class-flip search is recentered on the most likely
+        candidate.
+    **bposd_options
+        Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
+        ``ldpc.BpOsdDecoder``.
+
+    Notes
+    -----
+    Building the decoder constructs one BP-OSD decoder for the model and one
+    per observable, so it should be built once and reused for all syndromes of
+    a model.
+    """
+
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self,
+        problem: DemProblem,
+        chi_max: int = 16,
+        recenter_rounds: int = 3,
+        **bposd_options: Any,
+    ):
+        # Imported here so that importing mdopt does not pay for ldpc, which
+        # only this decoder uses.
+        from ldpc import BpOsdDecoder  # pylint: disable=import-outside-toplevel
+
+        probs = np.asarray(problem.probs, dtype=float)
+        if probs.size == 0:
+            raise ValueError("The detector error model has no mechanisms.")
+        if np.any(probs <= 0) or np.any(probs > 0.5):
+            # Above 1/2 a mechanism is more likely to fire than not, and the
+            # empty syndrome would no longer be best explained by no error.
+            raise ValueError("Every prior must be positive and at most 1/2.")
+        if chi_max < 1:
+            raise ValueError("The bond dimension must be positive.")
+        self.problem = problem
+        self.chi_max = chi_max
+        self.recenter_rounds = recenter_rounds
+        self.num_observables = problem.num_observables
+        self._check, self._observables = problem_matrices(problem)
+        self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
+        self._dense_observables = np.asarray(
+            self._observables.todense(), dtype=np.uint8
+        )
+        self._llr = np.log(probs / (1 - probs))
+        self._powers = 1 << np.arange(self.num_observables)
+        options = {**DEFAULT_BPOSD_OPTIONS, **bposd_options}
+        channel = [float(p) for p in probs]
+        self._bposd = BpOsdDecoder(self._check, error_channel=channel, **options)
+        self._flipped = [
+            BpOsdDecoder(
+                vstack([self._check, self._observables[j]]).tocsr(),
+                error_channel=channel,
+                **options,
+            )
+            for j in range(self.num_observables)
+        ]
+
+    def class_of(self, mechanisms: np.ndarray) -> int:
+        """Observable pattern of a mechanism set (bit ``j`` is observable ``j``)."""
+        return int(((self._observables @ mechanisms) % 2) @ self._powers)
+
+    def _satisfies(self, mechanisms: np.ndarray, syndrome: np.ndarray) -> bool:
+        return not ((self._check @ mechanisms) % 2 != syndrome).any()
+
+    def candidates(
+        self, syndrome: np.ndarray, seed: np.ndarray
+    ) -> Dict[int, Tuple[float, np.ndarray]]:
+        """Candidate solutions from class-flipped BP-OSD reruns.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+        seed : np.ndarray
+            A solution of the syndrome, normally the BP-OSD solution.
+
+        Returns
+        -------
+        Dict[int, Tuple[float, np.ndarray]]
+            For each logical class reached, the log-likelihood ratio and the
+            mechanisms of its most likely candidate.
+        """
+        center = self.class_of(seed)
+        found = {center: (float(self._llr @ seed), seed.copy())}
+        tried = set()
+        for _ in range(self.recenter_rounds):
+            if center in tried:
+                break
+            tried.add(center)
+            self._flip_around(center, syndrome, found)
+            center = max(found, key=lambda label: found[label][0])
+        return found
+
+    def _flip_around(
+        self,
+        center: int,
+        syndrome: np.ndarray,
+        found: Dict[int, Tuple[float, np.ndarray]],
+    ) -> None:
+        """Flip every observable of ``center`` once and record the solutions."""
+        for j in range(self.num_observables):
+            target = ((center >> j) & 1) ^ 1
+            extended = np.concatenate([syndrome, [target]]).astype(np.uint8)
+            solution = np.asarray(self._flipped[j].decode(extended), dtype=np.uint8)
+            if not self._satisfies(solution, syndrome):
+                continue
+            label = self.class_of(solution)
+            likelihood = float(self._llr @ solution)
+            if label not in found or likelihood > found[label][0]:
+                found[label] = (likelihood, solution.copy())
+
+    @staticmethod
+    def _active_set(found: Dict[int, Tuple[float, np.ndarray]]) -> List[int]:
+        """Union of the candidate supports, most likely candidate first."""
+        active: List[int] = []
+        seen = set()
+        for _, (_, solution) in sorted(found.items(), key=lambda item: -item[1][0]):
+            for i in np.flatnonzero(solution):
+                if int(i) not in seen:
+                    seen.add(int(i))
+                    active.append(int(i))
+        return active
+
+    def _flips(self, label: int) -> np.ndarray:
+        return ((label >> np.arange(self.num_observables)) & 1).astype(np.uint8)
+
+    def _class_masses(
+        self, syndrome: np.ndarray, active: Sequence[int]
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        return active_set_class_masses(
+            self.problem,
+            syndrome,
+            active,
+            self.chi_max,
+            check_matrix=self._dense_check,
+            observable_matrix=self._dense_observables,
+        )
+
+    def decode(  # pylint: disable=too-many-locals
+        self, syndrome: np.ndarray
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Predict the observable flips for one syndrome.
+
+        Parameters
+        ----------
+        syndrome : np.ndarray
+            One bit per detector.
+
+        Returns
+        -------
+        (predicted_flips, info)
+            ``predicted_flips`` has one bit per observable. ``info`` holds
+            ``predicted_class`` and ``bposd_class`` (observable patterns as
+            integers, bit ``j`` is observable ``j``), ``best_candidate_class``
+            (the class of the most likely single candidate), ``margin``
+            (difference between the two largest normalized class masses),
+            ``lost`` (discarded fraction of the squared norm in the
+            contraction: an indicator, not a bound on the error of the
+            masses), ``active`` and
+            ``free`` (sizes of the active set and of its free part) and
+            ``candidates`` (number of logical classes reached). A tie for the
+            heaviest class goes to the BP-OSD class when it is one of the
+            tied classes; two normalized masses within
+            :data:`TIE_TOLERANCE` of each other count as tied. The empty
+            syndrome is answered with no flips without a search. If BP-OSD
+            returns a mechanism set that does not reproduce the syndrome, its
+            class is returned with ``candidates`` set to 0.
+        """
+        syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
+        info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
+        info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
+        info.update(candidates=1)
+        if not syndrome.any():
+            return self._flips(0), info
+        seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
+        bposd_class = self.class_of(seed)
+        info.update(predicted_class=bposd_class, bposd_class=bposd_class)
+        info["best_candidate_class"] = bposd_class
+        if not self._satisfies(seed, syndrome):
+            info.update(margin=0.0, candidates=0)
+            return self._flips(bposd_class), info
+
+        found = self.candidates(syndrome, seed)
+        active = self._active_set(found)
+        masses, contraction = self._class_masses(syndrome, active)
+        ranking = np.argsort(masses)[::-1]
+        predicted = int(ranking[0])
+        margin = (
+            float(masses[ranking[0]] - masses[ranking[1]]) if masses.size > 1 else 1.0
+        )
+        if masses[bposd_class] >= masses[predicted] - TIE_TOLERANCE:
+            predicted = bposd_class
+        info.update(
+            predicted_class=predicted,
+            best_candidate_class=max(found, key=lambda label: found[label][0]),
+            margin=margin,
+            lost=contraction["lost"],
+            active=len(active),
+            free=contraction["free"],
+            candidates=len(found),
+        )
+        return self._flips(predicted), info

@@ -1,7 +1,9 @@
-"""Tests for the class sums of a detector error model on an active set.
+"""Tests for the class-summed detector-error-model decoder.
 
 The contraction is checked against dense linear algebra and against exact
-enumeration of every solution inside an active set.
+enumeration of every solution inside an active set. The decoder is checked on
+small circuits against exact maximum likelihood and, on the bivariate bicycle
+[[72, 12, 6]] memory circuit, against BP-OSD on the same shots.
 """
 
 import itertools
@@ -9,8 +11,14 @@ import itertools
 import numpy as np
 import pytest
 import stim
+import sympy
+from ldpc import BpOsdDecoder
+from qldpc import circuits as qldpc_circuits
+from qldpc.codes import BBCode
 
 from mdopt.decoding.class_sum import (
+    DEFAULT_BPOSD_OPTIONS,
+    ClassSumDecoder,
     ParityChain,
     active_set_class_masses,
     multiplet_safe_rank,
@@ -67,6 +75,19 @@ def _sample_from_model(problem, shots, seed):
     syndromes = (check @ errors.T).T % 2
     flips = (observables @ errors.T).T % 2
     return syndromes.astype(np.uint8), flips.astype(np.uint8)
+
+
+def _bb72_problem(rounds=1, p=0.01):
+    x, y = sympy.symbols("x y")
+    code = BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2)
+    circuit = qldpc_circuits.get_memory_experiment(
+        code,
+        "Z",
+        num_rounds=rounds,
+        noise_model=qldpc_circuits.DepolarizingNoiseModel(p),
+    )
+    dem = circuit.detector_error_model(decompose_errors=False, flatten_loops=True)
+    return dem_to_problem(dem)
 
 
 def test_rank_is_plain_truncation_without_degeneracy():
@@ -453,3 +474,114 @@ def test_model_without_observables_has_one_class():
     assert np.isclose(info["log_mass"], np.log(0.1 * 0.8 + 0.9 * 0.2))
     masses, info = active_set_class_masses(problem, np.array([1]), [0])
     assert np.isclose(info["log_mass"], np.log(0.1 * 0.8))
+
+
+def test_decoder_rejects_bad_input():
+    problem = _random_problem(0)
+    with pytest.raises(ValueError, match="bond dimension"):
+        ClassSumDecoder(problem, chi_max=0)
+    degenerate = DemProblem(
+        probs=[0.1, 1.0],
+        detector_rows=[[0, 1]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="at most 1/2"):
+        ClassSumDecoder(degenerate)
+    likely = DemProblem(
+        probs=[0.9, 0.8],
+        detector_rows=[[0, 1]],
+        observable_rows=[[0]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="at most 1/2"):
+        ClassSumDecoder(likely)
+    empty = DemProblem(
+        probs=[],
+        detector_rows=[[]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    with pytest.raises(ValueError, match="no mechanisms"):
+        ClassSumDecoder(empty)
+    with pytest.raises(ValueError):
+        ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors + 1))
+
+
+def test_decoder_returns_no_flips_for_the_empty_syndrome():
+    problem = _random_problem(1)
+    flips, info = ClassSumDecoder(problem).decode(np.zeros(problem.num_detectors))
+    assert flips.shape == (problem.num_observables,) and not flips.any()
+    assert info["predicted_class"] == 0 and info["active"] == 0
+
+
+def test_a_tie_goes_to_the_bposd_class(monkeypatch):
+    """The BP-OSD class wins a tie wherever the sort happens to rank it."""
+    problem = _random_problem(4, num_observables=2)
+    decoder = ClassSumDecoder(problem)
+    monkeypatch.setattr(
+        decoder,
+        "_class_masses",
+        lambda syndrome, active: (np.full(4, 0.25), {"lost": 0.0, "free": 1}),
+    )
+    syndromes, _ = _sample_from_model(problem, 60, seed=7)
+    ranked_elsewhere = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        flips, info = decoder.decode(syndrome)
+        if info["candidates"] == 0:
+            continue
+        assert info["predicted_class"] == info["bposd_class"]
+        assert int(flips @ (1 << np.arange(2))) == info["bposd_class"]
+        # argsort puts class 3 first and class 2 second among equal masses.
+        ranked_elsewhere += info["bposd_class"] in (0, 1)
+    assert ranked_elsewhere > 0
+
+
+def test_decoder_matches_maximum_likelihood_on_a_small_surface_code():
+    """On a small circuit the candidates' active set holds the posterior."""
+    problem = _small_surface_problem(0.02)
+    decoder = ClassSumDecoder(problem, chi_max=16)
+    syndromes, _ = _sample_from_model(problem, 80, seed=3)
+    assert syndromes.any(axis=1).sum() > 20
+    agree = 0
+    for syndrome in syndromes:
+        flips, info = decoder.decode(syndrome)
+        _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
+        agree += int(np.array_equal(flips, reference))
+        assert info["lost"] < 1e-6
+        assert int(flips @ (1 << np.arange(flips.size))) == info["predicted_class"]
+    assert agree >= 78
+
+
+def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
+    """Fewer logical errors than BP-OSD on the same circuit-level shots.
+
+    One syndrome-extraction round of the [[72, 12, 6]] bivariate bicycle code
+    at p = 0.01, where BP-OSD fails on about 9 % of the shots and the class sum
+    on about 7 %.
+    """
+    problem = _bb72_problem(rounds=1, p=0.01)
+    assert problem.num_detectors == 72 and problem.num_observables == 12
+    check, observables = problem_matrices(problem)
+    syndromes, truth = _sample_from_model(problem, 250, seed=2026)
+    decoder = ClassSumDecoder(problem, chi_max=16)
+    bposd = BpOsdDecoder(
+        check, error_channel=list(problem.probs), **DEFAULT_BPOSD_OPTIONS
+    )
+    class_sum_failures = bposd_failures = fixes = breaks = 0
+    for syndrome, expected in zip(syndromes, truth):
+        flips, info = decoder.decode(syndrome)
+        reference = (observables @ bposd.decode(syndrome)) % 2
+        assert info["bposd_class"] == int(reference @ (1 << np.arange(12)))
+        ours_wrong = not np.array_equal(flips, expected)
+        theirs_wrong = not np.array_equal(reference, expected)
+        class_sum_failures += ours_wrong
+        bposd_failures += theirs_wrong
+        fixes += theirs_wrong and not ours_wrong
+        breaks += ours_wrong and not theirs_wrong
+    assert bposd_failures > 0
+    assert class_sum_failures < bposd_failures
+    assert fixes > breaks

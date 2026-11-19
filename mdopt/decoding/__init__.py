@@ -2,11 +2,12 @@
 
 This package provides the error-based decoders for CSS and custom stabilizer
 codes (:mod:`mdopt.decoding.decoding`), the detector-error-model decoder for
-circuit-level noise (:mod:`mdopt.decoding.dem`) and the class sums of a
-detector error model on an active set (:mod:`mdopt.decoding.class_sum`).
+circuit-level noise (:mod:`mdopt.decoding.dem`) and the class-sum decoder that
+resums the posterior around BP-OSD candidates (:mod:`mdopt.decoding.class_sum`).
 """
 
 from mdopt.decoding.class_sum import (
+    ClassSumDecoder,
     ParityChain,
     active_set_class_masses,
     multiplet_safe_rank,
