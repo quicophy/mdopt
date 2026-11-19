@@ -68,18 +68,64 @@ widens the candidate search: classes that the search has already found become
 centers of further class flips, which reaches classes more than one observable
 flip away from the most likely candidates.
 
+**Truncating in the computational basis.** Every factor of this network is
+diagonal in the bit basis, so a bond does not need the basis an SVD would
+choose: it can stay in the computational basis, where one basis state is one
+pattern of running parities of the pivots whose support is in progress,
+together with the observable pattern accumulated so far. That is the state
+space of a trellis decoder ([1]_, [2]_), and :func:`basis_truncated_class_masses`
+contracts the same network in it. A bond is truncated by keeping the
+``max_states`` most probable basis states, as in reduced-state trellis decoding
+[3]_, ranked by the weight they have when every remaining free mechanism stays
+off. A state that a factor of exactly zero rules out under that completion
+ranks behind every other state, and is counted in the pruned share by its
+weight without that factor, since a later mechanism can still revive it.
+The pruned share is measured by that ranking weight, one step at a time. It
+indicates that states were dropped; it does not bound the probability that
+was lost, because a dropped state can be worth far more once later mechanisms
+fire than its ranking weight said.
+Nothing is rotated, every number is a probability, and the cost is a few
+ten thousand additions and multiplications where the SVD contraction needs a
+thousand factorizations. ``ClassSumDecoder(truncation="basis")`` uses it.
+
 On the bivariate bicycle [[72, 12, 6]] code under circuit-level depolarizing
 noise this decoder makes fewer logical errors than BP-OSD on the same shots at
 1, 2 and 6 syndrome-extraction rounds. On the [[90, 8, 10]], [[108, 8, 10]]
 and [[144, 12, 12]] codes of the same family the tempered pass is what keeps
 it ahead: on [[144, 12, 12]] the one-pass contraction alone does worse than
-picking the most likely single candidate.
+picking the most likely single candidate. With the truncation in the
+computational basis the decoder makes fewer errors still on [[144, 12, 12]]
+than with the tempered SVD contraction.
+
+References
+----------
+.. [1] H. Ollivier and J.-P. Tillich, "Trellises for stabilizer codes:
+   definition and uses", Physical Review A 74, 032304 (2006).
+.. [2] E. Stylianou, V. Sidorenko, C. Deppe and H. Boche, "Minimal trellises
+   for non-degenerate and degenerate decoding of quantum stabilizer codes",
+   arXiv:2410.07897 (2024).
+.. [3] V. Franz and J. B. Anderson, "Concatenated decoding with a
+   reduced-search BCJR algorithm", IEEE Journal on Selected Areas in
+   Communications 16 (2), 186-195 (1998).
 """
 
 # pylint: disable=too-many-lines
 
+import heapq
+import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 from scipy.linalg import svd as scipy_svd
@@ -737,6 +783,322 @@ def active_set_class_masses(  # pylint: disable=too-many-arguments,too-many-posi
     return masses / total, info
 
 
+def _safe_log(value: float) -> float:
+    """Logarithm that sends zero to minus infinity instead of raising."""
+    return math.log(value) if value > 0 else -math.inf
+
+
+class _BasisState(NamedTuple):
+    """One basis state of the recursion in :func:`_basis_recursion`."""
+
+    #: Logarithm of the summed weight of the partial assignments.
+    log_weight: float
+    #: Sum of the finite logarithms of the open pivots' current factors.
+    pending: float
+    #: Number of open pivots whose current factor is zero.
+    blocked: int
+
+
+def _log_sum_exp(values: Sequence[float]) -> float:
+    """Logarithm of the sum of the exponentials of finite ``values``."""
+    top = max(values)
+    return top + math.log(sum(math.exp(value - top) for value in values))
+
+
+def _basis_recursion(  # pylint: disable=too-many-locals,too-many-branches,too-many-statements,too-many-nested-blocks
+    free_priors: Sequence[Tuple[float, float]],
+    pivot_weights: Sequence[Sequence[float]],
+    kernel: _KernelPicture,
+    num_obs: int,
+    max_states: int,
+) -> Tuple[Dict[int, float], float, float, int, int]:
+    """Class sums by a forward recursion over the free mechanisms.
+
+    A state is ``(signature, class)``: the running parity of every pivot whose
+    support has started but not ended (bit ``r`` of the signature belongs to
+    pivot ``r``), and the observable pattern accumulated so far. Its value is
+    the summed probability of all partial assignments that lead to it, without
+    the factors of the pivots still open; those are tracked separately so that
+    states can be ranked by the weight of their completion with every
+    remaining free mechanism off.
+
+    Weights are kept as logarithms throughout and merged by a log-sum-exp, so
+    neither hundreds of small factors at one site nor a weight that is tiny
+    until its open pivots close can underflow. A factor of zero
+    is allowed: it removes the assignments it applies to, and an open pivot
+    whose current factor is zero is counted rather than added, so that it can
+    be taken back when the pivot's parity changes.
+
+    Returns the final values by relative class, the logarithm of the scale
+    divided out, the largest fraction of the ranking weight pruned at one
+    step, the largest number of states held, and the number of states
+    removed. The result is exact when nothing was removed. The pruned
+    fraction is measured by the ranking weight and is the largest over the
+    steps, not their sum: it indicates pruning and does not bound the mass
+    that was lost.
+    """
+    num_free = len(kernel.free)
+    log_weights = [[_safe_log(w0), _safe_log(w1)] for w0, w1 in pivot_weights]
+    log_priors = [[_safe_log(off), _safe_log(on)] for off, on in free_priors]
+    opens: List[List[int]] = [[] for _ in range(num_free)]
+    continues: List[List[int]] = [[] for _ in range(num_free)]
+    closes: List[List[int]] = [[] for _ in range(num_free)]
+    singles: List[List[int]] = [[] for _ in range(num_free)]
+    toggles = [0] * num_free
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            continue
+        first, last = min(support), max(support)
+        if first == last:
+            singles[first].append(r)
+            continue
+        opens[first].append(r)
+        closes[last].append(r)
+        for k in support:
+            toggles[k] |= 1 << r
+            if k != first:
+                continues[k].append(r)
+    flips = [
+        sum(int(kernel.observable_flips[j, k]) << j for j in range(num_obs))
+        for k in range(num_free)
+    ]
+    states: Dict[Tuple[int, int], _BasisState] = {(0, 0): _BasisState(0.0, 0.0, 0)}
+    pruned, peak, removed = 0.0, 1, 0
+    for k in range(num_free):
+        branch = [
+            log_priors[k][bit] + sum(log_weights[r][bit] for r in singles[k])
+            for bit in (0, 1)
+        ]
+        clear = 0
+        for r in closes[k]:
+            clear |= 1 << r
+        merged: Dict[Tuple[int, int], Tuple[List[float], float, int]] = {}
+        for (signature, label), (base, pending, zeros) in states.items():
+            for bit in (0, 1):
+                value = base + branch[bit]
+                if value == -math.inf:
+                    continue
+                later, blocked = pending, int(zeros)
+                sig, lab = signature, label
+                if bit == 1:
+                    for r in continues[k]:
+                        current = (signature >> r) & 1
+                        for term, sign in (
+                            (log_weights[r][current], -1),
+                            (log_weights[r][1 - current], 1),
+                        ):
+                            if term == -math.inf:
+                                blocked += sign
+                            else:
+                                later += sign * term
+                    sig, lab = signature ^ toggles[k], label ^ flips[k]
+                for r in opens[k]:
+                    term = log_weights[r][bit]
+                    if term == -math.inf:
+                        blocked += 1
+                    else:
+                        later += term
+                for r in closes[k]:
+                    term = log_weights[r][(sig >> r) & 1]
+                    value += term
+                    if term == -math.inf:
+                        blocked -= 1
+                    else:
+                        later -= term
+                if value == -math.inf:
+                    continue
+                key = (sig & ~clear, lab)
+                item = merged.get(key)
+                if item is None:
+                    merged[key] = ([value], later, blocked)
+                else:
+                    item[0].append(value)
+        if not merged:
+            raise ArithmeticError(
+                f"The recursion lost all of its weight at free mechanism {k} of "
+                f"{num_free}, with {len(states)} states held and {removed} "
+                "pruned so far."
+            )
+        # Weights stay logarithms from step to step and merge by a
+        # log-sum-exp: a weight that is tiny now is kept, because the factors
+        # of its open pivots can still make it the largest.
+        new: Dict[Tuple[int, int], _BasisState] = {
+            key: _BasisState(_log_sum_exp(values), later, blocked)
+            for key, (values, later, blocked) in merged.items()
+        }
+        peak = max(peak, len(new))
+        if len(new) > max_states:
+            # Unblocked states first, each group by the weight of its
+            # completion with every remaining free mechanism off. A blocked
+            # state has no such completion, but a later mechanism can unblock
+            # it, so the pruned share counts it by the same weight with its
+            # zero factors left out: an upper estimate, never zero.
+            scored = [
+                (state.blocked == 0, state.log_weight + state.pending, key)
+                for key, state in new.items()
+            ]
+            kept = heapq.nlargest(max_states, scored)
+            kept_keys = {key for _, _, key in kept}
+            best = max(score for _, score, _ in scored)
+            # The discarded weights are summed directly: one minus the
+            # retained share would round a loss of 1e-80 to zero.
+            everything = math.fsum(math.exp(score - best) for _, score, _ in scored)
+            discarded = math.fsum(
+                math.exp(score - best)
+                for _, score, key in scored
+                if key not in kept_keys
+            )
+            pruned = max(pruned, discarded / everything)
+            removed += len(scored) - max_states
+            new = {key: new[key] for _, _, key in kept}
+        states = new
+    by_class: Dict[int, List[float]] = {}
+    for (_, label), (value, _, _) in states.items():
+        by_class.setdefault(label, []).append(value)
+    log_totals = {label: _log_sum_exp(values) for label, values in by_class.items()}
+    log_scale = max(log_totals.values())
+    totals = {label: math.exp(v - log_scale) for label, v in log_totals.items()}
+    return totals, log_scale, pruned, peak, removed
+
+
+def basis_truncated_class_masses(  # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
+    problem: DemProblem,
+    syndrome: np.ndarray,
+    active: Sequence[int],
+    max_states: int = 256,
+    check_matrix: Optional[np.ndarray] = None,
+    observable_matrix: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Probability mass of every logical class, truncated in the bit basis.
+
+    The same sum as :func:`active_set_class_masses`, over the same network,
+    with the bonds kept in the computational basis and truncated to the
+    ``max_states`` most probable basis states (see the module docstring). With
+    ``max_states`` large enough that nothing is pruned the result is exact.
+    Mechanisms of probability exactly zero or one are decided beforehand, as
+    in :func:`active_set_class_masses`, and are not counted in ``free`` and
+    ``rank``.
+
+    Parameters
+    ----------
+    problem : DemProblem
+        The detector error model.
+    syndrome : np.ndarray
+        One bit per detector.
+    active : Sequence[int]
+        The mechanisms that may fire, in the order in which pivots are chosen
+        and free mechanisms are read. It must hold a solution of the syndrome.
+    max_states : int
+        The number of basis states kept on a bond.
+    check_matrix, observable_matrix : Optional[np.ndarray]
+        Dense ``uint8`` detector and observable matrices, to avoid rebuilding
+        them for every syndrome.
+
+    Returns
+    -------
+    (class_masses, info)
+        ``class_masses`` as in :func:`active_set_class_masses`. ``info`` holds
+        ``log_mass`` (logarithm of the retained probability that the syndrome
+        is produced by mechanisms of the active set alone; pruning only
+        drops non-negative terms of the sum, so unlike the SVD estimate it
+        never exceeds the exact value), ``pruned`` (the
+        largest fraction of the ranking weight discarded at one step. It is
+        an indicator, not a bound: the ranking weight assumes that every
+        remaining free mechanism stays off, and a discarded state can carry
+        most of the probability once some of them fire, so the true loss
+        can exceed this value by many orders of magnitude; compare
+        ``log_mass`` at a larger ``max_states`` to measure it),
+        ``pruned_states`` (the number of
+        states removed; zero means the result is exact), ``states`` (the
+        largest number of basis states held at one step, counted before that
+        step is pruned, so at most twice ``max_states``), ``free`` and
+        ``rank``.
+
+    Raises
+    ------
+    ValueError
+        If the active set holds no solution of the syndrome, or if
+        ``max_states`` is not positive.
+    ArithmeticError
+        If the recursion loses all of its weight, or if no assignment of the
+        active set has positive probability.
+    """
+    if max_states < 1:
+        raise ValueError("The number of basis states must be positive.")
+    syndrome = _validated_syndrome(problem, syndrome).astype(np.uint8) % 2
+    if check_matrix is None or observable_matrix is None:
+        sparse_check, sparse_observable = problem_matrices(problem)
+        check_matrix = np.asarray(sparse_check.todense(), dtype=np.uint8)
+        observable_matrix = np.asarray(sparse_observable.todense(), dtype=np.uint8)
+    num_obs = problem.num_observables
+    probs = np.asarray(problem.probs, dtype=float)
+    named = list(dict.fromkeys(int(i) for i in active))
+    if any(i < 0 or i >= problem.num_mechanisms for i in named):
+        raise ValueError("The active set names a mechanism outside the model.")
+    kernel = _kernel_picture(check_matrix, observable_matrix, syndrome, named)
+    # A mechanism of probability exactly zero or one is decided beforehand,
+    # as in :func:`active_set_class_masses`. Left in, the states are ranked
+    # by a completion in which a certain mechanism stays off, which has
+    # probability zero, and the pruning then keeps the wrong states.
+    columns = [i for i in named if 0.0 < probs[i] < 1.0]
+    forced_class = 0
+    if len(columns) < len(named):
+        reduced = syndrome.copy()
+        for i in named:
+            if probs[i] >= 1.0:
+                reduced ^= check_matrix[:, i]
+                forced_class ^= sum(
+                    int(observable_matrix[j, i]) << j for j in range(num_obs)
+                )
+        try:
+            kernel = _kernel_picture(check_matrix, observable_matrix, reduced, columns)
+        except ValueError as error:
+            raise ArithmeticError(
+                "No assignment of the active set has positive probability."
+            ) from error
+    pivot_probs = probs[kernel.pivots]
+    pivot_weights = np.where(
+        kernel.base[:, None] == 1,
+        np.stack([pivot_probs, 1 - pivot_probs], axis=1),
+        np.stack([1 - pivot_probs, pivot_probs], axis=1),
+    )
+    # Every mechanism outside the active set is off. The certain ones of
+    # the active set contribute a factor of one.
+    inactive = np.ones(problem.num_mechanisms, dtype=bool)
+    inactive[named] = False
+    with np.errstate(divide="ignore"):
+        log_scale = float(np.sum(np.log1p(-probs[inactive])))
+    for r, support in enumerate(kernel.supports):
+        if not support:
+            log_scale += _safe_log(float(pivot_weights[r, 0]))
+    if log_scale == -math.inf:
+        # A pinned mechanism of probability one, or a pivot without free
+        # support that must take a value of probability zero.
+        raise ArithmeticError(
+            "No assignment of the active set has positive probability."
+        )
+    totals, log_recursion, pruned, peak, removed = _basis_recursion(
+        [(1 - float(probs[c]), float(probs[c])) for c in kernel.free],
+        pivot_weights.tolist(),
+        kernel,
+        num_obs,
+        max_states,
+    )
+    masses = np.zeros(1 << num_obs)
+    for label, weight in totals.items():
+        masses[label ^ kernel.base_class ^ forced_class] += weight
+    total = float(masses.sum())
+    info: Dict[str, Any] = {
+        "free": len(kernel.free),
+        "rank": len(kernel.pivots),
+        "log_mass": _safe_log(total) + log_recursion + log_scale,
+        "pruned": pruned,
+        "pruned_states": removed,
+        "states": peak,
+    }
+    return masses / total, info
+
+
 #: BP-OSD solves of one syndrome: (observable, forced value) -> solution, or
 #: ``None`` when BP-OSD returned something that does not match the syndrome.
 _Solves = Dict[Tuple[int, int], Optional[np.ndarray]]
@@ -781,6 +1143,17 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         the syndrome are reused: there are only two per observable, so the
         whole search never costs more than that. With 0 the search is not
         widened.
+    truncation : str
+        ``"svd"`` contracts the class sum as a matrix product state truncated
+        by SVD to ``chi_max``, with the tempered pass on syndromes where that
+        truncates. ``"basis"`` keeps the bonds in the computational basis and
+        truncates them to the ``max_states`` most probable basis states (see
+        :func:`basis_truncated_class_masses`); it needs no tempered pass, and
+        ``temper_threshold`` then applies to the pruned fraction, which can
+        understate the loss: a wider search is not triggered by every loss.
+    max_states : int
+        The number of basis states kept on a bond with ``truncation="basis"``.
+        It must be positive whichever truncation is chosen.
     **bposd_options
         Overrides of :data:`DEFAULT_BPOSD_OPTIONS`, passed to
         ``ldpc.BpOsdDecoder``.
@@ -801,6 +1174,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         temper_threshold: float = 1e-8,
         temper_chi_max: Optional[int] = None,
         extra_centers: int = 0,
+        truncation: str = "svd",
+        max_states: int = 256,
         **bposd_options: Any,
     ):
         # Imported here so that importing mdopt does not pay for ldpc, which
@@ -824,6 +1199,12 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             raise ValueError("temper_chi_max, when given, must be positive.")
         if extra_centers < 0:
             raise ValueError("The number of extra centers cannot be negative.")
+        if truncation not in ("svd", "basis"):
+            raise ValueError(
+                f"Unknown truncation {truncation!r}; expected 'svd' or 'basis'."
+            )
+        if max_states < 1:
+            raise ValueError("The number of basis states must be positive.")
         self.problem = problem
         self.chi_max = chi_max
         self.recenter_rounds = recenter_rounds
@@ -831,6 +1212,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         self.temper_threshold = temper_threshold
         self.temper_chi_max = chi_max if temper_chi_max is None else temper_chi_max
         self.extra_centers = extra_centers
+        self.truncation = truncation
+        self.max_states = max_states
         self.num_observables = problem.num_observables
         self._check, self._observables = problem_matrices(problem)
         self._dense_check = np.asarray(self._check.todense(), dtype=np.uint8)
@@ -1011,6 +1394,34 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             stages=stages,
         )
 
+    def _truncated(self, contraction: Dict[str, Any]) -> bool:
+        """Whether a first pass truncated: ``lost`` or ``pruned`` at the threshold."""
+        measure = max(contraction["lost"], contraction.get("pruned", 0.0))
+        return measure >= self.temper_threshold
+
+    def _first_pass(
+        self, syndrome: np.ndarray, active: Sequence[int]
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Class masses of the configured truncation.
+
+        ``lost`` and ``pruned`` are both filled in; the one that does not
+        belong to the configured truncation is zero.
+        """
+        if self.truncation == "svd":
+            masses, info = self._class_masses(syndrome, active, 1)
+            info["pruned"] = 0.0
+            return masses, info
+        masses, info = basis_truncated_class_masses(
+            self.problem,
+            syndrome,
+            active,
+            self.max_states,
+            check_matrix=self._dense_check,
+            observable_matrix=self._dense_observables,
+        )
+        info["lost"] = 0.0
+        return masses, info
+
     def decode(  # pylint: disable=too-many-locals
         self, syndrome: np.ndarray
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
@@ -1030,8 +1441,11 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             (the class of the most likely single candidate), ``margin``
             (difference between the two largest normalized class masses),
             ``lost`` (the discarded fraction of the squared norm, summed
-            over every truncation of the contraction that gave the verdict:
-            an indicator, not a bound on the error of the masses),
+            over every truncation of the SVD contraction that gave the
+            verdict; zero with ``truncation="basis"``), ``pruned`` (the
+            largest fraction of the ranking weight pruned at one step of the
+            basis truncation; zero with ``truncation="svd"``; both are
+            indicators, not bounds on the error of the masses),
             ``tempered`` (whether that
             was the tempered contraction), ``widened`` (whether the wider
             search asked BP-OSD for a solve it did not have), ``active`` and
@@ -1047,7 +1461,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         syndrome = _validated_syndrome(self.problem, syndrome).astype(np.uint8) % 2
         info: Dict[str, Any] = {"predicted_class": 0, "bposd_class": 0}
         info.update(best_candidate_class=0, margin=1.0, lost=0.0, active=0, free=0)
-        info.update(candidates=1, tempered=False, widened=False)
+        info.update(candidates=1, tempered=False, widened=False, pruned=0.0)
         if not syndrome.any():
             return self._flips(0), info
         seed = np.asarray(self._bposd.decode(syndrome), dtype=np.uint8)
@@ -1060,8 +1474,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
 
         found, tried, solves = self._search(syndrome, seed)
         active = self._active_set(found)
-        masses, contraction = self._class_masses(syndrome, active, 1)
-        hard = contraction["lost"] >= self.temper_threshold
+        masses, contraction = self._first_pass(syndrome, active)
+        hard = self._truncated(contraction)
         widened = False
         if hard and self.extra_centers > 0 and len(found) > len(tried):
             solved = len(solves)
@@ -1074,7 +1488,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             wider_active += [m for m in active if m not in kept]
             if wider_active != active:
                 try:
-                    wider = self._class_masses(syndrome, wider_active, 1)
+                    wider = self._first_pass(syndrome, wider_active)
                 except ArithmeticError:
                     # The wider sum vanished: the first sum and its active
                     # set stand.
@@ -1082,12 +1496,12 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
                 else:
                     active = wider_active
                     masses, contraction = wider
-                    hard = contraction["lost"] >= self.temper_threshold
+                    hard = self._truncated(contraction)
             # Centers whose solves were all made already cost nothing and
             # change nothing: the search was widened only if it asked for one.
             widened = len(solves) > solved
         tempered = False
-        if self.temper_stages > 1 and hard:
+        if self.truncation == "svd" and self.temper_stages > 1 and hard:
             try:
                 masses, contraction = self._class_masses(
                     syndrome, active, self.temper_stages
@@ -1108,6 +1522,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             best_candidate_class=max(found, key=lambda label: found[label][0]),
             margin=margin,
             lost=contraction["lost"],
+            pruned=contraction.get("pruned", 0.0),
             tempered=tempered,
             widened=widened,
             active=len(active),

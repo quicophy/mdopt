@@ -21,6 +21,7 @@ from mdopt.decoding.class_sum import (
     ClassSumDecoder,
     ParityChain,
     active_set_class_masses,
+    basis_truncated_class_masses,
     multiplet_safe_rank,
     problem_matrices,
 )
@@ -788,6 +789,313 @@ def test_decoder_widens_only_when_the_first_pass_truncated():
     assert widened > 0 and tempered > 5 and larger >= tempered - 2
 
 
+@pytest.mark.parametrize("seed", range(6))
+def test_basis_truncated_masses_match_enumeration(seed):
+    """Without pruning the computational-basis contraction is exact."""
+    problem = _random_problem(seed)
+    syndromes, _ = _sample_from_model(problem, 3, seed + 100)
+    for syndrome in syndromes:
+        active = list(range(problem.num_mechanisms))
+        exact = _enumerate_active_set(problem, syndrome, active)
+        masses, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4096
+        )
+        assert info["pruned"] == 0.0
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert info["rank"] + info["free"] == problem.num_mechanisms
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_basis_truncated_masses_on_a_restricted_active_set(seed):
+    """Pinned mechanisms and the pivot order are handled as in the SVD sum."""
+    problem = _random_problem(seed, num_mechanisms=16)
+    rng = np.random.default_rng(seed)
+    check, _ = problem_matrices(problem)
+    error = np.zeros(problem.num_mechanisms, dtype=np.uint8)
+    error[rng.choice(problem.num_mechanisms, size=3, replace=False)] = 1
+    syndrome = (check @ error) % 2
+    extra = rng.choice(problem.num_mechanisms, size=7, replace=False)
+    active = list(dict.fromkeys([int(i) for i in np.flatnonzero(error)] + list(extra)))
+    exact = _enumerate_active_set(problem, syndrome, active)
+    for order in (active, active[::-1], sorted(active)):
+        masses, info = basis_truncated_class_masses(problem, syndrome, order)
+        reference, svd = active_set_class_masses(problem, syndrome, order, chi_max=256)
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.allclose(masses, reference, atol=1e-10)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert np.isclose(info["log_mass"], svd["log_mass"])
+
+
+def test_basis_truncation_prunes_and_reports_it():
+    """A small state budget prunes, says so, and still returns probabilities."""
+    problem = _random_problem(3, num_detectors=10, num_mechanisms=40, num_observables=4)
+    syndromes, _ = _sample_from_model(problem, 6, seed=11)
+    active = list(range(problem.num_mechanisms))
+    pruned_once = False
+    for syndrome in syndromes:
+        full, exact = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=1 << 20
+        )
+        assert exact["pruned"] == 0.0
+        few, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4
+        )
+        assert info["states"] <= 8
+        assert np.isclose(few.sum(), 1.0) and (few >= 0).all()
+        assert 0.0 <= info["pruned"] <= 1.0
+        # Pruning drops non-negative terms: the retained mass is a lower
+        # bound on the exact one.
+        assert info["log_mass"] <= exact["log_mass"] + 1e-12
+        pruned_once = pruned_once or info["pruned"] > 0
+        more, _ = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=512
+        )
+        assert np.abs(more - full).sum() <= np.abs(few - full).sum() + 1e-12
+    assert pruned_once
+    with pytest.raises(ValueError, match="basis states"):
+        basis_truncated_class_masses(problem, syndromes[0], active, max_states=0)
+
+
+def test_basis_truncation_survives_hundreds_of_small_factors_at_one_site():
+    """Four hundred pivot factors close on one free mechanism: their product
+    underflows float64, the class masses and the log mass do not."""
+    size, prob = 400, 0.01
+    problem = DemProblem(
+        probs=[prob] * (size + 1),
+        detector_rows=[[d, size] for d in range(size)],
+        observable_rows=[[size]],
+        num_detectors=size,
+        num_observables=1,
+    )
+    syndrome = np.zeros(size, dtype=np.uint8)
+    syndrome[: size // 2] = 1
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, list(range(size + 1)), max_states=2
+    )
+    assert info["free"] == 1 and info["pruned"] == 0.0
+    assert np.allclose(masses, [1 - prob, prob])
+    half = size // 2
+    assert np.isclose(info["log_mass"], half * np.log(prob) + half * np.log(1 - prob))
+
+
+def test_basis_truncation_decides_certain_mechanisms_beforehand():
+    """A mechanism that certainly fires is not ranked as if it stayed off.
+
+    Detector 0 holds a pivot of probability 1e-6, a free mechanism of
+    probability 0.3 that flips the observable, and a mechanism that certainly
+    fires. The free mechanism then almost surely fired too. Ranking the
+    states by "every remaining mechanism stays off" would keep the other
+    state when a single state is kept.
+    """
+    problem = DemProblem(
+        probs=[1e-6, 0.3, 1.0],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    syndrome = np.zeros(1, dtype=np.uint8)
+    exact = _enumerate_active_set(problem, syndrome, [0, 1, 2])
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, [0, 1, 2], max_states=1
+    )
+    assert masses.argmax() == exact.argmax() == 1
+    assert info["free"] + info["rank"] == 2
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, [0, 1, 2], max_states=4
+    )
+    assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+    assert np.isclose(info["log_mass"], np.log(exact.sum()))
+
+    checked = 0
+    for seed in range(60):
+        base = _random_problem(
+            seed, num_detectors=5, num_mechanisms=11, num_observables=2
+        )
+        rng = np.random.default_rng(seed)
+        probs = np.array(base.probs)
+        certain = rng.choice(11, size=int(rng.integers(1, 4)), replace=False)
+        probs[certain] = rng.choice([0.0, 1.0], size=len(certain))
+        problem = DemProblem(
+            probs=list(probs),
+            detector_rows=base.detector_rows,
+            observable_rows=base.observable_rows,
+            num_detectors=5,
+            num_observables=2,
+        )
+        syndromes, _ = _sample_from_model(problem, 1, seed + 7)
+        active = list(range(11))
+        exact = _enumerate_active_set(problem, syndromes[0], active)
+        if exact.sum() == 0.0:
+            with pytest.raises(ArithmeticError, match="positive probability"):
+                basis_truncated_class_masses(problem, syndromes[0], active)
+            continue
+        checked += 1
+        masses, info = basis_truncated_class_masses(
+            problem, syndromes[0], active, max_states=4096
+        )
+        assert info["pruned_states"] == 0
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+        assert info["free"] + info["rank"] == 11 - len(certain)
+        # A single state never loses everything: the completion it is
+        # ranked by has positive probability.
+        rough, _ = basis_truncated_class_masses(
+            problem, syndromes[0], active, max_states=1
+        )
+        assert np.all(rough >= 0.0) and np.isclose(rough.sum(), 1.0)
+    assert checked >= 40
+
+
+def test_basis_truncation_keeps_both_routes_of_the_zero_cutoff_case():
+    """Two equally likely solutions in opposite classes, one half each.
+
+    The one-pass SVD contraction can lose one of them to its zero cutoff (see
+    the tempering test on the same model); the recursion in the bit basis
+    works with probabilities and keeps both.
+    """
+    problem, syndrome, active = _two_route_problem(10, 1e-3)
+    for max_states in (256, 10**6):
+        masses, _ = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=max_states
+        )
+        assert np.allclose(masses, [0.5, 0.5], atol=1e-9)
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_basis_truncation_accepts_zero_probability_factors(seed):
+    """Deterministic mechanisms are valid input: zero factors remove
+    assignments, they do not raise."""
+    certain = DemProblem(
+        probs=[0.0],
+        detector_rows=[[0]],
+        observable_rows=[[]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    masses, info = basis_truncated_class_masses(certain, np.zeros(1), [0])
+    assert np.allclose(masses, [1.0, 0.0]) and info["log_mass"] == 0.0
+    # The same mechanism cannot explain a set detector: nothing to normalize.
+    with pytest.raises(ArithmeticError, match="positive probability"):
+        basis_truncated_class_masses(certain, np.ones(1), [0])
+
+    problem = _random_problem(seed)
+    rng = np.random.default_rng(seed)
+    probs = np.array(problem.probs)
+    probs[rng.choice(problem.num_mechanisms, size=3, replace=False)] = 0.0
+    problem = DemProblem(
+        probs=list(probs),
+        detector_rows=problem.detector_rows,
+        observable_rows=problem.observable_rows,
+        num_detectors=problem.num_detectors,
+        num_observables=problem.num_observables,
+    )
+    syndromes, _ = _sample_from_model(problem, 3, seed + 50)
+    active = list(range(problem.num_mechanisms))
+    for syndrome in syndromes:
+        exact = _enumerate_active_set(problem, syndrome, active)
+        masses, info = basis_truncated_class_masses(
+            problem, syndrome, active, max_states=4096
+        )
+        assert np.allclose(masses, exact / exact.sum(), atol=1e-12)
+        assert np.isclose(info["log_mass"], np.log(exact.sum()))
+
+
+def test_basis_truncation_keeps_a_weight_that_is_tiny_until_its_pivots_close():
+    """After the first free mechanism the winning class is 1200 orders of
+    magnitude behind; the pivots still open reverse that. Nothing is pruned,
+    so the result must be exact."""
+    prob, num_single, per_group, groups = 1e-3, 400, 200, 5
+    num_pivots = num_single + per_group * groups
+    first = num_pivots
+    # Turning the observable mechanism on fires 400 pivots at once. Leaving
+    # it off costs more: every one of the five groups then needs its own
+    # mechanism of probability 1e-300.
+    rows = [[d, first] for d in range(num_single)] + [
+        [num_single + g * per_group + i, first, first + 1 + g]
+        for g in range(groups)
+        for i in range(per_group)
+    ]
+    problem = DemProblem(
+        probs=[prob] * num_pivots + [0.5] + [1e-300] * groups,
+        detector_rows=rows,
+        observable_rows=[[first]],
+        num_detectors=num_pivots,
+        num_observables=1,
+    )
+    syndrome = np.array([0] * num_single + [1] * (per_group * groups), dtype=np.uint8)
+    masses, info = basis_truncated_class_masses(
+        problem, syndrome, list(range(num_pivots + 1 + groups)), max_states=64
+    )
+    assert info["free"] == 1 + groups
+    assert info["pruned_states"] == 0 and info["pruned"] == 0.0
+    assert np.allclose(masses, [0.0, 1.0])
+    assert np.isclose(
+        info["log_mass"],
+        np.log(0.5) + num_single * np.log(prob) + per_group * groups * np.log(1 - prob),
+    )
+
+
+def test_basis_truncation_reports_the_removal_of_a_blocked_state():
+    """A state whose open pivot has a zero factor can be unblocked by a later
+    mechanism. Removing it is a loss and must be reported as one."""
+    problem = DemProblem(
+        probs=[0.0, 0.5, 0.5],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    exact, info = basis_truncated_class_masses(problem, np.zeros(1), [0, 1, 2])
+    assert np.allclose(exact, [0.5, 0.5]) and info["pruned_states"] == 0
+    _, info = basis_truncated_class_masses(
+        problem, np.zeros(1), [0, 1, 2], max_states=1
+    )
+    assert info["pruned_states"] == 1 and info["pruned"] > 0.0
+
+
+def test_a_tiny_pruned_share_is_reported_as_it_is():
+    """A share of 1e-80 must not round to zero: the decoder compares it with
+    ``temper_threshold``, which a caller may set far below double precision
+    of one."""
+    problem = DemProblem(
+        probs=[1e-100, 1e-20, 0.5],
+        detector_rows=[[0, 1, 2]],
+        observable_rows=[[1]],
+        num_detectors=1,
+        num_observables=1,
+    )
+    _, info = basis_truncated_class_masses(
+        problem, np.ones(1, dtype=np.uint8), [0, 1, 2], max_states=1
+    )
+    assert info["pruned_states"] > 0
+    assert 1e-90 < info["pruned"] < 1e-60
+
+
+def test_decoder_with_basis_truncation_matches_maximum_likelihood():
+    """The decoder option agrees with the full-chain reference and the SVD sum."""
+    problem = _small_surface_problem(0.02)
+    basis = ClassSumDecoder(problem, truncation="basis")
+    svd = ClassSumDecoder(problem, chi_max=16)
+    syndromes, _ = _sample_from_model(problem, 80, seed=3)
+    agree = same = 0
+    for syndrome in syndromes:
+        flips, info = basis.decode(syndrome)
+        other, other_info = svd.decode(syndrome)
+        _, reference = decode_dem(problem, syndrome.astype(int), chi_max=4096)
+        agree += int(np.array_equal(flips, reference))
+        same += int(np.array_equal(flips, other))
+        assert not info["tempered"]
+        assert info["lost"] == 0.0 and info["pruned"] == 0.0
+        assert other_info["pruned"] == 0.0
+    assert agree >= 78 and same == len(syndromes)
+    with pytest.raises(ValueError, match="truncation"):
+        ClassSumDecoder(problem, truncation="schmidt")
+    with pytest.raises(ValueError, match="basis states"):
+        ClassSumDecoder(problem, truncation="basis", max_states=0)
+
+
 def test_widening_recontracts_a_superset_and_decides_from_it(monkeypatch):
     """A truncated first pass widens the search; the class sum is repeated on
     a set that contains the first one, and that second sum gives the verdict."""
@@ -974,12 +1282,15 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     check, observables = problem_matrices(problem)
     syndromes, truth = _sample_from_model(problem, 250, seed=2026)
     decoder = ClassSumDecoder(problem, chi_max=16)
+    basis = ClassSumDecoder(problem, truncation="basis", max_states=64)
     bposd = BpOsdDecoder(
         check, error_channel=list(problem.probs), **DEFAULT_BPOSD_OPTIONS
     )
-    class_sum_failures = bposd_failures = fixes = breaks = 0
+    class_sum_failures = bposd_failures = fixes = breaks = basis_failures = 0
     for syndrome, expected in zip(syndromes, truth):
         flips, info = decoder.decode(syndrome)
+        basis_flips, _ = basis.decode(syndrome)
+        basis_failures += int(not np.array_equal(basis_flips, expected))
         reference = (observables @ bposd.decode(syndrome)) % 2
         assert info["bposd_class"] == int(reference @ (1 << np.arange(12)))
         ours_wrong = not np.array_equal(flips, expected)
@@ -991,3 +1302,5 @@ def test_decoder_beats_bposd_on_the_bb72_memory_circuit():
     assert bposd_failures > 0
     assert class_sum_failures < bposd_failures
     assert fixes > breaks
+    assert basis_failures < bposd_failures
+    assert basis_failures <= class_sum_failures + 2
