@@ -2628,6 +2628,44 @@ def test_prior_reweighting_with_no_logicals_returns_the_scalar_posterior():
     assert plain[1] == reweighted[1] == 1
 
 
+_FIVE_QUBIT = (["XZZXI", "IXZZX", "XIXZZ", "ZXIXZ"], ["XXXXX"], ["ZZZZZ"])
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+@pytest.mark.parametrize(
+    "code, error, bias",
+    [
+        (_FIVE_QUBIT, "YZXZI", {"bias_type": "Bitflip", "bias_prob": 1.0}),
+        (_FIVE_QUBIT, "YZXZI", {"bias_type": "Depolarizing", "bias_prob": 0.0}),
+        ((["XX", "ZZ"], [], []), "IZ", {"bias_type": "Bitflip", "bias_prob": 0.0}),
+    ],
+)
+def test_prior_reweighting_reports_an_impossible_error_as_collapsed(
+    code, error, bias, renormalize
+):
+    """An error of probability zero under the prior has an all-zero posterior.
+    The undo multiplies everything the reweighted contraction kept by zero,
+    and the round-off left over must not be normalized into a verdict: the
+    shot scores 0 with an infinite bound, exactly as the plain decoder
+    reports it. Without the check the five-qubit bit-flip case scored 1 with
+    a bound of 7.5e-15."""
+    options = {
+        "chi_max": int(1e4),
+        "renormalize": renormalize,
+        "silent": True,
+        "optimizer": "Dense",
+        "return_certificate": True,
+        **bias,
+    }
+    plain = decode_custom(*code, error, **options)
+    reweighted = decode_custom(*code, error, prior_reweighting="BP", **options)
+    for posterior, score, certificate in (plain, reweighted):
+        assert not np.asarray(posterior).any()
+        assert score == 0
+        assert certificate.bound == float("inf")
+        assert certificate.survival == 0.0
+
+
 def test_depolarizing_bias_records_its_truncation_in_the_certificate():
     """The bias applier's two-site splits truncate at the SVD's default cutoff,
     which bites for very small biases; with a certificate the loss is recorded
@@ -3144,8 +3182,8 @@ def test_weighted_marginalization_requires_every_error_site():
 
     state = create_custom_product_state("0" + "+" * 4, form="Right-canonical")
     full = [(1, np.ones(2)), (2, np.ones((2, 2))), (4, np.ones(2))]
-    result = _marginalize_with_weights(state, 1, full, renormalize=False)
-    assert result.num_sites == 1
+    result, collapsed = _marginalize_with_weights(state, 1, full, renormalize=False)
+    assert result.num_sites == 1 and not collapsed
     for bad in (
         [(1, np.ones(2)), (3, np.ones(2))],
         [(1, np.ones(2)), (2, np.ones((2, 2))), (3, np.ones(2)), (4, np.ones(2))],
@@ -3162,10 +3200,37 @@ def test_weighted_marginalization_survives_weights_too_small_to_square():
 
     state = create_custom_product_state("0" + "+" * 6, form="Right-canonical")
     weights = [(site, np.full(2, 1e-197)) for site in range(1, 7)]
-    result = _marginalize_with_weights(state, 1, weights, renormalize=True)
+    result, collapsed = _marginalize_with_weights(state, 1, weights, renormalize=True)
     dense = np.asarray(result.dense(flatten=True, renormalize=False))
+    assert not collapsed  # tiny weights are not zero weights
     assert np.isfinite(dense).all()
     assert np.isclose(abs(dense[0]), 1.0) and dense[1] == 0.0
+
+
+@pytest.mark.parametrize("renormalize", [True, False])
+def test_weighted_marginalization_reports_a_state_the_weights_annihilate(renormalize):
+    """A zero undo weight on the only branch a site populates leaves nothing:
+    the helper says so and returns an exact zero instead of normalizing the
+    remainder. A zero weight on an empty branch is not a collapse."""
+    from mdopt.decoding.decoding import _marginalize_with_weights
+
+    state = create_custom_product_state("0" + "0+", form="Right-canonical")
+    keep = [(1, np.array([1.0, 0.0])), (2, np.ones(2))]
+    result, collapsed = _marginalize_with_weights(state, 1, keep, renormalize)
+    assert not collapsed
+    assert abs(np.asarray(result.dense(flatten=True, renormalize=False))[0]) > 0.1
+
+    kill = [(1, np.array([0.0, 1.0])), (2, np.ones(2))]
+    result, collapsed = _marginalize_with_weights(state, 1, kill, renormalize)
+    assert collapsed
+    assert not np.asarray(result.dense(flatten=True, renormalize=False)).any()
+
+    pair = create_custom_product_state("0" + "00", form="Right-canonical")
+    weight = np.ones((2, 2))
+    weight[0, 0] = 0.0
+    result, collapsed = _marginalize_with_weights(pair, 1, [(1, weight)], renormalize)
+    assert collapsed
+    assert not np.asarray(result.dense(flatten=True, renormalize=False)).any()
 
 
 def test_optima_tt_readout_rejects_non_qubit_chains():

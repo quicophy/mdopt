@@ -2247,12 +2247,22 @@ def _reweighted_error_state(
     return tensors, undo
 
 
+# The fraction of the arriving norm the undo weights must keep at a site with a
+# zero weight for the result to count as signal. On shots of probability zero
+# the measured fraction was 5e-17 to 2e-14 (round-off of the contraction); on
+# possible shots with zero-probability branches it was 0.7 or more. 1e-10 sits
+# above the round-off and above what the sweeps resolve at all, since the moves
+# of the orthogonality center drop singular values below 1e-12, and far below
+# any fraction a possible shot produced.
+_UNDO_COLLAPSE_TOLERANCE = 1e-10
+
+
 def _marginalize_with_weights(
     mps: CanonicalMPS,
     num_logicals: int,
     undo: List[Tuple[int, np.ndarray]],
     renormalize: bool,
-) -> CanonicalMPS:
+) -> Tuple[CanonicalMPS, bool]:
     """Trace out the error sites against the undo weights instead of all-ones.
 
     The same contraction as :meth:`CanonicalMPS.marginal` followed by
@@ -2261,6 +2271,16 @@ def _marginalize_with_weights(
     amplitudes come out on the plain decoder's scale; no SVD, so it is exact.
     With no logical sites the result is the one-site scalar MPS
     :meth:`CanonicalMPS.marginal` returns.
+
+    The second return value says whether the undo collapsed the state. A
+    branch the prior gives probability exactly zero has undo weight zero,
+    while the reweighted contraction still carries it (the clipped marginal
+    is at least the floor). When the checks leave only such branches, the
+    exact result is zero and what the weights let through is the round-off
+    of the contraction, which a later normalization would scale up to order
+    one. This is detected at the site where it happens, by comparing the
+    norm the weights keep with the norm that arrived, and the returned state
+    is then exactly zero.
     """
     tensors = list(mps.tensors)
     # Every error site must be traced exactly once: on a chain whose bonds
@@ -2284,29 +2304,42 @@ def _marginalize_with_weights(
     # ``right`` is a single column throughout, so it is contracted into each
     # site first and no chi x chi transfer matrix is ever formed: O(chi^2) per
     # site, like :meth:`CanonicalMPS.marginal`.
+    collapsed = False
     for first, weight in sorted(undo, key=lambda item: -item[0]):
         if weight.ndim == 1:
             trace = weight / np.sqrt(tensors[first].shape[1])
             site = np.tensordot(tensors[first], right, axes=([2], [0]))[:, :, 0]
+            arrived = site
             right = np.tensordot(site, trace, axes=([1], [0]))[:, None]
         else:
             trace = weight / np.sqrt(
                 tensors[first].shape[1] * tensors[first + 1].shape[1]
             )
             second = np.tensordot(tensors[first + 1], right, axes=([2], [0]))[:, :, 0]
+            arrived = None
             weighted = np.einsum("xz,mz->xm", trace, second)
             right = np.einsum("lxm,xm->l", tensors[first], weighted)[:, None]
+        if not collapsed and not np.all(weight):
+            # Only a weight with an exact zero can annihilate the state, so
+            # shots whose prior is positive everywhere never get here.
+            if arrived is None:
+                arrived = np.einsum("lxm,mz->lxz", tensors[first], second)
+            reference = _stable_norm(arrived) * float(np.max(np.abs(trace)))
+            collapsed = _stable_norm(right) <= _UNDO_COLLAPSE_TOLERANCE * reference
+        if collapsed:
+            right = np.zeros_like(right)
         if renormalize:
             norm = _stable_norm(right)
             if norm > 0:
                 right = right / norm
     if num_logicals == 0:
-        return CanonicalMPS(
+        scalar = CanonicalMPS(
             [right.reshape(1, 1, 1)],
             orth_center=0,
             tolerance=mps.tolerance,
             chi_max=mps.chi_max,
         )
+        return scalar, collapsed
     last = np.tensordot(tensors[num_logicals - 1], right, axes=([2], [0]))
     if renormalize:
         norm = _stable_norm(last)
@@ -2318,7 +2351,7 @@ def _marginalize_with_weights(
         tolerance=mps.tolerance,
         chi_max=mps.chi_max,
     )
-    return logical.reverse()
+    return logical.reverse(), collapsed
 
 
 def _with_certificate(outcome, certificate: TruncationCertificate, wanted: bool):
@@ -2445,6 +2478,10 @@ def decode_css(
         amplified by the inverse of the mass fraction the checks keep. That
         amplification is what produces globally sign-flipped, wrong-class
         posteriors at small ``chi_max``. ``None`` keeps the plain prior.
+        An error of probability exactly zero under the prior (a rate of 0 or
+        1 it contradicts) is undone to zero: the shot is reported like a
+        collapsed posterior, with all-zero amplitudes, a score of 0 and an
+        infinite bound, as the plain decoder reports it.
     reweighting_floor : float
         The BP marginals are clipped to ``[floor, 1 - floor]`` before use. The
         undo weight is ``sqrt(P / q)`` per site, so the floor caps how much a
@@ -2454,7 +2491,13 @@ def decode_css(
         on the [[72,12,6]] code at chi_max=128 a floor of 0.01 let that
         amplification flip the sign again on some shots, 0.05 and 0.1 did
         not, and 0.2 is close enough to the plain prior to inherit its
-        negatives. 0.05 is the default.
+        negatives. 0.05 is the default. Very small floors are accepted but
+        fail by round-off alone, with nothing truncated and a clean
+        certificate: on the five-qubit code at ``chi_max=1e4`` floors of
+        1e-6 and below returned posteriors unrelated to the exact one, while
+        floors from 0.01 to 0.2 agreed with the plain decoder to 6e-7 over
+        7200 cases. The certificate bounds the reweighted contraction, not
+        what the undo amplifies.
     bp_iterations : int
         Flooding iterations of the sum-product BP used for the reweighting.
 
@@ -2665,6 +2708,10 @@ def decode_custom(
         amplified by the inverse of the mass fraction the checks keep. That
         amplification is what produces globally sign-flipped, wrong-class
         posteriors at small ``chi_max``. ``None`` keeps the plain prior.
+        An error of probability exactly zero under the prior (a rate of 0 or
+        1 it contradicts) is undone to zero: the shot is reported like a
+        collapsed posterior, with all-zero amplitudes, a score of 0 and an
+        infinite bound, as the plain decoder reports it.
     reweighting_floor : float
         The BP marginals are clipped to ``[floor, 1 - floor]`` before use. The
         undo weight is ``sqrt(P / q)`` per site, so the floor caps how much a
@@ -2674,7 +2721,13 @@ def decode_custom(
         on the [[72,12,6]] code at chi_max=128 a floor of 0.01 let that
         amplification flip the sign again on some shots, 0.05 and 0.1 did
         not, and 0.2 is close enough to the plain prior to inherit its
-        negatives. 0.05 is the default.
+        negatives. 0.05 is the default. Very small floors are accepted but
+        fail by round-off alone, with nothing truncated and a clean
+        certificate: on the five-qubit code at ``chi_max=1e4`` floors of
+        1e-6 and below returned posteriors unrelated to the exact one, while
+        floors from 0.01 to 0.2 agreed with the plain decoder to 6e-7 over
+        7200 cases. The certificate bounds the reweighted contraction, not
+        what the undo amplifies.
     bp_iterations : int
         Flooding iterations of the sum-product BP used for the reweighting.
 
@@ -2990,9 +3043,11 @@ def decode_custom(
                 chi_max,
             )
     if undo_weights:
-        logical_mps = _marginalize_with_weights(
+        logical_mps, undo_collapsed = _marginalize_with_weights(
             error_mps, num_logicals, undo_weights, renormalize
         )
+        if undo_collapsed:
+            certificate.finalize(0.0)
     else:
         sites_to_marginalize = list(range(num_logicals, num_sites))
         logical_mps = error_mps.marginal(
