@@ -28,6 +28,7 @@ from mdopt.decoding.decoding import (
     pauli_to_mps,
 )
 from mdopt.decoding.dem import (
+    DemDecodingError,
     DemProblem,
     decode_dem,
     dem_to_problem,
