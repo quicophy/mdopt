@@ -32,8 +32,12 @@ from mdopt.mps.utils import (
     create_simple_product_state,
     create_custom_product_state,
 )
-from mdopt.optimizer.utils import apply_constraints, optimize_qubit_order
-from mdopt.utils.utils import split_two_site_tensor
+from mdopt.optimizer.utils import (
+    TruncationCertificate,
+    apply_constraints,
+    optimize_qubit_order,
+)
+from mdopt.utils.utils import _stable_norm, split_two_site_tensor
 from mdopt.optimizer.dephasing_dmrg import DephasingDMRG
 from mdopt.contractor.contractor import apply_one_site_operator
 from mdopt.optimizer.utils import XOR_LEFT, XOR_BULK, XOR_RIGHT, COPY_LEFT, SWAP
@@ -199,6 +203,7 @@ def apply_depolarizing_bias(
     sites_to_bias: Union[str, List[int]] = "All",
     prob_bias_list: Union[float, List[float]] = 0.1,
     renormalize: bool = True,
+    certificate: Optional[TruncationCertificate] = None,
 ) -> CanonicalMPS:
     """
     The function which applies a depolarizing bias to a given MPS.
@@ -217,6 +222,17 @@ def apply_depolarizing_bias(
         If set to a number, applies it to all of the sites.
     renormalize : bool
         Whether to renormalize spectra during contraction.
+    certificate : Optional[TruncationCertificate]
+        When given, the move of the orthogonality center to the first biased
+        site is recorded as one step (what its SVDs discard, no gain), and
+        every two-site split as one more step: the norm it discards in the
+        scale of its input, the factor the kept spectrum is renormalized by
+        (measured before the normalization, 1 when ``renormalize`` is off)
+        and the operator norm of that pair's bias operator as the gain, since
+        anything discarded earlier passes through the remaining bias
+        operators. So a truncation-error bound covers the prior's
+        initialization too (the splits use the SVD's default cutoff, which
+        bites for biases below about 1e-24).
 
     Raises
     ------
@@ -259,29 +275,90 @@ def apply_depolarizing_bias(
                 f"given {probability} at site {site}."
             )
 
-    mps = mps.mixed_canonical(orth_center=min(sites_to_bias))
+    # The move to the first biased site truncates too (at the chain's chi_max
+    # and the SVD's cutoff); it is recorded as its own step, without gain,
+    # and without renormalizing, so that every factor the state is divided by
+    # is measured below where it is removed.
+    move_losses: List[float] = []
+    mps = cast(
+        CanonicalMPS,
+        mps.move_orth_center(
+            min(sites_to_bias),
+            renormalize=False,
+            discarded_norms=move_losses if certificate is not None else None,
+        ),
+    )
+    if certificate is not None:
+        certificate.record(sum(move_losses), 1.0, 1.0)
 
     for site, prob_bias in zip(sites_to_bias, prob_bias_list):
+        # The previous split left the center on its right site (or further
+        # away, for pairs that are not consecutive). The split below measures
+        # what it discards in the scale of its input, so the pair must carry
+        # the state's scale: the center is moved into it, without
+        # renormalizing, and what that move discards is charged to this
+        # pair's step (it passes through the same bias operator).
+        pair_moves: List[float] = []
+        if mps.orth_center != site:
+            # In place: the chain is already this function's own copy (the
+            # first move made it), and a copy per pair would be quadratic.
+            mps = cast(
+                CanonicalMPS,
+                mps.move_orth_center(
+                    site,
+                    renormalize=False,
+                    inplace=True,
+                    discarded_norms=pair_moves if certificate is not None else None,
+                ),
+            )
+        bias_operator = depolarizing_bias(prob_bias=prob_bias)
+        # The pair carries the state's scale (the center is in it), so the
+        # ratio of its norms after and before the operator is the factor by
+        # which the exact operator changes the norm of the whole state: one
+        # for a basis pair, which it maps to a unit-norm prior, and the
+        # actual change for a superposition (|++> at bias 3/4 is doubled).
+        # The center is at ``site`` and its right neighbor is right-isometric,
+        # so the pair's norm is the center tensor's norm: no contraction.
+        pair_norm = _stable_norm(mps.tensors[site])
         two_site_tensor = contract(
             "ijk, klm, jlno -> inom",
             mps.tensors[site],
             mps.tensors[site + 1],
-            depolarizing_bias(prob_bias=prob_bias),
+            bias_operator,
             optimize=[(0, 1), (0, 1)],
         )
-        mps.tensors[site], singular_values, b_r, _ = split_two_site_tensor(
+        mass_gain = _stable_norm(two_site_tensor) / pair_norm if pair_norm > 0 else 1.0
+        # The split keeps the spectrum unnormalized so that the factor the
+        # SVD removes is measured, in the scale of this pair's input, before
+        # the center is renormalized; the discarded norm is in that scale too.
+        mps.tensors[site], singular_values, b_r, discarded = split_two_site_tensor(
             two_site_tensor,
-            renormalize=renormalize,
-            return_truncation_error=True,
+            renormalize=False,
+            return_discarded_norm=True,
         )
         mps.tensors[site + 1] = contract(
             "ij, jkl -> ikl", np.diag(singular_values), b_r, optimize=[(0, 1)]
         )
         mps.orth_center = site + 1
+        renormalization = 1.0
         if renormalize:
             center_norm = float(np.linalg.norm(mps.tensors[mps.orth_center]))
             if center_norm > 0:
                 mps.tensors[mps.orth_center] /= center_norm
+                renormalization = center_norm
+        if certificate is not None:
+            # Whatever was discarded before this pair passes through its bias
+            # operator, whose norm exceeds one (about 1.05 at bias 1e-3 and
+            # 1.5 at 0.1), so that norm is the step's gain in the bound,
+            # while ``survival`` divides out only the norm change measured
+            # on the pair above (one for a basis pair).
+            gain = float(np.linalg.norm(bias_operator.reshape(4, 4), 2))
+            certificate.record(
+                float(max(discarded or 0.0, 0.0)) + sum(pair_moves),
+                renormalization,
+                gain,
+                mass_gain=mass_gain,
+            )
 
     return mps
 
@@ -2006,6 +2083,16 @@ def decode_message(
     return engine, overlap
 
 
+# Operator norm of a logical-constraint MPO: its copy tensor sends |+> to
+# sqrt(2) times a basis state. Check constraints are partial permutations of
+# norm one. Pinned by a test against the dense MPO.
+LOGICAL_CONSTRAINT_GAIN = float(np.sqrt(2.0))
+
+
+def _with_certificate(outcome, certificate: TruncationCertificate, wanted: bool):
+    return (*outcome, certificate) if wanted else outcome
+
+
 def _identity_fast_path_fires(error: str, bias_prob: float) -> bool:
     """Whether decode_custom answers a trivial error without decoding.
 
@@ -2036,6 +2123,7 @@ def decode_css(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    return_certificate: bool = False,
 ):
     """
     This function performs error-based decoding of a CSS code via MPS marginalization and
@@ -2102,6 +2190,17 @@ def decode_css(
         between runs.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    return_certificate : bool
+        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
+        with the rigorous bound ``certificate.bound`` on the relative
+        truncation error of the contracted state and the survival factor
+        ``certificate.survival`` the checks kept. A bound above one means the
+        posterior may be truncation residue; on the [[18,2]] bivariate
+        bicycle code no verdict with a bound below 100 was wrong and every
+        sign-flipped shot had a bound above 1e8. A trivial error answered
+        by ``decode_custom``'s no-error fast path comes with the trivial
+        certificate (see there): its survival of one is not the probability
+        of the syndrome.
 
     Raises
     ------
@@ -2196,6 +2295,7 @@ def decode_css(
         num_candidates=num_candidates,
         tie_policy=tie_policy,
         rng=rng,
+        return_certificate=return_certificate,
     )
 
 
@@ -2220,6 +2320,7 @@ def decode_custom(
     tie_policy: str = "optimistic",
     rng: Optional[np.random.Generator] = None,
     num_candidates: int = 100,
+    return_certificate: bool = False,
 ):
     """
     This function performs error-based decoding for a custom quantum error-correcting code.
@@ -2276,6 +2377,23 @@ def decode_custom(
         Product states the Dephasing DMRG readout is restarted from.
     num_candidates : int
         Prefixes the Optima TT readout keeps per site in each sweep.
+    return_certificate : bool
+        Also return a :class:`mdopt.optimizer.utils.TruncationCertificate`
+        with the rigorous bound ``certificate.bound`` on the relative
+        truncation error of the contracted state and the survival factor
+        ``certificate.survival`` the checks kept. The certificate is always
+        computed, since the SVDs provide the discarded weights anyway, and
+        unless ``silent`` its bound is logged and a bound above one is
+        warned about: such a posterior may be truncation residue. This flag
+        only controls whether it is returned. On the [[18,2]] bivariate
+        bicycle code no verdict with a bound below 100 was wrong and every
+        sign-flipped shot had a bound above 1e8.
+        The no-error fast path (a trivial error at ``bias_prob < 0.5``)
+        contracts nothing and returns the trivial certificate: bound 0,
+        survival 1.0 and no terms. That survival is a placeholder, not the
+        survival of the shot (the full pipeline gives 0.69 for the Steane
+        code at ``bias_prob = 0.1``), so leave these shots out when
+        survivals are averaged or thresholded across shots.
 
     Returns
     -------
@@ -2376,6 +2494,8 @@ def decode_custom(
         raise ValueError(
             f"Unknown optimizer {optimizer!r}; expected one of {OPTIMIZERS}."
         )
+    certificate = TruncationCertificate()
+
     if _identity_fast_path_fires(error, bias_prob):
         if not silent:
             LOGGER.info("No error detected.")
@@ -2388,7 +2508,9 @@ def decode_custom(
         # not "fix" it to 2**(2k) entries, which would allocate 128 MB and cost
         # ~10 ms per shot on a k = 12 BB code, on the hot path this exists to
         # skip. Callers here consume only the success flag.
-        return [1.0, 0.0, 0.0, 0.0], 1
+        return _with_certificate(
+            ([1.0, 0.0, 0.0, 0.0], 1), certificate, return_certificate
+        )
 
     erased_qubits = [
         index for index, single_error in enumerate(error) if single_error == "E"
@@ -2414,13 +2536,6 @@ def decode_custom(
             f"The error length is {len(error)}, expected {num_sites - num_logicals}."
         )
 
-    logicals_state = "+" * num_logicals
-    state_string = logicals_state + error
-
-    error_mps = create_custom_product_state(
-        string=state_string, tolerance=tolerance, form="Right-canonical"
-    )
-
     constraints_tensors = [XOR_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
     logicals_tensors = [COPY_LEFT, XOR_BULK, SWAP, XOR_RIGHT]
 
@@ -2428,6 +2543,15 @@ def decode_custom(
         stabilizers, x_logicals + z_logicals
     )
     logicals_sites = custom_code_logicals_sites(x_logicals, z_logicals)
+
+    logicals_state = "+" * num_logicals
+    state_string = logicals_state + error
+    error_mps = cast(
+        CanonicalMPS,
+        create_custom_product_state(
+            string=state_string, tolerance=tolerance, form="Right-canonical"
+        ),
+    )
 
     # Exclude erased qubit sites from bias: erased qubits are initialized as
     # |+>, which already represents complete ignorance, so biasing them would
@@ -2464,6 +2588,7 @@ def decode_custom(
                 sites_to_bias=sites_to_bias,
                 prob_bias_list=bias_prob,
                 renormalize=renormalize,
+                certificate=certificate,
             )
 
     if not silent:
@@ -2479,6 +2604,8 @@ def decode_custom(
             renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
+            certificate=certificate,
+            gain=LOGICAL_CONSTRAINT_GAIN,
         ),
     )
 
@@ -2495,6 +2622,8 @@ def decode_custom(
             renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
+            certificate=certificate,
+            gain=LOGICAL_CONSTRAINT_GAIN,
         ),
     )
 
@@ -2511,6 +2640,7 @@ def decode_custom(
             renormalize=renormalize,
             silent=silent,
             strategy=contraction_strategy,
+            certificate=certificate,
         ),
     )
 
@@ -2519,6 +2649,26 @@ def decode_custom(
     # Marginalize ALL physical qubit sites in one pass.  Erased qubits are
     # already in |+> and are naturally included here — no separate
     # intermediate marginalization is needed.
+    final_norm = (
+        _stable_norm(error_mps.tensors[error_mps.orth_center])
+        if error_mps.orth_center is not None
+        else 1.0
+    )
+    certificate.finalize(final_norm)
+    if not silent:
+        LOGGER.info(
+            "Truncation-error bound %.2e; the checks kept a mass fraction of %.2e.",
+            certificate.bound,
+            certificate.survival,
+        )
+        if certificate.bound > 1.0:
+            LOGGER.warning(
+                "The truncation-error bound %.2e exceeds one at chi_max=%d: the "
+                "posterior may be truncation residue rather than signal. "
+                "Consider a larger chi_max.",
+                certificate.bound,
+                chi_max,
+            )
     sites_to_marginalize = list(range(num_logicals, num_sites))
     logical_mps = error_mps.marginal(
         sites_to_marginalize=sites_to_marginalize, renormalize=renormalize
@@ -2529,7 +2679,11 @@ def decode_custom(
         LOGGER.info(f"The number of logical sites: {num_logical_sites}.")
 
     if optimizer == "Dense" or num_logical_sites <= dense_readout_max_sites:
-        return _dense_readout(logical_mps, chi_max, tie_policy, renormalize, silent)
+        return _with_certificate(
+            _dense_readout(logical_mps, chi_max, tie_policy, renormalize, silent),
+            certificate,
+            return_certificate,
+        )
 
     if tie_policy != "optimistic":
         raise NotImplementedError(
@@ -2592,7 +2746,7 @@ def decode_custom(
                 "carries no information and is scored as a failure.",
                 chi_max,
             )
-        return engine, 0
+        return _with_certificate((engine, 0), certificate, return_certificate)
 
     # Compare amplitudes on a unit scale (normalized by the DMRG maximum) so
     # that the fixed tolerance is meaningful regardless of overall scale.
@@ -2628,4 +2782,6 @@ def decode_custom(
             amplitude_identity,
             bool(is_map_identity),
         )
-    return engine, int(is_map_identity)
+    return _with_certificate(
+        (engine, int(is_map_identity)), certificate, return_certificate
+    )
