@@ -1447,8 +1447,8 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
             basis truncation; zero with ``truncation="svd"``; both are
             indicators, not bounds on the error of the masses),
             ``tempered`` (whether that
-            was the tempered contraction), ``widened`` (whether the candidate
-            search was widened), ``active`` and
+            was the tempered contraction), ``widened`` (whether the wider
+            search asked BP-OSD for a solve it did not have), ``active`` and
             ``free`` (sizes of the active set and of its free part) and
             ``candidates`` (number of logical classes reached). A tie for the
             heaviest class goes to the BP-OSD class when it is one of the
@@ -1478,6 +1478,7 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
         hard = self._truncated(contraction)
         widened = False
         if hard and self.extra_centers > 0 and len(found) > len(tried):
+            solved = len(solves)
             found = self.widen(syndrome, found, tried, solves)
             # A better candidate can replace the one a class had; the
             # mechanisms of the replaced one stay active, so that widening
@@ -1496,7 +1497,9 @@ class ClassSumDecoder:  # pylint: disable=too-many-instance-attributes
                     active = wider_active
                     masses, contraction = wider
                     hard = self._truncated(contraction)
-            widened = True
+            # Centers whose solves were all made already cost nothing and
+            # change nothing: the search was widened only if it asked for one.
+            widened = len(solves) > solved
         tempered = False
         if self.truncation == "svd" and self.temper_stages > 1 and hard:
             try:

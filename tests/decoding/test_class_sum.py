@@ -1132,6 +1132,41 @@ def test_widening_recontracts_a_superset_and_decides_from_it(monkeypatch):
     assert recontracted > 0
 
 
+def test_widening_that_asks_for_no_solve_is_not_reported(monkeypatch):
+    """With every solve of the syndrome already made, the untried classes cost
+    nothing to visit and change nothing: the decode is not marked as widened
+    and the class sum is not run again."""
+    problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
+    decoder = ClassSumDecoder(problem, extra_centers=64, temper_stages=1)
+    calls = []
+
+    def truncated(syndrome, active, stages):
+        calls.append(list(active))
+        masses = np.zeros(1 << problem.num_observables)
+        masses[3] = 1.0
+        return masses, {"lost": 1.0, "free": 1}
+
+    search = decoder._search
+
+    def search_with_every_solve_made(syndrome, seed):
+        found, tried, solves = search(syndrome, seed)
+        for j in range(problem.num_observables):
+            for target in (0, 1):
+                solves.setdefault((j, target), None)
+        return found, tried, solves
+
+    monkeypatch.setattr(decoder, "_class_masses", truncated)
+    monkeypatch.setattr(decoder, "_search", search_with_every_solve_made)
+    syndromes, _ = _sample_from_model(problem, 60, seed=5)
+    untried = 0
+    for syndrome in syndromes[syndromes.any(axis=1)]:
+        calls.clear()
+        _, info = decoder.decode(syndrome)
+        assert not info["widened"] and len(calls) <= 1
+        untried += info["candidates"] > decoder.recenter_rounds
+    assert untried > 0
+
+
 def test_a_wider_sum_that_vanishes_keeps_the_first_verdict(monkeypatch):
     """Widening must not abort a decode that already has a verdict."""
     problem = _random_problem(2, num_detectors=10, num_mechanisms=40, num_observables=6)
