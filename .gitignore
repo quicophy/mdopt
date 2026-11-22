@@ -146,3 +146,8 @@ tmp*
 # binaries are kept locally rather than committed.
 examples/decoding/figures/*
 !examples/decoding/figures/README.md
+
+# Local links to the thesis and article repositories, which live next to this
+# one. They are separate git repositories and are never part of this one.
+/thesis
+/article
