@@ -10,6 +10,7 @@ from mdopt.decoding.class_sum import (
     ClassSumDecoder,
     ParityChain,
     active_set_class_masses,
+    basis_truncated_class_masses,
     multiplet_safe_rank,
     problem_matrices,
 )
