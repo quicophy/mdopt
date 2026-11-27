@@ -143,7 +143,7 @@ print(predicted_flips, observables[0].astype(int))
 - `mdopt.mps` — matrix product states in the explicit (Vidal) and canonical forms.
 - `mdopt.contractor` — MPS-MPO zip-up contraction with truncation.
 - `mdopt.optimizer` — DMRG, dephasing DMRG, and the parity-check MPO tensors applied by `apply_constraints`.
-- `mdopt.decoding` — the decoders: `decode_css`, `decode_custom` and `decode_message` for stabilizer and classical codes, `decode_dem` for detector error models.
+- `mdopt.decoding` — the decoders: `decode_css`, `decode_custom` and `decode_message` for stabilizer and classical codes, `decode_dem` for detector error models, `ClassSumDecoder` for class-summed decoding around BP-OSD candidates.
 - `mdopt.utils` — truncated SVD/QR and tensor helpers.
 - `mdopt.examples` — the runnable campaign scripts behind the example notebooks.
 
